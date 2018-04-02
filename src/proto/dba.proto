@@ -1,0 +1,205 @@
+//                                                                         
+//  This file is part of Binsec.                                           
+//                                                                         
+//  Copyright (C) 2016-2017                                                
+//    CEA (Commissariat à l'énergie atomique et aux énergies               
+//         alternatives)                                                   
+//                                                                         
+//  you can redistribute it and/or modify it under the terms of the GNU    
+//  Lesser General Public License as published by the Free Software        
+//  Foundation, version 2.1.                                               
+//                                                                         
+//  It is distributed in the hope that it will be useful,                  
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of         
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the          
+//  GNU Lesser General Public License for more details.                    
+//                                                                         
+//  See the GNU Lesser General Public License version 2.1                  
+//  for more details (enclosed in the file licenses/LGPLv2.1).             
+//                                                                         
+//                                                                         
+
+/*
+  This protobuf, describe the DBA language. This is the protobuf representation of dba.ml
+*/
+
+syntax = "proto2";
+
+package dba;
+
+message bitvector {
+  required uint64 bv    = 1;
+  required uint32 size  = 2;
+}
+
+message dbacodeaddress {
+  required bitvector bitvector = 1;
+  required uint32 dbaoffset    = 2;
+}
+
+message codeaddress {
+  enum typeid_codeaddress {
+    Local     = 0;
+    NonLocal  = 1;
+  }
+  
+  required typeid_codeaddress typeid = 1;
+  optional uint32 offset             = 2;
+  optional dbacodeaddress address    = 3;
+}
+
+message dbatag {
+  enum typeid_dbatag {
+    DbaCall   = 1;
+    DbaReturn = 2;
+  }
+  required typeid_dbatag typeid   = 1;
+  optional dbacodeaddress address = 2;
+}
+
+enum endianness {
+  Little = 1;
+  Big    = 2;
+}
+
+message dbastopstate {
+  enum typeid_dbastate {
+    Ok          = 1;
+    Ko          = 2;
+    Undefined   = 3;
+    Unsupported = 4;
+  }
+
+  required typeid_dbastate typeid = 1;
+  optional string infos           = 2;
+}
+
+message dbaexpr {
+  enum typeid_dbaexpr {
+    DbaExprVar      = 1;
+    DbaLoad         = 2;
+    DbaExprCst      = 3;
+    DbaExprUnary    = 4;
+    DbaExprBinary   = 5;
+    DbaExprRestrict = 6;
+    DbaExprExtU     = 7;
+    DbaExprExtS     = 8;
+    DbaExprIte      = 9;
+    DbaExprAlternative = 10;
+  }
+
+  enum dbaunary {
+    DbaUnaryMinus = 1;
+    DbaUnaryNot   = 2;
+  }
+
+  enum dbabinary {
+    DbaPlus     = 1;
+    DbaMinus    = 2;
+    DbaMultU    = 3;
+    DbaMultS    = 4;
+    DbaDivU     = 6;
+    DbaDivS     = 7;
+    DbaModU     = 8;
+    DbaModS     = 9;
+    DbaOr       = 10;
+    DbaAnd      = 11;
+    DbaXor      = 12;
+    DbaConcat   = 13;
+    DbaLShiftU  = 14;
+    DbaRShiftU  = 15;
+    DbaRShiftS  = 16;
+    DbaLeftRotate = 17;
+    DbaRightRotate = 18;
+    DbaEq   = 19;
+    DbaDiff = 20;
+    DbaLeqU = 21;
+    DbaLtU  = 22;
+    DbaGeqU = 23;
+    DbaGtU  = 24;
+    DbaLeqS = 25;
+    DbaLtS  = 26;
+    DbaGeqS = 27;
+    DbaGtS  = 28;
+  }
+
+  required typeid_dbaexpr typeid  = 1;
+  optional string name            = 2;
+  optional uint32 size            = 3;
+  optional endianness endian      = 4;
+  optional bitvector bitvector    = 5;
+  optional dbaexpr expr1          = 6;
+  optional dbaexpr expr2          = 7;
+  optional dbaunary unaryop       = 9;
+  optional dbabinary binaryop     = 10;
+  optional uint32 low             = 11;
+  optional uint32 high            = 12;
+  optional dbacond cond           = 13;
+}
+
+
+message dbacond {
+  enum typeid_dbacond {
+    DbaCondReif = 1;
+    DbaCondNot  = 2;
+    DbaCondAnd  = 3;
+    DbaCondOr   = 4;
+    DbaTrue     = 5;
+    DbaFalse    = 6;
+  }
+
+  required typeid_dbacond typeid  = 1;
+  optional dbaexpr expr           = 2;
+  optional dbacond cond1          = 3;
+  optional dbacond cond2          = 4;
+}
+
+message dbaLhs {
+  enum typeid_dbalhs {
+    DbaLhsVar         = 1;
+    DbaLhsVarRestrict = 2;
+    DbaStore          = 3;
+  }
+
+  required typeid_dbalhs typeid = 1;
+  optional string name          = 2;
+  optional uint32 size          = 3;
+  optional uint32 low           = 4;
+  optional uint32 high          = 5;
+  optional endianness endian    = 6;
+  optional dbaexpr expr         = 7;
+}
+
+message dbainstr {
+  enum typeid_instrkind {
+    DbaIkAssign   = 1;
+    DbaIkSJump    = 2;
+    DbaIkDJump    = 3;
+    DbaIkIf       = 4;
+    DbaIkStop     = 5;
+    DbaIkAssert   = 6;
+    DbaIkAssume   = 7;
+    DbaIkNondetAssume = 8;
+    DbaIkNondet   = 9;
+    DbaIkUndef    = 10;
+    DbaIkMalloc   = 11;
+    DbaIkFree     = 12;
+    DbaIkPrint    = 13;
+  }
+
+  required typeid_instrkind typeid  = 1;
+  required dbacodeaddress location  = 2;
+  optional dbaLhs lhs               = 3;
+  optional dbaexpr expr             = 4;
+  optional uint32 offset            = 5;
+  optional codeaddress address      = 6;
+  optional dbatag tags              = 7;
+  optional dbacond cond             = 8;
+  optional dbastopstate stopinfos   = 9;
+  repeated dbaexpr exprs            = 10;
+} 
+
+message dba_list {
+  repeated dbainstr instrs = 1;
+}
+

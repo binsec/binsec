@@ -1,0 +1,37 @@
+true                                               : use_menhir, safe_string
+true                                               : annot, bin_annot, principal
+true                                               : package(ocamlgraph)
+true                                               : package(zarith)
+true                                               : package(ZMQ)
+true                                               : package(graphics)
+<piqi/**>                                          : include, package(piqilib, piqirun.ext), warn(A-27)
+true                                               : warn(A-4-3-19-18-58)
+true                                               : package(llvm)
+"main.native"                                      : package(piqilib, piqirun.ext)
+<server/**>                                        : include, package(piqilib, piqirun.ext)
+<dynamic/**>                                       : include, package(piqilib, piqirun.ext)
+"options.ml"                                       : package(piqilib, piqirun.ext)
+"test.ml"                                          : package(piqilib, piqirun.ext)
+<examples/**>                                      : include,package(piqilib, piqirun.ext)
+<formula/**>                                       : include
+<dba/**>                                           : include
+<base/**>                                          : include
+<loader/**>                                        : include
+<parser/**>                                        : include
+<llvm/**>                                          : include, package(llvm)
+<disasm/**>                                        : include,  inline(10000)
+<static/**>                                        : include
+<static/ai/**>                                     : include
+<static/simulation/**>                             : include
+<smtutils/**>                                      : include
+<trace/**>                                         : include
+<utils/**>                                         : include
+<ast/**>                                           : include
+<binpatcher/**>                                    : include
+<dynamic/dse/path_exploration/**>                  : include, warn(A)
+"dynamic/dse/path_exploration/symbolicInput.ml"    : package(piqirun.ext)
+"dynamic/dse/path_exploration/invertChild.ml"      : package(piqirun.ext)
+"dynamic/dse/path_exploration/conf_exploration.ml" : package(piqirun.ext)
+"dynamic/dse/path_exploration/eipRewrite.ml"       : package(piqirun.ext)
+"disasm/disasm_dyn_infos.ml"                       : package(piqilib, piqirun.ext)
+"disasm/disasm_dyn_infos_callrets.ml"              : package(piqilib, piqirun.ext)

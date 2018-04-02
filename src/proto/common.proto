@@ -1,0 +1,118 @@
+//                                                                         
+//  This file is part of Binsec.                                           
+//                                                                         
+//  Copyright (C) 2016-2017                                                
+//    CEA (Commissariat à l'énergie atomique et aux énergies               
+//         alternatives)                                                   
+//                                                                         
+//  you can redistribute it and/or modify it under the terms of the GNU    
+//  Lesser General Public License as published by the Free Software        
+//  Foundation, version 2.1.                                               
+//                                                                         
+//  It is distributed in the hope that it will be useful,                  
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of         
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the          
+//  GNU Lesser General Public License for more details.                    
+//                                                                         
+//  See the GNU Lesser General Public License version 2.1                  
+//  for more details (enclosed in the file licenses/LGPLv2.1).             
+//                                                                         
+//                                                                         
+
+syntax = "proto2";
+
+package common;
+
+enum smt_result {
+    UNKNOWN = 0;
+    SAT     = 1;
+    UNSAT   = 2;
+    TIMEOUT = 3;
+}
+
+enum tracing_action {
+  SKIP = 0;
+  INTO = 1;
+}
+
+enum action {
+  DEFAULT = 0; //
+  PATCH   = 1; // Pinsec:patch     Binsec:/
+  CONC    = 2; // Pinsec:get val   Binsec:Concretize
+  SYMB    = 3; // Pinsec:get val   Binsec:Symbolize
+  LOGIC   = 4; // Pinsec:get val   Binsec:Apply logical computation if possible
+  IGNORE  = 5;
+}
+
+enum call_convention_t {
+  UNKNOWN_CVT = 0;
+  CDECL       = 1;
+  FASTCALL    = 2;
+  STDCALL     = 3;
+  THISCALL    = 4;
+}
+
+enum ir_kind_t {
+  DBA = 1;
+  BAP = 2;
+  MIASM = 3;
+  /*  .......  */
+}
+
+enum solver_t {
+  Z3        = 1;
+  BOOLECTOR = 2;
+  CVC4      = 3;
+  YICES     = 4;
+}
+
+enum analysis_direction_t {
+  FORWARD  = 1;
+  BACKWARD = 2;
+}
+
+enum proto_size_t {
+  INVALID_SIZE = 0;
+  BIT8   = 1;
+  BIT16  = 2;
+  BIT32  = 3;
+  BIT64  = 4;
+  BIT80  = 5;
+  BIT128 = 6;
+  BIT256 = 7;
+};
+
+message register_value_t {
+  required proto_size_t typeid = 1;
+  oneof value_cnt {
+    uint32 value_8   = 2;
+    uint32 value_16  = 3;
+    uint32 value_32  = 4;
+    uint64 value_64  = 5;
+    bytes  value_80  = 6;
+    bytes  value_128 = 7;
+    bytes  value_256 = 8;
+  }
+}
+
+message register_t {
+  required string name            = 1;
+  required register_value_t value = 2;
+}
+
+message memory_t {
+  required uint64 addr    = 1;
+  required bytes value    = 2;
+}
+
+message indirect_register_t {
+  required string name    = 1;
+  required bytes value    = 2;
+}
+
+
+
+message memory_pol {
+  optional action addr  = 1 [default = DEFAULT];
+  optional action value = 2 [default = DEFAULT];
+}

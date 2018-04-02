@@ -1,0 +1,99 @@
+//                                                                         
+//  This file is part of Binsec.                                           
+//                                                                         
+//  Copyright (C) 2016-2017                                                
+//    CEA (Commissariat à l'énergie atomique et aux énergies               
+//         alternatives)                                                   
+//                                                                         
+//  you can redistribute it and/or modify it under the terms of the GNU    
+//  Lesser General Public License as published by the Free Software        
+//  Foundation, version 2.1.                                               
+//                                                                         
+//  It is distributed in the hope that it will be useful,                  
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of         
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the          
+//  GNU Lesser General Public License for more details.                    
+//                                                                         
+//  See the GNU Lesser General Public License version 2.1                  
+//  for more details (enclosed in the file licenses/LGPLv2.1).             
+//                                                                         
+//                                                                         
+
+syntax = "proto2";
+
+package syscall_types;
+
+import "common.proto";
+
+
+enum syscall_ident {
+  NR_READ   = 0;
+  NR_WRITE  = 1;
+  NR_OPEN   = 2;
+  GENERIC   = 3;
+  /* .... */
+}
+
+/* =============== Main types ============== */
+message syscall_pol {
+  required uint32 id                    = 1;
+  required string name                  = 2;
+  required syscall_ident ident          = 3;
+  required common.tracing_action action = 4;
+  repeated uint64 restrict_addresses    = 5;
+
+  oneof syscall_pol_cnt {
+    nr_read_pol nr_read                 = 6;
+    /* ..... */
+  }
+}
+
+message syscall_t {
+  required uint32 id              = 1;
+  required syscall_ident ident    = 2;
+
+  oneof syscall_t_cnt {
+    nr_open_t     open_syscall    = 3;
+    nr_read_t     read_syscall    = 4;
+    nr_write_t    write_sycall    = 5;
+    sys_generic_t generic_sycall  = 6;
+  }
+}
+/* ============================================ */
+
+
+/* ================ Policies ================ */
+message nr_read_pol {
+  required string name = 1; /* TODO: complete */
+}
+/* ========================================== */
+
+/* ========== Syscall concrete infos ========= */
+message nr_open_t { /* TODO: Redefine */
+  required string file_name      = 1;
+  required sint32 flags          = 2;
+  required uint32 mode           = 3;
+  required int32 file_descriptor = 4;
+}
+
+message nr_read_t {
+  required uint32 file_descriptor   = 1;
+  required uint64 buffer_address    = 2;
+  required uint32 count             = 3;
+  required bytes buffer_data        = 4;
+  required uint32 count_effective   = 5;
+}
+
+message nr_write_t {
+  required uint32 file_descriptor   = 1;
+  required uint64 buffer_address    = 2;
+  required uint32 count             = 3;
+  required bytes buffer_data        = 4;
+  required uint32 count_effective   = 5;
+}
+
+message sys_generic_t {
+  required string name    = 1;
+  required uint32 address = 2;
+}
+/* ============================================= */

@@ -1,0 +1,136 @@
+//                                                                         
+//  This file is part of Binsec.                                           
+//                                                                         
+//  Copyright (C) 2016-2017                                                
+//    CEA (Commissariat à l'énergie atomique et aux énergies               
+//         alternatives)                                                   
+//                                                                         
+//  you can redistribute it and/or modify it under the terms of the GNU    
+//  Lesser General Public License as published by the Free Software        
+//  Foundation, version 2.1.                                               
+//                                                                         
+//  It is distributed in the hope that it will be useful,                  
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of         
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the          
+//  GNU Lesser General Public License for more details.                    
+//                                                                         
+//  See the GNU Lesser General Public License version 2.1                  
+//  for more details (enclosed in the file licenses/LGPLv2.1).             
+//                                                                         
+//                                                                         
+
+syntax = "proto2";
+
+import "common.proto";
+import "dba.proto";
+import "config.proto";
+
+/* --------------- Broker <-> Pin ---------------- */
+
+
+message message_start_exec {
+  required uint64 start       = 1;
+  required uint64 stop        = 2;
+  optional uint32 size_chunks = 3 [default = 1000];
+  repeated uint64 breakpoints = 4;
+  repeated configuration.input_t inputs = 5;
+  repeated uint64 skips       = 6;
+}
+
+/* message_trace_header see trace.proto */
+
+/* message_trace_chunk see trace.proto */
+
+message message_bp_reached {
+  required uint64 addr = 1;
+}
+
+/* message_exec_step */
+
+message message_patch {
+  repeated configuration.input_t patch = 1;
+}
+
+/* message_exec_resume */
+/* message_exec_end */
+/* message exec_terminate */
+
+
+/* ---------------- Broker <-> Frontend -------------- */
+
+/* message_get_infos */
+
+message message_infos {
+  required uint32 nb_workers = 1;
+  repeated string analyses = 2;
+  repeated string solvers = 3;
+}
+
+message message_decode_instr {
+  enum bin_kind {
+    HEXA = 1;
+    BIN = 2;
+  }
+
+  message instr_entry {
+    required string instr     = 1;
+    optional uint64 base_addr = 2 [default = 0];
+  }
+
+  repeated instr_entry instrs       = 1;
+  optional bin_kind kind            = 2 [default = BIN];
+  optional common.ir_kind_t irkind  = 3 [default = DBA];
+}
+
+message message_decode_instr_reply {
+  message instr_entry {
+    required string opcode            = 1;
+    required common.ir_kind_t irkind  = 2;
+    oneof instrs_cnt {
+      dba.dba_list dba_instrs         = 3;
+    }
+  }
+
+  repeated instr_entry instrs = 1;
+}
+
+/* message decode_trace see trace.proto */
+/* message decode_trace_reply see trace.proto */
+
+message message_start_symb_exec {
+  enum trace_kind {
+    FILE   = 1;
+    STREAM = 2;
+  }
+  required trace_kind trace_type        = 1;
+  required string name                  = 2;
+  optional common.solver_t solver       = 3 [default = Z3];
+  optional configuration.configuration  config  = 4;
+  optional common.ir_kind_t irkind       = 5 [default = DBA];
+  optional bool formula_optim_cstfold   = 6;
+  optional bool formula_optim_rebase    = 7;
+  optional bool formula_optim_row       = 8;
+  required uint32 verbose               = 9;
+  optional uint64 addr_predicate        = 10;
+  optional string predicate             = 11;
+  optional string trace_filename        = 12;
+
+}
+
+
+message message_output {
+  enum output_kind {
+    SUCCESS = 1;
+    RESULT  = 2;
+    DEBUG   = 3;
+    WARNING = 4;
+    ERROR   = 5;
+    FAILURE = 6;
+  }
+
+  required output_kind type     = 1;
+  required string message       = 2;
+  optional uint32 ram_total     = 3;
+  optional uint32 ram_free      = 4;
+  optional uint32 ram_available = 5;
+}

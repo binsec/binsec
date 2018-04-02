@@ -1,0 +1,106 @@
+//                                                                         
+//  This file is part of Binsec.                                           
+//                                                                         
+//  Copyright (C) 2016-2017                                                
+//    CEA (Commissariat à l'énergie atomique et aux énergies               
+//         alternatives)                                                   
+//                                                                         
+//  you can redistribute it and/or modify it under the terms of the GNU    
+//  Lesser General Public License as published by the Free Software        
+//  Foundation, version 2.1.                                               
+//                                                                         
+//  It is distributed in the hope that it will be useful,                  
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of         
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the          
+//  GNU Lesser General Public License for more details.                    
+//                                                                         
+//  See the GNU Lesser General Public License version 2.1                  
+//  for more details (enclosed in the file licenses/LGPLv2.1).             
+//                                                                         
+//                                                                         
+
+syntax = "proto2";
+
+package configuration;
+
+import "common.proto";
+import "libcall.proto";
+import "syscall.proto";
+import "instruction.proto";
+import "analysis_config.proto";
+
+message call_name_t {
+  required uint64 address = 1;
+  required string name    = 2;
+}
+
+message configuration {
+  optional uint64 start                 = 1;
+  optional uint64 stop                  = 2;
+  repeated uint64 call_skips            = 3; /* equivalent to old skip-full */
+  repeated uint64 fun_skips             = 4; /* equivalent to skip-auto */
+  repeated libcall_types.libcall_pol libcalls = 5;
+  repeated syscall_types.syscall_pol syscalls = 6;
+  repeated instruction_pol.instr_pol instrs = 7; /* Used by Binsec only */
+  repeated string policy                = 8;     /* Used by Binsec only */
+  repeated input_t inputs               = 9; /* use both to patch or gather additional concrete infos */
+  repeated call_name_t call_map         = 10;
+  repeated uint64 breakpoints           = 11;
+  repeated common.memory_t initial_state= 12;
+
+  /* Analysis config */
+  optional common.analysis_direction_t direction = 13 [default = FORWARD];
+  optional uint32 ksteps                = 14 [default = 0];
+  optional string analysis_name         = 15 [default = ""];
+  optional common.solver_t solver       = 16 [default = Z3];
+  optional bool incremental             = 17 [default = false];
+  optional uint32 timeout               = 18 [default = 0];
+  optional bool optim_cstprop           = 19 [default = false];
+  optional bool optim_rebase            = 20 [default = false];
+  optional bool optim_row               = 21 [default = false];
+  optional bool optim_rowplus           = 26 [default = false];
+  optional bool optim_eqprop            = 27 [default = false];
+  optional common.call_convention_t callcvt = 22 [default = CDECL];
+  optional common.action default_action = 23 [default = SYMB];
+  optional uint32 verbosity             = 24 [default = 0];
+  optional analysis_config.specific_parameters_t additional_parameters  = 25; /* Analysis specific parameters */
+}
+
+/* Maybe not useful to such complex description of a rule
+message policy_rule {
+
+  enum policy_rule_kind {
+    RULE    = 0;
+    DEFAULT = 1;
+  }
+  required policy_rule_kind typeid = 0;
+  required string action           = 1;
+  optional string pred_loc         = 2;
+  optional string pred_inst        = 3;
+  optional string pred_exp         = 4;
+  optional string pred_sigma       = 5;
+}
+*/
+
+message input_t {
+  enum input_kind {
+    REG = 0;
+    MEM = 1;
+    INDIRECT = 2;
+  }
+  enum when_t {
+    BEFORE = 0;
+    AFTER  = 1;
+  }
+  required input_kind typeid      = 1;
+  required uint64 address         = 2;
+  required when_t when            = 3;
+  required common.action action   = 4; //Pin DEFAULT,SYMB=/, CONC=retrieve valu, PATH=patch value
+  // iteration for patching point
+  optional uint32 iteration     = 100 [default = 0];
+  oneof input_cnt {
+    common.register_t reg= 7; /* for reg */
+    common.memory_t mem  = 8; /* for mem */
+    common.indirect_register_t indirect  = 9; /* for indirect */
+  }
+}

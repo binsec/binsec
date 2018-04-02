@@ -1,0 +1,91 @@
+entry_point : (0x00000000, 0)
+word_size : 32
+endianness : little
+
+#declaration
+var CF : 1 <FLAG>; 
+var DF : 1 <FLAG>; 
+var ZF : 1 <FLAG>; 
+var OF : 1 <FLAG>; 
+var SF : 1 <FLAG>; 
+var AF : 1 <FLAG>; 
+var PF : 1 <FLAG>; 
+var NOP : 1      ; 
+
+var eax : 32     ; 
+var ecx : 32     ; 
+var edx : 32     ; 
+var ebx : 32     ; 
+var esp : 32     ; 
+var ebp : 32     ; 
+var esi : 32     ; 
+var edi : 32     ; 
+
+var mm0 : 64     ; 
+var mm1 : 64     ; 
+var mm2 : 64     ; 
+var mm3 : 64     ; 
+var mm4 : 64     ; 
+var mm5 : 64     ; 
+var mm6 : 64     ; 
+var mm7 : 64     ; 
+
+var st0 : 80     ; 
+var st1 : 80     ; 
+var st2 : 80     ; 
+var st3 : 80     ; 
+var st4 : 80     ; 
+var st5 : 80     ; 
+var st6 : 80     ; 
+var st7 : 80     ; 
+
+var xmm0 : 128   ; 
+var xmm1 : 128   ; 
+var xmm2 : 128   ; 
+var xmm3 : 128   ; 
+var xmm4 : 128   ; 
+var xmm5 : 128   ; 
+var xmm6 : 128   ; 
+var xmm7 : 128   ; 
+
+var res8 : 8     ; 
+var res16 : 16   ; 
+var res32 : 32   ; 
+var res64 : 64   ; 
+
+var temp8 : 8    ; 
+var temp16 : 16  ; 
+var temp32 : 32  ; 
+var temp40 : 40  ; 
+var temp48 : 48  ; 
+var temp56 : 56  ; 
+var temp64 : 64  ; 
+var temp72 : 72  ; 
+var temp80 : 80  ; 
+var temp88 : 88  ; 
+var temp96 : 96  ; 
+var temp104 : 104; 
+var temp112 : 112; 
+var temp120 : 120; 
+var temp128 : 128; 
+var temp256 : 256; 
+var temp9 : 9    ; 
+var temp17 : 17  ; 
+var temp33 : 33  ; 
+var temp : 32    ; 
+var cpt : 16     ; 
+var cpt : 32     ; 
+
+
+
+CF := 0<1>                 ; 
+DF := 0<1>                 ; 
+SF := 0<1>                 ; 
+ebp := (stack, 0x7fffee28) ; 
+esp := (stack, 0x7fffee28) ; 
+eax := 0<32>               ; 
+ebx := 0<32>               ; 
+ecx := 0<32>               ; 
+edx := 0<32>               ; 
+edi := 0<32>               ; 
+esi := 0<32>               ; 

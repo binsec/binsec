@@ -1,0 +1,599 @@
+//                                                                         
+//  This file is part of Binsec.                                           
+//                                                                         
+//  Copyright (C) 2016-2017                                                
+//    CEA (Commissariat à l'énergie atomique et aux énergies               
+//         alternatives)                                                   
+//                                                                         
+//  you can redistribute it and/or modify it under the terms of the GNU    
+//  Lesser General Public License as published by the Free Software        
+//  Foundation, version 2.1.                                               
+//                                                                         
+//  It is distributed in the hope that it will be useful,                  
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of         
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the          
+//  GNU Lesser General Public License for more details.                    
+//                                                                         
+//  See the GNU Lesser General Public License version 2.1                  
+//  for more details (enclosed in the file licenses/LGPLv2.1).             
+//                                                                         
+//                                                                         
+
+syntax = "proto2";
+
+package libcall_types;
+
+import "common.proto";
+
+
+enum lib_ident {
+  INVALID    = 0;
+  PRINTF     = 1;
+  STRCPY     = 2;
+  ATOI       = 3;
+  MALLOC     = 4;
+  FREE       = 5;
+  MEMCPY     = 6;
+  MEMSET     = 7;
+  FGETC      = 8;
+
+  READ       = 9;
+  STRCHR     = 10;
+  EXIT       = 11;
+  STRCMP     = 12; 
+  CTYPE_B_LOC = 13; 
+  FSCANF     = 14;
+  STRRCHR    = 15;  /* almost = as strchr */
+  STRNCPY    = 16; 
+  FSTAT      = 17; 
+  REALLOC    = 18; 
+  MMAP    	 = 19; 
+  QSORT      = 20; 
+  BSEARCH    = 21; 
+  OPEN_STUB       = 22;	// open_stub instead of open, to avoid open keywork in ocaml compilation :)
+  LSEEK       = 23;	
+  FREAD       = 24;
+  STRNCMP     = 25; 
+  MEMCMP      = 26; 
+  FXSTAT64    = 27; 
+
+  
+  GETMODULEHANDLE = 100; //Start Windows Calls here
+  GETPROCADDRESS  = 101;
+
+  GETMAINARGS     = 102;
+  GETHOSTNAME     = 103;
+  GENERIC   = 0xFF;
+  /* .... */
+}
+
+/* ================ Main types ==============  */
+message libcall_pol {
+  required string name                  = 1;
+  optional lib_ident ident              = 2 [default = GENERIC];
+  optional common.tracing_action action = 3 [default = SKIP]; //Useless if no call_map provided
+  repeated uint64 restrict_addresses    = 4;
+
+  oneof libcall_cnt {
+    strcpy_pol strcpy    = 5;
+    printf_pol printf    = 6;
+    atoi_pol atoi        = 7;
+    malloc_pol malloc    = 8;
+    getmodulehandle_pol getmodulehandle = 9;
+    getprocaddress_pol getprocaddress   = 10;
+    getmainargs_pol    getmainargs      = 11;
+    gethostname_pol    gethostname      = 12;
+    free_pol free        = 13;
+    memcpy_pol         memcpy           = 14;
+    memset_pol         memset           = 15;
+    fgetc_pol          fgetc            = 16;
+    read_pol read        = 17;
+    strchr_pol strchr    = 18;
+    exit_pol exit        = 19;
+    strcmp_pol strcmp    = 20;
+    ctype_b_loc_pol ctype_b_loc = 22;
+    fscanf_pol fscanf 	 = 23;
+    strncpy_pol strncpy  = 24;
+    fstat_pol fstat 	 = 25;
+    realloc_pol realloc  = 26;
+    mmap_pol mmap        = 27;
+    qsort_pol qsort      = 28;
+    bsearch_pol bsearch  = 29;
+    open_pol open_stub   = 30; // open_stub instead of open, to avoid open keywork in ocaml compilation :)
+    lseek_pol lseek      = 31; 
+    fread_pol fread      = 32;
+    strncmp_pol strncmp  = 33;
+    memcmp_pol memcmp   = 34;
+    fxstat64_pol fxstat64 = 35;
+
+    generic_pol generic  = 50;
+
+
+    /* ..... */
+  }
+}
+
+message libcall_t {
+  required uint64 func_addr    = 1;
+  required string func_name    = 2;
+  required bool is_traced      = 3;
+  required lib_ident ident     = 4;
+
+  oneof libcall_cnt {
+    strcpy_t strcpy   = 5;
+    printf_t printf   = 6;
+    atoi_t atoi       = 7;
+    malloc_t malloc   = 8;
+    getmodulehandle_t getmodulehandle = 9;
+    getprocaddress_t getprocaddress   = 10;
+    getmainargs_t    getmainargs      = 11;
+    gethostname_t    gethostname      = 12;
+    free_t free       = 13;
+    memcpy_t         memcpy           = 14;
+    memset_t         memset           = 15;
+    fgetc_t          fgetc            = 16;
+
+    generic_t generic = 17;
+    read_t read       = 18;
+    strchr_t strchr   = 19;
+    exit_t exit       = 20;
+    strcmp_t strcmp   = 21;
+    ctype_b_loc_t ctype_b_loc = 23;
+    fscanf_t fscanf   = 24;
+    strncpy_t strncpy = 25;
+    fstat_t fstat 	  = 26;
+    realloc_t realloc = 27;
+    mmap_t mmap 	  = 28;
+    qsort_t qsort 	  = 29;
+    bsearch_t bsearch = 30;
+    open_t open_stub       = 31; // open_stub instead of open, to avoid open keywork in ocaml compilation :)
+    lseek_t lseek       = 32; 
+    fread_t fread       = 33;
+    strncmp_t strncmp   = 34;
+    memcmp_t memcmp   = 35;
+    fxstat64_t fxstat64  = 36;
+    
+    /*  ..... */
+  }
+}
+/* ============================================ */
+
+
+/* =============== Policies =============== */
+message generic_pol {
+  required common.action ret = 1 ;
+}
+
+message ctype_b_loc_pol {
+  required common.memory_pol table = 1;
+  required common.action ret   = 2;
+}
+
+message exit_pol {
+}
+
+
+message fscanf_pol {
+  required common.action stream =1;
+  required common.action elems =2;
+  required common.action ret   =3;
+}
+
+message read_pol {
+  required common.action fd         = 1;
+  required common.memory_pol buf    = 2;
+  required common.action count    = 3;
+  required common.action ret        = 4;
+}
+
+message fread_pol {
+  required common.memory_pol ptr         = 1;
+  required common.action size        = 2;
+  required common.action nmemb       = 3;
+  required common.action stream       = 4;
+  required common.action ret         = 5;
+}
+
+message strcmp_pol {
+  required common.memory_pol src    = 1;
+  required common.memory_pol dst    = 2;
+  required common.action ret        = 3;
+}
+
+message strncmp_pol {
+  required common.action s1    = 1;
+  required common.action s2    = 2;
+  required common.action n      = 3;
+  required common.action ret       = 4;
+}
+
+message memcmp_pol {
+  required common.action s1    = 1;
+  required common.action s2    = 2;
+  required common.action n      = 3;
+  required common.action ret       = 4;
+}
+
+message strchr_pol {
+  required common.memory_pol sc   = 1;
+  required common.memory_pol c    = 2;
+  required common.action ret      = 3;
+}
+
+
+
+message strncpy_pol {
+  required common.action dst   = 1;
+  required common.action src   = 2;
+  required common.action n     = 3;
+  required common.action ret   = 4;
+
+}
+
+message fstat_pol {
+//  required common.action fd    = 1;
+//  required common.memory_t buf = 2;
+//  required common.action ret   = 3;
+}
+
+message fxstat64_pol{
+
+}
+
+message realloc_pol {
+  required common.action ptr  = 1;
+  required common.action size = 2;
+  required common.action ret  = 3;
+}
+
+message mmap_pol {
+  required common.action addr    = 1;
+  required common.action length  = 2;
+  required common.action prot    = 3;
+  required common.action flags   = 4;
+  required common.action fd      = 5;
+  required common.action offset  = 6;
+  required common.memory_pol ret = 7;
+}
+
+message qsort_pol {
+  required common.memory_pol base =1;
+  required common.action nmemb    =2;
+  required common.action size     =3;
+  required common.action compare  =4;
+}
+
+message bsearch_pol {
+  required common.memory_pol key  =1; 
+  required common.memory_pol base =2; 
+  required common.action nmemb    =3;
+  required common.action size     =4;
+  required common.action compare  =5;
+  required common.memory_pol ret  =6; 
+}                                    
+
+message open_pol {
+  required common.memory_pol pathname  =1; 
+  required common.action flags         =2; 
+  required common.action mode          =3;
+  required common.action ret           =4;
+}         
+
+message strcpy_pol {
+  required common.memory_pol src    = 1;
+  required common.memory_pol dst    = 2;
+  required common.action ret        = 3;
+}
+
+message printf_pol {
+  required common.memory_pol format = 1;
+  required common.action ret        = 2;
+}
+
+message atoi_pol {
+  required common.memory_pol src = 1;
+  required common.action ret     = 3;
+}
+
+message malloc_pol {
+  required common.action size   = 1;
+  required common.action ret    = 2;
+}
+
+message getmodulehandle_pol {
+  required common.memory_pol module_name = 1;
+  required common.action ret             = 2;
+}
+
+message getprocaddress_pol {
+  required common.action hmodule       = 1;
+  required common.memory_pol proc_name = 2;
+  required common.action ret           = 3;
+}
+
+message getmainargs_pol {
+  required common.memory_pol argc      = 1;
+  required common.memory_pol argv      = 2;
+  required common.memory_pol env       = 3;
+  required common.action     dowildcard = 4;
+  required common.memory_pol startinfo = 5;
+  required common.action ret           = 6;
+}
+
+message gethostname_pol {
+  required common.memory_pol name     = 1;
+  required common.action     namelen  = 2;
+  required common.action     ret      = 3;
+}
+
+message free_pol {
+  required common.action ptr  = 1;
+}
+
+message memcpy_pol {
+  required common.memory_pol dest = 1;
+  required common.memory_pol src  = 2;
+  required common.action     size = 3;
+  required common.action     ret  = 4;
+}
+
+message memset_pol {
+  required common.memory_pol s    = 1;
+  required common.action     c    = 2;
+  required common.action     size = 3;
+  required common.action     ret  = 4;
+}
+
+message fgetc_pol {
+  required common.action stream = 1;
+  required common.action ret    = 2;
+}
+
+message lseek_pol {
+  required common.action fd     = 1 ;
+  required common.action offset = 2 ;
+  required common.action whence = 3 ;
+  required common.action ret    = 4 ;
+}
+/* ========================================= */
+
+
+/* ============= Calls concrete infos =========== */
+
+message exit_t {
+}
+
+message generic_t {
+  required uint64 ret = 1;
+}
+
+/* piqi is not case sensitive, D -> dd */
+enum fscanf_enum {
+  d = 0;
+  dd = 1;
+  i = 2;
+  o = 3;
+  u = 4;
+  x = 5;
+  xx = 6;
+  f = 7;
+  e = 8; 
+  g = 9;
+  ee = 10;
+  a = 11;
+  s = 12;
+  c = 13;
+  sb = 14 ; // square bracet [
+  p = 15;
+  n = 16 ;   
+}
+
+message fscanf_elem_t {
+  required fscanf_enum type = 1;
+  required uint64 addr = 2;
+  oneof fscanf_cnt {
+	uint64 value_dec = 3;
+    string value_string = 4; 
+  }
+}
+
+
+message fscanf_t {
+  required uint64 stream = 1;
+  repeated fscanf_elem_t elems = 2;
+  required uint64 ret = 3;
+}
+
+
+message ctype_b_loc_t {
+  required common.memory_t table = 1;
+  required uint64 ret  = 2;
+}
+
+// message ignore_t {
+// }
+message read_t {
+  required uint64 fd             = 1;
+  required common.memory_t buf   = 2;
+  required uint64 count          = 3;
+  required uint64 ret            = 4;
+}
+
+message fread_t {
+  required common.memory_t ptr   = 1;
+  required uint64 size           = 2;
+  required uint64 nmemb          = 3;
+  required uint64 stream         = 4;
+  required uint64 ret            = 5;
+}
+
+message strchr_t {
+  required uint64 s   		   = 1;
+  required uint64 c            = 2;
+  required uint64 size_max     = 3;
+  required uint64 ret          = 4;
+}
+
+
+
+message strncpy_t {
+  required uint64 dst	       = 1;
+  required uint64 src          = 2;
+  required uint64 n	           = 3;
+  required uint64 ret          = 4;
+}
+
+message fstat_t {
+  required uint64 fd = 1;
+  required common.memory_t buf = 2;
+  required uint64 ret          = 3;
+}
+
+message fxstat64_t {
+  required uint64 vers = 1;
+  required uint64 fd   = 2;
+  required common.memory_t buf = 3;
+  required uint64 ret          = 4;
+}
+
+message realloc_t {
+  required uint64 ptr = 1;
+  required uint64 size		   = 2;
+  required uint64 ret          = 3;
+}
+
+message mmap_t {
+  required uint64 addr          	= 1;
+  required uint64 length		= 2;
+  required uint64 prot 			= 3;
+  required uint64 flags 		= 4;
+  required uint64 fd 			= 5;
+  required uint64 offset 		= 6;
+  required common.memory_t ret  = 7;
+}
+
+message qsort_t {
+  required common.memory_t base = 1;
+  required uint64 nmemb			= 2;
+  required uint64 size 			= 3;
+  required uint64 compare 		= 4;
+}
+
+message bsearch_t {
+  required common.memory_t key  = 1;
+  required common.memory_t base = 2;
+  required uint64 nmemb			= 3;
+  required uint64 size 			= 4;
+  required uint64 compare 		= 5;
+  required common.memory_t ret	= 6;
+}
+
+message open_t {
+  required common.memory_t pathname     = 1;
+  required uint64 flags			= 3;
+  required uint64 mode 			= 4;
+  required uint64 ret    		= 5;
+}
+
+message strcpy_t {
+  required common.memory_t src = 1;
+  required common.memory_t dst = 2;
+  required uint64 ret          = 3;
+}
+
+message strcmp_t {
+  required uint64 s1 = 1;
+  required uint64 s2 = 2;
+  required uint64 size_max_s1  = 3;
+  required uint64 size_max_s2  = 4;
+  required uint64 ret          = 5;
+}
+
+message strncmp_t {
+  required uint64 s1  = 1;
+  required uint64 s2  = 2;
+  required uint64 n   = 3;
+  required uint64 ret = 4;
+}
+
+message memcmp_t {
+  required uint64 s1  = 1;
+  required uint64 s2  = 2;
+  required uint64 n   = 3;
+  required uint64 ret = 4;
+}
+
+
+
+
+message printf_t {
+  required common.memory_t format  = 1;
+  required uint64 ret              = 2;
+}
+
+message atoi_t {
+  required common.memory_t src = 1;
+  required uint64 ret          = 3;
+}
+
+message malloc_t {
+  required uint64 size   = 1;
+  required uint64 ret    = 2;
+}
+
+message getmodulehandle_t {
+  required common.memory_t module_name = 1;
+  required uint64 ret                  = 2;
+}
+
+message getprocaddress_t {
+  required uint64 hmodule            = 1;
+  required common.memory_t proc_name = 2;
+  required uint64 ret                = 3;
+}
+
+message getmainargs_t {
+  required common.memory_t argc      = 1;
+  required common.memory_t argv      = 2;
+  required common.memory_t env       = 3;
+  required uint64          dowildcard= 4;
+  required common.memory_t startinfo = 5;
+  required uint64 ret                = 6;
+}
+
+message gethostname_t {
+  required common.memory_t name      = 1;
+  required uint64          namelen   = 2;
+  required uint64          ret       = 3;
+}
+
+message free_t {
+  required uint64 ptr   = 1;
+}
+
+message memcpy_t {
+  required common.memory_t dest = 1;
+  required common.memory_t src  = 2;
+  required uint64          size = 3;
+  required uint64          ret  = 4;
+}
+
+message memset_t {
+  required common.memory_t s    = 1;
+  required uint64          c    = 2;
+  required uint64          size = 3;
+  required uint64          ret  = 4;
+}
+
+message fgetc_t {
+  required uint64 stream = 1;
+  required uint64 ret    = 2;
+}
+
+message lseek_t {
+  required uint64 fd = 1;
+  required uint64 offset = 2;
+  required uint64 whence = 3;
+  required uint64 ret    = 4;
+}
+/* ============================================== */

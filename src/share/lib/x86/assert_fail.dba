@@ -1,0 +1,3 @@
+print "*** warning: assert call ***\n";
+esp<32> := (esp + (cst, 4<32>));
+goto @[(esp - (cst, 4<32>)),<-,4];

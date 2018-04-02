@@ -1,0 +1,137 @@
+//                                                                         
+//  This file is part of Binsec.                                           
+//                                                                         
+//  Copyright (C) 2016-2017                                                
+//    CEA (Commissariat à l'énergie atomique et aux énergies               
+//         alternatives)                                                   
+//                                                                         
+//  you can redistribute it and/or modify it under the terms of the GNU    
+//  Lesser General Public License as published by the Free Software        
+//  Foundation, version 2.1.                                               
+//                                                                         
+//  It is distributed in the hope that it will be useful,                  
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of         
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the          
+//  GNU Lesser General Public License for more details.                    
+//                                                                         
+//  See the GNU Lesser General Public License version 2.1                  
+//  for more details (enclosed in the file licenses/LGPLv2.1).             
+//                                                                         
+//                                                                         
+
+syntax = "proto2";
+
+package analysis_config;
+
+import "common.proto";
+
+message specific_parameters_t {
+    enum analyse_type {
+        NONE = 0;
+        GENERIC = 1;
+        STANDARD = 2;
+        /* Put yours at 100  */
+    }
+    required analyse_type typeid = 1;
+    oneof analyse_param {
+        generic_analysis generic_params = 2;
+        standard_analysis standard_params = 3;
+        /* Put yours at 100 */
+    }
+}
+
+/*  ----------- Simple params ------------ */
+message standard_analysis {
+    optional uint64 target_addr = 1;
+    optional bool   uniq        = 2;
+    optional bool   get_formula = 3;
+}
+/* ---------------------------------------- */
+
+/*  ------------ Generic Analysis ------------- */
+message generic_analysis {
+    enum query_type {
+        SATISFIABILITY = 0;
+        VALUES = 1;
+    }
+
+    required query_type kind             = 1;
+    required uint64 target_addr          = 2;
+    required string dba                  = 3;
+    optional uint32 limit_values         = 4;
+    optional bool get_formula            = 5;
+    optional uint64 from_addr            = 6;
+    optional uint64 to_addr              = 7;
+    optional uint64 restrict_values_from = 8;
+    optional uint64 restrict_values_to    = 9;
+
+}
+
+message generic_analysis_results {
+    required common.smt_result result = 1;
+    repeated uint64 values            = 2;
+    optional string smt_formula       = 3;
+}
+/* ---------------------------------------------- */
+
+/* ------------- Call/Ret Analysis --------------- */
+message callret_analysis_results {
+    enum callret_labels {
+        VIOLABLE   = 1;
+        ALIGNED    = 2;
+        DISALIGNED = 3;
+        CAN_RETURN = 4;
+        SINGLE     = 5;
+        MULTIPLE   = 6;
+        STRONG     = 7;
+        WEAK       = 8;
+        SOLVER_WRONG = 9;
+        NO_CALL      = 10;
+        HAS_RETURNED = 11;
+    }
+
+    enum callret_status {
+        OK = 1;
+        VIOL = 2;
+    }
+
+    message call_data {
+        required uint64         addr   = 1;
+        required callret_status status = 2;
+    }
+
+    message ret_data {
+        required uint64         ret_addr    = 1;
+        required callret_status status      = 2;
+        repeated callret_labels labels      = 3;
+        repeated uint64         returnsites = 4;
+        required uint32         solve_count = 5;
+        repeated call_data      calls       = 6;
+    }
+
+    repeated ret_data values = 1;
+}
+/* ----------------------------------------------- */
+
+/* --------- Opaque Predicates Analysis ---------- */
+message po_analysis_results {
+    enum po_status {
+        UNKNOWN    = 1; /* Partially covered formula SAT */
+        NOT_OPAQUE = 2; /* Not opaque because fully covered */
+        OPAQUE     = 3; /* Formula UNSAT */
+        LIKELY     = 4; /* Formula TO */
+    }
+
+    message po_data {
+        required uint64 jmp_addr        = 1;
+        required po_status status       = 2;
+        required uint32 ksteps          = 3;
+        required float computation_time = 4;
+        optional uint32 nb_paths        = 5;
+        optional uint64 alive_branch    = 6;
+        optional string formula         = 7;
+    }
+
+    repeated po_data values = 1;
+}
+/* ----------------------------------------------- */

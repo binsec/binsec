@@ -1,0 +1,82 @@
+opam-version: "1.2"
+name: "binsec"
+version: "0.1"
+maintainer: "richard.binochon@cea.fr"
+authors: [
+"Adel Djoudi"
+"Benjamin Farinier"
+"Feist Josselin"
+"Frédéric Besson"
+"Guillaume Jeanne"
+"Josselin Feist"
+"Richard Bonichon"
+"Robin David"
+"Ta Thanh Dinh"
+]
+homepage: "http://binsec.gforge.inria.fr/"
+license: "GNU Lesser General Public License version 2.1"
+#dev-repo: "https://.../.git"
+doc: ["http://binsec.gforge.inria.fr/apiref/index.html"]
+bug-reports: "mailto:binsec _at_ saxifrage.saclay.cea.fr"
+tags: [
+  "deductive"
+  "program verification"
+  "formal specification"
+  "automated theorem prover"
+  "Binary"
+  "plugins"
+  "abstract interpretation"
+  "dataflow analysis"
+  "linking"
+  "disassemble"
+]
+
+build: [
+  ["sh" "-eux" "./run_autoconf_if_needed.sh"] # when used in pinned mode,
+                                              # the configure *cannot* yet be
+                                              # generated
+  ["sh" "-eux" "./run_configure.sh" "--prefix" prefix]
+  [make "-C" "src" "-j%{jobs}%"]
+]
+
+install: [
+  [make "-C" "src" "install"]
+]
+
+remove: [
+  ["sh" "-eux" "./run_autoconf_if_needed.sh"] # when used in pinned mode,
+                                              # the configure *cannot* yet be
+                                              # generated
+  ["sh" "-eux" "./run_configure.sh" "--prefix" prefix ]
+  [make "-C" "src" "uninstall"]
+]
+
+# build-doc: [
+#    [make "-C" "doc" "download"]
+#    [make "-C" "doc" "FRAMAC_DOCDIR=%{frama-c:doc}%" "install"]
+# ]
+
+# build-test: [
+#   [make "-j%{jobs}%" "PTESTS_OPTS=-error-code" "tests"]
+# ]
+
+depends: [
+  "ocamlgraph" { >= "1.8.5" & < "1.9~" }
+  "ocamlfind"
+  "piqi"
+  "zarith"
+  "zmq"
+  "menhir"
+  "llvm"
+]
+
+depopts: [
+]
+
+messages: [
+]
+
+conflicts: [
+]
+
+available: [ ocaml-version >= "4.02.3" ]

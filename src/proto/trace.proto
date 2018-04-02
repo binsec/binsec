@@ -1,0 +1,140 @@
+//                                                                         
+//  This file is part of Binsec.                                           
+//                                                                         
+//  Copyright (C) 2016-2017                                                
+//    CEA (Commissariat à l'énergie atomique et aux énergies               
+//         alternatives)                                                   
+//                                                                         
+//  you can redistribute it and/or modify it under the terms of the GNU    
+//  Lesser General Public License as published by the Free Software        
+//  Foundation, version 2.1.                                               
+//                                                                         
+//  It is distributed in the hope that it will be useful,                  
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of         
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the          
+//  GNU Lesser General Public License for more details.                    
+//                                                                         
+//  See the GNU Lesser General Public License version 2.1                  
+//  for more details (enclosed in the file licenses/LGPLv2.1).             
+//                                                                         
+//                                                                         
+
+/*
+ * A trace consists of header information and a list of instruction information. 
+ * Different instructions have different information, so the main trick is to use 
+ * variant type to represent instructions.
+ *
+ * Since protobuf does not support variant type, the main trick is to use a message 
+ * have multiple optional sub-messages, and an id to identify which is the real 
+ * sub-message of the message.
+ */
+
+syntax = "proto2";
+
+import "dba.proto";
+import "common.proto";
+
+package trace_format;
+
+import "syscall.proto";
+import "libcall.proto";
+
+/* =========== Header ========= */
+message header_t {
+  enum architecture_t {
+    X86    = 0;
+    X86_64 = 1;
+  }
+
+  required architecture_t architecture          = 1;
+  required common.proto_size_t address_size     = 2;
+  optional common.ir_kind_t kind                = 3 [default = DBA];
+}
+
+
+message metadata_t {
+  enum typeid_metadata_t {
+    INVALID_METADATA = 0;
+    EXCEPTION_TYPE   = 1;
+    MODULE_TYPE      = 2;
+    WAVE_TYPE        = 3;
+  }
+
+  message exception_t {
+    required uint32 type_exception = 1;
+    required uint64 handler        = 2;
+  }
+
+  required typeid_metadata_t typeid = 1; 
+  oneof metadata_content {
+    string module_metadata          = 2;
+    exception_t exception_metadata  = 3;
+    uint32 wave_metadata            = 4;
+  }
+}
+/* ================================= */
+
+
+/* ======== Concrete infos ======== */
+message ins_con_info_t {
+  enum typeid_con_info_t {
+    INVALID       = 0;
+    REGREAD       = 1;
+    REGWRITE      = 2;
+    MEMLOAD       = 3;
+    MEMSTORE      = 4;
+    CALL          = 5;
+    SYSCALL       = 6;
+    NOT_RETRIEVED = 7;
+    NEXT_ADDRESS  = 8;
+    COMMENT       = 9;
+    WAVE          = 10;
+  }
+
+  required typeid_con_info_t typeid     = 1;
+  oneof conc_info_content {
+    common.register_t read_register     = 2;
+    common.register_t write_register    = 3;
+    common.memory_t load_memory         = 4;
+    common.memory_t store_memory        = 5;
+    libcall_types.libcall_t call        = 6;
+    syscall_types.syscall_t system_call = 8;
+    uint64 next_address                 = 9;
+    string reserved_comment             = 10;
+    uint32 wave                         = 11;
+  }
+}
+/* ================================= */
+
+/* ============ Main containers ========== */
+message instruction_t {
+  required uint32 thread_id              = 1;
+  required uint64 address                = 2;
+  required bytes opcode                  = 3;
+  repeated ins_con_info_t concrete_infos = 4;
+  optional dba.dba_list dba_instrs       = 5;
+}
+
+message body_t {
+  enum typeid_body_t {
+      METADATA    = 0;
+      INSTRUCTION = 1;
+  }
+
+  required typeid_body_t typeid = 1; 
+  oneof body_content {
+    metadata_t metadata         = 2;
+    instruction_t instruction   = 3;
+  }
+}
+
+message chunk_t {
+  repeated body_t body = 1;
+}
+/* ======================================= */
+
+
+message trace_t {//Not used anymore
+  required header_t header = 1;
+  repeated body_t body     = 2;
+}
