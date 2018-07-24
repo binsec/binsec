@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,21 +24,17 @@ open Server_callback
 let get_time_string () =
   let open Unix in
   let date = gmtime (time ()) in
-  let _month =
-    match date.tm_mon with
-    | 0 -> "Jan" | 1 -> "Feb" | 2 -> "Mar"
-    | 3 -> "Apr" | 4 -> "May" | 5 -> "Jun"
-    | 6 -> "Jul" | 7 -> "Aug" | 8 -> "Sep"
-    | 9 -> "Oct" | 10 -> "Nov" | 11 -> "Dec"
-    | _ -> assert false in
   Format.asprintf "%d:%02d:%02d" (date.tm_hour+1) date.tm_min date.tm_sec
 
-let single_thread_server_loop (): unit =
-  Network_io.bind !Options.port;
-  let items = ZMQ.Poll.mask_of [| (!Network_io.frontend_socket, ZMQ.Poll.In) |] in
+let single_thread_server_loop () =
+  let open Trace_config in
+  let open Config_piqi.Configuration in
+  Logger.set_verbosity (Int32.to_int default.configuration.verbosity);
+  Network_io.bind @@ Server_options.Server_port.get ();
+  let items = Zmq.Poll.mask_of [| (!Network_io.frontend_socket, Zmq.Poll.In) |] in
   try
     while true do
-      let pollResults = ZMQ.Poll.poll ~timeout:100 items in
+      let pollResults = Zmq.Poll.poll ~timeout:100 items in
       let frontResults = pollResults.(0) in
       match frontResults with
       | Some _ ->
@@ -47,12 +43,18 @@ let single_thread_server_loop (): unit =
         begin
           match content with
           | ident :: cmd :: msg :: _ ->
-            Logger.debug "%s [server]: received %s from %s!" (get_time_string()) cmd ident;
+             Logger.debug "%s [server]: received %s from %s!"
+               (get_time_string ()) cmd ident;
             Server_callback.request_dispatcher ident cmd msg
           | _ -> assert false
         end
-      | None -> ();
+      | None -> ()
     done
-
   with Stop -> ();
     Network_io.close_and_terminate_socket ()
+
+let run_server () =
+  if Server_options.is_enabled () then single_thread_server_loop ()
+
+let _ =
+  Cli.Boot.enlist ~name:"server" ~f:run_server

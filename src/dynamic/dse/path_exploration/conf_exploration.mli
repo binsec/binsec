@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -24,4 +24,4 @@ val get_conf_id : conf_t -> int
 val counter_conf : unit -> int
 
 val build_analysis_configuration :
-  string -> conf_t -> Options.trace_analysis_config
+  string -> conf_t -> Trace_config.t

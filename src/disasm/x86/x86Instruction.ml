@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,7 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Disasm_types.Make(
+include Instruction.Make(
   struct
     type t = X86Types.instruction_kind
     let pp ppf v = X86pp.pp_instr ppf v
@@ -27,14 +27,13 @@ include Disasm_types.Make(
 
 
 let to_generic_mnemonic = function
-  | X86Types.Bad -> Disasm_types.Mnemonic.bad
-  | X86Types.Unhandled -> Disasm_types.Mnemonic.unhandled
-  | other -> Disasm_types.Mnemonic.handled other X86pp.pp_instr 
+  | X86Types.Bad -> Mnemonic.unknown
+  | X86Types.Unsupported mnemonic_hint ->
+    Mnemonic.unsupported ~mnemonic_hint ()
+  | other -> Mnemonic.supported other X86pp.pp_instr
 
-  
+
 let to_generic_instruction v =
   let mnemonic = to_generic_mnemonic v.mnemonic in
-  let size = Basic_types.ByteSize.to_int v.size in
-  Disasm_types.GenericInstruction.create size v.opcode mnemonic
-      
-
+  let size = Size.Byte.to_int v.size in
+  Instruction.Generic.create size v.opcode mnemonic

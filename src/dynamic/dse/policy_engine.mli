@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,8 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-val eval_expr_policy : Policy_type.policy -> Dba_types.Statement.t -> Dba.expr ->
-  Path_pred_env.dse_analysis_sig_t -> Policy_type.cs_action
+val eval_expr_policy : Policy_type.policy -> Dba_types.Statement.t -> Dba.Expr.t ->
+  Path_predicate_env.dse_analysis_sig_t -> Policy_type.cs_action
 
 val print_policy : Policy_type.policy -> unit
 

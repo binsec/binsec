@@ -1,7 +1,7 @@
 ##########################################################################
-#  This file is part of Binsec.                                          #
+#  This file is part of BINSEC.                                          #
 #                                                                        #
-#  Copyright (C) 2016-2017                                               #
+#  Copyright (C) 2016-2018                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -25,6 +25,7 @@
 	$(PP) 'PIQIML $@'
 	$(PIQI2CAML) $(PIQI2CAML_FLAGS) $<
 
+# $(PIQI_DIR) is created by configure script
 $(PIQI_DIR)/%.piqi: $(PROTO_DIR)/%.proto
 	$(PP) 'PIQI $@'
 	$(PIQI) $(PIQI_FLAGS) -o $@ $<
@@ -34,7 +35,7 @@ CPP_PROTOBUF_DIR = $(PINSEC_DIR)/$(PINSEC_TYPES_DIR)/protobuf
 .PHONY: pre-protoc
 
 pre-protoc:
-	$(MKDIR) $(CPP_PROTOBUF_DIR)
+	$(MKDIR_P) $(CPP_PROTOBUF_DIR)
 
 %.pb.cc: src/proto/%.proto
 	$(PP) 'PROTOC $@'
@@ -52,10 +53,7 @@ protoc: pre-protoc $(PROTO_LSRC_FILES)
 clean::
 	$(RRM) $(CPP_PROTOBUF_DIR)
 
-.PHONY: prepiqi
-prepiqi:
-	$(MKDIR) $(PIQI_DIR)
+$(PIQI_ML_FILES): $(PIQI_FILES)
 
-$(PIQI_FILES): prepiqi
-$(PIQI_ML_FILES) : $(PIQI_FILES)
 piqi-ml : $(PIQI_ML_FILES)
+

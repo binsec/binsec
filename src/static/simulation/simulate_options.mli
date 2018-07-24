@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,30 +19,37 @@
 (*                                                                        *)
 (**************************************************************************)
 
+include Cli.S
+
 (** Options for simulation *)
 
-module StepByStep : Parameters.Boolean
+module StepByStep : Cli.BOOLEAN
 
-module FuzzerIterations : Parameters.Integer
+module FuzzerIterations : Cli.INTEGER
 
-module ConditionalStrategy : sig
-  type t = private
-    | Normal
-    | Else
+type strategy =
+  | Branch_if
+  | Branch_else
+  | Fail
 
-  val set : string -> unit
-  val get : unit -> t option
-  val cli_handler: Arg.spec
-end
+module Conditional_strategy : Cli.GENERIC with type t = strategy
 
+type semantic_mode =
+  | Flat
+  | Region
+  | Region_load_store
+  | Logic
+  | Rewrite
 
-module SemanticsMode : sig
-  val to_string : unit -> string
-  val arg : string * Arg.spec * string
+module Semantic_mode : Cli.GENERIC with type t = semantic_mode
 
-  val flat_or_not_basic : unit -> bool
-  val flat_or_basic_and_full : unit -> bool
-  val basic : unit -> bool
-  val basic_affine : unit -> bool
-  val flat : unit -> bool
-end
+(* module SemanticsMode : sig
+ *   val to_string : unit -> string
+ *   val arg : string * Arg.spec * string
+ *
+ *   val flat_or_not_basic : unit -> bool
+ *   val flat_or_basic_and_full : unit -> bool
+ *   val basic : unit -> bool
+ *   val basic_affine : unit -> bool
+ *   val flat : unit -> bool
+ * end *)

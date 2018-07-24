@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,17 +23,17 @@
 
 
 type globals = Dba_types.Caddress.Set.t
-                       
+
 module type AbstractDomain =
 sig
   type t
   type equalities
   type thresholds = int array * int array * int array * int array
   type elementsRecord = Region_bitvector.t list Dba_types.AddressStack.Map.t
-  type naturalPredicatesRecord = (Dba.cond * Dba.cond) Dba_types.Caddress.Map.t
+  type naturalPredicatesRecord = (Dba.Expr.t * Dba.Expr.t) Dba_types.Caddress.Map.t
 
   (** [get_initial_state] *)
-  val get_initial_state: Dba.instruction list -> t
+  val get_initial_state: Dba.Instr.t list -> t
 
   (** [top] *)
   val top: (t * High_level_predicate.t * equalities)
@@ -67,13 +67,13 @@ sig
 
 
   val regs_in_expr_to_string:
-    Dba.expr -> Format.formatter -> t * High_level_predicate.t * equalities -> unit
+    Dba.Expr.t -> Format.formatter -> t * High_level_predicate.t * equalities -> unit
 
- (** [post addr instr m] *)
+  (** [post addr instr m] *)
   val post :
     (t * High_level_predicate.t * equalities) ->
     Dba_types.AddressStack.Map.key ->
-    Dba.instruction ->
+    Dba.Instr.t ->
     (elementsRecord * naturalPredicatesRecord) ->
     Smt_bitvectors.smtBvExprAlt list ->
     Dba_types.Caddress.Set.t ->
@@ -81,20 +81,19 @@ sig
     Dba_types.Caddress.Set.t Dba_types.Caddress.Map.t ->
     Region_bitvector.t list ->
     ((Dba_types.AddressStack.Map.key * t * High_level_predicate.t * equalities) list) *
-      (elementsRecord * naturalPredicatesRecord) *
-      (Smt_bitvectors.smtBvExprAlt list) *
-      (Dba_types.Caddress.Set.t Dba_types.AddressStack.Map.t)
+    (elementsRecord * naturalPredicatesRecord) *
+    (Smt_bitvectors.smtBvExprAlt list) *
+    (Dba_types.Caddress.Set.t Dba_types.AddressStack.Map.t)
 
   val env_to_smt_list:
     t ->
     int Basic_types.String.Map.t ->
-    Smtlib2.SmtVarSet.t ->
-    Smtlib2.smt_bv_expr list * Smtlib2.SmtVarSet.t
+    Formula.VarSet.t ->
+    Formula.bl_term list * Formula.VarSet.t
 
   val refine_state: t ->
-    ((Smtlib2.smt_expr * Smtlib2.smt_expr) list *
-        Smtlib2.smt_bv_expr list * Smtlib2.SmtVarSet.t * string *
-        int Basic_types.String.Map.t) ->
+    (Formula.def list * Formula.bl_term list * Formula.VarSet.t *
+     string * int Basic_types.String.Map.t) ->
     t
 
 end
@@ -119,8 +118,7 @@ sig
   val lognot: t -> t
   val add: t -> t -> t
   val sub: t -> t -> t
-  val umul: t -> t -> t
-  val smul: t -> t -> t
+  val mul: t -> t -> t
   val power: t -> t -> t
   val udiv: t -> t -> t
   val sdiv: t -> t -> t
@@ -148,16 +146,17 @@ sig
   val signed_extension: t -> int -> t
   val equal: t -> t -> bool
   val is_true: t -> Smt_bitvectors.condition_env -> globals -> Basic_types.Ternary.t
-  val guard: Dba.binary_op -> t -> t -> t * t
+  val guard: Dba.Binary_op.t -> t -> t -> t * t
   val pp : Format.formatter -> t -> unit
   val to_string: t -> string
   val max : t -> Region_bitvector.t
   val elements: t -> Region_bitvector.t list
   val restrict: t -> int -> int -> t
   val concat: t -> t -> t
-  val to_smt: t -> Smtlib2.smt_bv_expr -> Smtlib2.smt_bv_expr list
-  val smt_refine: t -> ((Smtlib2.smt_expr * Smtlib2.smt_expr) list *
-                             Smtlib2.smt_bv_expr list * Smtlib2.SmtVarSet.t * string *
-                             int Basic_types.String.Map.t) -> string -> t
+  val to_smt: t -> Formula.bv_term -> Formula.bl_term list
+  val smt_refine: t ->
+    (Formula.def list * Formula.bl_term list *
+     Formula.VarSet.t * string * int Basic_types.String.Map.t) ->
+    string -> t
 
 end

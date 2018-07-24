@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -29,6 +29,7 @@ type identification = private {
   elf_abiversion : u8;
 }
 
+(* Main header. *)
 type program = private {
   e_ident     : identification;
   e_type      : u16;
@@ -46,6 +47,7 @@ type program = private {
   e_shstrndx  : u16;
 }
 
+(* ELF section header. *)
 type section = private {
   sh_name      : u32;
   sh_type      : u32;
@@ -59,6 +61,18 @@ type section = private {
   sh_entsize   : u64;
   sh_name_str : string;
 }
+
+(* ELF program header *)
+type program_header = private {
+  p_type    : u32;
+  p_flags   : u32;
+  p_offset  : u64;
+  p_vaddr   : u64;
+  p_paddr   : u64;
+  p_filesz  : u64;
+  p_memsz   : u64;
+  p_align   : u64;
+};;
 
 type symbol = private {
   st_name  : u32;
@@ -74,3 +88,5 @@ include Loader_sigs.S
   with type Section.header = section
    and type Symbol.header  = symbol
    and type Img.header     = program
+
+val program_headers: Img.t -> program_header array

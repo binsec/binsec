@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,6 +20,7 @@
 (**************************************************************************)
 
 (** Definitions for binary patcher *)
+
 (** {2 Patch map} *)
 
 module PatchMap : sig
@@ -32,11 +33,10 @@ module PatchMap : sig
   (** [load_file filename] loads patches contained in [filename]
 
       The patches can be given in the following format,
-      defined in {v parser/parser.mly v}:
+      defined in file [parser/parser.mly]:
 
-      {ul {- (address "....") }
-      {- (address (i_1 ... i_n)) }
-      }
+      {ul {- (address "....")}
+      {- (address (i_1 ... i_n))}}
 
       i.e. the file contains a list of small S-expressions where:
       {ul {- the first element is an address (hexadecimal or decimal integer); }
@@ -49,21 +49,22 @@ module PatchMap : sig
   *)
 
   val of_list :
-    (Dba_types.Virtual_address.t * Basic_types.Binstream.t) list -> t
+    (Virtual_address.t * Binstream.t) list -> t
   (** [of_list l] converts an association list [l] of addresses to opcodes to a
       patch map  *)
 
 
   val add_bytes :
-    Dba_types.Virtual_address.t -> Basic_types.Binstream.t -> t -> t
-  (** [add_bytes address bytes patchmap] writes the opcode [bytes] to [address]
-      in the [patchmap]. The full length of the byte sequence is writtent
-      starting at [address]. *)
+    Virtual_address.t -> Binstream.t -> t -> t
+    (** [add_bytes address bytes patchmap] writes the opcode [bytes] to [address]
+        in the [patchmap]. The full length of the byte sequence is writtent
+        starting at [address]. *)
 end
 
 
-(** {2 Writable loader}
+(** {2 Writable loader} *)
 
+(**
     This module is a simple extension to the loaders of [binsec] where it is
     allowed to rewrite parts of the binary.
 

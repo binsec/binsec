@@ -1,0 +1,16 @@
+* 0.2 [2018-07-23 Mon]
+
+  - New symbolic execution engine
+  - New interpreter for binary code
+  - Improved logical representation for formulas
+  - New internal control-flow-graph representation
+  - Action language for symbolic execution goals
+  - Improved x86 decoder
+    - Fixed bugs reported by KAIST
+  - Docker support
+    - includes Unisim-vp ARM v7 decoder 
+
+
+* 0.1 [2017-03-01 Wed]
+
+  First release

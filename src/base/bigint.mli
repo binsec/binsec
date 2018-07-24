@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -75,3 +75,4 @@ val shift_right_big_int : t -> int -> t
 val shift_right_towards_zero_big_int : t -> int -> t
 val extract_big_int : t -> int -> int -> t
 
+val of_bits : string -> t

@@ -222,7 +222,7 @@ type address = {
   addrIndex : (scale * reg32) option     (** Optional index register, along
                                               with a scaling factor by which to
                                               multiply it *)
-  }
+}
 
 (** {6 Operands} *)
 
@@ -311,6 +311,7 @@ type instruction_kind =
   | Neg of sizeMode * genop32
   | Pop of sizeMode * genop32
   | PopS of segment_reg
+  | PopA of mode
   | Push of sizeMode * genop32
   | PushS of segment_reg
   | PushA of mode
@@ -340,7 +341,7 @@ type instruction_kind =
   | IMul3 of sizeMode * genop32 * genop32 * genop32
   | Div of sizeMode * genop32
   | IDiv of sizeMode * genop32
-  | Unhandled
+  | Unsupported of string
   | Bad
   | Loopnz of mode * address_size_mode * int64
   | Loopz of mode * address_size_mode * int64
@@ -398,9 +399,9 @@ type instruction_kind =
   | Movups of genopxmm * genopxmm
   | Movupd of genopxmm * genopxmm
   | Xlat of address_size_mode
+  | Aas
   | Aam of int
   | Aad of int
-  | Popa of sizeMode
   | Lsl of sizeMode * genop32 * genop32
   | Fld
   | Fxch of float_reg
@@ -408,3 +409,4 @@ type instruction_kind =
   | Sahf
   | Salc
   | Wait
+  | Popcnt of sizeMode * genop32 * genop32

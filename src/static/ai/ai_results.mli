@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,8 +24,8 @@
 val pp_file :
   ?filename:string ->
   ('a * 'b * 'c * 'd) Dba_types.AddressStack.Map.t ->
-  Disasm_types.pmap ->
-  ('e * Dba.cond) Dba_types.Caddress.Map.t ->
+  Pmap.t ->
+  ('e * Dba.Expr.t) Dba_types.Caddress.Map.t ->
   Dba_types.Caddress.Set.t Dba_types.AddressStack.Map.t ->
-  (Dba.expr -> Format.formatter -> 'a * 'b * 'c -> unit) -> unit
+  (Dba.Expr.t -> Format.formatter -> 'a * 'b * 'c -> unit) -> unit
 (** [pp_file ~filename] *)

@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,55 +19,38 @@
 (*                                                                        *)
 (**************************************************************************)
 
-exception UndeclaredVariable of string
-exception WrongInitializationSize of Dba.address * Dba.instruction
+
+exception WrongInitializationSize of Dba.address * Dba.Instr.t
+
+module Logger = Kernel_options.Logger
 
 let cur_address = ref 0
-
 let incr_address addr = cur_address := addr.Dba.id + 1
-
-let _threshold_merge (los1, his1, lou1, hiu1) (los2, his2, lou2, hiu2) =
-  (los1 @ los2, his1 @ his2, lou1 @ lou2, hiu1 @ hiu2)
-
-let _mk_threshold (los, his, lou, hiu) =
-  let open Infos in
-  let signed = BoundThreshold.mk_from_list los his
-  and unsigned = BoundThreshold.mk_from_list lou hiu in
-  WideningThreshold.mk signed unsigned
-
-let _empty_threshold = [], [], [], []
+let cur_address () = !cur_address
 
 
 module Declarations = struct
 
-  let declarations : (string, Dba.size * Dba.vartag option) Hashtbl.t =
-    Hashtbl.create 16
+  module SH = Basic_types.String.Htbl
 
-  let _init () = Hashtbl.reset declarations
-
-  let find name = Hashtbl.find declarations name
-  let size name = find name |> fst
-  let _check name  =
-    if not (Hashtbl.mem declarations name)
-    then raise (UndeclaredVariable name)
+  let declarations : (Dba.size * Dba.VarTag.t option) SH.t =
+    SH.create 16
 
   let add name size opttags =
-    Hashtbl.add declarations name (size, opttags)
+    SH.add declarations name (size, opttags)
 end
 
 
 module Mk = struct
   open Dba
   let checked_cond_expr e =
-    let cond = Dba.CondReif e in
-    ignore(Dba_utils.checksize_dbacond cond);
-    cond
-
+    ignore(Dba_utils.checksize_dbacond e);
+    e
 
   let filemode addr read_perm write_perm exec_perm =
     let access_to_dbabool = function
-      | true -> Dba.True
-      | false -> Dba.CondNot addr
+      | true -> Expr.one
+      | false -> Expr.zero
     in
     let open Dba_types in
     (addr, (Read read_perm, Write write_perm, Exec exec_perm)),
@@ -76,7 +59,6 @@ module Mk = struct
      access_to_dbabool exec_perm)
 
   module Predicates = struct
-    let mk_and p q = Dba.CondAnd(p, q)
     let rec of_list l =
       match l with
       | [] -> assert false
@@ -84,126 +66,55 @@ module Mk = struct
       | (elmt, (p1, p2, p3)) :: l ->
         let elmts, (q1, q2, q3) = of_list l in
         elmt :: elmts,
-        (mk_and p1 q1, mk_and p2 q2, mk_and p3 q3)
+        (Expr.logand p1 q1, Expr.logand p2 q2, Expr.logand p3 q3)
   end
 
   module Permissions = struct
-  let empty = Dba_types.Region.Map.empty, Dba_types.Rights.empty
+    let empty = Dba_types.Region.Map.empty, Dba_types.Rights.empty
 
-  let add_rights (p1, p2, p3) region rights =
-    let open Dba_types.Rights in
-    let update_rights v p rights =
-      let right_condition =
-        match find v rights with
-        | p' -> Dba.CondAnd (p, p')
-        | exception Not_found -> p
-      in add v right_condition rights
-    in
-    update_rights (R, region) p1 rights
-    |> update_rights (W, region) p2
-    |> update_rights (X, region) p3
+    let add_rights (p1, p2, p3) region rights =
+      let open Dba_types.Rights in
+      let update_rights v p rights =
+        let right_condition =
+          match find v rights with
+          | p' -> Expr.logand p p'
+          | exception Not_found -> p
+        in add v right_condition rights
+      in
+      update_rights (R, region) p1 rights
+      |> update_rights (W, region) p2
+      |> update_rights (X, region) p3
 
-  let add_permissions l region permissions =
-    try let p_l = Dba_types.Region.Map.find region permissions in
-      (Dba_types.Region.Map.add region (p_l @ l) permissions)
-    with Not_found ->
-      (Dba_types.Region.Map.add region l permissions)
+    let add_permissions l region permissions =
+      let ps =
+        match Dba_types.Region.Map.find region permissions with
+        | p_l -> p_l @ l
+        | exception Not_found -> l
+      in Dba_types.Region.Map.add region ps permissions
 
-  let add_permissions l region (perms, rights) =
-    add_permissions l region perms, rights
+    let add_permissions l region (perms, rights) =
+      add_permissions l region perms, rights
 
-  let add_rights v region (perms, rights) =
-    perms, add_rights v region rights
+    let add_rights v region (perms, rights) =
+      perms, add_rights v region rights
 
-  let of_list l =
-    let rec aux p = function
-      | [] -> p
-      | (region, permission, rights) :: l' ->
-        let p'= add_permissions permission region (add_rights rights region p)
-        in aux p' l'
-    in aux empty l
+    let of_list l =
+      let rec aux p = function
+        | [] -> p
+        | (region, permission, rights) :: l' ->
+          let p'= add_permissions permission region (add_rights rights region p)
+          in aux p' l'
+      in aux empty l
 
-end
-
-  let default_endianness = Dba_types.get_endianness
-   (* match !Dba.endiannness with
-    | [] -> raise UnknownEndianness
-    | endianness :: _ -> endianness
-   *)
-  module Lhs = struct
-    let lhs name size = Dba.LhsVar (name, size, None)
-    let restricted name (loff, roff) size =
-      Dba.LhsVarRestrict(name, size, loff, roff)
-
-    let declared name =
-      try
-        let size = Declarations.size name in
-        lhs name size
-      with
-      | Not_found -> raise (UndeclaredVariable name)
-
-    let declared_restricted name offs =
-      try
-        let size = Declarations.size name in
-        restricted name offs size
-      with
-      | Not_found -> raise (UndeclaredVariable name)
-
-    let store endianness size expr =
-      let size = int_of_string size in
-      Dba.LhsStore(size, endianness, expr)
-
-    let big_endian_store = store Dba.BigEndian
-    let little_endian_store = store Dba.LittleEndian
-    let default_store size expr =
-      store (default_endianness ()) size expr
-
-    let store expr size = function
-      | Some BigEndian -> big_endian_store size expr
-      | Some LittleEndian -> little_endian_store size expr
-      | None -> default_store size expr
   end
-
-  module Expr = struct
-    let id name size tags = Dba.ExprVar(name, size, tags)
-
-    let declared_id name =
-      try
-        let size, tags = Declarations.find name in
-        id name size tags
-      with
-      | Not_found -> raise (UndeclaredVariable name)
-
-    let sized_region region (value, size) =
-      let value = Bigint.big_int_of_string value in
-      Dba_types.Expr.constant ~region (Bitvector.create value size)
-
-    let constant (value, size) =
-      let value = Bigint.big_int_of_string value in
-      Dba_types.Expr.constant (Bitvector.create value size)
-
-    let load expr size endianness_opt =
-      let endianness =
-        match endianness_opt with
-        | Some e -> e
-        | None -> default_endianness ()
-      in Dba.ExprLoad(size, endianness, expr)
-
-    let restricted expr (loff, roff) =
-      assert (roff >= loff);
-      Dba.ExprRestrict(expr, loff, roff)
-  end
-
 
   module Initializations = struct
-
     let check addr instruction =
       let is_ok =
         try Dba_utils.checksize_instruction instruction
         with  _ -> false
       in
-      if not is_ok then
-        begin
+      if not is_ok then begin
           Logger.fatal
             "@[<hov 0>%@ %a:@ bad initialization size for %a@]"
             Dba_printer.Ascii.pp_code_address addr
@@ -215,13 +126,6 @@ end
       (* init_address seems to be set once and for all *)
       List.iter (check !Dba_types.Caddress.default_init) instructions;
       instructions
-  end
-
-  module Region = struct
-    let malloc addr =
-      let minus_one = Bigint.big_int_of_int (-1) in
-      let a = Dba_types.Caddress.block_start (Bitvector.create minus_one addr) in
-      `Malloc ((-1, a), Bigint.zero_big_int)
   end
 
   let instruction_size_error instruction =
@@ -244,27 +148,27 @@ end
 
 
   let extract_declaration_data = function
-    | Dba.LhsVar (v, sz, tagopt) -> v, sz, tagopt
-    | Dba.LhsVarRestrict _
-    | Dba.LhsStore _ -> assert false
+    | Dba.LValue.Var (v, sz, tagopt) -> v, sz, tagopt
+    | Dba.LValue.Restrict _
+    | Dba.LValue.Store _ -> assert false
 
   let fill_sizes declarations initializations =
-    let open Dba_types in
     let patch_instruction_size = function
-      | Dba.IkAssign (lv, rv, id) ->
-         let lvname =
-           match LValue.name_of lv with
-           | Some name -> name
-           | None -> assert false
-                            (* initializations should not manipulate tables *)
-         in
-         let declared_size =
-           match Basic_types.String.Map.find lvname declarations with
-           | size, _ -> Basic_types.BitSize.create size
-           | exception Not_found ->
-              Logger.fatal "Variable %s was not declared" lvname;
-              exit 2
-         in Instruction.assign (LValue.resize declared_size lv) rv id
+      | Dba.Instr.Assign (lv, rv, id) ->
+        let lvname =
+          match Dba_types.LValue.name_of lv with
+          | Some name -> name
+          | None -> assert false
+          (* initializations should not manipulate tables *)
+        in
+        let declared_size =
+          match Basic_types.String.Map.find lvname declarations with
+          | size, _ -> Size.Bit.create size
+          | exception Not_found ->
+            Logger.fatal "Variable %s was not declared" lvname;
+            exit 2
+        in
+        Dba.Instr.assign (Dba.LValue.resize declared_size lv) rv id
       | _ -> assert false (* initializations should only be assignments *)
     in
     List.map patch_instruction_size initializations
@@ -297,124 +201,124 @@ end
 end
 
 
-let rec expr_size = function
-  | Dba.ExprVar(_ ,sz, _) -> sz
-  | Dba.ExprLoad(sz, _endian, _bexpr) -> sz
-  | Dba.ExprCst(_r, bv) -> Bitvector.size_of bv
-  | Dba.ExprUnary(_uop, bexpr) -> expr_size bexpr
-  | Dba.ExprBinary(bop, bexpr1, bexpr2) ->
-    let sz1 = expr_size bexpr1 in
-    let sz2 = expr_size bexpr2 in
-    begin
-      match bop with
-      | Dba.Plus | Dba.Minus | Dba.MultU | Dba.MultS | Dba.DivU | Dba.DivS
-      | Dba.ModU | Dba.ModS | Dba.Or | Dba.And | Dba.Xor ->
-        if sz1 = 0 then sz2
-        else if sz2 = 0 then sz1
-        else (Logger.warning "cannot infer binary expr size"; 0)
-      | Dba.LShift | Dba.RShiftU
-      | Dba.RShiftS | Dba.LeftRotate | Dba.RightRotate ->
-        sz1
-      | Dba.Concat ->
-        if sz1 = 0 || sz2 = 0 then 0
-        else sz1 + sz2
-      | Dba.Eq| Dba.Diff | Dba.LeqU | Dba.LtU | Dba.GeqU | Dba.GtU
-      | Dba.LeqS | Dba.LtS | Dba.GeqS | Dba.GtS ->
-        1
-    end
-  | Dba.ExprRestrict(_bexpr,i,j) -> j - i +1
-  | Dba.ExprExtU(bexpr,n) | Dba.ExprExtS(bexpr,n) ->
-    let sz = expr_size bexpr in
-    if sz = 0 then 0 else sz + n
-  | Dba.ExprIte(_bcond, be1, be2) ->
-    let sz1 = expr_size be1 in
-    let sz2 = expr_size be2 in
-    if sz1 = sz2 then sz1
-    else if sz1 = 0 then sz2
-    else if sz2 = 0 then sz1
-    else (Logger.warning "cannot infer binary expr size"; 0)
-  | Dba.ExprAlternative (e :: _, _) ->
-    expr_size e
-  | Dba.ExprAlternative ([], _) -> 0
-
-
 let expr_of_name name =
   let first_char = name.[0] in
   if first_char = '_' || first_char =  '?' ||  first_char  = '!' then
     let name = if first_char = '_' then "*" else name in
-    Dba.ExprVar(name, 0, None)
+    Dba.Expr.var name 0 None
   else
+    let open Dba.Expr in
+    let reg name = var name 32 None in
+    let eax = reg "eax"
+    and ebx = reg "ebx"
+    and ecx = reg "ecx"
+    and edx = reg "edx" in
     match name with
-    | "al" -> Dba.ExprRestrict(Dba.ExprVar("eax", 32,None), 0, 7)
-    | "ah" -> Dba.ExprRestrict(Dba.ExprVar("eax", 32,None), 8, 15)
-    | "ax" -> Dba.ExprRestrict(Dba.ExprVar("eax", 32,None), 0, 15)
-    | "eax" -> Dba.ExprVar ("eax", 32, None)
-    | "bl" -> Dba.ExprRestrict(Dba.ExprVar("ebx", 32,None), 0, 7)
-    | "bh" -> Dba.ExprRestrict(Dba.ExprVar("ebx", 32,None), 8, 15)
-    | "bx" -> Dba.ExprRestrict(Dba.ExprVar("ebx", 32,None), 0, 15)
-    | "ebx" -> Dba.ExprVar ("ebx", 32, None)
-    | "cl" -> Dba.ExprRestrict(Dba.ExprVar("ecx", 32,None), 0, 7)
-    | "ch" -> Dba.ExprRestrict(Dba.ExprVar("ecx", 32,None), 8, 15)
-    | "cx" -> Dba.ExprRestrict(Dba.ExprVar("ecx", 32,None), 0, 15)
-    | "ecx" -> Dba.ExprVar ("ecx", 32, None)
-    | "dl" -> Dba.ExprRestrict(Dba.ExprVar("edx", 32,None), 0, 7)
-    | "dh" -> Dba.ExprRestrict(Dba.ExprVar("edx", 32,None), 8, 15)
-    | "dx" -> Dba.ExprRestrict(Dba.ExprVar("edx", 32,None), 0, 15)
-    | "edx" -> Dba.ExprVar ("edx", 32, None)
-    | "di" -> Dba.ExprRestrict(Dba.ExprVar("edi", 32,None), 0, 15)
-    | "edi" -> Dba.ExprVar ("edi", 32, None)
-    | "si" -> Dba.ExprRestrict(Dba.ExprVar("esi", 32,None), 0, 15)
-    | "esi" -> Dba.ExprVar ("esi", 32, None)
-    | "bp" -> Dba.ExprRestrict(Dba.ExprVar("ebp", 32,None), 0, 15)
-    | "ebp" -> Dba.ExprVar ("ebp", 32, None)
-    | "sp" -> Dba.ExprRestrict(Dba.ExprVar("esp", 32,None), 0, 15)
-    | "esp" -> Dba.ExprVar ("esp", 32, None)
-    | "btemp" -> Dba.ExprVar ("btemp", 8, None)
-    | "stemp" -> Dba.ExprVar ("stemp", 16, None)
-    | "temp" -> Dba.ExprVar ("temp", 32, None)
-    | "dtemp" -> Dba.ExprVar ("dtemp", 64, None)
-    | name ->
+    | "al"    -> restrict 0 7  eax
+    | "ah"    -> restrict 8 15 eax
+    | "ax"    -> restrict 0 15 eax
+    | "eax"   -> eax
+    | "bl"    -> restrict 0 7  ebx
+    | "bh"    -> restrict 8 15 ebx
+    | "bx"    -> restrict 0 15 ebx
+    | "ebx"   -> ebx
+    | "cl"    -> restrict 0 7  ecx
+    | "ch"    -> restrict 8 15 ecx
+    | "cx"    -> restrict 0 15 ecx
+    | "ecx"   -> ecx
+    | "dl"    -> restrict 0 7  edx
+    | "dh"    -> restrict 8 15 edx
+    | "dx"    -> restrict 0 15 edx
+    | "edx"   -> edx
+    | "di"    -> restrict 0 15 (reg "edi")
+    | "edi"   -> reg "edi"
+    | "si"    -> restrict 0 15 (reg "esi")
+    | "esi"   -> reg "esi"
+    | "bp"    -> restrict 0 15 (reg "ebp")
+    | "ebp"   -> reg "ebp"
+    | "sp"    -> restrict 0 15 (reg "esp")
+    | "esp"   -> reg "esp"
+    | "btemp" -> var "btemp" 8 None
+    | "stemp" -> var "stemp" 16 None
+    | "temp"  -> var "temp" 32 None
+    | "dtemp" -> var "dtemp" 64 None
+    | name    ->
       Logger.error"Unknown variable name: %s" name;
       raise Parsing.Parse_error
 
-  let is_wildmetapld_expr = function
-    | Dba.ExprVar(name, _, _) ->
-      let c = name.[0] in c = '*' || c = '?' || c = '!'
-    | _ -> false
+let is_wildmetapld_expr = function
+  | Dba.Expr.Var(name, _, _) ->
+    let c = name.[0] in c = '*' || c = '?' || c = '!'
+  | _ -> false
 
 
-  let rec patch_expr_size e sz =
-    Logger.debug ~level:2 "Will patch: %a with %d" Dba_printer.Ascii.pp_expr e sz;
-    match e with
-    | Dba.ExprVar(n, _old_sz,l) ->
-      if is_wildmetapld_expr e then e
-      else Dba.ExprVar(n, sz, l)
-    | Dba.ExprCst(r,bv) -> Dba.ExprCst(r,(Bitvector.create (Bitvector.value_of bv) sz))
-    | Dba.ExprLoad(_old_sz, en, e) -> Dba.ExprLoad(sz/8, en, e)
-    | Dba.ExprUnary(op, e1) -> Dba.ExprUnary(op, patch_expr_size e1 sz)
-    | Dba.ExprExtU(e1,size) -> Dba.ExprExtU(patch_expr_size e1 (sz-size), size)
-    | Dba.ExprExtS(e1,size) -> Dba.ExprExtS(patch_expr_size e1 (sz-size), size)
-    | _ -> e
+let rec patch_expr_size e sz =
+  let open Dba.Expr in
+  Logger.debug ~level:2
+    "Will patch: %a with %d" Dba_printer.Ascii.pp_bl_term e sz;
+  match e with
+  | Dba.Expr.Var(n, _old_sz,l) ->
+    if is_wildmetapld_expr e then e
+    else var n sz l
+  | Dba.Expr.Cst(region ,bv) ->
+    constant ~region (Bitvector.create (Bitvector.value_of bv) sz)
+  | Dba.Expr.Load(_old_sz, en, e) ->
+     let bysz = Size.(Bit.create sz |> Byte.of_bitsize) in
+     load bysz en e
+  | Dba.Expr.Unary(Dba.Unary_op.Uext size, e) ->
+    uext size (patch_expr_size e (sz - size))
+  | Dba.Expr.Unary(Dba.Unary_op.Sext size, e) ->
+    sext size (patch_expr_size e (sz - size))
+  | Dba.Expr.Unary(op, e) -> unary op (patch_expr_size e sz)
+  | _ -> e
 
 
 module Message = struct
   module Value = struct
     type t =
       | Hex of int
+      | Bin of int
       | Int of int
       | Str of string
 
     let vstr v = Str v
     let vhex v = Hex (int_of_string v)
+    let vbin v = Bin (int_of_string v)
     let vint v = Int (int_of_string v)
   end
 
 end
 
+module Initialization = struct
+  open Dba
+
+  type interval_or_set =
+    | SignedInterval of Dba.Expr.t * Dba.Expr.t
+    | UnsignedInterval of Dba.Expr.t * Dba.Expr.t
+    | Set of Dba.Expr.t list
+
+  type t =
+    | Assignment of Dba.LValue.t * Dba.Expr.t
+    | MemLoad of Int64.t * int
+    | NondeterministicAssignment of Dba.LValue.t * interval_or_set
+
+  let from_assignment = function
+    | Dba.Instr.Assign(lval, rval, _) -> Assignment (lval,rval)
+    | _ -> failwith "initialization with non assignment"
+
+  let from_store lv =
+    Logger.debug "Init from store %a" Dba_printer.Ascii.pp_lhs lv;
+    match lv with
+    | LValue.Store(size, _, Dba.Expr.Cst(_, bv)) ->
+      begin
+        assert (Bitvector.size_of bv = Machine.Word_size.get ());
+        MemLoad (Bitvector.value_of bv |> Bigint.int64_of_big_int, size)
+      end
+    | _ -> failwith "initialization from file with non store"
+end
+
 let mk_patches l =
-  let open Dba_types.Virtual_address in
+  let open Virtual_address in
   List.fold_left
     (fun vmap (vaddr, opcode) -> Map.add (create vaddr) opcode vmap)
     Map.empty l
-         
-  

@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -24,9 +24,9 @@ open TypeHistoryDSE
 module CriteriaAsDefault = functor (TraceDSE_v:TypeTraceDSE) -> functor (HistoryDSE_v:TypeHistoryDSE) ->
 struct
   type conf_criteria = string
-  type trace_t = TraceDSE_v.trace_t                    
-  type child_t = TraceDSE_v.child_t                    
-  type history_t  = HistoryDSE_v(TraceDSE_v).history_t 
+  type trace_t = TraceDSE_v.trace_t
+  type child_t = TraceDSE_v.child_t
+  type history_t  = HistoryDSE_v(TraceDSE_v).history_t
 
   let init_criteria _c = ()
   (* we explore all execution paths, so trace verdict is always false *)

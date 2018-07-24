@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -26,6 +26,7 @@ module type S = sig
   val empty : t
   val singleton : elt -> t
   val is_empty : t -> bool
+  val length : t -> int
 
   val add : elt -> t -> t
   val remove : t -> t
@@ -41,7 +42,7 @@ module type S = sig
 end
 
 
-module Make(X: Sigs.Comparable) = struct
+module Make(X: Sigs.COMPARABLE) = struct
 
   type t =
     | Empty
@@ -71,7 +72,6 @@ module Make(X: Sigs.Comparable) = struct
 
 
   let add x h = merge (Heap (x, [])) h ;;
-
 
   let remove h =
     match h with
@@ -106,12 +106,15 @@ module Make(X: Sigs.Comparable) = struct
     | Heap (x, l) ->
       f x;
       List.iter (iter f) l
+
+  let length h = fold (fun acc _ -> acc + 1) 0 h
+
 end
 
 
-module CMake (X: Sigs.Any) = struct
+module CMake (X: Sigs.ANY) = struct
 
-  module H =Make (
+  module H = Make (
     struct
       type t = X.t * int
       let compare (_, n1) (_, n2) = Pervasives.compare n1 n2
@@ -154,5 +157,7 @@ module CMake (X: Sigs.Any) = struct
   let map f h = H.map (fun (e, n) -> (f e, n)) h
 
   let merge = H.merge
+
+  let length = H.length
 
 end

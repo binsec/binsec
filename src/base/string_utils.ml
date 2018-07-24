@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -45,10 +45,11 @@ let fold f acc s =
 let remove_char c s =
   filter (fun c' -> c <> c') s
 
+let remove_newline = remove_char '\n'
 
 let for_all p s =
   let len = String.length s in
-  let rec loop i = i >= len || p s.[i] && loop (i + 1) in loop 0 
+  let rec loop i = i >= len || p s.[i] && loop (i + 1) in loop 0
 
 
 let exists p s =
@@ -56,11 +57,14 @@ let exists p s =
   let rec loop i =
     if i >= len then false
     else p s.[i] || loop (i + 1)
-  in loop 0 
+  in loop 0
 
 
-let remove_newline = remove_char '\n'
+let split ~sep s =
+  let rexp = Str.regexp sep in
+  Str.split rexp s
 
+let cli_split s = split ~sep:"," s
 
 let lchop n s =
   assert (n >= 0);
@@ -74,8 +78,45 @@ let left n s =
   String.sub s 0 n
 
 
+let right n s =
+  let len = String.length s in
+  assert (n <= len);
+  let idx = n - len in
+  String.sub s idx n
+
 let size_of_hexstring s =
   assert (s.[0] = '0' && s.[1] = 'x');
   (* The pattern in the lexer is '0x' + hexadigits *)
   let nibble_size = 4 in
   nibble_size * (String.length s - 2)
+
+
+let index p s =
+  let len = String.length s in
+  let rec loop i =
+    if i >= len then None
+    else if p s.[i] then Some i
+    else loop (i + 1)
+  in loop 0
+
+let contains subs s =
+  let ls = String.length s and lsubs = String.length subs in
+  (lsubs = 0) || ((lsubs <= ls) && (
+      let rec loop = function
+        | -1 -> false
+        | n ->
+          ((String.sub s n lsubs |> String.compare subs) = 0
+           || loop (n-1))
+      in
+      loop (ls-lsubs)
+    ))
+
+let is_hex_char c =
+  c >= '0' && c <= '9'
+  || c >= 'a' && c <= 'f'
+  || c >= 'A' && c <= 'F'
+
+
+let is_char_printable c =
+  (* Printable ASCII characters are all between 33 [!] & 126 [~] included *)
+  c >= '!' && c <= '~'

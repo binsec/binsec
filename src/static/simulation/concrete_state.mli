@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,6 +22,6 @@
 module SubEnv = Basic_types.BigInt.Map
 
 type concreteMap = (Region_bitvector.t SubEnv.t) Static_types.Env.t
-    
+
 val m_init: (Region_bitvector.t SubEnv.t) Static_types.Env.t ref
-val display: Format.formatter -> concreteMap -> unit 
+val display: Format.formatter -> concreteMap -> unit

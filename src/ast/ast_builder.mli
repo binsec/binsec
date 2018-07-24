@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,8 +21,12 @@
 
 type t
 
+type pmap  =
+  (Dba.Instr.t * Instruction.Generic.t option)
+    Dba_types.Caddress.Map.t
+
 val make:
-  Disasm_types.pmap ->
+  pmap ->
   Dba_types.Caddress.Set.t Dba_types.Caddress.Map.t ->
   t
 

@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -30,7 +30,7 @@ let rec expand_flag (read_vars:Basic_types.String.Set.t) (write_vars:Basic_types
     [] -> concret_info
   | RegRead("eflags", value) :: q ->
     let flgs = List.fold_left (fun acc (name,v) ->
-      if Basic_types.String.Set.mem name read_vars then RegRead(name,get_val v value)::acc else acc) [] flag_list in
+        if Basic_types.String.Set.mem name read_vars then RegRead(name,get_val v value)::acc else acc) [] flag_list in
     flgs@(expand_flag read_vars write_vars q)
   | RegWrite("eflags", value) :: q ->
     let flgs =
@@ -47,7 +47,7 @@ let the = Utils.unsafe_get_opt
 let size_t_to_int64 (value:register_value_t): int64 =
   let open Register_value_t in
   match value.typeid with
-  | `invalid_size -> Logger.warning "Invalid register size encountered in the trace, no sound analysis" ; 0x0L; 
+  | `invalid_size -> Logger.warning "Invalid register size encountered in the trace, no sound analysis" ; 0x0L;
   | `bit8 -> Int64.of_int32 (Int32.logand 0x000000FFl (the value.value_8))
   | `bit16 -> Int64.of_int32 (Int32.logand 0x0000FFFFl (the value.value_16))
   | `bit32 -> Int64.logand 0x00000000FFFFFFFFL (Int64.of_int32 (the value.value_32))
@@ -105,6 +105,27 @@ let read_concrete_infos info: trace_concrete_infos =
   | `next_address -> NextAddr(the info.next_address)
   | `wave -> Wave(the info.wave |> Int32.to_int)
 
+class get_var_visitor =
+  object inherit Dba_visitor.dba_inplace_visitor
+    val mutable vars_read = Basic_types.String.Set.empty
+    val mutable vars_written = Basic_types.String.Set.empty
+
+    method get_read_vars = vars_read
+    method get_written_vars = vars_written
+
+    method! visit_lhs_var name _size _low _high _opts =
+      vars_written <- Basic_types.String.Set.add name vars_written
+
+    method! visit_var name _ _ =
+      vars_read <- Basic_types.String.Set.add name vars_read
+
+  end
+
+let get_var_dbainstr (instr:Dhunk.t) =
+  let visitor = new get_var_visitor in
+  Dhunk.iter ~f:(fun i -> visitor#visit_instrkind i) instr;
+  visitor#get_read_vars, visitor#get_written_vars
+
 
 let read_instr instr (_addr_size:int): trace_inst =
   let open Trace_piqi in
@@ -114,15 +135,16 @@ let read_instr instr (_addr_size:int): trace_inst =
   let concrete_infos =
     List.map read_concrete_infos instr.Instruction_t.concrete_infos in
   try
-    let binstream = Basic_types.Binstream.of_bytes opcode in
-    let binstr, dbainstrs = X86toDba.decode_string binstream location in
-    let r_var, w_var = Dba_visitor.get_var_dbainstr dbainstrs in
-    let dbainstrs = Dba_types.Block.to_dbainstrs dbainstrs (Dba_types.Virtual_address.of_int64 location) in
+    let binstream = Binstream.of_bytes opcode in
+    let base_addr = Virtual_address.of_int64 location in
+    let binstr, dbainstrs = X86toDba.decode_binstream binstream ~base_addr in
+    let r_var, w_var = get_var_dbainstr dbainstrs in
+    let dbainstrs = Dhunk.to_stmts dbainstrs (Virtual_address.of_int64 location) in
     let concrete_infos = expand_flag r_var w_var concrete_infos in
     let mnemonic =
       Format.asprintf "%a" X86Instruction.pp_mnemonic binstr in
     { thread; location; decoded=true;
-      opcode=mnemonic; opcode_bytes=opcode;
+      mnemonic; opcode=opcode;
       dbainstrs; concrete_infos}
   with X86toDba.InstructionUnhandled _ ->
     let s =
@@ -130,7 +152,7 @@ let read_instr instr (_addr_size:int): trace_inst =
         (fun c -> Printf.sprintf "\\x%02x" (Char.code c )) opcode in
     Logger.warning "Not decoded %Lx: %s" location s;
     {thread; location; decoded=false;
-     opcode=Printf.sprintf "[not decoded %s]" s; opcode_bytes=opcode;
+     mnemonic=Printf.sprintf "[not decoded %s]" s; opcode=opcode;
      dbainstrs=[]; concrete_infos}
 
 
@@ -159,9 +181,9 @@ let read_body_t (start_offset:int) body (addr_size:int): trace_inst_map * metada
       ) (InstrMap.empty,Basic_types.Int.Map.empty,start_offset, 0L,false) body
   in
   let insts =
-  if !Options.natural_cond_enabled then
-    Trace_postprocessing.merge_natural_conditions insts
-  else insts in
+    if Trace_options.Hlp.get () then
+      Trace_postprocessing.merge_natural_conditions insts
+    else insts in
   insts, metas
 
 let read_i32 ic : int =
@@ -192,11 +214,13 @@ let complete_partial_trace (trace:trace) chunk (keep_existing:bool) : trace =
   let open Trace_piqi.Chunk_t in
   let current_t = Unix.gettimeofday () in
   Logger.debug "New chunk.. %d (%.2f)" !chunk_count (current_t -. !chunk_timestamp);
-  chunk_count := !chunk_count +1 ; chunk_timestamp := current_t;
-  let max,_ =
+  incr chunk_count;
+  chunk_timestamp := current_t;
+  let max, _ =
     if InstrMap.is_empty trace.instrs then 0, empty_inst
     else InstrMap.max_binding trace.instrs in
-  let new_instrs, new_metas = read_body_t (max+1) chunk.body trace.address_size in
+  let new_instrs, new_metas =
+    read_body_t (max + 1) chunk.body trace.address_size in
   let merge_inst _ map1 map2 =
     match map1, map2 with
     | Some _, Some _ -> failwith "Overlapping map offset"
@@ -216,16 +240,15 @@ let complete_partial_trace (trace:trace) chunk (keep_existing:bool) : trace =
     else new_metas in
   {trace with instrs=new_instrs; metadatas=new_metas}
 
-let complete_all_partial_trace (trace:trace) ch : trace =
+let complete_all_partial_trace trace ch =
   let rec aux tr =
     if tr.complete then tr
     else
       match parse_chunk ch with
       | Some chk ->
         aux (complete_partial_trace tr chk true)
-      | None -> {tr with complete=true}
-  in
-  aux trace
+      | None -> { tr with complete = true }
+  in aux trace
 
 let load_partial_trace_from_file ?(load_all=false) ch: trace =
   let buf = Piqirun.init_from_string (sized_read ch) in
@@ -281,25 +304,42 @@ let string_of_instr ?(with_conc=false) (instr:trace_inst) (addr_size:int): strin
     | Wave n -> Printf.sprintf "%s Wave:%d" acc n
   in
   let conc_string = List.fold_left print_concrete "" instr.concrete_infos in
-  let opcode = Decode_utils.string_to_hex ~with_space:true instr.opcode_bytes in
-  let padding1 = String.make (let x = 15 - (String.length opcode) in if x < 0 then 5 else x) ' ' in
-  let padding = String.make (let x = 35 - (String.length instr.opcode) in if x < 0 then 5 else x) ' ' in
-  Printf.sprintf "%Lx t[%lx]    %s%s%s%s%s" instr.location instr.thread opcode padding1 instr.opcode padding (if with_conc then conc_string else "")
+  let opcode = Decode_utils.string_to_hex ~with_space:true instr.opcode in
+  let padding1 =
+    String.make (let x = 15 - (String.length opcode) in if x < 0 then 5 else x) ' ' in
+  let padding =
+    String.make (let x = 35 - (String.length instr.mnemonic) in if x < 0 then 5 else x) ' ' in
+  Printf.sprintf "%Lx t[%lx]    %s%s%s%s%s"
+    instr.location instr.thread opcode padding1 instr.mnemonic padding
+    (if with_conc then conc_string else "")
 
 let exception_type_str s =
   match s with
-  | 0x80000001l -> "EXCEPTION_GUARD_PAGE" | 0x80000002l -> "EXCEPTION_DATATYPE_MISALIGNMENT"
-  | 0x80000003l -> "EXCEPTION_BREAKPOINT" | 0x80000004l -> "EXCEPTION_SINGLE_STEP"
-  | 0xC0000009l -> "EXCEPTION_ACCESS_VIOLATION" | 0xC000008Cl -> "EXCEPTION_ARRAY_BOUNDS_EXCEEDED"
-  | 0xC000008Dl -> "EXCEPTION_FLT_DENORMAL_OPERAND" | 0xC000008El -> "EXCEPTION_FLT_DIVIDE_BY_ZERO"
-  | 0xC000008Fl -> "EXCEPTION_FLT_INEXACT_RESULT" | 0xC0000090l -> "EXCEPTION_FLT_INVALID_OPERATION"
-  | 0xC0000005l -> "EXCEPTION_ACCESS_VIOLATION" | 0xC0000091l -> "EXCEPTION_FLT_OVERFLOW"
-  | 0xC0000092l -> "EXCEPTION_FLT_STACK_CHECK" | 0xC0000093l -> "EXCEPTION_FLT_UNDERFLOW"
-  | 0xC000001Dl -> "EXCEPTION_ILLEGAL_INSTRUCTION" | 0xC0000006l -> "EXCEPTION_IN_PAGE_ERROR"
-  | 0xC0000094l -> "EXCEPTION_INT_DIVIDE_BY_ZERO" | 0xC0000095l -> "EXCEPTION_INT_OVERFLOW"
-  | 0xC0000026l -> "EXCEPTION_INVALID_DISPOSITION" | 0xC0000025l -> "EXCEPTION_NONCONTINUABLE_EXCEPTION"
-  | 0xC0000096l -> "EXCEPTION_PRIV_INSTRUCTION" | 0xc00000FDl -> "EXCEPTION_STACK_OVERFLOW"
-  | 0x40010006l -> "DBG_PRINTEXCEPTION_C" | 0x40010007l -> "DBG_RIPEXCEPTION" | _ -> ""
+  | 0x80000001l -> "EXCEPTION_GUARD_PAGE"
+  | 0x80000002l -> "EXCEPTION_DATATYPE_MISALIGNMENT"
+  | 0x80000003l -> "EXCEPTION_BREAKPOINT"
+  | 0x80000004l -> "EXCEPTION_SINGLE_STEP"
+  | 0xC0000009l -> "EXCEPTION_ACCESS_VIOLATION"
+  | 0xC000008Cl -> "EXCEPTION_ARRAY_BOUNDS_EXCEEDED"
+  | 0xC000008Dl -> "EXCEPTION_FLT_DENORMAL_OPERAND"
+  | 0xC000008El -> "EXCEPTION_FLT_DIVIDE_BY_ZERO"
+  | 0xC000008Fl -> "EXCEPTION_FLT_INEXACT_RESULT"
+  | 0xC0000090l -> "EXCEPTION_FLT_INVALID_OPERATION"
+  | 0xC0000005l -> "EXCEPTION_ACCESS_VIOLATION"
+  | 0xC0000091l -> "EXCEPTION_FLT_OVERFLOW"
+  | 0xC0000092l -> "EXCEPTION_FLT_STACK_CHECK"
+  | 0xC0000093l -> "EXCEPTION_FLT_UNDERFLOW"
+  | 0xC000001Dl -> "EXCEPTION_ILLEGAL_INSTRUCTION"
+  | 0xC0000006l -> "EXCEPTION_IN_PAGE_ERROR"
+  | 0xC0000094l -> "EXCEPTION_INT_DIVIDE_BY_ZERO"
+  | 0xC0000095l -> "EXCEPTION_INT_OVERFLOW"
+  | 0xC0000026l -> "EXCEPTION_INVALID_DISPOSITION"
+  | 0xC0000025l -> "EXCEPTION_NONCONTINUABLE_EXCEPTION"
+  | 0xC0000096l -> "EXCEPTION_PRIV_INSTRUCTION"
+  | 0xc00000FDl -> "EXCEPTION_STACK_OVERFLOW"
+  | 0x40010006l -> "DBG_PRINTEXCEPTION_C"
+  | 0x40010007l -> "DBG_RIPEXCEPTION"
+  | _ -> ""
 
 let string_of_metadatas (meta: metadata): string =
   match meta with
@@ -310,7 +350,7 @@ let string_of_metadatas (meta: metadata): string =
 
 let print_instrs trace =
   InstrMap.iter
-    (fun (key:int) (inst:trace_inst) ->
+    (fun (key:int) inst ->
        if Basic_types.Int.Map.mem key trace.metadatas
        then
          List.iter
@@ -318,27 +358,97 @@ let print_instrs trace =
            (Basic_types.Int.Map.find key trace.metadatas);
        Logger.result "%d %s" key (string_of_instr inst ~with_conc:true trace.address_size);
        List.iter(fun dbainst ->
-        Logger.info ~level:1 "⇒ %a" Dba_types.Statement.pp dbainst) inst.dbainstrs
+           Logger.info ~level:1 "⇒ %a" Dba_types.Statement.pp dbainst) inst.dbainstrs
     ) trace.instrs
 
 let print_trace trace_input =
   Logger.set_tagged_entry false;
   match trace_input with
-  | Options.Chunked(chan,r_all) ->
+  | Trace_config.Chunked(chan,r_all) ->
     let rec print_recurs trace =
       print_instrs trace;
-      if trace.complete then ()
-      else begin
-        Logger.debug ~level:1 "complete trace..";
-        match parse_chunk chan with
-        | Some chk ->
-          print_recurs (complete_partial_trace trace chk false)
-        | None -> ()
-      end
+      if not trace.complete then
+        begin
+          Logger.debug ~level:1 "complete trace..";
+          match parse_chunk chan with
+          | Some chk ->
+            print_recurs (complete_partial_trace trace chk false)
+          | None -> ()
+        end
     in
     let trace = load_partial_trace_from_file ~load_all:r_all chan in
     print_recurs trace;
-  | Options.Stream _ -> Logger.error "Not implemented yet"
+  | Trace_config.Stream _ ->
+    Logger.error "Not implemented yet"
+
+let load_full_trace = function
+  | Trace_config.Chunked (ic, load_all) ->
+    let rec loop trace =
+      if trace.complete then trace
+      else begin
+        match parse_chunk ic with
+        | None -> trace
+        | Some chunk ->
+          loop (complete_partial_trace trace chunk false)
+      end
+    in load_partial_trace_from_file ~load_all ic |> loop
+  | Trace_config.Stream _ ->
+    failwith "load_full_trace: Stream not handled"
+    (*
+type trace_inst = {
+  thread : int32;   (** What thread id the instruction belong to *)
+  location : int64; (** location of the instruction (address) *)
+  mnemonic : string;  (** mnemonic of the instruction *)
+  opcode : string; (** opcode bytes *)
+  decoded : bool;   (** either the instruction was decoded by the decoder or not *)
+  mutable dbainstrs : Dba_types.Statement.t list; (** DBA IR of the instruction *)
+  mutable concrete_infos : trace_concrete_infos list (** concrete(runtime) infos of the instruction *)
+}
+     *)
+module IC = Instr_cfg
+
+let as_cfg config =
+  let tc = config.Trace_config.trace_input in
+  let trace = load_full_trace tc in
+  let len = InstrMap.cardinal trace.instrs in
+  Logger.debug "Loaded trace with %d instructions" len;
+  let cfg = IC.create len in
+  let entry = ref None in
+  let last_vertex = ref None in
+  let vaddrs = Hashtbl.create len in
+  InstrMap.iter
+    (fun _ instr ->
+       let vaddr = Virtual_address.of_int64 instr.location in
+       let size = Size.Byte.create (String.length instr.opcode) in
+       let mnemonic =
+         Mnemonic.supported
+           instr.mnemonic
+           (fun ppf m -> Format.pp_print_string ppf m) in
+       let opcode = Binstream.of_bytes instr.opcode in
+       let dhunk = Dhunk.empty in
+       let dinstr =
+         Instruction.create vaddr size opcode mnemonic dhunk in
+       let v = IC.V.of_inst vaddr dinstr in
+       entry := Some v; (* Apparently the trace is reversed *)
+       (match !last_vertex with
+        | None -> ()
+        | Some lv -> IC.add_edge cfg lv v);
+       last_vertex := Some v;
+       Hashtbl.replace vaddrs vaddr ();
+    )
+    trace.instrs;
+  Utils.unsafe_get_opt !entry, (* This should not be None *)
+  cfg,
+  vaddrs
+
+let view_cfg config =
+  let entry, cfg, vaddrs = as_cfg config in
+  let l = Hashtbl.fold (fun vaddr _ acc -> vaddr :: acc) vaddrs [] in
+  IC.output_graph Pervasives.stdout cfg ~entry l
+
+let as_cfg config =
+  match as_cfg config with
+  | _, cfg, _ -> cfg
 
 
 let rec get_load_content (address:int64) ?(esp_value=0L) (size:int) = function

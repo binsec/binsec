@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,8 +22,8 @@
 (** Symbolic simulation of DBA with low-level regions *)
 val mallocs : Dba.malloc_status Dba_types.Region.Map.t ref
 
-val run : ?dba_file:string option -> configuration_file:string option -> unit -> unit
-(** [run ~dba_file ~configuration_file ()] launches a simulation run using the
+val run : ?dba_file:string option -> configuration_file:string option -> unit
+(** [run ~dba_file ~configuration_file] launches a simulation run using the
  ** DBA description in [dba_file] augmented by stubs and configurations from
  ** [configuration_file]
  **)

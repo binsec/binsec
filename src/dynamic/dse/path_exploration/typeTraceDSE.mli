@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -19,7 +19,7 @@
 
 open Conf_exploration
 
-type location_t = Exploration_type.location 
+type location_t = Exploration_type.location
 type control_t = ConJump of location_t | DynJump of location_t
 
 
@@ -51,7 +51,7 @@ sig
 
   (* get children of a trace*)
   val get_children : location_t option -> trace_t -> child_t list
-  
+
   val get_children_uaf : location_t option -> trace_t ->(Int64.t * Int64.t list) list -> (Int64.t * Int64.t list) list -> (Int64.t * Int64.t list) list -> child_t list * child_t list * child_t list
 
 
@@ -66,20 +66,20 @@ sig
 
   (* list of loop instr (All_loc_(addr) *)
   val get_loop_instr : trace_t -> location_t list
-  
+
   val get_conditional_loop_instr : trace_t -> location_t list
-  
+
   val generate_child_in_loop : trace_t -> (Exploration_type.location *  Int64.t) list -> ((child_t) list)  * ((child_t) list)
   val generate_child_in_strcmp : trace_t -> (child_t) list
 
   (* list of call-ret seq, with addr -> addr  *)
 
   val find_instr_cs : trace_t -> (int64 * (int64 list)) list -> (int64 * (int64 list)) list
-  
-  
+
+
   val exists_instr_cs : trace_t -> (int64 * (int64 list)) list -> bool
-   
-  val build_analysis_configuration : trace_t -> Options.trace_analysis_config
+
+  val build_analysis_configuration : trace_t -> Trace_config.t
 
   val trace_to_list_addr : trace_t -> (int64 * TracesToTree.node_type * (Int64.t list)) list option
 
@@ -87,4 +87,3 @@ sig
 
 
 end
-

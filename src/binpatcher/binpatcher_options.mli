@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,8 +21,8 @@
 
 (** Options for binary patching *)
 
-module PatchOutFile : Parameters.String
+include Cli.S
 
-module PatchFile : Parameters.OptionalString
+module PatchOutFile : Cli.STRING
 
-val cli : (string * Arg.spec * string) list
+module PatchFile : Cli.STRING_OPT

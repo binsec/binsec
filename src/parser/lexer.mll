@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -51,15 +51,13 @@ let keywords = [
   "assume"        , ASSUME ;
   "nondet"        , NONDET ;
   "nondet_assume" , NONDETASSUME ;
-  "alternative"   , ALTERNATIVE ;
-  "addcarry"      , ADDCARRY ;
-  "addoverflow"   , ADDOVERFLOW ;
   "cst"           , CONSTANT ;
   "stack"         , STACK ;
   "malloc"        , MALLOC ;
   "free"          , FREE ;
   "var"           , VAR;
   "print"         , PRINT;
+  "from_file"     , FROMFILE;
   "big"           , BIG ;
   "little"        , LITTLE;
   "permissions"   , PERMISSIONS;
@@ -69,6 +67,14 @@ let keywords = [
   "entry_point"   , ENTRYPOINT;
   "word_size"     , WORDSIZE ;
   "endianness"    , ENDIANNESS;
+
+  "cut"           , CUT;
+  "enum"          , ENUMERATE;
+  "enumerate"     , ENUMERATE;
+  "reach"         , REACH;
+  "restrict"      , RESTRICT;
+  "alternative"   , ALTERNATIVE;
+  "consequent"    , CONSEQUENT;
 ]
 
 let keyword_tbl =
@@ -86,21 +92,28 @@ let kwd_or_ident name =
 let space = ' ' | '\t' | '\r'
 let digit = ['0'-'9']
 let hex = '0' ['x']['0'-'9''A'-'F''a'-'f']*
-let ident = ['a'-'z''A'-'Z']['a'-'z''A'-'Z''0'-'9''_']*
+let bin = '0' ['b']['0''1']*
+let alpha = ['a'-'z''A'-'Z']
+let alpha_num = (alpha | digit)
+let ident = alpha (alpha_num | '_')*
 
 rule token = parse
   | "@"             { AT }
   | "+"             { PLUS }
   | "-"             { MINUS }
-  | "*u"            { MULTU }
-  | "*s"            { MULTS }
-  | "/"             { DIVU }
-  | "/s"            { DIVS }
+  | "*"             { STAR }
+  | "*u"            { STAR_U }
+  | "*s"            { STAR_S }
+  | "/u?"           { SLASH_U }
+  | "/s"            { SLASH_S }
   | "!"             { NOT }
-  | ">>"            { CONCAT }
+  | ">>"
+  | ">>u"           { RSHIFTU }
+  | ">>s"           { RSHIFTS }
+  | "<<"            { LSHIFT }
   | ":"             { COLON }
   | ";"             { SEMICOLON }
-  | "="             { EQQ }
+  | "="             { EQUAL }
   | "<>"            { NEQ }
   | "<=u"           { LEU }
   | "<=s"           { LES }
@@ -116,8 +129,11 @@ rule token = parse
   | ")"             { RPAR }
   | "["             { LBRACKET }
   | "]"             { RBRACKET }
+  | "]s"            { RBRACKETS }
+  | "]u"            { RBRACKETU }
   | ","             { COMMA }
   | '.'             { DOT }
+  | ".."            { DOTDOT }
   | "->"            { ARROW }
   | "<-"            { ARROWINV }
   | ":="            { ASSIGN }
@@ -142,6 +158,7 @@ rule token = parse
                     { STRING st }
   | ident as s      { kwd_or_ident s }
   | hex as s        { HEXA s }
+  | bin as s        { BIN s }
   | digit+ as s     { INT s }
   | space+          { token lexbuf }
   | '#' [^'\n']* '\n'

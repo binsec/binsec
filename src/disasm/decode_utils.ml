@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,21 +21,25 @@
 
 open Bigint
 
-  
+
 let decode_opcode ?(addr=Int64.zero) opcode =
   try
-    let basic_inst, instrs = X86toDba.decode_string opcode addr in
+    let base_addr = Virtual_address.of_int64 addr in
+    let basic_inst, instrs = X86toDba.decode_binstream ~base_addr opcode in
     let mnemonic =
       Format.asprintf "%a" X86Instruction.pp_mnemonic basic_inst in
     mnemonic, instrs
   with X86toDba.InstructionUnhandled _ ->
-    Logger.warning "Not decoded @%Lx: %a" addr Basic_types.Binstream.pp opcode;
-    "not decoded", Dba_types.Block.empty
+    Logger.warning "Not decoded @%Lx: %a" addr Binstream.pp opcode;
+    "not decoded", Dhunk.empty
 
 
 let decode_bin_opcode ?(addr=Int64.zero) bytes =
-  let opcode = Basic_types.Binstream.of_bytes bytes in
+  let opcode = Binstream.of_bytes bytes in
   decode_opcode ~addr opcode
+
+let decode_hex_opcode ?(addr=Int64.zero) (raw:string) =
+  decode_opcode ~addr (Binstream.of_nibbles raw)
 
 
 let group_char_two (str:string): string list =
@@ -52,9 +56,6 @@ let hex_string_to_list (raw:string): string list =
 
 let hex_string_to_bin (raw:string): string =
   List.fold_left (fun acc i -> acc^i) "" (hex_string_to_list raw)
-
-let decode_hex_opcode ?(addr=Int64.zero) (raw:string) =
-  decode_opcode ~addr (Basic_types.Binstream.of_nibbles raw)
 
 let string_to_hex ?(with_space=false) (raw:string) : string =
   let spacer = if with_space then " " else "" in

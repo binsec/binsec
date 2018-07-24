@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,6 +25,7 @@ open Concrete_state
 open Concrete_eval
 open Format
 open Ast_builder
+open Simulate_options
 
 let mallocs =
   ref (Dba_types.Region.Map.empty : Dba.malloc_status Dba_types.Region.Map.t)
@@ -43,13 +44,13 @@ let update_memory lhs rbv m conds glbs:
   Concrete_state.concreteMap * Caddress.Set.t =
   let open Bigint in
   match lhs with
-  | Dba.LhsVar (s, size, _) ->
+  | Dba.LValue.Var (s, size, _) ->
     let v = Static_types.Var (s, size) in
     let m = Concrete_eval.write v zero_big_int rbv m conds glbs in
     m, glbs
 
   (* restrict assignment requires to load variable from memory *)
-  | Dba.LhsVarRestrict (s, size, of1, of2) ->
+  | Dba.LValue.Restrict (s, size, {Interval.lo=of1; Interval.hi=of2}) ->
     let x =
       try Concrete_eval.read (Static_types.Var (s, size)) zero_big_int m conds glbs
       with Not_found -> Simulate_utils.mk_undef_value size
@@ -64,7 +65,7 @@ let update_memory lhs rbv m conds glbs:
     let m = Concrete_eval.write v zero_big_int tmp m conds glbs in
     m, glbs
 
-  | Dba.LhsStore (size, Dba.LittleEndian, expr) ->
+  | Dba.LValue.Store (size, Dba.LittleEndian, expr) ->
     (* FIXME: this is the same case as BigEndian modulo *)
     let e, m = Concrete_eval.eval_expr expr m conds glbs, m in
     let region = region_of e in
@@ -98,7 +99,7 @@ let update_memory lhs rbv m conds glbs:
       !m, !glbs
     else raise (Errors.Bad_bound "store, Little_endian case")
 
-  | Dba.LhsStore (size, Dba.BigEndian, expr) ->
+  | Dba.LValue.Store (size, Dba.BigEndian, expr) ->
     let e, m = Concrete_eval.eval_expr expr m conds glbs, m in
     let region = region_of e in
     let i = value_of e in
@@ -152,7 +153,7 @@ let check_exec_permission addr m conds glbs =
   let m = Static_types.Env.add (Static_types.Var ("\\addr", Machine.Word_size.get ())) sub_m m in
   let c =
     try Dba_types.Rights.find (Dba_types.Rights.X, `Constant) !permis
-    with Not_found ->  Dba.True
+    with Not_found ->  Dba.Expr.one
   in
   if (Concrete_eval.eval_cond c m conds glbs) then addr
   else raise Errors.Exec_permission_denied
@@ -160,18 +161,18 @@ let check_exec_permission addr m conds glbs =
 
 let compute addr instr m conds djmps pp_conds glbs:
   Dba.address option *
-  concreteMap *
-  Smt_bitvectors.smtBvExprAlt list *
-  Caddress.Set.t Caddress.Map.t *
-  (Dba.address * Region_bitvector.t) list Caddress.Map.t *
-  Caddress.Set.t =
+      concreteMap *
+      Smt_bitvectors.smtBvExprAlt list *
+      Caddress.Set.t Caddress.Map.t *
+      (Dba.address * Region_bitvector.t) list Caddress.Map.t *
+      Caddress.Set.t =
   match instr with
-  | Dba.IkStop (Some Dba.OK) ->
+  | Dba.Instr.Stop (Some Dba.OK) ->
     None, m, conds, djmps, pp_conds, glbs
 
-  | Dba.IkStop _ -> None, m, conds, djmps, pp_conds, glbs
+  | Dba.Instr.Stop _ -> None, m, conds, djmps, pp_conds, glbs
 
-  | Dba.IkAssign (lhs, expr, id_suiv) ->
+  | Dba.Instr.Assign (lhs, expr, id_suiv) ->
     let addr_suiv = Dba_types.Caddress.reid addr id_suiv in
     let s1 = Some (check_exec_permission addr_suiv m conds glbs) in
     Logger.debug "%a" Dba_printer.Ascii.pp_instruction instr ;
@@ -180,7 +181,7 @@ let compute addr instr m conds djmps pp_conds glbs:
     let s3 = conds in
     s1, s2, s3, djmps, pp_conds, glbs
 
-  | Dba.IkMalloc (lhs, expr, id_suiv) ->
+  | Dba.Instr.Malloc (lhs, expr, id_suiv) ->
     incr Dba_types.malloc_id;
     let e_size = Concrete_eval.eval_expr expr m conds glbs in
     let size =
@@ -188,28 +189,25 @@ let compute addr instr m conds djmps pp_conds glbs:
       | `Value (`Constant, bv) -> Bitvector.value_of bv
       | _ -> failwith "Simulate.ml: malloc ();"
     in
-    let malloc_key  =
-      if Simulate_options.SemanticsMode.flat ()
-      then
-        let a = Dba_types.Caddress.create (Bitvector.create !new_malloc 32) (-1) in
-        `Malloc ((-1, a), Bigint.zero_big_int)
-      else `Malloc ((!Dba_types.malloc_id, addr), size)
-    in
-    let region =
-      if Simulate_options.SemanticsMode.flat () then `Constant
-      else `Malloc ((!Dba_types.malloc_id, addr), size)
-    in
-    let bv =
-      if Simulate_options.SemanticsMode.flat () then
-        begin
+    let malloc_key, region, bv  =
+      match Semantic_mode.get () with
+      | Flat ->
+         let bv = Bitvector.create !new_malloc 32 in
+         let a = Dba_types.Caddress.create bv (-1) in
+         let malloc = `Malloc ((-1, a), Bigint.zero_big_int) in
+         let region = `Constant in
+         let bv =
           let res = !new_malloc in
           let big_size = Bigint.add_int_big_int 15 size in
           let big_a = Bigint.big_int_of_int 15 in
           let aligned_size = Bigint.mod_big_int big_size big_a in
           new_malloc := Bigint.add_big_int aligned_size !new_malloc;
           Bitvector.create res (Machine.Word_size.get ())
-        end
-      else Bitvector.zeros (Machine.Word_size.get ())
+         in malloc, region, bv
+      | _ ->
+         let malloc = `Malloc ((!Dba_types.malloc_id, addr), size) in
+         let bv = Bitvector.zeros (Machine.Word_size.get ()) in
+         malloc, malloc, bv
     in
     mallocs := Dba_types.Region.Map.add malloc_key Dba.Freeable !mallocs;
     let v = (`Value (region, bv)) in
@@ -218,7 +216,7 @@ let compute addr instr m conds djmps pp_conds glbs:
     let addr_suiv = Some (check_exec_permission a m conds glbs) in
     addr_suiv, m, conds, djmps, pp_conds, glbs
 
-  | Dba.IkFree (expr, id_suiv) ->
+  | Dba.Instr.Free (expr, id_suiv) ->
     let v = Concrete_eval.eval_expr expr m conds glbs in
     let rec aux v =
       (match v with
@@ -244,7 +242,8 @@ let compute addr instr m conds djmps pp_conds glbs:
            | _ -> raise Errors.Invalid_free_address
          end
        | `Value (`Constant, bv) ->
-         let elmt = `Malloc ((-1, Dba_types.Caddress.create bv (-1)), Bigint.zero_big_int) in
+         let elmt =
+           `Malloc ((-1, Dba_types.Caddress.create bv (-1)), Bigint.zero_big_int) in
          let st = Dba_types.Region.Map.find elmt !mallocs in
          begin
            match st with
@@ -262,64 +261,64 @@ let compute addr instr m conds djmps pp_conds glbs:
       )
     in aux v
 
-  | Dba.IkSJump (Dba.JOuter addr_suiv, _call_return_tag) ->
+  | Dba.Instr.SJump (Dba.JOuter addr_suiv, _call_return_tag) ->
     let next = Some (check_exec_permission addr_suiv m conds glbs) in
     next, m, conds, djmps, pp_conds, glbs
 
-  | Dba.IkSJump (Dba.JInner id_suiv, _call_return_tag) ->
+  | Dba.Instr.SJump (Dba.JInner id_suiv, _call_return_tag) ->
     let a = Dba_types.Caddress.reid addr id_suiv in
     let next = Some (check_exec_permission a m conds glbs) in
     next, m, conds, djmps, pp_conds, glbs
 
-  | Dba.IkDJump (expr, _call_return_tag) ->
+  | Dba.Instr.DJump (expr, _call_return_tag) ->
     let rbv = Concrete_eval.eval_expr expr m conds glbs in
     let rec aux rbv  =
       match rbv with
-       | `SymbSmt smb ->
-         let sz = Machine.Word_size.get () in
-         let v = Region_bitvector.get_value smb sz conds glbs in
-         aux v
-       | `Value (_r, b) ->
-         let sz = Bitvector.size_of b in
-         let b = Bitvector.value_of b  in
-         let v = `Value (`Constant, (Bitvector.create b sz)) in
-         let sub_m = SubEnv.add Bigint.zero_big_int v SubEnv.empty in
-         let key = Static_types.Var ("\\addr", Machine.Word_size.get ()) in
-         let m = Static_types.Env.add key sub_m m in
-         let r = region_of rbv in
-         let c =
-           try Dba_types.Rights.find (Dba_types.Rights.X, r) !permis
-           with Not_found -> Dba.True
-         in
-         if (Concrete_eval.eval_cond c m conds glbs) then (
-           if r = `Constant then
-             if size_of rbv = Machine.Word_size.get ()
-             then
-               begin
-                 let target_addr =
-                   Dba_types.Caddress.block_start @@
-                   Region_bitvector.bitvector_of rbv in
-                 let old_set =
-                   try Caddress.Map.find addr djmps
-                   with Not_found -> Caddress.Set.empty
-                 in
-                 let new_set = Caddress.Set.add target_addr old_set in
-                 let djmps = Caddress.Map.add addr new_set djmps in
-                 (Some target_addr), m, conds, djmps, pp_conds, glbs
-               end
-             else
-               begin
-                 Format.eprintf "size = %d" (size_of rbv);
-                 raise Errors.Bad_address_size
-               end
-           else raise (Errors.Bad_region "Dynamic jump"))
-         else raise Errors.Exec_permission_denied
+      | `SymbSmt smb ->
+        let sz = Machine.Word_size.get () in
+        let v = Region_bitvector.get_value smb sz conds glbs in
+        aux v
+      | `Value (_r, b) ->
+        let sz = Bitvector.size_of b in
+        let b = Bitvector.value_of b  in
+        let v = `Value (`Constant, (Bitvector.create b sz)) in
+        let sub_m = SubEnv.add Bigint.zero_big_int v SubEnv.empty in
+        let key = Static_types.Var ("\\addr", Machine.Word_size.get ()) in
+        let m = Static_types.Env.add key sub_m m in
+        let r = region_of rbv in
+        let c =
+          try Dba_types.Rights.find (Dba_types.Rights.X, r) !permis
+          with Not_found -> Dba.Expr.one
+        in
+        if (Concrete_eval.eval_cond c m conds glbs) then (
+          if r = `Constant then
+            if size_of rbv = Machine.Word_size.get ()
+            then
+              begin
+                let target_addr =
+                  Dba_types.Caddress.block_start @@
+                  Region_bitvector.bitvector_of rbv in
+                let old_set =
+                  try Caddress.Map.find addr djmps
+                  with Not_found -> Caddress.Set.empty
+                in
+                let new_set = Caddress.Set.add target_addr old_set in
+                let djmps = Caddress.Map.add addr new_set djmps in
+                (Some target_addr), m, conds, djmps, pp_conds, glbs
+              end
+            else
+              begin
+                Format.eprintf "size = %d" (size_of rbv);
+                raise Errors.Bad_address_size
+              end
+          else raise (Errors.Bad_region "Dynamic jump"))
+        else raise Errors.Exec_permission_denied
 
-       | _ -> raise (Errors.Unknown_value (to_string rbv))
+      | _ -> raise (Errors.Unknown_value (to_string rbv))
     in
     aux rbv
 
-  | Dba.IkIf (cond, (Dba.JOuter addr_suiv1), id_suiv2) ->
+  | Dba.Instr.If (cond, (Dba.JOuter addr_suiv1), id_suiv2) ->
     (
       try
         if Concrete_eval.eval_cond cond m conds glbs then
@@ -333,10 +332,9 @@ let compute addr instr m conds djmps pp_conds glbs:
           next, m, conds, djmps, pp_conds, glbs
       with
         Smt_bitvectors.Assume_condition c ->
-        Random.self_init ();
         let random_value = Random.int 100 in
         let alternative_strategy () =
-          let nc = Smt_bitvectors.SmtBvUnaryAlt (Smtlib2.SmtBvNot, c) in
+          let nc = Smt_bitvectors.SmtBvUnaryAlt (Formula.BvNot, c) in
           let bv_cond = `SymbSmt nc in
           let bv_cond_list =
             try Caddress.Map.find addr_suiv1 pp_conds
@@ -344,17 +342,16 @@ let compute addr instr m conds djmps pp_conds glbs:
           in
           let l = bv_cond_list @ [(addr, bv_cond)] in
           let pp_conds = Caddress.Map.add addr_suiv1 l pp_conds in
-          let nc = Dba.CondNot cond in
-          let conds = Concrete_eval.add_smt_cond nc m conds glbs in
+          let conds = Concrete_eval.add_smt_cond (Dba.Expr.lognot cond) m conds glbs in
           let a = Dba_types.Caddress.reid addr id_suiv2 in
           let a = check_exec_permission a m conds glbs in
           let next = Some a in
           next, m, conds, djmps, pp_conds, glbs
         in
-        match Simulate_options.ConditionalStrategy.get () with
-        | None -> raise (Smt_bitvectors.Assume_condition c)
-        | Some Simulate_options.ConditionalStrategy.Else -> alternative_strategy ()
-        | Some Simulate_options.ConditionalStrategy.Normal ->
+        match Conditional_strategy.get () with
+        | Fail -> raise (Smt_bitvectors.Assume_condition c)
+        | Branch_else -> alternative_strategy ()
+        | Branch_if ->
           if random_value mod 2 = 0 then alternative_strategy ()
           else
             let bv_cond = `SymbSmt c in
@@ -370,7 +367,7 @@ let compute addr instr m conds djmps pp_conds glbs:
             next, m, conds, djmps, pp_conds, glbs
     )
 
-  | Dba.IkIf (cond, (Dba.JInner id_suiv1), id_suiv2) ->
+  | Dba.Instr.If (cond, (Dba.JInner id_suiv1), id_suiv2) ->
     (
       try
         if (Concrete_eval.eval_cond cond m conds glbs) then
@@ -384,11 +381,10 @@ let compute addr instr m conds djmps pp_conds glbs:
       with
       | Smt_bitvectors.Assume_condition c ->
         let cond, next =
-          let open Simulate_options in
-          match ConditionalStrategy.get () with
-          | None -> raise (Smt_bitvectors.Assume_condition c)
-          | Some ConditionalStrategy.Else -> Dba.CondNot cond, id_suiv2
-          | Some ConditionalStrategy.Normal -> cond, id_suiv1
+          match Conditional_strategy.get () with
+          | Fail -> raise (Smt_bitvectors.Assume_condition c)
+          | Branch_else -> Dba.Expr.lognot cond, id_suiv2
+          | Branch_if -> cond, id_suiv1
         in
         let conds = Concrete_eval.add_smt_cond cond m conds glbs in
         let a = Dba_types.Caddress.reid addr next in
@@ -397,7 +393,7 @@ let compute addr instr m conds djmps pp_conds glbs:
         next, m, conds, djmps, pp_conds, glbs
     )
 
-  | Dba.IkAssert (cond, id_suiv) ->
+  | Dba.Instr.Assert (cond, id_suiv) ->
     if (Concrete_eval.eval_cond cond m conds glbs) then
       let a = Dba_types.Caddress.reid addr id_suiv in
       let a = check_exec_permission a m conds glbs in
@@ -405,17 +401,17 @@ let compute addr instr m conds djmps pp_conds glbs:
       next, m, conds, djmps, pp_conds, glbs
     else Errors.assert_failure addr instr
 
-  | Dba.IkAssume (cond, id_suiv) ->
+  | Dba.Instr.Assume (cond, id_suiv) ->
     let conds =
-      match Simulate_options.ConditionalStrategy.get () with
-      | None ->  conds
-      | Some _ -> Concrete_eval.add_smt_cond cond m conds glbs
+      match Conditional_strategy.get () with
+      | Fail ->  conds
+      | Branch_if | Branch_else -> Concrete_eval.add_smt_cond cond m conds glbs
     in
     let a = Dba_types.Caddress.reid addr id_suiv in
     let next = Some (check_exec_permission a m conds glbs) in
     next, m, conds, djmps, pp_conds, glbs
 
-  | Dba.IkNondetAssume (lhslist, cond, id_suiv) ->
+  | Dba.Instr.NondetAssume (lhslist, cond, id_suiv) ->
 
     let rec update_memory_nondet lhslist m conds glbs =
       match lhslist with
@@ -435,7 +431,7 @@ let compute addr instr m conds djmps pp_conds glbs:
     let next = Some (check_exec_permission a m conds glbs) in
     next, m, conds, djmps, pp_conds, glbs
 
-  | Dba.IkNondet (lhs, region, id_suiv) ->
+  | Dba.Instr.Nondet (lhs, region, id_suiv) ->
     let m, glbs =
       match region with
       | `Malloc ((_id1, _addr1), _size1) ->
@@ -461,14 +457,14 @@ let compute addr instr m conds djmps pp_conds glbs:
     let next = Some (check_exec_permission a m conds glbs) in
     next, m, conds, djmps, pp_conds, glbs
 
-  | Dba.IkUndef (lhs, id_suiv) ->
+  | Dba.Instr.Undef (lhs, id_suiv) ->
     let v = Simulate_utils.mk_undef_value (Dba_utils.computesize_dbalhs lhs) in
     let m, glbs = update_memory lhs v m conds glbs in
     let a = Dba_types.Caddress.reid addr id_suiv in
     let next = Some (check_exec_permission a m conds glbs) in
     next, m, conds, djmps, pp_conds, glbs
 
-  | Dba.IkPrint (args, id_suiv) ->
+  | Dba.Instr.Print (args, id_suiv) ->
     printf "%s%!" (string_of_args args m conds glbs);
     let a = Dba_types.Caddress.reid addr id_suiv in
     let next = Some (check_exec_permission a m conds glbs) in
@@ -531,7 +527,7 @@ let exec_inst a instsb m conds time djmps pp_conds glbs =
 let add_stub_replace address instsr inst_map =
   try
     let chained_instr = Caddress.Map.find address instsr in
-    Disasm_types.add_chained_instr chained_instr inst_map
+    Pmap.add_chained_instr chained_instr inst_map
   with Not_found ->
     inst_map
 
@@ -553,8 +549,7 @@ let display_step (a, l0) m insts djmps visited pp_conds =
 
 
 let simulate l0 insts stops instsb instsr glbs =
-  let mode_name = Simulate_options.SemanticsMode.to_string () in
-  let trace_name = "out_" ^ mode_name ^ ".trace" in
+  let trace_name = "out_simulation.trace" in
   let oc = open_out trace_name in
   let trace_fmt = Format.formatter_of_out_channel oc in
   let rec aux a m stmts conds time djmps visited pp_conds glbs =
@@ -562,15 +557,15 @@ let simulate l0 insts stops instsb instsr glbs =
     let insts, instsb, instsr = stmts in
     match cur_add with
     | None ->
-        close_out oc;
-        m, insts, djmps, visited, pp_conds, conds, time
+      close_out oc;
+      m, insts, djmps, visited, pp_conds, conds, time
     | Some addr ->
       Format.fprintf trace_fmt "%a"
         Dba_printer.Ascii.pp_code_address addr;
       let visited = Caddress.Set.add addr visited in
       let _next_add, m, conds, time, djmps, pp_conds, glbs =
         exec_inst addr instsb m conds time djmps pp_conds glbs in
-      let (insts:Disasm_types.pmap) = add_stub_replace addr instsr insts in
+      let (insts:Simplification_options.pmap) = add_stub_replace addr instsr insts in
       let w_pts = Caddress.Map.empty in
       let unrolled_loops = Caddress.Map.empty in
       let w_delays = 0, Caddress.Map.empty in
@@ -623,7 +618,7 @@ let display_simulation_results _mem _assumes time cfg_opcode cfg_dba =
   Cfgraph.Dot.output_graph_to_file "cfg_dba.dot" cfg_dba;
   Logger.result
     "@[<v 0><info>: simulation time: \t %f@ \
-      %.2f & %a & %d & %d@]"
+     %.2f & %a & %d & %d@]"
     time time
     Region_bitvector.display_statistics ()
     (Simulate_utils.get_nb_undef_builds ())
@@ -636,8 +631,8 @@ let set_sim_outputs insts m djumps l0 visited pp_conds conds time =
     (fun fmt map ->
        Caddress.Map.iter
          (fun key _ ->
-           fprintf fmt "Dynamic jump : %a@ "
-           Dba_printer.Ascii.pp_code_address key)
+            fprintf fmt "Dynamic jump : %a@ "
+              Dba_printer.Ascii.pp_code_address key)
          map)
     djumps ;
   let ast = Ast_builder.make insts djumps in
@@ -665,22 +660,35 @@ let fuzz_simulate l0 insts perms inits parameters =
     incr count
   done
 
-let run ?(dba_file=None) ~configuration_file () =
+let run ?(dba_file=None) ~configuration_file =
   Logger.debug "Starting simulation ..." ;
-  let parameters = Binsec_utils.read_optional_config_file configuration_file in
+  let parameters = Parse_utils.read_optional_config_file configuration_file in
   let program =
     match dba_file with
-    | None -> Binsec_utils.load_dba_definition (Machine.ISA.get ())
-    | Some filename -> Binsec_utils.read_dba_file filename
+    | None ->
+       Parse_utils.load_dba_definition (Kernel_options.Machine.ISA.get ())
+    | Some filename -> Parse_utils.read_dba_file filename
   in
   let start_address =
-    match Options.get_entry_point () with
+    match Kernel_functions.get_ep () with
     | None -> program.start_address
-    | Some bint ->
-       let bv = Bitvector.create bint (Machine.Word_size.get ()) in
-       Dba_types.Caddress.block_start bv
+    | Some va ->
+      let bint = Virtual_address.to_bigint va in
+      let bv = Bitvector.create bint (Machine.Word_size.get ()) in
+      Dba_types.Caddress.block_start bv
   in
   fuzz_simulate
     start_address program.instructions
     program.permissions program.initializations
     parameters
+
+
+let default_run () =
+  if Simulate_options.is_enabled () then
+    let dba_file = Kernel_options.Dba_file.get_opt () in
+    let configuration_file = Kernel_options.Dba_config.get_opt () in
+    (*  set_machdep_on_need (); *)
+    run ~dba_file ~configuration_file
+
+let _ =
+  Cli.Boot.enlist ~name:"DBA interpreter" ~f:default_run

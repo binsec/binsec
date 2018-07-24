@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -18,12 +18,9 @@
 (**************************************************************************)
 
 open Dba
-open Path_pred_env
-open Trace_type
-open Formula
-open Smtlib2
-open Smtlib2_visitor
-open Options
+open Path_predicate_env
+open Path_predicate_formula
+open Formula_utils
 open Config_piqi
 open Configuration
 open Libcall_piqi
@@ -34,17 +31,15 @@ type heap_event_t =  ALLOC of (int * int64 * int64) | ALLOC_UAF of (int * int64 
 (*type heap_event_t = heap_event_elem_t Core.Std.Heap.t*)
 
 let counter_alloc =
-    let count = ref (-1) in
-    fun () ->
-        incr count;
-        !count
+  let count = ref (-1) in
+  fun () ->
+    incr count;
+    !count
 
 exception DOUBLEFREE of int * int64
 
-class uaf_detection (trace_config:Options.trace_analysis_config) =
+class uaf_detection (trace_config:Trace_config.t) =
   object(self) inherit InvertChild.invert_child trace_config
-
-
 
     val malloc_symb = "MALLOC"
     val malloc_uaf_id = ref 0
@@ -74,138 +69,161 @@ class uaf_detection (trace_config:Options.trace_analysis_config) =
     method set_nth_use n= use_nth := n
 
     method call_malloc env (malloc:malloc_t option) loc key =
-        let open Malloc_t in
-        match malloc with
-        | None -> ()
-        | Some malloc ->
-            if ((Int64.compare loc (!alloc_addr)) == 0  || key = (!alloc_nth)) then
-                self#add_alloc env malloc.ret malloc.size true
-            else
-                self#add_alloc env malloc.ret malloc.size false
+      let open Malloc_t in
+      match malloc with
+      | None -> ()
+      | Some malloc ->
+        if ((Int64.compare loc (!alloc_addr)) == 0  || key = (!alloc_nth)) then
+          self#add_alloc env malloc.ret malloc.size true
+        else
+          self#add_alloc env malloc.ret malloc.size false
 
     method call_free free =
-        let open Free_t in
-        match free with
-        | None -> ()
-        | Some free -> self#add_free free.ptr
+      let open Free_t in
+      match free with
+      | None -> ()
+      | Some free -> self#add_free free.ptr
 
 
     method check_lib inst env key =
-        List.iter (fun x -> match x with
-            | Libcall l when l.ident = `malloc -> self#call_malloc env l.malloc inst.location key
-            | Libcall l when l.ident = `free -> self#call_free l.free
-            | Libcall _ | NextAddr _|RegRead (_, _)|RegWrite (_, _)|Syscall _|MemLoad (_, _)| MemStore (_, _)|Not_retrieved|Comment _|Wave _  -> ()
+      let open Trace_type in
+      List.iter
+        (fun x ->
+           match x with
+           | Libcall l when l.ident = `malloc ->
+             self#call_malloc env l.malloc inst.location key
+           | Libcall l when l.ident = `free -> self#call_free l.free
+           | Libcall _ | NextAddr _
+           | RegRead (_, _)|RegWrite (_, _)|Syscall _
+           | MemLoad (_, _) | MemStore (_, _)
+           | Not_retrieved | Comment _ | Wave _  -> ()
         ) inst.concrete_infos
 
 
     method add_alloc env addr size symbolize =
-        let id = counter_alloc() in
-        let name = Printf.sprintf "%s%d" malloc_symb id in
-        Hashtbl.add alloc_size_tbl addr (id,size);
-        if symbolize then begin
-          let () = last_malloc:=name in
-          heap_events := (ALLOC_UAF(id,size,addr))::(!heap_events);
-          malloc_uaf_id := id;
-          malloc_uaf_size := size;
-          Formula_utils.symbolize_register "eax" ~is_full_name:true name env
-        end
-        else begin
-            heap_events := ALLOC (id,size,addr)::!heap_events;
-            let fexpr =
-              SmtBvCst(Bitvector.create (Bigint.big_int_of_int64 addr)
-                         env.Path_pred_env.addr_size)
-            in Formula_utils.replace_register "eax" fexpr env
-        end
+      let id = counter_alloc() in
+      let name = Printf.sprintf "%s%d" malloc_symb id in
+      Hashtbl.add alloc_size_tbl addr (id,size);
+      if symbolize then begin
+        last_malloc:=name;
+        heap_events := ALLOC_UAF (id,size,addr) :: !heap_events;
+        malloc_uaf_id := id;
+        malloc_uaf_size := size;
+        Path_predicate_utils.symbolize_register "eax" ~is_full_name:true name env
+      end
+      else begin
+        heap_events := ALLOC (id,size,addr) :: !heap_events;
+        let fexpr =
+          Formula.mk_bv_cst
+            (Bitvector.create (Bigint.big_int_of_int64 addr)
+               env.Path_predicate_env.formula.addr_size)
+        in Path_predicate_utils.replace_register "eax" fexpr env
+      end
 
     method add_free addr  =
-        let id,_ =
-          try Hashtbl.find alloc_size_tbl addr
-          with Not_found -> (-1), 0L
-        in
-        let has_free =
-          List.exists
-            (fun e ->
-               match e with
-               | FREE(i,a) -> i = id && a = addr
-               | ALLOC _ | ALLOC_UAF _ | DFREE _ -> false)
-            !heap_events
-        in
-        (* check for double free *)
-        heap_events := FREE (id,addr) :: !heap_events;
-        if has_free then raise (DOUBLEFREE (id, addr))
+      let id,_ =
+        try Hashtbl.find alloc_size_tbl addr
+        with Not_found -> (-1), 0L
+      in
+      let has_free =
+        List.exists
+          (fun e ->
+             match e with
+             | FREE(i,a) -> i = id && a = addr
+             | ALLOC _ | ALLOC_UAF _ | DFREE _ -> false)
+          !heap_events
+      in
+      (* check for double free *)
+      heap_events := FREE (id,addr) :: !heap_events;
+      if has_free then raise (DOUBLEFREE (id, addr))
 
     (* should do : 0<= (ADDR+sz) - addr <= sz in smt :) *)
     method add_uaf_check predicate (name,_) env =
-        let get_addr_size e = e.Path_pred_env.addr_size in
-        let _,chunk = get_var_or_create env.formula (!last_malloc) (get_addr_size env) 0 31 in
-        let _,reg = get_var_or_create env.formula name env.Path_pred_env.addr_size 0 31 in
-        let new_predicate = SmtAnd(predicate,SmtNot(SmtComp(SmtBvExpr(reg),SmtBvExpr(chunk)))) in
-        new_predicate
- 
+      let open Formula in
+      let get_addr_size e = e.Path_predicate_env.formula.addr_size in
+      let _,chunk = get_var_or_create env.formula (!last_malloc) (get_addr_size env) 0 31 in
+      let _,reg = get_var_or_create env.formula name env.Path_predicate_env.formula.addr_size 0 31 in
+      let new_predicate = mk_bl_and predicate (mk_bv_distinct reg chunk) in
+      new_predicate
+
     (* should do : 0<= (ADDR+sz) - addr <= sz in smt :) *)
     method add_free_check predicate env =
-        let get_addr_size e = e.Path_pred_env.addr_size in
-        (* Get the last val of memory *)
-        let _,esp = get_var_or_create env.formula "esp" (get_addr_size env) 0 31 in
-        let esp = SmtBvBinary(SmtBvAdd,esp,(SmtBvCst(Bitvector.create (Bigint.big_int_of_int 0x4) (get_addr_size env)))) in
-        let _,chunk = get_var_or_create env.formula (!last_malloc) (get_addr_size env) 0 31 in
-        let mem_name = "memory" ^ (string_of_int ((get_varindex env.formula "memory")-1)) in
-        let load_esp = SmtBvExpr(SmtABvLoad32(SmtABvArray(mem_name,0,(get_addr_size env)),esp)) in
-        let new_predicate = SmtAnd(predicate,SmtNot(SmtComp(load_esp,SmtBvExpr(chunk)))) in
-        new_predicate   
+      let open Formula in
+      let get_addr_size e = e.Path_predicate_env.formula.addr_size in
+      (* Get the last val of memory *)
+      let _,esp = get_var_or_create env.formula "esp" (get_addr_size env) 0 31 in
+      let esp = mk_bv_add esp
+          (mk_bv_cst (Bitvector.create (Bigint.big_int_of_int 0x4) (get_addr_size env)))
+      in
+      let _,chunk = get_var_or_create env.formula (!last_malloc) (get_addr_size env) 0 31 in
+      let mem_name = "memory" ^ (string_of_int ((get_varindex env.formula "memory")-1)) in
+      let load_esp =
+        mk_select 4 (mk_ax_var (ax_var mem_name 0 (get_addr_size env))) esp
+      in
+      let new_predicate = mk_bl_and predicate (mk_bv_distinct load_esp chunk) in
+      new_predicate
 
     (* useless *)
     method check_with_visitor name env =
-        let visitor = new get_var_visitor in
-        let _,reg = get_var_or_create env.formula name env.Path_pred_env.addr_size 0 31 in
-        let _ = visitor#visit_smt_bv_expr reg in
-        let vars = visitor#get_vars in
-        Basic_types.String.Set.iter (fun x  -> Logger.debug "%s " x) vars
+      let _,reg = get_var_or_create env.formula name env.Path_predicate_env.formula.addr_size 0 31 in
+      let vars = bv_term_variables reg |> to_stringmap in
+      Basic_types.String.Set.iter (fun x  -> Logger.debug "%s " x) vars
 
-    method! private visit_instr_after (key:int) (inst:trace_inst) (env:Path_pred_env.t) =
+    method! private visit_instr_after key inst env =
       try
-          self#check_lib inst env key;
-          Path_predicate.DoExec
+        self#check_lib inst env key;
+        Path_predicate.DoExec
       with
       | DOUBLEFREE(id,addr) ->
         Logger.debug "DoubleFree found at nth %d (addr: %Lx, id %d)" key addr id;
         uaf_detect <- true;
         Path_predicate.DoExec
 
-    method! private visit_dbainstr_after (key:int) (inst:trace_inst) (dbainst:Dba_types.Statement.t) (env:Path_pred_env.t) =
+    method! private visit_dbainstr_after (key:int) inst
+        (dbainst:Dba_types.Statement.t) (env:Path_predicate_env.t)
+      =
+      let open Trace_type in
+      let open Trace_config in
       let addr = inst.location in
-      if List.exists (fun x -> Int64.compare addr x =0) !free_addr || key = !free_nth then
-              let formula_file = Printf.sprintf "formula-free-%d.smt2" key in
-              let static_predicate = self#build_cond_predicate True env in 
-              let predicate = self#add_free_check static_predicate env in
-              let _ = Formula.build_formula_file env.formula predicate formula_file trace_config.configuration.solver in
-              let result, _model = Solver.solve_model formula_file trace_config.configuration.solver in
-              begin
-                match result with
-                | SAT -> 
-                  Logger.debug "Free on other chunk at nth %d" key;
-                  Path_predicate.StopExec
-                | UNSAT | TIMEOUT | UNKNOWN ->
-                  Path_predicate.DoExec
-              end
+      if List.exists (fun x -> Int64.compare addr x = 0) !free_addr
+      || key = !free_nth then
+        begin
+          let formula_file = Printf.sprintf "formula-free-%d.smt2" key in
+          let static_predicate = self#build_cond_predicate Dba.Expr._true env in
+          let predicate = self#add_free_check static_predicate env in
+          ignore @@
+          Path_predicate_formula.build_formula_file env.formula predicate formula_file;
+          let result, _model = Solver.solve_model formula_file trace_config.configuration.solver in
+          begin
+            let open Formula in
+            match result with
+            | SAT ->
+              Logger.debug "Free on other chunk at nth %d" key;
+              Path_predicate.StopExec
+            | UNSAT | TIMEOUT | UNKNOWN ->
+              Path_predicate.DoExec
+          end
+        end
       else if List.exists (fun x -> Int64.compare addr x =0) !use_addr || key = !use_nth then
-          match Dba_types.Statement.instruction dbainst with
-            | IkAssign (Dba.LhsStore(size,_,ExprVar(name,_,_)),_,_) ->
-              let formula_file = Printf.sprintf "formula-uaf-%d.smt2" key in
-              let static_predicate = self#build_cond_predicate True env in
-              let predicate = self#add_uaf_check static_predicate (name,size) env in
-              let _ = Formula.build_formula_file env.formula predicate formula_file trace_config.configuration.solver in
-              let result, _model = Solver.solve_model formula_file trace_config.configuration.solver in
-              begin
-                match result with
-                | UNSAT -> 
-                  Logger.debug "Uaf Found at nth %d" key;
-                  uaf_detect <- true;
-                  Path_predicate.StopExec
-                | SAT | TIMEOUT | UNKNOWN ->
-                  Path_predicate.DoExec
-              end
-            | _ -> Path_predicate.DoExec (* not success to avoid fragile on this one :) *)
+        match Dba_types.Statement.instruction dbainst with
+        | Instr.Assign (Dba.LValue.Store(size,_,Dba.Expr.Var(name,_,_)),_,_) ->
+          let formula_file = Printf.sprintf "formula-uaf-%d.smt2" key in
+          let static_predicate =
+            self#build_cond_predicate Dba.Expr._true env in
+          let predicate = self#add_uaf_check static_predicate (name,size) env in
+          ignore (Path_predicate_formula.build_formula_file env.formula predicate formula_file);
+          let result, _model = Solver.solve_model formula_file trace_config.configuration.solver in
+          begin
+            let open Formula in
+            match result with
+            | UNSAT ->
+              Logger.debug "Uaf Found at nth %d" key;
+              uaf_detect <- true;
+              Path_predicate.StopExec
+            | SAT | TIMEOUT | UNKNOWN ->
+              Path_predicate.DoExec
+          end
+        | _ -> Path_predicate.DoExec (* not success to avoid fragile on this one :) *)
       else Path_predicate.DoExec
 
     method! private post_execution _env =
@@ -235,7 +253,7 @@ class uaf_detection (trace_config:Options.trace_analysis_config) =
            | FREE(id,addr) -> Logger.debug "Free  %d (addr 0x%Lx)\n" id addr
            | DFREE(id,addr) -> Logger.debug "(Double)Free  %d (addr 0x%Lx)\n" id addr
         ) (List.rev !heap_events);
-    0
+      0
 
 
-end;;
+  end;;

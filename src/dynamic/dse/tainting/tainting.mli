@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -29,16 +29,16 @@ open Trace_type
     data structure *)
 class tainting_engine: taint_strategy ->
   object
-  method compute_taint_instr:
-    trace_inst -> TaintInfoSet.t list
-  (** compute the taint on the given instruction *)
+    method compute_taint_instr:
+      trace_inst -> TaintInfoSet.t list
+    (** compute the taint on the given instruction *)
 
-  method is_tainted:
-    taint -> bool
-  (** return [false] if taint is {!NoTaint} true otherwise *)
+    method is_tainted:
+      taint -> bool
+    (** return [false] if taint is {!NoTaint} true otherwise *)
 
-  method expr_to_taint:
-    Dba.expr -> trace_concrete_infos list -> taint
-   (** compute the taint on the given expression according to the
-       current internal taint state *)
-end
+    method expr_to_taint:
+      Dba.Expr.t -> trace_concrete_infos list -> taint
+    (** compute the taint on the given expression according to the
+        current internal taint state *)
+  end

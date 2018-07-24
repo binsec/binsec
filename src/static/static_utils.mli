@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,15 +21,14 @@
 
 (** Common functions for static analyses *)
 val update_instr_map:
-   Dba.address ->
-   Dba_types.Caddress.Map.key ->
-   Disasm_types.pmap ->
-   Dba_types.Caddress.Set.t ->
-   'a Dba_types.Caddress.Map.t ->
-   'a * 'a Dba_types.Caddress.Map.t ->
-   Dba_types.Caddress.Set.t Dba_types.Caddress.Map.t ->
-   Dba_types.Caddress.Set.t Dba_types.Caddress.Map.t ->
-   (Dba.instruction * Disasm_types.GenericInstruction.t option) *
-   Disasm_types.pmap
-   * 'a Dba_types.Caddress.Map.t *
-   Dba_types.Caddress.Set.t Dba_types.Caddress.Map.t
+  Dba.address ->
+  Dba_types.Caddress.Map.key ->
+  Pmap.t ->
+  Dba_types.Caddress.Set.t ->
+  'a Dba_types.Caddress.Map.t ->
+  'a * 'a Dba_types.Caddress.Map.t ->
+  Dba_types.Caddress.Set.t Dba_types.Caddress.Map.t ->
+  Dba_types.Caddress.Set.t Dba_types.Caddress.Map.t ->
+  (Dba.Instr.t * Instruction.Generic.t option) *
+  Pmap.t * 'a Dba_types.Caddress.Map.t *
+  Dba_types.Caddress.Set.t Dba_types.Caddress.Map.t

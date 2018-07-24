@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -146,6 +146,55 @@ let read_header t e_ident =
   | 1 -> read_header32 t e_ident
   | 2 -> read_header64 t e_ident
   | _ -> invalid_format "Invalid ELF class"
+
+(* ELF program header *)
+type program_header = {
+  p_type    : u32;
+  p_flags   : u32;
+  p_offset  : u64;
+  p_vaddr   : u64;
+  p_paddr   : u64;
+  p_filesz  : u64;
+  p_memsz   : u64;
+  p_align   : u64;
+}
+
+let read_program_header32 t =
+  ensure t 32 "Program header truncated";
+  let p_type   = Read.u32 t in
+  let p_offset = Read.u32 t in
+  let p_vaddr  = Read.u32 t in
+  let p_paddr  = Read.u32 t in
+  let p_filesz = Read.u32 t in
+  let p_memsz  = Read.u32 t in
+  let p_flags  = Read.u32 t in
+  let p_align  = Read.u32 t in
+  {p_type; p_flags; p_offset; p_vaddr;
+   p_paddr; p_filesz; p_memsz; p_align }
+
+let read_program_header64 t =
+  ensure t 56 "Program header truncated";
+  let p_type   = Read.u32 t in
+  let p_flags  = Read.u32 t in
+  let p_offset = Read.u64 t in
+  let p_vaddr  = Read.u64 t in
+  let p_paddr  = Read.u64 t in
+  let p_filesz = Read.u64 t in
+  let p_memsz  = Read.u64 t in
+  let p_align  = Read.u64 t in
+  {p_type; p_flags; p_offset; p_vaddr;
+   p_paddr; p_filesz; p_memsz; p_align }
+
+let read_program_header t header n =
+  seek t (header.e_phoff + n * header.e_phentsize);
+  match header.e_ident.elf_class with
+  | 1 -> read_program_header32 t
+  | 2 -> read_program_header64 t
+  | _ -> invalid_format "Invalid ELF class"
+
+let read_program_headers t header =
+  Array.init header.e_phnum (read_program_header t header)
+
 
 (* Section header *)
 type section = {
@@ -315,6 +364,14 @@ struct
   let size s = { raw = s.sh_size; virt = s.sh_size }
 
   let header s = s
+  let has_flag f s =
+    let mask =
+      match f with
+      | Write -> 1
+      | Read -> 2
+      | Exec -> 4
+    in
+    (flag s) land mask = mask
 
 end
 
@@ -334,16 +391,18 @@ end
 module Img =
 struct
 
-  type t = program * section array * symbol array * Loader_buf.t
+  type t = {program:program;sections:section array;
+            symbols:symbol array;buf:Loader_buf.t;
+            phdrs:program_header array}
   type header = program
 
-  let arch   (h,_,_,_) = arch h.e_machine
-  let entry  (h,_,_,_) = h.e_entry
-  let endian (h,_,_,_) = endian h.e_ident.elf_data
-  let sections (_,s,_,_) = Array.copy s
-  let symbols  (_,_,s,_) = Array.copy s
+  let arch   i = arch i.program.e_machine
+  let entry  i = i.program.e_entry
+  let endian i = endian i.program.e_ident.elf_data
+  let sections i = Array.copy i.sections
+  let symbols  i = Array.copy i.symbols
 
-  let header (h,_,_,_) = h
+  let header i = i.program
 
 end
 
@@ -351,8 +410,9 @@ let load buffer =
   let t, e_ident = init_cursor buffer in
   let header = read_header t e_ident in
   let sections = read_sections t header in
+  let phdrs = read_program_headers t header in
   let symbols = read_symbols t header sections in
-  header, sections, symbols, buffer
+  {Img.program=header; sections; symbols; buf=buffer; phdrs}
 
 let load_file_descr file_descr =
   let buffer =
@@ -365,7 +425,7 @@ let load_file path =
   Unix.close file_descr;
   img
 
-let read_offset (_,_,_,b) offset = b.{offset}
+let read_offset i offset = i.Img.buf.{offset}
 
 let cache = ref None
 let find_section_by_addr_with_cache sections addr =
@@ -373,28 +433,28 @@ let find_section_by_addr_with_cache sections addr =
   then cache := find_section_by_addr sections addr;
   !cache
 
-let read_address (_,s,_,b) addr =
-  match find_section_by_addr_with_cache s addr with
+let read_address i addr =
+  match find_section_by_addr_with_cache i.Img.sections addr with
   | None ->
-     let msg = Format.sprintf "Unreachable virtual address %x" addr in
-     invalid_arg msg
-  | Some s -> b.{addr - s.sh_addr + s.sh_offset}
+    let msg = Format.sprintf "Unreachable virtual address %x" addr in
+    invalid_arg msg
+  | Some s -> i.Img.buf.{addr - s.sh_addr + s.sh_offset}
 
-let write_address (_, s, _, b) addr bytes =
-  match find_section_by_addr s addr with
+let write_address img addr bytes =
+  match find_section_by_addr img.Img.sections addr with
   | None ->
-     let msg = Format.sprintf "Unreachable virtual address %x" addr in
-     invalid_arg msg
+    let msg = Format.sprintf "Unreachable virtual address %x" addr in
+    invalid_arg msg
   | Some s ->
-     let base = addr - s.sh_addr + s.sh_offset in
-     List.iteri (fun i by -> b.{base + i} <- by) bytes
+    let base = addr - s.sh_addr + s.sh_offset in
+    List.iteri (fun i by -> img.Img.buf.{base + i} <- by) bytes
 
-  
+
 module Offset = Loader_buf.Make
     (struct
       type t = Img.t
       let get t i = read_offset t i
-      let dim (_,_,_,b) = Bigarray.Array1.dim b
+      let dim i = Bigarray.Array1.dim i.Img.buf
     end)
 
 module Address = Loader_buf.Make
@@ -404,3 +464,4 @@ module Address = Loader_buf.Make
       let dim _ = max_int
     end)
 
+let program_headers i = i.Img.phdrs

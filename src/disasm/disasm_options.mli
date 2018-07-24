@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,56 +19,52 @@
 (*                                                                        *)
 (**************************************************************************)
 
+include Cli.S
+
 (** Command-line options specific to disassembly *)
 
-val simplification_cli_handler : Arg.spec
-(** Sets variables below according to command line *)
+module DbaOutputFile : Cli.STRING
 
-val simpl: bool ref
-val simpl_fun : bool ref
-val simpl_sequence : bool ref
-val simpl_inline_calls : bool ref
-val simpl_no_summaries : bool ref
+module OpcodeOutputFile : Cli.STRING_OPT
 
-module DisassemblyMode : sig
-  type t = private
-    | Recursive | Linear | Linear_byte_wise | ExtendedLinear
-
-
-  val set : string -> unit
-  val get : unit -> t
-  (** Defaults to [Recursive] *)
-
-  val set_recursive         : unit -> unit
-  val set_linear            : unit -> unit
-  val set_byte_wise_linear  : unit -> unit
-  val set_extended_linear   : unit -> unit
-  val cli_handler : Arg.spec
-end
-
-
-module DbaOutputFile : Parameters.String
-
-module OpcodeOutputFile : Parameters.OptionalString
-
-module NoLoaderMode : Parameters.Boolean
+module NoLoaderMode : Cli.BOOLEAN
 (** Default to [false]. Loader is activated by default *)
 
-module IgnoreUnhandledInstructions : Parameters.Boolean
+module IgnoreUnhandledInstructions : Cli.BOOLEAN
 (** Defaults to [true] **)
 
-module ProtectedMode : Parameters.Boolean
+module ProtectedMode : Cli.BOOLEAN
 
-module ShowInstructionCount : Parameters.Boolean
-module Sections : Parameters.StringSet
-     
-module ArmDecoder : Parameters.String
+module ShowInstructionCount : Cli.BOOLEAN
 
-val is_ignored_segment : X86Types.segment_reg -> bool
-val mark_ignored_segments : string -> unit
+module Sections  : Cli.STRING_SET
+module Functions : Cli.STRING_SET
+module HandleSegments : Cli.STRING_SET
 
-val set_file : string -> unit
-val get_file : unit -> string
-(* Set & get executable file under disassembly *)
+module SimplifiedDisassembly : Cli.BOOLEAN
 
-module Logger : Logger.S
+type disassembly_mode =
+  | Recursive | Linear | Linear_byte_wise | Extended_linear
+
+module Disassembly_mode : Cli.GENERIC with type t = disassembly_mode
+
+type specifics =
+  | All
+  | NoInline
+  | NoSummaries
+
+type simplification =
+  | No_simplification
+  | Program
+  | Function of specifics
+  | Sequence of specifics
+
+module Simplification : Cli.GENERIC with type t = simplification
+
+module Decode_instruction : Cli.STRING_OPT
+
+module Decode_replacement : Cli.GENERIC with type t = Dhunk.t Virtual_address.Map.t
+
+module Decode_llvm : Cli.STRING_OPT
+
+module CFG_graph : Cli.BOOLEAN

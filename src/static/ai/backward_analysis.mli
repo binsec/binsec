@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,11 +23,11 @@
 val backward_refine_elements :
   Dba_types.AddressStack.Map.key ->
   ('a * 'b * 'c * Dba_types.AddressStack.Set.t) Dba_types.AddressStack.Map.t ->
-  (Dba.instruction * 'd) Dba_types.Caddress.Map.t ->
+  (Dba.Instr.t * 'd) Dba_types.Caddress.Map.t ->
   ('a ->
    int Basic_types.String.Map.t ->
-   Smtlib2.SmtVarSet.t -> Smtlib2.smt_bv_expr list * Smtlib2.SmtVarSet.t) ->
+   Formula.VarSet.t -> Formula.bl_term list * Formula.VarSet.t) ->
   int Dba_types.Caddress.Map.t ->
   Region_bitvector.t list *
-  ((Smtlib2.smt_expr * Smtlib2.smt_expr) list * Smtlib2.smt_bv_expr list *
-   Smtlib2.SmtVarSet.t * string * int Basic_types.String.Map.t)
+  (Formula.def list * Formula.bl_term list *
+   Formula.VarSet.t * string * int Basic_types.String.Map.t)

@@ -138,12 +138,11 @@ let pp_instr instr ppf rep =
   | Cmp (mode, dst, src) ->
     let pp_genop = pp_genop32 mode in
     fprintf ppf "@[cmp@ %a,@ %a@]" pp_genop dst pp_genop src
-  | Cmps `M32 -> fprintf ppf "@[cmp@ (esi),@ (edi)@]"
-  | Cmps `M16 -> fprintf ppf "@[cmp@ (esi),@ (edi)@]"
-  | Cmps `M8 -> fprintf ppf "@[cmp@ (esi),@ (edi)@]"
+  | Cmps _ ->  fprintf ppf "@[cmp@ (esi),@ (edi)@]"
   | Xadd (mode, dst, src) ->
     let pp_genop = pp_genop32 mode in
     fprintf ppf "@[xadd@ %a,@ %a@]" pp_genop dst pp_genop src
+  | Aas -> fprintf ppf "@[aas@]"
   | Aam imm -> fprintf ppf "@[%02x@]" imm
   | Aad imm -> fprintf ppf "@[%02x@]" imm
   | CmpXchg (mode, dst, src) ->
@@ -155,7 +154,7 @@ let pp_instr instr ppf rep =
   | Inc (mode, gop) -> fprintf ppf "@[inc@ %a@]" (pp_genop32 mode) gop
   | Jcc (cc,imm) -> fprintf ppf "@[j%a@ %a@]" pp_cc cc pp_addr imm
   | Jcxz (_,imm) -> fprintf ppf "@[jcxz@ %a@ %a@]" pp_addr imm pp_reg32 ECX
-  | Jmp (imm) -> fprintf ppf "@[jmp@ %a@]" pp_addr imm
+  | Jmp imm -> fprintf ppf "@[jmp@ %a@]" pp_addr imm
   | DJmp gop ->
     fprintf ppf "@[djmp@ %a@]" (pp_genop32 `M32) gop
   | Lea (_, dst, src) ->
@@ -166,7 +165,7 @@ let pp_instr instr ppf rep =
     fprintf ppf "@[cmov%a@ %a,@ %a@]" pp_cc cc pp_genop dst pp_genop src
   | Movaps (_, dst, src) ->
     fprintf ppf "@[mov@ %a,@ %a@]" pp_genop_xmm dst pp_genop_xmm src
-  | MovQ _
+  | MovQ _ -> fprintf ppf "@[movq .. @]"
   | MovdQA _
   | MovdQU _
   | Movd (_,_,_,_)
@@ -201,7 +200,11 @@ let pp_instr instr ppf rep =
   | Psrad (_,_,_,_)
   | Psrldq (_,_)
   | Pslldq (_,_) -> fprintf ppf "@[psr/psl ....@]"
-  | Palignr (_, _, _, _, _) -> fprintf ppf "@[palignr ...@]"
+  | Palignr (_xmm, _, dst, src, imm) ->
+    fprintf ppf "@[palignr %a,%a,0x%x@]"
+      pp_genop_xmm dst
+      pp_genop_xmm src
+      imm
   | Pcmpeqb (_, _, _, _) -> fprintf ppf "@[pcmpeqb ...@]"
   | Pcmpeqw (_, _, _, _) -> fprintf ppf "@[pcmpeqw ...@]"
   | Pcmpeqd (_, _, _, _) -> fprintf ppf "@[pcmpeqd ...@]"
@@ -222,7 +225,6 @@ let pp_instr instr ppf rep =
   | Punpcklbw (_,_, _, _) -> fprintf ppf "@[punpcklbw ...@]"
   | Punpcklwd (_,_, _, _) -> fprintf ppf "@[punpcklwd ...@]"
   | Punpckldq (_,_, _, _) -> fprintf ppf "@[punpckldq ...@]"
-  | Popa _ -> fprintf ppf "@[popa@]"
   | Bswap (_, dst) -> fprintf ppf "@[bswap@ %a@]" pp_reg32 dst
   | Bsr (mode, dst, src) ->
     fprintf ppf "@[bsr@ %a, %a@]" pp_reg32 dst (pp_genop32 mode) src
@@ -248,9 +250,9 @@ let pp_instr instr ppf rep =
   | Movzx (`M16,dst, src) ->
     fprintf ppf "@[movzx %a, %a@]" pp_reg32 dst pp_genop8 src
   | Movs `M8 ->
-     fprintf ppf "@[%amovsb [edi] [esi]@]" pp_rep rep
+    fprintf ppf "@[%amovsb [edi] [esi]@]" pp_rep rep
   | Movs _ ->
-     fprintf ppf "@[%amovs [edi] [esi]@]" pp_rep rep
+    fprintf ppf "@[%amovs [edi] [esi]@]" pp_rep rep
   | Lods `M32 ->
     fprintf ppf "@[%alods %s [esi]@]"  pp_rep rep (reg32_to_string EAX)
   | Lods `M16 ->
@@ -258,13 +260,14 @@ let pp_instr instr ppf rep =
   | CBW _ -> fprintf ppf "@[cbw@]"
   | CWD _ -> fprintf ppf "@[cwd@]"
   | PushA _ -> fprintf ppf "@[pushal@]"
+  | PopA _ -> fprintf ppf "@[popa@]"
   | Pushfd _ -> fprintf ppf "@[pushfd@]"
   | Popfd _ -> fprintf ppf "@[popfd@]"
   | Lods `M8 -> fprintf ppf "@[%alodsb al [esi]@]" pp_rep rep
   | Stos `M32
   | Stos `M16 -> fprintf ppf "@[%astos@]"  pp_rep rep
   | Stos `M8 -> fprintf ppf "@[%astosb@]"  pp_rep rep
-  | Scas `M32 
+  | Scas `M32
   | Scas `M16 -> fprintf ppf "@[%ascas@]"  pp_rep rep
   | Scas `M8 -> fprintf ppf "@[%ascasb@]"  pp_rep rep
   | PopS reg -> fprintf ppf "@[pop %a@]" pp_segment_reg reg
@@ -334,7 +337,11 @@ let pp_instr instr ppf rep =
   | Sahf -> fprintf ppf "@[sahf@]"
   | Salc -> fprintf ppf "@[salc@]"
   | Wait -> fprintf ppf "@[wait@]"
-  | Unhandled -> fprintf ppf "@[binsec_unhandled@]"
+  | Popcnt (mode, dst, src) ->
+    let pp_genop = pp_genop32 mode in
+    fprintf ppf "@[popcnt@ %a,@ %a@]" pp_genop dst pp_genop src
+  | Unsupported descr -> fprintf ppf "@[binsec_unsupported %s@]" descr
+
 
 let pp_bytes nbytes ppf i =
   (* At most one word is read *)

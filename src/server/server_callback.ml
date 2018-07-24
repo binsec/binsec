@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -35,13 +35,13 @@ let request_decode_instr ident (message:message_decode_instr): unit =
   try
     match message.Message_decode_instr.irkind with
     | `dba ->
-       let result =
-         let open Message_decode_instr_instr_entry in
-         List.fold_left
-           (fun acc e ->
+      let result =
+        let open Message_decode_instr_instr_entry in
+        List.fold_left
+          (fun acc e ->
              let opc, insts = f ~addr:e.base_addr e.instr in
              Logger.debug  "Decoded:%s" opc;
-             let insts = Dba_types.Block.to_dbainstrs insts (Dba_types.Virtual_address.of_int64 e.base_addr) in
+             let insts = Dhunk.to_stmts insts (Virtual_address.of_int64 e.base_addr) in
              (opc, insts) :: acc
           ) [] message.Message_decode_instr.instrs
       in
@@ -59,17 +59,18 @@ let request_decode_instr ident (message:message_decode_instr): unit =
           (gen_message_decode_instr_reply
              ({Message_decode_instr_reply.instrs=entries})) in
       Network_io.send_client_message ident ~block:true "DECODE_INSTR_REPLY" data
-    | _ -> 
+    | _ ->
       Network_io.send_client_message ident ~block:true "END" "ir_kind not supported"
   with _ ->
     Network_io.send_client_message ident ~block:true "END" "Error occured during decoding"
 
 let request_start_analysis ident (config:configuration): int =
-  let full_config = {Options.configuration=config;
-                     trace_file="";
-                     trace_input=Options.Stream(ident)} in
+  let full_config = Trace_config.({
+      configuration = config;
+      trace_file = "";
+      trace_input= Stream ident }) in
   Libcall_stubs.check_libcall_policy_consistency config.libcalls config.default_action |> ignore;
-  match String.uppercase config.analysis_name with
+  match String.uppercase_ascii config.analysis_name with
   | "GENERIC" ->
     let analyzer = new Generic_analyse.generic_analyzer full_config in
     analyzer#compute
@@ -88,7 +89,10 @@ let request_start_analysis ident (config:configuration): int =
 
 let request_infos ident: unit =
   let open Message_infos in
-  let infos = { nb_workers=(Int32.of_int !Options.nb_workers); analyses=["generic"; "callret"; "opaque"]; solvers=["Z3";"boolector";"CVC4";"yices"] } in
+  let infos = {
+      nb_workers = Int32.of_int @@ Server_options.Workers.get ();
+      analyses = ["generic"; "callret"; "opaque"];
+      solvers = ["Z3";"boolector";"CVC4";"yices"] } in
   let data = Piqirun.to_string (gen_message_infos infos) in
   Network_io.send_client_message ident ~block:true "INFOS" data
 

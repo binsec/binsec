@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,12 +22,10 @@
 let test_policy pol =
   Logger.set_tagged_entry false;
   let p = Policy_engine.parse_policy_from_string_list pol in
-  Policy_engine.print_policy p;
-  0
-
+  Policy_engine.print_policy p
 
 let experiment () =
-  let data = File_utils.load (Options.ExecFile.get ()) in
+  let data = File_utils.load (Kernel_options.ExecFile.get ()) in
   let lexbuf = Lexing.from_string data in
   try
     let dba = Dbacsl_parser.term Dbacsl_token.token lexbuf in
@@ -38,7 +36,7 @@ let experiment () =
     assert ((=) s "lexing: empty token");
     let pos = (Lexing.lexeme_end_p lexbuf) in
     let l = pos.Lexing.pos_lnum in
-    let c = (pos.Lexing.pos_cnum - pos.Lexing.pos_bol) in
+    let c = pos.Lexing.pos_cnum - pos.Lexing.pos_bol in
     Logger.error "Lexing error at line %d, character %d." l c;
     exit 1
   | Parsing.Parse_error ->
@@ -48,3 +46,23 @@ let experiment () =
     let c = (pos.Lexing.pos_cnum - pos.Lexing.pos_bol - 1) in
     Logger.error "Parse error at word \"%s\", line %d, character %d." w l c;
     exit 1
+
+
+(* Should be protected by an option *)
+let run () =
+  let open Trace_config in
+  let open Config_piqi in
+  let config = Trace_config.default in
+  let v = Int32.to_int config.configuration.Configuration.verbosity in
+  Logger.set_verbosity v;
+  let p = config.configuration.Configuration.policy in
+  match p with
+  | _ :: _ -> test_policy p
+  | [] -> ()
+
+let xp () =
+  if Kernel_options.Experimental.get () then experiment ()
+
+let _ =
+  Cli.Boot.enlist ~name:"test xp" ~f:xp;
+  Cli.Boot.enlist ~name:"test policy" ~f:run

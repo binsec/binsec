@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -93,9 +93,6 @@ rule token = parse
   | "assume" { ASSUME }
   | "nondet" { NONDET }
   | "nondet_assume" { NONDETASSUME }
-  | "alternative" { ALTERNATIVE }
-  | "addcarry" { ADDCARRY }
-  | "addoverflow" { ADDOVERFLOW }
   | "high signed thresholds" { HIGHSIGNEDTHRESHOLDS }
   | "low signed thresholds" { LOWSIGNEDTHRESHOLDS }
   | "high unsigned thresholds" { HIGHUNSIGNEDTHRESHOLDS }

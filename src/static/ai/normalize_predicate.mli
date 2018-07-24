@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,4 +20,4 @@
 (**************************************************************************)
 
 val apply_smt_natural_cond_recovery :
-  Dba.binary_op list -> Dba.cond -> Dba.expr -> Dba.expr -> Dba.expr option
+  Dba.Binary_op.t list -> condition:Dba.Expr.t -> Dba.Expr.t -> Dba.Expr.t -> Dba.Expr.t option

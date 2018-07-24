@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -34,6 +34,8 @@ type arch =
 
 val pp_arch : Format.formatter -> arch -> unit
 val print_arch : arch -> string
+
+type section_flag = Read | Write | Exec
 
 type endian = LittleEndian | BigEndian
 

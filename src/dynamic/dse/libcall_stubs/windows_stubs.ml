@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -45,7 +45,7 @@ struct
 
   let apply_policy
       (pol:getmodulehandle_pol) (data:getmodulehandle_t) (cvt:(module CallConvention))
-      (uniq_prefix:string) (infos:conc_infos) (default:action) (env:Path_pred_env.t) =
+      (uniq_prefix:string) (infos:conc_infos) (default:action) (env:Path_predicate_env.t) =
     let module CVT = (val cvt: CallConvention) in
     CVT.set_param_pointer 0 (uniq_prefix^"_getmodulehandle_modulename")
       pol.Getmodulehandle_pol.module_name data.Getmodulehandle_t.module_name infos default env |> ignore;
@@ -80,7 +80,7 @@ module GetProcAddress_call:
 
   let apply_policy
       (pol:getprocaddress_pol) (data:getprocaddress_t) (cvt:(module CallConvention))
-      (uniq_prefix:string) (infos:conc_infos) (default:action) (env:Path_pred_env.t): unit =
+      (uniq_prefix:string) (infos:conc_infos) (default:action) (env:Path_predicate_env.t): unit =
     let module CVT = (val cvt: CallConvention) in
     CVT.set_param 0 (uniq_prefix^"_getprocaddress_hmodule")
       data.Getprocaddress_t.hmodule pol.Getprocaddress_pol.hmodule infos default env |> ignore;
@@ -123,7 +123,7 @@ struct
 
   let apply_policy
       (pol:getmainargs_pol) (data:getmainargs_t) (cvt:(module CallConvention))
-      (uniq_p:string) (infos:conc_infos) (default:action) (env:Path_pred_env.t): unit =
+      (uniq_p:string) (infos:conc_infos) (default:action) (env:Path_predicate_env.t): unit =
     let module CVT = (val cvt: CallConvention) in
     CVT.set_param_pointer 0 (uniq_p^"_getmainargs_argc")
       pol.Getmainargs_pol.argc data.Getmainargs_t.argc infos default env |> ignore;
@@ -176,7 +176,7 @@ module Gethostname_call:
 
   let apply_policy
       (pol:gethostname_pol) (data:gethostname_t) (cvt:(module CallConvention))
-      (uniq_p:string) (infos:conc_infos) (default:action) (env:Path_pred_env.t): unit =
+      (uniq_p:string) (infos:conc_infos) (default:action) (env:Path_predicate_env.t): unit =
     let module CVT = (val cvt: CallConvention) in
     CVT.set_param_pointer 0 (uniq_p^"_gethostname_name")
       pol.Gethostname_pol.name data.Gethostname_t.name infos default env

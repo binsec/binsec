@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,10 +21,10 @@
 
 module LhsMap2 = Map.Make (
   struct
-    type t = Dba.lhs * Dba.lhs
+    type t = Dba.LValue.t * Dba.LValue.t
     let compare = Pervasives.compare
   end
-)
+  )
 
 (* Debug level *)
 let level = 3
@@ -33,7 +33,7 @@ let level = 3
 module PaMake (Val : Ai_sigs.Domain) = struct
 
   type t = data
-  and data = (int * (Dba.lhs option) * (Val.t option)) Basic_types.Int.Map.t
+  and data = (int * (Dba.LValue.t option) * (Val.t option)) Basic_types.Int.Map.t
 
   let pp ppf t =
     let open Format in
@@ -42,22 +42,22 @@ module PaMake (Val : Ai_sigs.Domain) = struct
       (fun key -> function
          | i, Some lhs, Some v ->
            fprintf ppf "%d -> (%d, %a, %s);@ "
-            key i
-            Dba_printer.Ascii.pp_lhs lhs (Val.to_string v)
-        | i, Some lhs, None ->
-          fprintf ppf "%d -> (%d, %a, _);@ "
-            key i
-            Dba_printer.Ascii.pp_lhs lhs
-        | i, None, Some v ->
-          fprintf ppf "%d -> (%d, _, %s);@ " key i (Val.to_string v)
-        | _, None, None -> fprintf ppf ""
+             key i
+             Dba_printer.Ascii.pp_lhs lhs (Val.to_string v)
+         | i, Some lhs, None ->
+           fprintf ppf "%d -> (%d, %a, _);@ "
+             key i
+             Dba_printer.Ascii.pp_lhs lhs
+         | i, None, Some v ->
+           fprintf ppf "%d -> (%d, _, %s);@ " key i (Val.to_string v)
+         | _, None, None -> fprintf ppf ""
       ) t;
     fprintf ppf "@]"
 
-  let to_string t = 
+  let to_string t =
     pp Format.str_formatter t;
     Format.flush_str_formatter ()
-    
+
   let _print a = Logger.debug "%s" (to_string a)
 
   let create () = Basic_types.Int.Map.empty
@@ -118,28 +118,29 @@ struct
            Dba_types.LValue.Map.iter
              (fun lvalue id ->
                 fprintf ppf "@[%a -> %d;@]@ "
-                  Dba_printer.Ascii.pp_lhs lvalue id 
+                  Dba_printer.Ascii.pp_lhs lvalue id
              ) lvmap;
            fprintf ppf "@]"
         ) h.map
 
   let to_string h = pp str_formatter h; flush_str_formatter ()
 
-  
+
   let print h = Format.printf "%s" (to_string h)
 
   let assert_well_formed h =
     Dba_types.LValue.Map.iter (fun lhs id ->
-      let (_, some_lhs, _some_v) = Pa.get h.father id in
-      match some_lhs with
-        None -> print (Some h); Format.printf "id = %d; lhs = None\n%!" id; assert (false)
-      | Some flhs ->
-        if Dba_types.LValue.equal lhs flhs
-        then ()
-        else (print (Some h);
-              Format.printf "id = %d; lhs = %a"
-                id Dba_printer.Ascii.pp_lhs flhs; assert (false))
-    ) h.map
+        let (_, some_lhs, _some_v) = Pa.get h.father id in
+        match some_lhs with
+          None -> print (Some h); Format.printf "id = %d; lhs = None\n%!" id; assert (false)
+        | Some flhs ->
+          if not (Dba.LValue.equal lhs flhs) then begin
+            print (Some h);
+            Format.printf "id = %d; lhs = %a"
+              id Dba_printer.Ascii.pp_lhs flhs;
+            assert false
+          end
+      ) h.map
 
 
   let create () =
@@ -212,11 +213,11 @@ struct
     match h with
       None -> None, None
     | Some h -> (
-      try
-        let _id, lhs, v = find_bis h x in
-        lhs, v
-      with Not_found -> None, None
-    )
+        try
+          let _id, lhs, v = find_bis h x in
+          lhs, v
+        with Not_found -> None, None
+      )
 
 
 
@@ -246,7 +247,7 @@ struct
         | Some v1, Some v2 -> Val.meet (Val.meet v1 v2) v
       in
       if idx != idy then begin
-      (* c = Pa.set h.c rx ((fst rxc + 1), snd rxc); *)
+        (* c = Pa.set h.c rx ((fst rxc + 1), snd rxc); *)
         let h = { h with father = Pa.set2 h.father idx (idx, lhs_x, Some v) } in
         let h = { h with father = Pa.set2 h.father idy (idx, lhs_y, None) } in
         assert_well_formed h;
@@ -266,24 +267,24 @@ struct
     | Some eq1, Some _eq2 ->
       let (_, equalities) =
         Dba_types.LValue.Map.fold (fun lhs _id1 (acc_map2, acc_eq) ->
-          let lhs_class1, v_class1 = find equalities1 lhs in
-          let lhs_class2, v_class2 = find equalities2 lhs in
-          match lhs_class1, lhs_class2 with
-            None, _ | _, None -> (acc_map2, acc_eq)
-          | Some lhs1, Some lhs2 ->
-            try let lhs_class, v_class = LhsMap2.find (lhs1, lhs2) acc_map2 in
+            let lhs_class1, v_class1 = find equalities1 lhs in
+            let lhs_class2, v_class2 = find equalities2 lhs in
+            match lhs_class1, lhs_class2 with
+              None, _ | _, None -> (acc_map2, acc_eq)
+            | Some lhs1, Some lhs2 ->
+              try let lhs_class, v_class = LhsMap2.find (lhs1, lhs2) acc_map2 in
                 (acc_map2, union acc_eq lhs lhs_class v_class)
-            with Not_found ->
-              let v1, v2 =
-                match v_class1, v_class2 with
-                | None, _ | _, None -> failwith "empty env class!"
-                | Some v1, Some v2 -> (v1, v2)
-              in
-              let v = Val.join v1 v2 in
-              let acc_map2 = LhsMap2.add (lhs1, lhs2) (lhs, v) acc_map2 in
-              let acc_eq = union acc_eq lhs lhs v in
-              (acc_map2, acc_eq)
-        ) eq1.map (LhsMap2.empty, None)
+              with Not_found ->
+                let v1, v2 =
+                  match v_class1, v_class2 with
+                  | None, _ | _, None -> failwith "empty env class!"
+                  | Some v1, Some v2 -> (v1, v2)
+                in
+                let v = Val.join v1 v2 in
+                let acc_map2 = LhsMap2.add (lhs1, lhs2) (lhs, v) acc_map2 in
+                let acc_eq = union acc_eq lhs lhs v in
+                (acc_map2, acc_eq)
+          ) eq1.map (LhsMap2.empty, None)
       in equalities
 
 
@@ -295,24 +296,24 @@ struct
     | Some eq1, Some _eq2 ->
       let (_, equalities) =
         Dba_types.LValue.Map.fold (fun lhs _id1 (acc_map2, acc_eq) ->
-          let lhs_class1, v_class1 = find equalities1 lhs in
-          let lhs_class2, v_class2 = find equalities2 lhs in
-          match lhs_class1, lhs_class2 with
-            None, _ | _, None -> (acc_map2, acc_eq)
-          | Some lhs1, Some lhs2 ->
-            try let lhs_class, v_class = LhsMap2.find (lhs1, lhs2) acc_map2 in
+            let lhs_class1, v_class1 = find equalities1 lhs in
+            let lhs_class2, v_class2 = find equalities2 lhs in
+            match lhs_class1, lhs_class2 with
+              None, _ | _, None -> (acc_map2, acc_eq)
+            | Some lhs1, Some lhs2 ->
+              try let lhs_class, v_class = LhsMap2.find (lhs1, lhs2) acc_map2 in
                 (acc_map2, union acc_eq lhs lhs_class v_class)
-            with Not_found ->
-              let v1, v2 =
-                match v_class1, v_class2 with
-                | None, _ | _, None -> failwith "empty env class!"
-                | Some v1, Some v2 -> (v1, v2)
-              in
-              let v = Val.widen v1 v2 thresholds in
-              let acc_map2 = LhsMap2.add (lhs1, lhs2) (lhs, v) acc_map2 in
-              let acc_eq = union acc_eq lhs lhs v in
-              (acc_map2, acc_eq)
-        ) eq1.map (LhsMap2.empty, None)
+              with Not_found ->
+                let v1, v2 =
+                  match v_class1, v_class2 with
+                  | None, _ | _, None -> failwith "empty env class!"
+                  | Some v1, Some v2 -> (v1, v2)
+                in
+                let v = Val.widen v1 v2 thresholds in
+                let acc_map2 = LhsMap2.add (lhs1, lhs2) (lhs, v) acc_map2 in
+                let acc_eq = union acc_eq lhs lhs v in
+                (acc_map2, acc_eq)
+          ) eq1.map (LhsMap2.empty, None)
       in equalities
 
 
@@ -324,10 +325,10 @@ struct
       Logger.debug ~level "@[<v 0>before removing: %a@ %a@]"
         Dba_printer.Ascii.pp_lhs x pp (Some h) ;
       try let i = Dba_types.LValue.Map.find x h.map in
-          let i_class, _x_class, v_class = find_bis h x in
-          let new_map = Dba_types.LValue.Map.remove x h.map in
-          if i = i_class then
-            let res = Dba_types.LValue.Map.fold
+        let i_class, _x_class, v_class = find_bis h x in
+        let new_map = Dba_types.LValue.Map.remove x h.map in
+        if i = i_class then
+          let res = Dba_types.LValue.Map.fold
               (
                 fun cur_x cur_i acc ->
                   let cur_i_class, _cur_x_class, _cur_v_class = find_bis h cur_x in
@@ -335,54 +336,54 @@ struct
                     let (cur_fi, some_cur_x, _some_cur_v) = Pa.get h.father cur_i in
                     match some_cur_x with
                       None ->
-                        print (Some h);
-                        Format.printf "removing %a@."
-                          Dba_printer.Ascii.pp_lhs x;
-                        failwith "??????"
+                      print (Some h);
+                      Format.printf "removing %a@."
+                        Dba_printer.Ascii.pp_lhs x;
+                      failwith "??????"
                     | Some xx-> (cur_i, (cur_fi, xx)) :: acc
                   )
                   else acc
               ) new_map []
-            in
-            try
-              assert (res <> []);
-              let (new_i, (new_fi, new_x)) = List.hd res in
-              Logger.debug ~level "Removing and replacing by %a"
-                Dba_printer.Ascii.pp_lhs new_x ;
-              let new_map = Dba_types.LValue.Map.remove new_x new_map in
-              let new_map = Dba_types.LValue.Map.add new_x i new_map in
-              h.father <- Pa.set2 h.father new_i (new_fi, None, None);
-              h.father <- Pa.set2 h.father i (i, Some new_x, v_class);
-              let equalities = { h with map = new_map } in
-              assert_well_formed equalities;
-              Logger.debug ~level "@[<v 0>after removing1: %a@ %a@]"
-                Dba_printer.Ascii.pp_lhs x
-                pp (Some equalities) ;
-              (Some equalities)
-            with _ ->
-              let (fi, _lhs', _v') = Pa.get h.father i in
-              assert_well_formed h;
-              let equalities = { h with father = Pa.set2 h.father i (fi, None, None); map = new_map } in
-              Logger.debug ~level "@[<v 0>after removing2: %a@ %a@]"
-                Dba_printer.Ascii.pp_lhs x
-                pp (Some equalities);
-              assert_well_formed equalities;
-              (Some equalities)
-          else
-            let (fi, _lhs', _v') = Pa.get h.father i in
-            let equalities = { h with father = Pa.set2 h.father i (fi, None, None); map = new_map } in
-            Logger.debug ~level "@[<v 0>after removing3: %a@ %a@]"
+          in
+          try
+            assert (res <> []);
+            let (new_i, (new_fi, new_x)) = List.hd res in
+            Logger.debug ~level "Removing and replacing by %a"
+              Dba_printer.Ascii.pp_lhs new_x ;
+            let new_map = Dba_types.LValue.Map.remove new_x new_map in
+            let new_map = Dba_types.LValue.Map.add new_x i new_map in
+            h.father <- Pa.set2 h.father new_i (new_fi, None, None);
+            h.father <- Pa.set2 h.father i (i, Some new_x, v_class);
+            let equalities = { h with map = new_map } in
+            assert_well_formed equalities;
+            Logger.debug ~level "@[<v 0>after removing1: %a@ %a@]"
               Dba_printer.Ascii.pp_lhs x
               pp (Some equalities) ;
+            (Some equalities)
+          with _ ->
+            let (fi, _lhs', _v') = Pa.get h.father i in
+            assert_well_formed h;
+            let equalities = { h with father = Pa.set2 h.father i (fi, None, None); map = new_map } in
+            Logger.debug ~level "@[<v 0>after removing2: %a@ %a@]"
+              Dba_printer.Ascii.pp_lhs x
+              pp (Some equalities);
             assert_well_formed equalities;
             (Some equalities)
+        else
+          let (fi, _lhs', _v') = Pa.get h.father i in
+          let equalities = { h with father = Pa.set2 h.father i (fi, None, None); map = new_map } in
+          Logger.debug ~level "@[<v 0>after removing3: %a@ %a@]"
+            Dba_printer.Ascii.pp_lhs x
+            pp (Some equalities) ;
+          assert_well_formed equalities;
+          (Some equalities)
       with
         Not_found ->
         Logger.debug ~level "@[<v 0>after removing (not found): %a@ %a@]"
           Dba_printer.Ascii.pp_lhs x
           pp (Some h) ;
-          assert_well_formed h;
-          (Some h)
+        assert_well_formed h;
+        (Some h)
 
 
 
@@ -427,7 +428,7 @@ struct
     | Some equalities ->
       Dba_types.LValue.Map.fold (
         fun _lhs id nb -> let (id_father, _x, _v) = Pa.get equalities.father id in
-                         if id = id_father then nb + 1 else nb
+          if id = id_father then nb + 1 else nb
       ) equalities.map 0
 
 
@@ -440,10 +441,10 @@ struct
     | None, None -> false
     | Some _lhs1, None -> false
     | None, Some _lhs2 -> false
-    | Some lhs1, Some lhs2 -> Dba_types.LValue.equal lhs1 lhs2
+    | Some lhs1, Some lhs2 -> Dba.LValue.equal lhs1 lhs2
 
 
- let get_nb_names_in_class lhs1 equalities =
+  let get_nb_names_in_class lhs1 equalities =
     match equalities with
       None -> 0
     | Some eq ->
@@ -456,29 +457,29 @@ struct
     let t0 = Unix.gettimeofday () in
     match equalities with
       None ->
-        Options.time_equalities := Unix.gettimeofday () -. t0 +. !Options.time_equalities;
-        None
+      Ai_options.time_equalities := Unix.gettimeofday () -. t0 +. !Ai_options.time_equalities;
+      None
     | Some eq ->
       begin
-        match Dba_types.LValue.of_expr e with
+        match Dba.LValue.of_expr e with
         | lhs ->
           let lhs_class, _v_class = find equalities lhs in
           begin
             match lhs_class with
             | None ->
-              Options.time_equalities := Unix.gettimeofday () -. t0 +. !Options.time_equalities;
+              Ai_options.time_equalities := Unix.gettimeofday () -. t0 +. !Ai_options.time_equalities;
               equalities
             | Some lhs ->
-              Options.nb_refined_lhs := !Options.nb_refined_lhs + (get_nb_names_in_class lhs equalities) - 1;
+              Ai_options.nb_refined_lhs := !Ai_options.nb_refined_lhs + (get_nb_names_in_class lhs equalities) - 1;
               let id = Dba_types.LValue.Map.find lhs eq.map in
               let id_father, old_lhs, _old_v = Pa.get eq.father id in
               let father = Pa.set2 eq.father id (id_father, old_lhs, Some v) in
               eq.father <- father;
-              Options.time_equalities := Unix.gettimeofday () -. t0 +. !Options.time_equalities;
+              Ai_options.time_equalities := Unix.gettimeofday () -. t0 +. !Ai_options.time_equalities;
               Some eq
           end
         | exception Failure _ ->
-          Options.time_equalities := Unix.gettimeofday () -. t0 +. !Options.time_equalities;
+          Ai_options.time_equalities := Unix.gettimeofday () -. t0 +. !Ai_options.time_equalities;
           equalities
       end
 

@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -40,3 +40,8 @@ val time: (unit -> 'a) -> float * 'a
 (** [time f] times the execution of function f and returns both the time taken
     and the result *)
 
+
+val random_max_int : unit -> int
+(** [random_max_int ()] generates a random number between 0 and 2^30 - 1.
+    This second value is the maximum accepted by Random.int.
+*)

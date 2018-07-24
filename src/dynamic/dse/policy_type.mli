@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,12 +27,11 @@ type cs_status =
 
 type cs_action = cs_status * string (* String *)
 
-
 type metavar_item =
-  | InstReif of Dba.instruction
-  | LhsReif of Dba.lhs
-  | CondReif of Dba.cond
-  | ExprReif of Dba.expr
+  | InstReif of Dba.Instr.t
+  | LhsReif of Dba.LValue.t
+  | CondReif of Dba.Expr.t
+  | ExprReif of Dba.Expr.t
 
 type loc_pred =
   | LocWildcard
@@ -41,12 +40,12 @@ type loc_pred =
 
 type inst_pred =
   | InstWildcard
-  | InstPattern of Dba.instruction
+  | InstPattern of Dba.Instr.t
 
 type exp_pred =
   | ExpWildcard
-  | ExpSubTerm of Dba.expr * Dba.expr
-  | ExpDba of Dba.expr
+  | ExpSubTerm of Dba.Expr.t * Dba.Expr.t
+  | ExpDba of Dba.Expr.t
 
 type sigma_binary = And | Or
 type sigma_unary = Not
@@ -55,7 +54,7 @@ type sigma_pred =
   | SigmaWildcard
   | SigmaUnary of sigma_unary * sigma_pred
   | SigmaBinary of sigma_binary * sigma_pred * sigma_pred
-  | TaintCheck of Taint_types.taint * Dba.expr
+  | TaintCheck of Taint_types.taint * Dba.Expr.t
 
 type rule_t = {
   loc_p : loc_pred;

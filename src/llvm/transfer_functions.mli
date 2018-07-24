@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -61,7 +61,7 @@ module type Binary_Backward = sig
   type boolean
   module Arity: Arity
   val biadd: size:int -> (binary,binary,binary) Arity.ar2
-  val bisub: size:int -> (binary,binary,binary) Arity.ar2    
+  val bisub: size:int -> (binary,binary,binary) Arity.ar2
   val bimul: size:int -> (binary,binary,binary) Arity.ar2
 
   val beq:   size:int -> (binary,binary,boolean) Arity.ar2

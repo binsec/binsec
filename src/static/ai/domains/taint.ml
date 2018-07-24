@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -114,9 +114,7 @@ let sub abs1 abs2 = binop abs1 abs2
 
 let max _abs = failwith "taint.ml: max of taint"
 
-let umul abs1 abs2 = binop abs1 abs2
-
-let smul abs1 abs2 = binop abs1 abs2
+let mul abs1 abs2 = binop abs1 abs2
 
 let power abs1 abs2 = binop abs1 abs2
 

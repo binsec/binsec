@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -52,9 +52,9 @@ type conc_infos = trace_concrete_infos list
 type trace_inst = {
   thread : int32;
   location : int64;
-  (* opcode_size : int; *)
-  opcode : string;
-  opcode_bytes: string;
+  (* opcodce_size : int; *)
+  mnemonic : string;
+  opcode: string;
   decoded : bool;
   mutable dbainstrs : Dba_types.Statement.t list;
   (* next_loc : int64; *)
@@ -77,8 +77,8 @@ let empty_inst  =  {
   thread = Int32.zero;
   location = Int64.zero;
   decoded = false;
+  mnemonic = "";
   opcode = "";
-  opcode_bytes = "";
   dbainstrs = [];
   concrete_infos = []}
 
@@ -210,7 +210,7 @@ let rec is_traced (infos:conc_infos): bool =
   | _ :: q -> is_traced q
 
 let is_concrete_infos_retrieved (infos:conc_infos): bool =
-  let rec aux infs = 
+  let rec aux infs =
     match infs with
     | [] -> true
     | Not_retrieved :: _ -> false

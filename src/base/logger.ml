@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -29,7 +29,7 @@ let with_tags_on ppf fmt =
   kfprintf (fun ppf ->
       pp_set_mark_tags ppf mark_tags;
       pp_set_print_tags ppf print_tags)
-    ppf fmt 
+    ppf fmt
 
 module Color = struct
   type t =
@@ -89,7 +89,7 @@ module Color = struct
 
 
   let string_to_terminal_color_codes color_name =
-    match String.lowercase color_name with
+    match String.lowercase_ascii color_name with
     | "black" -> Some "0;30"
     | "darkgray" -> Some "1;30"
     | "blue" -> Some "0;34"
@@ -160,7 +160,7 @@ module ChannelKind = struct
 
 
   let of_string s =
-    match String.lowercase s with
+    match String.lowercase_ascii s with
     | "info"    -> ChInfo
     | "result"  -> ChResult
     | "warning" -> ChWarning
@@ -236,7 +236,7 @@ module Make(G : ChannelGroup) = struct
   let set_log_level, log_level_of_chkind, get_log_level, quiet =
     let loglevel = ref (ChannelKind.loglevel ChannelKind.ChInfo) in
     (fun (s:string) ->
-      loglevel := ChannelKind.of_string s |> ChannelKind.loglevel),
+       loglevel := ChannelKind.of_string s |> ChannelKind.loglevel),
     (fun ck ->
        let ck_loglevel = ChannelKind.loglevel ck in
        (* Only auto-update loglevel if it is lower than it already is *)
@@ -256,7 +256,7 @@ module Make(G : ChannelGroup) = struct
   let stdout_ppf () = formatter_of_out_channel stdout
   let stderr_ppf () = formatter_of_out_channel stderr
 
-  
+
   let default_out kind = { kind; ppfs = [ stdout_ppf () ]; }
   let err_out kind = { kind; ppfs = [ stderr_ppf () ]; }
 
@@ -293,7 +293,7 @@ module Make(G : ChannelGroup) = struct
     (fun ta -> tag := ta),
     (fun () -> !tag)
 
-  let channel_group_delimiter = '/'
+  let channel_group_delimiter = ':'
 
   let channel_name chan_kind =
     let chan_kind_name = ChannelKind.to_string chan_kind in
@@ -302,7 +302,7 @@ module Make(G : ChannelGroup) = struct
 
   (* @assumes a tag string for channels has a form <[group_name/]channel_name>
      It should have been produced by a call to [channel_name] to ensure the
-     pre-condition. 
+     pre-condition.
   *)
   let channel_kind_of_tagstring tag_string =
     match String.index tag_string channel_group_delimiter with
@@ -327,19 +327,19 @@ module Make(G : ChannelGroup) = struct
       then fprintf ppf "[%s] " tag_string
     (* otherwise it's assumed to be a color tag string, handled by
        [mark_open_tag] *)
-          
+
     and print_close_tag _tag_string = ()
 
     and mark_close_tag _ = "\027[0m"
     in { mark_open_tag; mark_close_tag; print_open_tag; print_close_tag; }
 
 
-  
+
   let log (channel: channel) txt  =
     let ppfs = channel.ppfs in
     let pp fmt txt =
       if (ChannelKind.loglevel channel.kind) >= (get_log_level ())
-      then 
+      then
         Format.kfprintf
           (fun fmt ->
              Format.kfprintf (fun fmt -> Format.fprintf fmt "@]@}@}@.") fmt txt)
@@ -349,27 +349,62 @@ module Make(G : ChannelGroup) = struct
       else Format.ifprintf fmt txt
     in
     let rec aux = function
-      | [] -> assert false (* One should not be able to "dry" a channel,
-                              i.e. have no pretty-printing formatter associated to it *)
+      | [] -> assert false
+      (* One should not be able to "dry" a channel,
+         i.e. have no pretty-printing formatter associated to it *)
       | [ppf] -> pp ppf txt
       | ppf :: ppfs -> pp ppf txt; aux ppfs
     in aux ppfs
+
+
+  (*  module type Leveled_chan = sig
+   *     val set : int -> unit
+   *     val get : unit -> int
+   *     val pass : int -> bool
+   *  end
+   *
+   *
+   * let mk_level_mod chan =
+   *   let module M = struct
+   *       let level = ref 0
+   *       let set n =
+   *         assert (n >= 0);
+   *         level := n;
+   *         log_level_of_chkind chan.kind
+   *
+   *       let get () = !level
+   *
+   *       let pass n = n <= !level
+   *     end
+   *   in (module M:Leveled_chan) *)
 
 
   let mk_level_functions chan =
     let level = ref 0 in
     (fun () -> !level),
     (fun n ->
-      assert (n >= 0);
-      level := n;
-      log_level_of_chkind chan.kind
+       assert (n >= 0);
+       level := n;
+       log_level_of_chkind chan.kind
     ),
     (fun lvl -> lvl <= !level)
 
 
-  let get_debug_level, set_debug_level, debug_pass = mk_level_functions debug_channel
-  let get_info_level, set_info_level, info_pass = mk_level_functions info_channel
-  let get_warning_level, set_warning_level, warning_pass = mk_level_functions warning_channel
+  (* let d = mk_level_mod debug_channel
+   * module Debug_level = (val d : Leveled_chan)
+   *
+   * let i = mk_level_mod info_channel
+   * module Info_level = (val i : Leveled_chan)
+   *
+   * let w = mk_level_mod warning_channel
+   * module Warning_level = (val w : Leveled_chan) *)
+
+  let get_debug_level, set_debug_level, debug_pass =
+    mk_level_functions debug_channel
+  let get_info_level, set_info_level, info_pass =
+    mk_level_functions info_channel
+  let get_warning_level, set_warning_level, warning_pass =
+    mk_level_functions warning_channel
 
   let leveled_channel channel level_pass =
     (fun ?(level=0) txt ->
@@ -401,7 +436,7 @@ module Make(G : ChannelGroup) = struct
            ) ppfs
       ) channels
 
-  
+
   let channel_set_color, channel_get_color =
     let color_tbl = Hashtbl.create (List.length ChannelKind.values) in
     (fun b channel ->
@@ -448,3 +483,8 @@ let set_zmq_logging_only ~send = function
     in
     let zeromq_fmt = Format.make_formatter out_string flush in
     List.iter (set_formatters [zeromq_fmt]) channels
+
+let set_verbosity n =
+  set_debug_level n;
+  set_info_level n;
+  set_warning_level n

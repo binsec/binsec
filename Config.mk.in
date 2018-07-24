@@ -1,7 +1,7 @@
 ##########################################################################
-#  This file is part of Binsec.                                          #
+#  This file is part of BINSEC.                                          #
 #                                                                        #
-#  Copyright (C) 2016-2017                                               #
+#  Copyright (C) 2016-2018                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -22,21 +22,28 @@
 CAMLC		?=@OCAMLC@
 CAMLOPT		?=@OCAMLOPT@
 CAMLLEX		?=@OCAMLLEX@
-CAMLLEXOPTS?	?=
+CAMLLEXOPTS	?=
 CAMLYAC		?=@MENHIR@
 CAMLYACOPTS	?=
 CAMLDEP		?=@OCAMLDEP@
-CAMLWARNINGS?	?=-w +a-4-3
-CAMLFLAGS?	?=-g -annot
+CAMLWARNINGS	?=-w +a-4-3-18
+CAMLFLAGS	?=-g -bin-annot
 CAMLDOC		?=@OCAMLDOC@
 CAMLFIND	?=@OCAMLFIND@
 BEST		?=@OCAMLBEST@
 
+
 OCAMLBUILD?=@OCAMLBUILD@
-OCB_OPTIONS?=-use-ocamlfind -no-hygiene -libs str,bigarray -I .
+
+# By default, ocamlbuild will NOT be used, unless the environment variable
+# USE_OCAMLBUILD is set to something else than "no".
+USE_OCAMLBUILD ?= no
+OCB_OPTIONS ?=-use-ocamlfind -I .
 
 PIQI ?=@PIQI@
 PIQI_FLAGS ?= of-proto -I $(PROTO_DIR)
+PIQI_DIR ?=@PIQI_DIR@
+
 
 PROTOC ?=@PROTOC@
 PROTOC_FLAGS ?= --proto_path=$(BINSEC_DIR)/$(PROTO_DIR) --cpp_out=$(CPP_PROTOBUF_DIR)
@@ -89,11 +96,13 @@ PP_LEX   = $(PP) 'LEX  '
 
 RM ?= rm -rf
 RRM ?= rm -rf
-CP ?= cp -r
-MKDIR ?= mkdir -p
+CP ?= cp -R
+MKDIR_P ?= @MKDIR_P@
 CD ?= cd
 TAR ?= tar cvzf
-INSTALL ?= install
+INSTALL ?= @INSTALL@
+AWK ?= @AWK@
+
 
 HEADACHE=@HEADACHE@
 HEADACHE_CONFIG?=headers/headache_config.txt

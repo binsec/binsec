@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,7 +20,7 @@
 (**************************************************************************)
 
 
-type instruction_kinds = Dba.instruction list
+type instruction_kinds = Dba.Instr.t list
 
 type widening_delay = int
 
@@ -74,13 +74,13 @@ and default_global_widening_delay = 0
 
 
 type t = {
-  entry_points :  Dba_types.Virtual_address.Set.t;
+  entry_points :  Virtual_address.Set.t;
   jumps : Dba.addresses Dba_types.Caddress.Map.t ;
   allowed_jumpzones : (Dba.address * Dba.address) list ;
   stops : Dba_types.Caddress.Set.t ;
   prepend_stubs : instruction_kinds Dba_types.Caddress.Map.t ;
   substitute_stubs : Dba_types.instruction_sequence Dba_types.Caddress.Map.t ;
-  linear_addresses : (Dba_types.Virtual_address.t * Dba_types.Virtual_address.t) list ;
+  linear_addresses : (Virtual_address.t * Virtual_address.t) list ;
   global_widening : WideningThreshold.t * widening_delay ;
   local_widening_thresholds : WideningThreshold.t Dba_types.Caddress.Map.t ;
   local_widening_delays : widening_delay Dba_types.Caddress.Map.t ;
@@ -88,7 +88,7 @@ type t = {
 
 
 let default =
-  { entry_points = Dba_types.Virtual_address.Set.empty;
+  { entry_points = Virtual_address.Set.empty;
     jumps = Dba_types.Caddress.Map.empty;
     allowed_jumpzones = [];
     stops = Dba_types.Caddress.Set.empty;
@@ -102,7 +102,9 @@ let default =
   }
 
 
-let has_entry_points p = not (Dba_types.Virtual_address.Set.is_empty p.entry_points)
+let empty = default
+
+let has_entry_points p = not (Virtual_address.Set.is_empty p.entry_points)
 
 let has_stops p = not (Dba_types.Caddress.Set.is_empty p.stops)
 
@@ -138,7 +140,7 @@ let set_if_not err_p err_msg do_action parameters =
 
 let set_entry_points addrs parameters =
   Logger.debug "@[Setting %d entry points...@]"
-    (Dba_types.Virtual_address.Set.cardinal addrs);
+    (Virtual_address.Set.cardinal addrs);
   set_if_not has_entry_points
     "Entry points already set"
     (fun p -> { p with entry_points = addrs })
@@ -178,7 +180,8 @@ let set_linear_addresses addr_intervals parameters =
   let linear_addresses =
     List.map
       (fun (start, _end) ->
-        Dba_types.Virtual_address.(of_code_address start, of_code_address _end))
+         let open Dba_types.Caddress in
+         (to_virtual_address start, to_virtual_address _end))
       addr_intervals
   in
   set_if_not has_linear_addresses

@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -44,8 +44,6 @@ module G = struct
   let mk_active_node name = V.create (name, Active)
   let mk_inactive_node name = V.create (name, Inactive)
 end
-
-module D = Graph.Traverse.Dfs(G)
 
 module Dot = struct
   include Graph.Graphviz.Dot(struct

@@ -1,15 +1,16 @@
 # Compilation #
 
-## BINSEC 
+## BINSEC
 
 The following usual steps should do the trick:
 
 ```
+% autoconf
 % ./configure
 % make binsec
+% make install 
 ```
 
-To install `BINSEC`, do `cd src; make install`.
 
 ## PINSEC
 
@@ -23,38 +24,11 @@ Then, go to the directory pinsec/build, and configure your build.
 The build needs `CMake`.
 
 
-# Use
+# Help
 
-## BINSEC
+```
+binsec --help
+```
 
-In the `src` directory.
-
-- List of available commands:
-     ./binsec --help
-
- - Help about a specific command:
-     ./binsec COMMAND --help
-
-
-### Simple examples ###
-
-
-- Linear (objdump-like) disassembly of text section
-
-    ```
-    ./binsec disasm -sections .text -dmode linear BINARY_FILE
-    ```
-
-- Recursive disassembly of text section
-
-    ```
-    ./binsec disasm -sections .text -dmode rec BINARY_FILE
-    ```
-
-- Simulation:
-
-    ```
-    ./binsec simulate -entrypoint INIT_ADDR BINARY_FILE
-    ```
 
 

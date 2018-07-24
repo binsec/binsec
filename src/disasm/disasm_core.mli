@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,38 +22,49 @@
 (** Core functionalities for disassembly *)
 exception Decode_error of string
 
-(** {2 Worklist definition for disassembly } *)                        
+
+(** {2 Worklist definition for disassembly } *)
 
 module W : sig
-  include Worklist.S with type elt = Dba_types.Virtual_address.t
-  include Sigs.Printable with type t:= t
+  include Worklist.S with type elt = Virtual_address.t
+  include Sigs.PRINTABLE with type t:= t
 
-  val of_list : Dba_types.Virtual_address.t list -> t
+  val of_list  : Virtual_address.t list -> t
+  val add_list : t -> Virtual_address.t list -> t
 
-  val add_virtual_addresses : Dba_types.Virtual_address.Set.t -> t -> t
+  val add_set : t -> Virtual_address.Set.t -> t
+  val of_set  : Virtual_address.Set.t -> t
+
+  val add_filtered_set :
+    (Virtual_address.t -> bool) -> t -> Virtual_address.Set.t ->t
+
+  val of_filtered_set :
+    (Virtual_address.t -> bool) -> Virtual_address.Set.t ->t
+
+  val singleton : Virtual_address.t -> t
 end
 
 (** {2 Basic successors definition } *)
 
 module Successors : sig
-  val recursive : Disasm_types.Instruction.t ->  Dba_types.Virtual_address.Set.t
-    
-  val linear : Disasm_types.Instruction.t ->  Dba_types.Virtual_address.Set.t
-    
-  val linear_bytewise : Disasm_types.Instruction.t ->  Dba_types.Virtual_address.Set.t
+  val recursive : Instruction.t ->  Virtual_address.Set.t
+
+  val linear : Instruction.t ->  Virtual_address.Set.t
+
+  val linear_bytewise : Instruction.t ->  Virtual_address.Set.t
 end
 
-val decode : Dba_types.Virtual_address.t -> Disasm_types.Instruction.t * Dba_types.Virtual_address.t option
-(** [decode addr] decodes the contents of address [addr] 
-    @returns the contents of this address and its linear successor (if applicable)
- *)
+val decode : Virtual_address.t -> Instruction.t * Virtual_address.t option
+(** [decode addr] decodes the contents of address [addr]
+    @return the contents of this address and its linear successor (if applicable)
+*)
 
 
 (** {2 Iterators} *)
-  
+
 val fold :
   ('a -> W.t ->
-   Disasm_types.Instruction.t -> Dba_types.Virtual_address.Set.t -> 'a * W.t ) ->
+   Instruction.t -> Virtual_address.Set.t -> 'a * W.t ) ->
   'a -> W.t -> 'a
 (** [fold f wl v] starts disassembly from worklist [wl] (i.e. an initial
     state) using function [f] to guide its choices to compute a value intialized
@@ -77,25 +88,34 @@ val fold :
 
 
 val iter:
-  (W.t -> Disasm_types.Instruction.t -> Dba_types.Virtual_address.Set.t -> W.t) -> W.t -> unit
+  (W.t -> Instruction.t -> Virtual_address.Set.t -> W.t) -> W.t -> unit
 (** [iter f worklist] iterates disassembles an executable with function [f].
-    
+
     Given the signature of the function, all computations, except worklist
     management, must take place as imperative side-effects.
 *)
 
 
 (** {2 Functors } *)
+
 module type Iterable = sig
-  val successors : Disasm_types.Instruction.t -> Dba_types.Virtual_address.Set.t
+  val successors : Instruction.t -> Virtual_address.Set.t
 end
 
 module Make (I:Iterable) : sig
   val fold :
     ('a -> W.t ->
-     Disasm_types.Instruction.t -> Dba_types.Virtual_address.Set.t -> 'a * W.t ) ->
+     Instruction.t -> Virtual_address.Set.t -> 'a * W.t ) ->
     'a -> W.t -> 'a
-    
+
   val iter:
-    (W.t -> Disasm_types.Instruction.t -> Dba_types.Virtual_address.Set.t -> W.t) -> W.t -> unit
+    (W.t -> Instruction.t -> Virtual_address.Set.t -> W.t) -> W.t -> unit
 end
+
+val decode_binstream :
+  Binstream.t ->
+  Instruction.t * Virtual_address.t option
+(** [decode_binstream b] decodes stream [b] and returns
+    a tuple of the first instruction contained in [b] and its possible
+    linear successor.
+*)

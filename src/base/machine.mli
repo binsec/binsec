@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,6 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** Abstract description of machines *)
+
 module type Gettable_settable = sig
   type t
   val set : t -> unit
@@ -30,20 +32,21 @@ end
 (** Abstract representation of hardware architecture *)
 
 type isa =
-  | X86 (** x86 32 bits *)
-  | AMD64 (** aka x86-64 *)
+  | X86     (** x86 32 bits *)
+  | AMD64   (** aka x86-64 *)
   | PowerPC (** Power PC 32 bits *)
-  | ARM (** ARM 32 bits *)
+  | ARMv7   (** ARM 32 bits *)
   | Unknown
 
+
+val pp_isa : Format.formatter -> isa -> unit
 
 type endianness =
   | LittleEndian
   | BigEndian
 
 
-(** *)
-module ISA : Gettable_settable with type t = isa
+(** Instruction set : defaults to X86 *)
 
 module Endianness : Gettable_settable with type t = endianness
 
@@ -66,11 +69,11 @@ val is_unknown : unit -> bool
 val set_unknown : unit -> unit
 (** No architecture and LittleEndian. Anything can happen. *)
 
-val set_arm : endianness -> unit
+val set_armv7 : endianness -> unit
 (** ARM with chosen endianness. *)
 
-val set_arm_little : unit -> unit
-val set_arm_big : unit -> unit
+val set_armv7_little : unit -> unit
+val set_armv7_big : unit -> unit
 
 val pp : Format.formatter -> unit -> unit
 (** [pp ppf arch] pretty-prints an arch value into [ppf] *)

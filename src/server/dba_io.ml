@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -44,7 +44,7 @@ let parse_dbacodeaddress addr : Dba.address =
   Dba_types.Caddress.create bv id
 
 
-let generate_codeaddress (addr:Dba.jump_target) =
+let generate_codeaddress addr =
   let open Dba_piqi.Codeaddress in
   match addr with
   | Dba.JInner off ->
@@ -54,7 +54,7 @@ let generate_codeaddress (addr:Dba.jump_target) =
       offset = None;
       address = Some (generate_dbacodeaddress addr)}
 
-let parse_codeaddress addr: Dba.jump_target =
+let parse_codeaddress addr =
   let open Dba_piqi.Codeaddress in
   match addr.typeid with
   | `local ->
@@ -76,8 +76,8 @@ let parse_tag_option = function
     let open Dba_piqi.Dbatag in
     let v =
       match t.typeid with
-     | `dba_call -> Dba.Call (parse_dbacodeaddress (the t.address))
-     | `dba_return -> Dba.Return in
+      | `dba_call -> Dba.Call (parse_dbacodeaddress (the t.address))
+      | `dba_return -> Dba.Return in
     Some v
 
 let generate_dbastate (state:Dba.state option) =
@@ -100,171 +100,171 @@ let parse_dbastate stateopt: Dba.state option =
     | `undefined -> Some (Dba.Undefined (the st.infos))
     | `unsupported -> Some (Dba.Unsupported (the st.infos))
 
-let binaryop_to_piqi (op:Dba.binary_op) =
+let binaryop_to_piqi (op:Dba.Binary_op.t) =
   match op with
-  | Dba.Plus -> `dba_plus | Dba.Minus ->  `dba_minus
-  | Dba.MultU -> `dba_mult_u | Dba.MultS -> `dba_mult_s
+  | Dba.Binary_op.Plus -> `dba_plus | Dba.Binary_op.Minus ->  `dba_minus
+  | Dba.Binary_op.Mult -> `dba_mult_u
   (* | Dba.Power -> `dba_power  *)
-  | Dba.DivU -> `dba_div_u | Dba.DivS -> `dba_div_s | Dba.ModU -> `dba_mod_u
-  | Dba.ModS -> `dba_mod_s | Dba.Or -> `dba_or
-  | Dba.And -> `dba_and | Dba.Xor -> `dba_xor
-  | Dba.Concat -> `dba_concat
-  | Dba.LShift -> `dba_lshift_u | Dba.RShiftU -> `dba_rshift_u
-  | Dba.RShiftS -> `dba_rshift_s
-  | Dba.LeftRotate -> `dba_left_rotate | Dba.RightRotate -> `dba_right_rotate
-  | Dba.Eq -> `dba_eq | Dba.Diff -> `dba_diff
-  | Dba.LeqU -> `dba_leq_u | Dba.LtU  -> `dba_lt_u
-  | Dba.GeqU -> `dba_geq_u | Dba.GtU -> `dba_gt_u
-  | Dba.LeqS -> `dba_leq_s | Dba.LtS -> `dba_lt_s
-  | Dba.GeqS -> `dba_geq_s | Dba.GtS -> `dba_gt_s
+  | Dba.Binary_op.DivU -> `dba_div_u | Dba.Binary_op.DivS -> `dba_div_s | Dba.Binary_op.ModU -> `dba_mod_u
+  | Dba.Binary_op.ModS -> `dba_mod_s | Dba.Binary_op.Or -> `dba_or
+  | Dba.Binary_op.And -> `dba_and | Dba.Binary_op.Xor -> `dba_xor
+  | Dba.Binary_op.Concat -> `dba_concat
+  | Dba.Binary_op.LShift -> `dba_lshift_u | Dba.Binary_op.RShiftU -> `dba_rshift_u
+  | Dba.Binary_op.RShiftS -> `dba_rshift_s
+  | Dba.Binary_op.LeftRotate -> `dba_left_rotate | Dba.Binary_op.RightRotate -> `dba_right_rotate
+  | Dba.Binary_op.Eq -> `dba_eq | Dba.Binary_op.Diff -> `dba_diff
+  | Dba.Binary_op.LeqU -> `dba_leq_u | Dba.Binary_op.LtU  -> `dba_lt_u
+  | Dba.Binary_op.GeqU -> `dba_geq_u | Dba.Binary_op.GtU -> `dba_gt_u
+  | Dba.Binary_op.LeqS -> `dba_leq_s | Dba.Binary_op.LtS -> `dba_lt_s
+  | Dba.Binary_op.GeqS -> `dba_geq_s | Dba.Binary_op.GtS -> `dba_gt_s
 
 let piqi_to_binaryop = function
-  | `dba_plus -> Dba.Plus  | `dba_minus -> Dba.Minus
-  | `dba_mult_u -> Dba.MultU | `dba_mult_s -> Dba.MultS
-  | `dba_div_u -> Dba.DivU | `dba_div_s -> Dba.DivS | `dba_mod_u -> Dba.ModU
-  | `dba_mod_s -> Dba.ModS | `dba_or -> Dba.Or
-  | `dba_and -> Dba.And | `dba_xor -> Dba.Xor
-  | `dba_concat -> Dba.Concat
-  | `dba_lshift_u -> Dba.LShift | `dba_rshift_u -> Dba.RShiftU
-  | `dba_rshift_s -> Dba.RShiftS
-  | `dba_left_rotate -> Dba.LeftRotate | `dba_right_rotate -> Dba.RightRotate
-  | `dba_eq -> Dba.Eq | `dba_diff -> Dba.Diff
-  | `dba_leq_u -> Dba.LeqU | `dba_lt_u -> Dba.LtU
-  | `dba_geq_u -> Dba.GeqU | `dba_gt_u -> Dba.GtU
-  | `dba_leq_s -> Dba.LeqS | `dba_lt_s -> Dba.LtS
-  | `dba_geq_s -> Dba.GeqS | `dba_gt_s -> Dba.GtS
+  | `dba_plus -> Dba.Binary_op.Plus  | `dba_minus -> Dba.Binary_op.Minus
+  | `dba_mult_u -> Dba.Binary_op.Mult | `dba_mult_s -> Dba.Binary_op.Mult
+  | `dba_div_u -> Dba.Binary_op.DivU | `dba_div_s -> Dba.Binary_op.DivS | `dba_mod_u -> Dba.Binary_op.ModU
+  | `dba_mod_s -> Dba.Binary_op.ModS | `dba_or -> Dba.Binary_op.Or
+  | `dba_and -> Dba.Binary_op.And | `dba_xor -> Dba.Binary_op.Xor
+  | `dba_concat -> Dba.Binary_op.Concat
+  | `dba_lshift_u -> Dba.Binary_op.LShift | `dba_rshift_u -> Dba.Binary_op.RShiftU
+  | `dba_rshift_s -> Dba.Binary_op.RShiftS
+  | `dba_left_rotate -> Dba.Binary_op.LeftRotate | `dba_right_rotate -> Dba.Binary_op.RightRotate
+  | `dba_eq -> Dba.Binary_op.Eq | `dba_diff -> Dba.Binary_op.Diff
+  | `dba_leq_u -> Dba.Binary_op.LeqU | `dba_lt_u -> Dba.Binary_op.LtU
+  | `dba_geq_u -> Dba.Binary_op.GeqU | `dba_gt_u -> Dba.Binary_op.GtU
+  | `dba_leq_s -> Dba.Binary_op.LeqS | `dba_lt_s -> Dba.Binary_op.LtS
+  | `dba_geq_s -> Dba.Binary_op.GeqS | `dba_gt_s -> Dba.Binary_op.GtS
 
 let parse_endian = function
   | `little -> Dba.LittleEndian
   | `big -> Dba.BigEndian
 
-let rec generate_dbaexpr (e:Dba.expr)  =
+let rec generate_dbaexpr (e:Dba.Expr.t)  =
   let open Dba_piqi.Dbaexpr in
   let expr  =  Dba_piqi.default_dbaexpr () in
   match e with
-  | Dba.ExprVar(s,sz,_) ->
+  | Dba.Expr.Var(s,sz,_) ->
     {expr with typeid = `dba_expr_var;
                name = Some s;
                size = Some (Int32.of_int sz)}
-  | Dba.ExprLoad(sz, endian, e1) ->
+  | Dba.Expr.Load(sz, endian, e1) ->
     let endian =
       match endian with Dba.LittleEndian -> `little | Dba.BigEndian -> `big in
     {expr with typeid = `dba_load;
                size = Some (Int32.of_int sz);
                endian = Some endian;
                expr1 = Some (generate_dbaexpr e1)}
-  | Dba.ExprCst(`Constant, bv) ->
+  | Dba.Expr.Cst(`Constant, bv) ->
     { expr with typeid = `dba_expr_cst;
                 bitvector = Some (generate_bitvector bv) }
-  | Dba.ExprUnary(uop, e1) ->
+  | Dba.Expr.Unary(Dba.Unary_op.Uext sz, e1) ->
+    {expr with typeid = `dba_expr_ext_u;
+               expr1 = Some (generate_dbaexpr e1);
+               size = Some (Int32.of_int sz)}
+  | Dba.Expr.Unary(Dba.Unary_op.Restrict {Interval.lo; Interval.hi;}, e1) ->
+    { expr with typeid = `dba_expr_restrict;
+                expr1 = Some (generate_dbaexpr e1);
+                low = Some (Int32.of_int lo);
+                high = Some (Int32.of_int hi)}
+
+  | Dba.Expr.Unary(Dba.Unary_op.Sext sz, e1) ->
+    { expr with typeid = `dba_expr_ext_s;
+                expr1 = Some (generate_dbaexpr e1);
+                size = Some (Int32.of_int sz)}
+
+  | Dba.Expr.Unary(uop, e1) ->
     let uop =
-      match uop with Dba.UMinus -> `dba_unary_minus | Dba.Not -> `dba_unary_not in
+      match uop with
+      | Dba.Unary_op.UMinus -> `dba_unary_minus
+      | Dba.Unary_op.Not -> `dba_unary_not
+      | _ -> assert false
+    in
     {expr with typeid = `dba_expr_unary;
                unaryop = Some uop;
                expr1 = Some (generate_dbaexpr e1)}
-  | Dba.ExprBinary(op, e1, e2) ->
+  | Dba.Expr.Binary(op, e1, e2) ->
     { expr with typeid = `dba_expr_binary;
                 binaryop = Some (binaryop_to_piqi op);
                 expr1 = Some (generate_dbaexpr e1);
                 expr2 = Some (generate_dbaexpr e2)}
-  | Dba.ExprRestrict(e1,low,high) ->
-    { expr with typeid = `dba_expr_restrict;
-                expr1 = Some (generate_dbaexpr e1);
-                low = Some (Int32.of_int low);
-                high = Some (Int32.of_int high)}
-  | Dba.ExprExtU(e1,sz) ->
-    {expr with typeid = `dba_expr_ext_u;
-               expr1 = Some (generate_dbaexpr e1);
-               size = Some (Int32.of_int sz)}
-  | Dba.ExprExtS(e1,sz) ->
-    { expr with typeid = `dba_expr_ext_s;
-                expr1 = Some (generate_dbaexpr e1);
-                size = Some (Int32.of_int sz)}
-  | Dba.ExprIte(c1,e1,e2) ->
+  | Dba.Expr.Ite(c1,e1,e2) ->
     { expr with typeid = `dba_expr_ite;
                 cond = Some (generate_dbacond c1);
                 expr1 = Some (generate_dbaexpr e1);
                 expr2 = Some (generate_dbaexpr e2)}
-  | Dba.ExprAlternative _ ->
-    raise (NotSupportedForExport "DbaExprAlternative not implemented")
   | _ -> assert false
 
 
-and generate_dbacond (c:Dba.cond)  =
+and generate_dbacond c  =
   let open Dba_piqi.Dbacond in
   let cond  =  Dba_piqi.default_dbacond () in
-  match c with
-  | Dba.CondReif(e1) ->
-    { cond with typeid = `dba_cond_reif; expr = Some (generate_dbaexpr e1)}
-  | Dba.CondNot c1 ->
-    {cond with typeid = `dba_cond_not; cond1 = Some (generate_dbacond c1)}
-  | Dba.CondAnd (c1,c2) ->
-    {cond with typeid = `dba_cond_and;
-               cond1 = Some (generate_dbacond c1);
-               cond2 = Some (generate_dbacond c2)}
-  | Dba.CondOr (c1,c2) ->
-    {cond with typeid = `dba_cond_or;
-               cond1 = Some (generate_dbacond c1);
-               cond2 = Some (generate_dbacond c2)}
-  | Dba.True -> {cond with typeid = `dba_true}
-  | Dba.False -> {cond with typeid = `dba_false}
+  { cond with typeid = `dba_cond_reif; expr = Some (generate_dbaexpr c)}
 
 
 let rec parse_dbaexpr e =
   let open Dba_piqi.Dbaexpr in
+  let open Dba.Expr in
   match e.typeid with
-  | `dba_expr_var -> Dba.ExprVar(the e.name, Int32.to_int (the e.size), None)
+  | `dba_expr_var -> Dba.Expr.var (the e.name) (Int32.to_int (the e.size)) None
   | `dba_load ->
-    Dba.ExprLoad(Int32.to_int (the e.size),
-                 parse_endian (the e.endian), parse_dbaexpr (the e.expr1))
-  | `dba_expr_cst -> Dba.ExprCst(`Constant, parse_bitvector (the e.bitvector))
+    load
+      (Int32.to_int  (the e.size) |> Size.Byte.create)
+      (parse_endian  (the e.endian))
+      (parse_dbaexpr (the e.expr1))
+  | `dba_expr_cst ->
+    constant (parse_bitvector (the e.bitvector))
   | `dba_expr_unary ->
     let uop =
       match the e.unaryop with
-      | `dba_unary_minus -> Dba.UMinus
-      | `dba_unary_not -> Dba.Not in
-    Dba.ExprUnary(uop, parse_dbaexpr (the e.expr1))
+      | `dba_unary_minus -> uminus
+      | `dba_unary_not -> lognot in
+    uop (parse_dbaexpr (the e.expr1))
   | `dba_expr_binary ->
-    Dba.ExprBinary(piqi_to_binaryop (the e.binaryop),
-                   parse_dbaexpr (the e.expr1), parse_dbaexpr (the e.expr2))
+    binary (piqi_to_binaryop (the e.binaryop))
+      (parse_dbaexpr (the e.expr1))
+      (parse_dbaexpr (the e.expr2))
   | `dba_expr_restrict ->
-    Dba.ExprRestrict(parse_dbaexpr (the e.expr1),
-                     Int32.to_int (the e.low), Int32.to_int (the e.high))
+    restrict
+      (Int32.to_int (the e.low))
+      (Int32.to_int (the e.high))
+      (parse_dbaexpr (the e.expr1))
   | `dba_expr_ext_u ->
-    Dba.ExprExtU(parse_dbaexpr (the e.expr1), Int32.to_int (the e.size))
+    uext (Int32.to_int (the e.size)) (parse_dbaexpr (the e.expr1))
   | `dba_expr_ext_s ->
-    Dba.ExprExtS(parse_dbaexpr (the e.expr1), Int32.to_int (the e.size))
+    sext (Int32.to_int (the e.size)) (parse_dbaexpr (the e.expr1))
   | `dba_expr_ite ->
-    Dba.ExprIte(parse_cond (the e.cond),
-                parse_dbaexpr (the e.expr1),
-                parse_dbaexpr (the e.expr2))
-  | `dba_expr_alternative -> raise (NotSupportedForImport("mouarf"))
+    ite
+      (parse_cond (the e.cond))
+      (parse_dbaexpr (the e.expr1))
+      (parse_dbaexpr (the e.expr2))
+  | `dba_expr_alternative -> raise (NotSupportedForImport "alternative")
 
-and parse_cond c: Dba.cond =
+and parse_cond c =
   let open Dba_piqi.Dbacond in
   match c.typeid with
-  | `dba_cond_reif -> Dba.CondReif(parse_dbaexpr (the c.expr))
-  | `dba_cond_not -> Dba.CondNot(parse_cond (the c.cond1))
+  | `dba_cond_reif -> parse_dbaexpr (the c.expr)
+  | `dba_cond_not -> Dba.Expr.lognot (parse_cond (the c.cond1))
   | `dba_cond_and ->
-    Dba.CondAnd(parse_cond (the c.cond1), parse_cond (the c.cond2))
+    Dba.Expr.logand
+      (parse_cond (the c.cond1)) (parse_cond (the c.cond2))
   | `dba_cond_or ->
-    Dba.CondOr(parse_cond (the c.cond1), parse_cond (the c.cond2))
-  | `dba_true -> Dba.True
-  | `dba_false -> Dba.False
+    Dba.Expr.logor
+      (parse_cond (the c.cond1)) (parse_cond (the c.cond2))
+  | `dba_true  -> Dba.Expr._true
+  | `dba_false -> Dba.Expr._false
 
-let generate_lhs (lhs:Dba.lhs) =
+let generate_lhs (lhs:Dba.LValue.t) =
   let open Dba_piqi.Dba_lhs in
   let piq_lhs = Dba_piqi.default_dba_lhs () in
   match lhs with
-  | Dba.LhsVar(s,sz,_) ->
+  | Dba.LValue.Var(s,sz,_) ->
     {piq_lhs with typeid=`dba_lhs_var; name=Some s; size=Some (Int32.of_int sz)}
-  | Dba.LhsVarRestrict(s,sz,low,high) ->
+  | Dba.LValue.Restrict(s,sz, {Interval.lo=low; Interval.hi=high}) ->
     {piq_lhs with typeid = `dba_lhs_var_restrict;
                   name = Some s;
                   size = Some (Int32.of_int sz);
                   low = Some (Int32.of_int low);
                   high = Some (Int32.of_int high)}
-  | Dba.LhsStore(sz,endian,e) ->
+  | Dba.LValue.Store(sz,endian,e) ->
     let indien =
       match endian with Dba.LittleEndian -> `little | Dba.BigEndian -> `big in
     {piq_lhs with typeid = `dba_store;
@@ -274,17 +274,19 @@ let generate_lhs (lhs:Dba.lhs) =
 
 let parse_lhs lhs =
   let open Dba_piqi.Dba_lhs in
+  let open Dba.LValue in
   match lhs.typeid with
   | `dba_lhs_var ->
-    Dba.LhsVar(the lhs.name, Int32.to_int (the lhs.size), None)
+    let bitsize = Size.Bit.of_int32 (the lhs.size) in
+    var (the lhs.name) ~bitsize None
   | `dba_lhs_var_restrict ->
-    Dba.LhsVarRestrict(
-      the lhs.name,
-      Int32.to_int (the lhs.size),
-      Int32.to_int (the lhs.low), Int32.to_int (the lhs.high))
+    let bitsize = Size.Bit.of_int32 (the lhs.size)
+    and lo = Int32.to_int (the lhs.low)
+    and hi = Int32.to_int (the lhs.high) in
+    restrict (the lhs.name) bitsize lo hi
   | `dba_store ->
-    Dba.LhsStore(Int32.to_int (the lhs.size),
-                 parse_endian (the lhs.endian), parse_dbaexpr (the lhs.expr))
+    let bytesize = Size.Byte.of_int32 (the lhs.size) in
+    store bytesize (parse_endian (the lhs.endian)) (parse_dbaexpr (the lhs.expr))
 
 let generate_instr (instr:Dba_types.Statement.t) =
   let location =
@@ -293,72 +295,81 @@ let generate_instr (instr:Dba_types.Statement.t) =
   let open Dba_piqi.Dbainstr in
   let piq_instr =
     match Dba_types.Statement.instruction instr with
-    | Dba.IkAssign(lhs,e,off) ->
+    | Dba.Instr.Assign(lhs,e,off) ->
       { piq_instr with typeid = `dba_ik_assign;
                        lhs = Some (generate_lhs lhs);
                        expr = Some (generate_dbaexpr e);
                        offset = Some (Int32.of_int off)}
-    | Dba.IkSJump(addr,tagopt) ->
+    | Dba.Instr.SJump(addr,tagopt) ->
       let tags =
         match tagopt with Some a -> Some (generate_tag a) | None -> None in
       {piq_instr with typeid=`dba_ik_sjump;
                       address=Some (generate_codeaddress addr);
                       tags}
-    | Dba.IkDJump(e,tagopt) ->
+    | Dba.Instr.DJump(e,tagopt) ->
       let tags =
         match tagopt with | Some a -> Some (generate_tag a) | None -> None in
       {piq_instr with typeid=`dba_ik_djump;
                       expr=Some (generate_dbaexpr e);
                       tags}
-    | Dba.IkIf(c,addr,off) ->
+    | Dba.Instr.If(c,addr,off) ->
       {piq_instr with
        typeid = `dba_ik_if;
        cond = Some (generate_dbacond c);
        address = Some (generate_codeaddress addr);
        offset = Some (Int32.of_int off)}
-    | Dba.IkStop state ->
+    | Dba.Instr.Stop state ->
       { piq_instr with typeid = `dba_ik_stop;
                        stopinfos = generate_dbastate state}
-    | Dba.IkUndef(lhs,off) ->
+    | Dba.Instr.Undef(lhs,off) ->
       {piq_instr with typeid = `dba_ik_undef; lhs = Some (generate_lhs lhs);
                       offset = Some (Int32.of_int off)}
-    | Dba.IkAssert(_,_)
-    | Dba.IkAssume(_,_)
-    | Dba.IkNondetAssume(_,_,_)
-    | Dba.IkNondet(_,_,_)
-    | Dba.IkMalloc(_,_,_)
-    | Dba.IkFree(_,_)
-    | Dba.IkPrint(_,_) -> raise (NotSupportedForExport "Invalid instr")
+    | Dba.Instr.Assert(_,_)
+    | Dba.Instr.Assume(_,_)
+    | Dba.Instr.NondetAssume(_,_,_)
+    | Dba.Instr.Nondet(_,_,_)
+    | Dba.Instr.Malloc(_,_,_)
+    | Dba.Instr.Free(_,_)
+    | Dba.Instr.Print(_,_) -> raise (NotSupportedForExport "Invalid instr")
   in { piq_instr with location }
 
 let parse_instr inst =
   let open Dba_piqi.Dbainstr in
+  let open Dba.Instr in
   let loc = parse_dbacodeaddress inst.location in
   let instkind =
     match inst.typeid with
     | `dba_ik_assign ->
-      Dba.IkAssign(parse_lhs (the inst.lhs),
-                   parse_dbaexpr(the inst.expr),
-                   Int32.to_int (the inst.offset))
+      let lv = parse_lhs (the inst.lhs)
+      and e = parse_dbaexpr (the inst.expr)
+      and s = Int32.to_int (the inst.offset) in
+      Dba.Instr.assign lv e s
     | `dba_ik_sjump ->
-      Dba.IkSJump(parse_codeaddress (the inst.address),
-                  parse_tag_option inst.tags)
+      let tag = parse_tag_option inst.tags
+      and caddr = parse_codeaddress (the inst.address) in
+      static_jump caddr ~tag
     | `dba_ik_djump ->
-      Dba.IkDJump(parse_dbaexpr (the inst.expr), parse_tag_option inst.tags)
+      let tag = parse_tag_option inst.tags
+      and e = parse_dbaexpr (the inst.expr) in
+      dynamic_jump e ~tag
+
     | `dba_ik_if ->
-      Dba.IkIf(parse_cond (the inst.cond),
-               parse_codeaddress (the inst.address),
-               Int32.to_int (the inst.offset))
-    | `dba_ik_stop -> Dba.IkStop(parse_dbastate inst.stopinfos)
+      let c = parse_cond (the inst.cond)
+      and ethen = parse_codeaddress (the inst.address)
+      and eelse = Int32.to_int (the inst.offset) in
+      ite c ethen eelse
+
+    | `dba_ik_stop ->
+      stop  (parse_dbastate inst.stopinfos)
     | `dba_ik_undef ->
-      Dba.IkUndef(parse_lhs (the inst.lhs), Int32.to_int (the inst.offset))
+      undefined (parse_lhs (the inst.lhs)) (Int32.to_int (the inst.offset))
     | `dba_ik_assert
     | `dba_ik_assume
     | `dba_ik_nondet_assume
     | `dba_ik_nondet
     | `dba_ik_malloc
     | `dba_ik_free
-    | `dba_ik_print -> raise (NotSupportedForImport("Invalid instr"))
+    | `dba_ik_print -> raise (NotSupportedForImport "Invalid instruction")
   in Dba_types.Statement.create loc instkind
 
 let generate_dbalist instrs =

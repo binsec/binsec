@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,16 +21,20 @@
 
 open Format
 
-let pp_list ?(pre="") ?(post="") ?(sep="; ") pp fmt l =
+type sformat = (unit,Format.formatter,unit) Pervasives.format
+type 'a formatter = Format.formatter -> 'a -> unit
+
+(* The empty format [ef] string *)
+let ef = format_of_string ""
+
+let pp_list ?(pre=ef) ?(post=ef) ?(sep=format_of_string "; ") pp fmt l =
   let rec pp_aux fmt = function
     | [] -> assert false
     | [e] -> fprintf fmt "%a" pp e
-    | e :: es -> fprintf fmt "%a%s%a" pp e sep pp_aux es
+    | e :: es -> fprintf fmt "%a%(%)%a" pp e sep pp_aux es
   in
-  if l = [] then
-    fprintf fmt ""
-  else
-    fprintf fmt "%s%a%s" pre pp_aux l post
+  if l = [] then fprintf fmt ""
+  else fprintf fmt "%(%)%a%(%)" pre pp_aux l post
 
 let pp_as_string to_string fmt element =
   Format.fprintf fmt "%s" (to_string element)
@@ -42,20 +46,20 @@ let pp_opt_as_string to_string fmt = function
 
 let pp_opt pp ppf = function
   | None -> fprintf ppf "none"
-  | Some v -> fprintf ppf "%a" pp v 
+  | Some v -> fprintf ppf "%a" pp v
 
 let string_from_pp pp_fun element =
   Format.asprintf "%a" pp_fun element
 
 let pp_dba_prelude ?(flat_memory=false) ppf () =
-  let default_value = if flat_memory then "0x7fffee28" else "(stack, 0x7fffee28)" in     
+  let default_value = if flat_memory then "0x7fffee28" else "(stack, 0x7fffee28)" in
   Format.fprintf ppf
     "@[<v 0>\
      # configuration@ \
      \\entry_point : (0x00000000, 0)@ \
      \\addr : 32@ \
      \\endianness : little@ \
-      @ \
+     @ \
      #declaration@ \
      var CF : 1 <FLAG>@ \
      var DF : 1 <FLAG>@ \
@@ -65,7 +69,7 @@ let pp_dba_prelude ?(flat_memory=false) ppf () =
      var AF : 1 <FLAG>@ \
      var PF : 1 <FLAG>@ \
      var NOP : 1@ \
-      @ \
+     @ \
      var eax : 32@ \
      var ecx : 32@ \
      var edx : 32@ \
@@ -74,7 +78,7 @@ let pp_dba_prelude ?(flat_memory=false) ppf () =
      var ebp : 32@ \
      var esi : 32@ \
      var edi : 32@ \
-      @ \
+     @ \
      var mm0 : 64@ \
      var mm1 : 64@ \
      var mm2 : 64@ \
@@ -83,7 +87,7 @@ let pp_dba_prelude ?(flat_memory=false) ppf () =
      var mm5 : 64@ \
      var mm6 : 64@ \
      var mm7 : 64@ \
-      @ \
+     @ \
      var st0 : 80@ \
      var st1 : 80@ \
      var st2 : 80@ \
@@ -92,7 +96,7 @@ let pp_dba_prelude ?(flat_memory=false) ppf () =
      var st5 : 80@ \
      var st6 : 80@ \
      var st7 : 80@ \
-      @ \
+     @ \
      var xmm0 : 128@ \
      var xmm1 : 128@ \
      var xmm2 : 128@ \
@@ -101,12 +105,12 @@ let pp_dba_prelude ?(flat_memory=false) ppf () =
      var xmm5 : 128@ \
      var xmm6 : 128@ \
      var xmm7 : 128@ \
-      @ \
+     @ \
      var res8 : 8@ \
      var res16 : 16@ \
      var res32 : 32@ \
      var res64 : 64@ \
-      @ \
+     @ \
      var temp8 : 8@ \
      var temp16 : 16@ \
      var temp32 : 32@ \
@@ -123,18 +127,18 @@ let pp_dba_prelude ?(flat_memory=false) ppf () =
      var temp120 : 120@ \
      var temp128 : 128@ \
      var temp256 : 256@ \
-      @ \
+     @ \
      var temp9 : 9@ \
      var temp17 : 17@ \
      var temp33 : 33@ \
-      @ \
+     @ \
      var temp : 32@ \
-      @ \
+     @ \
      var cpt : 16@ \
      var cpt : 32@ \
-      @ \
+     @ \
      #initialisation@ \
-      @ \
+     @ \
      CF := 0@ \
      DF := 0@ \
      SF := 0@ \

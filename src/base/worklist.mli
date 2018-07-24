@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -29,6 +29,7 @@ module type S = sig
   val empty : t
   val singleton : elt -> t
   val is_empty : t -> bool
+  val length : t -> int
 
   val add : elt -> t -> t
   val remove : t -> t
@@ -47,21 +48,21 @@ end
 (** {2 Functors} *)
 
 module Make:
-  functor (X:Sigs.Comparable) -> S with type elt = X.t
+  functor (X:Sigs.COMPARABLE) -> S with type elt = X.t
 (** Priority queues over comparable types *)
 
 module CMake:
-    functor (X:Sigs.Any) -> sig
-  include S with type elt = X.t
+  functor (X:Sigs.ANY) -> sig
+    include S with type elt = X.t
 
-  val cons : elt -> t -> t
-  (** [cons e h] inserts [e] at the front of the worklist [h] *)
+    val cons : elt -> t -> t
+    (** [cons e h] inserts [e] at the front of the worklist [h] *)
 
-  val snoc : elt -> t -> t
-  (** [snoc e h] inserts [e] at the rear of the worklist [h] *)
-end
+    val snoc : elt -> t -> t
+    (** [snoc e h] inserts [e] at the rear of the worklist [h] *)
+  end
 (** Priority queues with generated comparison function.
       Added benefit: insertion at the front/rear can be guaranteed.
       Culprit: does not behave as a set (i.e. the same element of [X.t] w.r.t to
       [=] can be inserted twice in the queue).
-  *)
+*)

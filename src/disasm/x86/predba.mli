@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,30 +21,31 @@
 
 (** First IL before producing DBA *)
 
-type t = private
-  | Assign of Dba.lhs * Dba.expr
-  | SJump of Dba.jump_target * Dba.tag option
-  | DJump of Dba.expr * Dba.tag option
-  | If of Dba.cond * Dba.jump_target
-  | Undef of Dba.lhs
-  | Nondet of Dba.lhs * Dba.region
+type 'a t = private
+  | Assign of Dba.LValue.t * Dba.Expr.t
+  | SJump of 'a Dba.jump_target * Dba.tag option
+  | DJump of Dba.Expr.t * Dba.tag option
+  | If of Dba.Expr.t * 'a Dba.jump_target
+  | Undef of Dba.LValue.t
+  | Nondet of Dba.LValue.t * Dba.region
   | Stop of Dba.state
 
-val assign : Dba.lhs -> Dba.expr -> t
+val assign : Dba.LValue.t -> Dba.Expr.t -> 'a t
+val (<<-) : Dba.LValue.t -> Dba.Expr.t -> 'a t
 
-val static_jump : ?tag:Dba.tag option -> Dba.jump_target -> t
+val static_jump : ?tag:Dba.tag option -> 'a Dba.jump_target -> 'a t
 
-val dynamic_jump : ?tag:Dba.tag option -> Dba.expr -> t
+val dynamic_jump : ?tag:Dba.tag option -> Dba.Expr.t -> 'a t
 
-val jif : Dba.cond -> Dba.jump_target -> t
+val conditional_jump : Dba.Expr.t -> 'a Dba.jump_target -> 'a t
 
-val undefined : Dba.lhs -> t
+val undefined : Dba.LValue.t -> 'a t
 
-val non_deterministic : Dba.lhs -> Dba.region -> t
+val non_deterministic : Dba.LValue.t -> Dba.region -> 'a t
 
-val stop : Dba.state -> t
+val stop : Dba.state -> 'a t
 
-val blockify : Dba.address -> t list -> Dba_types.Block.t
-(** [blockify next_addr predbas] 
-    @returns a full DBA block considering it continues to [next_addr]
+val blockify : Dba.address -> Dba.id t list -> Dhunk.t
+(** [blockify next_addr predbas]
+    @return a full DBA block considering it continues to [next_addr]
 *)

@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
@@ -30,7 +30,7 @@ let the = Utils.unsafe_get_opt
 
 let apply_libcall_policy
     (policy:libcall_pol list) (tr_index:int) (instr:trace_inst)
-    (callcvt:call_convention_t) (default:action) (env:Path_pred_env.t): unit =
+    (callcvt:call_convention_t) (default:action) (env:Path_predicate_env.t): unit =
   let cvt =
     match callcvt with
     | `cdecl -> (module Cdecl : CallConvention)
@@ -62,7 +62,7 @@ let apply_libcall_policy
 
   | Some pol ->
     Logger.debug ~level:1 "Start applying policy:%s" pol.Libcall_pol.name;
-    env.Path_pred_env.formula <- Formula.add_comment env.Path_pred_env.formula pol.Libcall_pol.name;
+    env.Path_predicate_env.formula <- Path_predicate_formula.add_comment env.Path_predicate_env.formula pol.Libcall_pol.name;
     begin
       let open Libcall_t in
       match data.Libcall_t.ident with
@@ -155,41 +155,41 @@ let check_libcall_policy_consistency (policy:libcall_pol list) (default:action)
   let open Libcall_pol in
   let aux acc pol =
     let res =
-    match pol.ident with
-    | `invalid -> Logger.warning "invalid policy ident"; false
-    | `printf -> Printf_call.check_consistency (the pol.printf) default
-    | `strcpy -> Strcpy_call.check_consistency (the pol.strcpy) default
-    | `strncpy -> Strncpy_call.check_consistency (the pol.strncpy) default
-    | `fstat -> Fstat_call.check_consistency (the pol.fstat) default
-    | `fxstat64 -> Fxstat64_call.check_consistency (the pol.fxstat64) default
-    | `realloc -> Realloc_call.check_consistency (the pol.realloc) default
-    | `mmap -> Mmap_call.check_consistency (the pol.mmap) default
-    | `qsort -> Qsort_call.check_consistency (the pol.qsort) default
-    | `bsearch -> Bsearch_call.check_consistency (the pol.bsearch) default
-    | `atoi -> Atoi_call.check_consistency (the pol.atoi) default
-    | `malloc -> Malloc_call.check_consistency (the pol.malloc) default
-    | `read -> Read_call.check_consistency (the pol.read) default
-    | `fread -> Fread_call.check_consistency (the pol.fread) default
-    | `open_stub -> Open_stub_call.check_consistency (the pol.open_stub) default
-    | `lseek -> Lseek_call.check_consistency (the pol.lseek) default
-    | `strchr -> Strchr_call.check_consistency (the pol.strchr) default
-    | `strrchr -> Strrchr_call.check_consistency (the pol.strchr) default
-    | `strcmp -> Strcmp_call.check_consistency (the pol.strcmp) default
-    | `strncmp -> Strncmp_call.check_consistency (the pol.strncmp) default
-    | `memcmp -> Memcmp_call.check_consistency (the pol.memcmp) default
-    | `free-> Free_call.check_consistency (the pol.free) default
-    | `ctype_b_loc-> Ctype_b_loc_call.check_consistency (the pol.ctype_b_loc) default
-    | `fscanf -> Fscanf_call.check_consistency (the pol.fscanf) default
-    | `exit -> true
-    (* | `ignore -> Ignore_call.check_consistency (the pol.ignore) default *)
-    | `generic -> Generic_call.check_consistency (the pol.generic) default
-    | `getmodulehandle -> GetModuleHandle_call.check_consistency (the pol.getmodulehandle) default
-    | `getprocaddress -> GetProcAddress_call.check_consistency (the pol.getprocaddress) default
-    | `getmainargs -> Getmainargs_call.check_consistency (the pol.getmainargs) default
-    | `gethostname -> Gethostname_call.check_consistency (the pol.gethostname) default
-    | `memcpy -> Memcpy_call.check_consistency (the pol.memcpy) default
-    | `memset -> Memset_call.check_consistency (the pol.memset) default
-    | `fgetc -> Fgetc_call.check_consistency (the pol.fgetc) default
+      match pol.ident with
+      | `invalid -> Logger.warning "invalid policy ident"; false
+      | `printf -> Printf_call.check_consistency (the pol.printf) default
+      | `strcpy -> Strcpy_call.check_consistency (the pol.strcpy) default
+      | `strncpy -> Strncpy_call.check_consistency (the pol.strncpy) default
+      | `fstat -> Fstat_call.check_consistency (the pol.fstat) default
+      | `fxstat64 -> Fxstat64_call.check_consistency (the pol.fxstat64) default
+      | `realloc -> Realloc_call.check_consistency (the pol.realloc) default
+      | `mmap -> Mmap_call.check_consistency (the pol.mmap) default
+      | `qsort -> Qsort_call.check_consistency (the pol.qsort) default
+      | `bsearch -> Bsearch_call.check_consistency (the pol.bsearch) default
+      | `atoi -> Atoi_call.check_consistency (the pol.atoi) default
+      | `malloc -> Malloc_call.check_consistency (the pol.malloc) default
+      | `read -> Read_call.check_consistency (the pol.read) default
+      | `fread -> Fread_call.check_consistency (the pol.fread) default
+      | `open_stub -> Open_stub_call.check_consistency (the pol.open_stub) default
+      | `lseek -> Lseek_call.check_consistency (the pol.lseek) default
+      | `strchr -> Strchr_call.check_consistency (the pol.strchr) default
+      | `strrchr -> Strrchr_call.check_consistency (the pol.strchr) default
+      | `strcmp -> Strcmp_call.check_consistency (the pol.strcmp) default
+      | `strncmp -> Strncmp_call.check_consistency (the pol.strncmp) default
+      | `memcmp -> Memcmp_call.check_consistency (the pol.memcmp) default
+      | `free-> Free_call.check_consistency (the pol.free) default
+      | `ctype_b_loc-> Ctype_b_loc_call.check_consistency (the pol.ctype_b_loc) default
+      | `fscanf -> Fscanf_call.check_consistency (the pol.fscanf) default
+      | `exit -> true
+      (* | `ignore -> Ignore_call.check_consistency (the pol.ignore) default *)
+      | `generic -> Generic_call.check_consistency (the pol.generic) default
+      | `getmodulehandle -> GetModuleHandle_call.check_consistency (the pol.getmodulehandle) default
+      | `getprocaddress -> GetProcAddress_call.check_consistency (the pol.getprocaddress) default
+      | `getmainargs -> Getmainargs_call.check_consistency (the pol.getmainargs) default
+      | `gethostname -> Gethostname_call.check_consistency (the pol.gethostname) default
+      | `memcpy -> Memcpy_call.check_consistency (the pol.memcpy) default
+      | `memset -> Memset_call.check_consistency (the pol.memset) default
+      | `fgetc -> Fgetc_call.check_consistency (the pol.fgetc) default
     in res && acc
   in
   List.fold_left aux true policy
@@ -197,27 +197,27 @@ let check_libcall_policy_consistency (policy:libcall_pol list) (default:action)
 let serialize_stack_params (data:libcall_t): string =
   let open Libcall_t in
   match data.ident with
-    | `invalid -> ""
-    | `generic -> ""
-    | `printf -> Printf_call.serialize_stack_params (the data.printf)
-    | `strcpy -> Strcpy_call.serialize_stack_params (the data.strcpy)
-    | `strncpy -> Strncpy_call.serialize_stack_params (the data.strncpy)
-    | `atoi -> Atoi_call.serialize_stack_params (the data.atoi)
-    | `malloc -> Malloc_call.serialize_stack_params (the data.malloc)
-    | `getmodulehandle -> GetModuleHandle_call.serialize_stack_params (the data.getmodulehandle)
-    | `getprocaddress -> GetProcAddress_call.serialize_stack_params (the data.getprocaddress)
-    | `getmainargs -> Getmainargs_call.serialize_stack_params (the data.getmainargs)
-    | `gethostname -> Gethostname_call.serialize_stack_params (the data.gethostname)
-    | `free -> Free_call.serialize_stack_params (the data.free)
-    | `memcpy -> Memcpy_call.serialize_stack_params (the data.memcpy)
-    | `memset -> Memset_call.serialize_stack_params (the data.memset)
-    | `fgetc -> Fgetc_call.serialize_stack_params (the data.fgetc)
-    |  `exit | `read | `fread |`fstat | `fxstat64
-    | `strcmp | `strncmp | `memcmp | `mmap | `qsort | `bsearch | `fscanf
-    | `open_stub
-    | `realloc | `strchr | `strrchr | `ctype_b_loc | `lseek -> assert false
+  | `invalid -> ""
+  | `generic -> ""
+  | `printf -> Printf_call.serialize_stack_params (the data.printf)
+  | `strcpy -> Strcpy_call.serialize_stack_params (the data.strcpy)
+  | `strncpy -> Strncpy_call.serialize_stack_params (the data.strncpy)
+  | `atoi -> Atoi_call.serialize_stack_params (the data.atoi)
+  | `malloc -> Malloc_call.serialize_stack_params (the data.malloc)
+  | `getmodulehandle -> GetModuleHandle_call.serialize_stack_params (the data.getmodulehandle)
+  | `getprocaddress -> GetProcAddress_call.serialize_stack_params (the data.getprocaddress)
+  | `getmainargs -> Getmainargs_call.serialize_stack_params (the data.getmainargs)
+  | `gethostname -> Gethostname_call.serialize_stack_params (the data.gethostname)
+  | `free -> Free_call.serialize_stack_params (the data.free)
+  | `memcpy -> Memcpy_call.serialize_stack_params (the data.memcpy)
+  | `memset -> Memset_call.serialize_stack_params (the data.memset)
+  | `fgetc -> Fgetc_call.serialize_stack_params (the data.fgetc)
+  |  `exit | `read | `fread |`fstat | `fxstat64
+  | `strcmp | `strncmp | `memcmp | `mmap | `qsort | `bsearch | `fscanf
+  | `open_stub
+  | `realloc | `strchr | `strrchr | `ctype_b_loc | `lseek -> assert false
 
-let apply_default_stub (tr_index:int) (callcvt:call_convention_t) (env:Path_pred_env.t): unit =
+let apply_default_stub (tr_index:int) (callcvt:call_convention_t) (env:Path_predicate_env.t): unit =
   let prefix = "_"^(string_of_int tr_index) in
   match callcvt with
   | `cdecl -> Cdecl.default_stub prefix env

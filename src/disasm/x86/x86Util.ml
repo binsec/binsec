@@ -35,6 +35,8 @@
 
 (* Utility functions *)
 
+open Disasm_options
+
 open X86Types
 
 let bitsize_of_xmm_mm = function
@@ -46,27 +48,34 @@ let bytesize_of_xmm_mm = function
   | MM -> 8
 
 let bytesize_of_simd_size = function
-  | S32  -> Basic_types.ByteSize.create 4
-  | S64  -> Basic_types.ByteSize.create 8
-  | S128 -> Basic_types.ByteSize.create 16
+  | S32  -> Size.Byte.create 4
+  | S64  -> Size.Byte.create 8
+  | S128 -> Size.Byte.create 16
 
 let bitsize_of_simd_size simd_size =
-  bytesize_of_simd_size simd_size |> Basic_types.ByteSize.to_bitsize
+  bytesize_of_simd_size simd_size |> Size.Byte.to_bitsize
 
 let bytesize_of_szmode = function
-  | `M8  -> Basic_types.ByteSize.create 1
-  | `M16 -> Basic_types.ByteSize.create 2
-  | `M32 -> Basic_types.ByteSize.create 4
+  | `M8  -> Size.Byte.create 1
+  | `M16 -> Size.Byte.create 2
+  | `M32 -> Size.Byte.create 4
 
 let bitsize_of_szmode mode =
-  bytesize_of_szmode mode |> Basic_types.ByteSize.to_bitsize
+  bytesize_of_szmode mode |> Size.Byte.to_bitsize
 
 let bytesize_of_mode = function
-  | `M16 -> Basic_types.ByteSize.create 2
-  | `M32 -> Basic_types.ByteSize.create 4
+  | `M16 -> Size.Byte.create 2
+  | `M32 -> Size.Byte.create 4
 
 let bitsize_of_mode mode =
-  bytesize_of_mode mode |> Basic_types.ByteSize.to_bitsize
+  bytesize_of_mode mode |> Size.Byte.to_bitsize
+
+let bytesize_of_address_mode = function
+  | A32 -> Size.Byte.create 4
+  | A16 -> Size.Byte.create 2
+
+let bitsize_of_address_mode mode =
+  bytesize_of_address_mode mode |> Size.Byte.to_bitsize
 
 let reg8_to_int = function
   | AL -> 0
@@ -108,6 +117,16 @@ let _reg16_to_int = function
   | BP -> 5
   | SI -> 6
   | DI -> 7
+
+let reg16_to_reg32 = function
+  | AX -> EAX
+  | CX -> ECX
+  | DX -> EDX
+  | BX -> EBX
+  | SP -> ESP
+  | BP -> EBP
+  | SI -> ESI
+  | DI -> EDI
 
 let reg16_to_string = function
     AX -> "ax"
@@ -151,7 +170,7 @@ let reg32_to_string = function
   | EDI -> "edi"
 
 let reg32_to_string_8 = function
-    EAX -> "al"
+  | EAX -> "al"
   | ECX -> "cl"
   | EDX -> "dl"
   | EBX -> "bl"
@@ -163,7 +182,7 @@ let reg32_to_string_8 = function
 
 
 let reg32_to_string_16 = function
-    EAX -> "ax"
+  | EAX -> "ax"
   | ECX -> "cx"
   | EDX -> "dx"
   | EBX -> "bx"
@@ -228,12 +247,25 @@ let _segment_reg_to_int = function
   | GS -> 5
 
 let segment_reg_to_string = function
-    ES -> "es"
+  | ES -> "es"
   | CS -> "cs"
   | SS -> "ss"
   | DS -> "ds"
   | FS -> "fs"
   | GS -> "gs"
+
+let segments = [FS; GS; CS; SS; DS; ES;]
+
+let segment_of_string string =
+  match String.lowercase_ascii string with
+  | "fs" -> Some X86Types.FS
+  | "gs" -> Some X86Types.GS
+  | "cs" -> Some X86Types.CS
+  | "ss" -> Some X86Types.SS
+  | "ds" -> Some X86Types.DS
+  | "es" -> Some X86Types.ES
+  | _ -> Logger.info "Ignoring unknown segment %s" string; None
+
 
 let int_to_segment_reg = function
   | 0 -> ES
@@ -378,7 +410,7 @@ let test_reg_to_string = function
   | TR6 -> "TR6"
   | TR7 -> "TR7"
 
- let int_to_test_reg = function
+let int_to_test_reg = function
     3 -> TR3
   | 4 -> TR4
   | 5 -> TR5
@@ -669,7 +701,7 @@ let read_rm16_with_spare int_to_reg lr =
   in
   match modrm_byte with
   | { modb = 0; rm = 6; reg; } ->
-    let disp = Lreader.Read.u16 lr in
+    let disp = Lreader.Read.i16 lr in
     mk_address ~address_mode:A16 disp, reg
   | { modb; rm; reg; } ->
     let address_base, address_index = get_base_index rm in
@@ -678,12 +710,12 @@ let read_rm16_with_spare int_to_reg lr =
       let disp = 0 in
       mk_address ~address_mode:A16 disp ~address_base ~address_index, reg
     | 1 ->
-      let disp = Lreader.Read.u8 lr in
+      let disp = Lreader.Read.i8 lr in
       (* let disp, bits = read_uint32_extend bits 8 in *)
       mk_address ~address_mode:A16 disp ~address_base ~address_index, reg
     | 2 ->
       let base = int_to_reg32 rm in
-      let disp = Lreader.Read.u16 lr in
+      let disp = Lreader.Read.i16 lr in
       mk_address ~address_mode:A16 disp ~address_base:(Some base) ~address_index, reg
     | 3 -> Reg (int_to_reg rm), reg
     | _ -> failwith "Unexpected ModR/M byte (mod > 3) !"
@@ -695,7 +727,7 @@ let read_rm32_with_spare int_to_reg lr =
   Logger.debug ~level:4 "%a"  pp_modrm modrm_byte;
   match modrm_byte with
   | { modb = 0; rm = 5; reg; } ->
-    let disp = Lreader.Read.u32 lr in
+    let disp = Lreader.Read.i32 lr in
     mk_address disp,  reg
   | { modb = 3; rm; reg; } ->
     Reg (int_to_reg rm), reg
@@ -705,8 +737,8 @@ let read_rm32_with_spare int_to_reg lr =
     let disp =
       match modb with
       | 0 -> 0
-      | 1 -> Lreader.Read.u8 lr (* read_uint32_extend bits 8 *)
-      | 2 -> Lreader.Read.u32 lr
+      | 1 -> Lreader.Read.i8 lr (* read_uint32_extend bits 8 *)
+      | 2 -> Lreader.Read.i32 lr
       | 3 -> failwith "Impossible: matched above."
       | _ ->
         let msg = Format.sprintf "Impossible: 2-bit value for modb : %d" modb in
@@ -714,12 +746,12 @@ let read_rm32_with_spare int_to_reg lr =
     in
     let scale = int_to_scale sib_byte.scale in
     let address_index =
-        match int_to_reg32 sib_byte.index with
-        | ESP -> None
-        | index -> Some (scale, index)
-      in
+      match int_to_reg32 sib_byte.index with
+      | ESP -> None
+      | index -> Some (scale, index)
+    in
     if sib_byte.base = 5 && modb = 0 then (* TODO : modb = 1, modb = 2 *)
-      let disp = Lreader.Read.u32 lr in
+      let disp = Lreader.Read.i32 lr in
       (* TODO : size := size + size + 4 *)
       mk_address disp ~address_index, reg
     else
@@ -732,11 +764,11 @@ let read_rm32_with_spare int_to_reg lr =
     mk_address ~address_mode:A32 0 ~address_base:(Some base), reg
   | { modb = 1; rm; reg; } ->
     let base = int_to_reg32 rm in
-    let disp = Lreader.Read.u8 lr in
+    let disp = Lreader.Read.i8 lr in
     mk_address ~address_mode:A32 disp ~address_base:(Some base), reg
   | { modb = 2; rm; reg; } ->
     let base = int_to_reg32 rm in
-    let disp = Lreader.Read.u32 lr in
+    let disp = Lreader.Read.i32 lr in
     mk_address ~address_mode:A32 disp ~address_base:(Some base), reg
   | _ -> failwith "Unexpected ModR/M byte"
 
@@ -811,3 +843,13 @@ let reg_to_extract (name:string): string * int * int =
   | "AF"  -> "AF", 0, 0
   | "PF"  -> "PF", 0, 0
   | _     -> failwith ("reg_to_extract unknown register: "^name)
+
+
+let switch_default_data_mode = function
+  | `M16 -> `M32
+  | `M32 -> `M16
+
+
+let switch_address_mode = function
+  | A16 -> A32
+  | A32 -> A16

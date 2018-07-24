@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -17,7 +17,6 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
 (**************************************************************************)
 
-open Options
 
 type conf_t = string * int
 
@@ -31,11 +30,11 @@ let get_conf_name conf = fst conf
 let get_conf_id   conf = snd conf
 
 let build_analysis_configuration tracefile conf =
-    let conf = get_conf_name conf in
-    let options = Piqirun_ext.make_options ~json_omit_missing_fields:true () in
-    let config_raw = File_utils.load conf in
-    { configuration = Config_piqi_ext.parse_configuration ~opts:options config_raw `json;
-      trace_file    = tracefile ;
-      trace_input   = Chunked(open_in_bin tracefile, true) 
-    }
-
+  let open Trace_config in
+  let conf = get_conf_name conf in
+  let options = Piqirun_ext.make_options ~json_omit_missing_fields:true () in
+  let config_raw = File_utils.load conf in
+  { configuration = Config_piqi_ext.parse_configuration ~opts:options config_raw `json;
+    trace_file    = tracefile ;
+    trace_input   = Chunked(open_in_bin tracefile, true)
+  }

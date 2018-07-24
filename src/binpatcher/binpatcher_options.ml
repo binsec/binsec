@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,8 +19,14 @@
 (*                                                                        *)
 (**************************************************************************)
 
+include Cli.Make(
+struct
+  let name = "Binary Patcher"
+  let shortname = "bp"
+end
+)
 module PatchOutFile =
-  Parameters.Builder.String(
+  Builder.String(
   struct
     let name = "o-patched"
     let default = "binsec_patched.bin"
@@ -29,14 +35,9 @@ module PatchOutFile =
   )
 
 module PatchFile =
-  Parameters.Builder.OptionalString(
+  Builder.String_option(
   struct
     let name = "patch"
     let doc = "Input file for the patched binary"
   end
   )
-
-let cli = [
-  PatchFile.arg;
-  PatchOutFile.arg;
-]

@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -156,18 +156,18 @@ struct
       let l =
         List.find
           (fun x -> match x with
-            | Trace_type.Libcall l when l.ident  = `strcmp -> true
-            | Trace_type.Libcall _
-            | Trace_type.NextAddr _
-            | Trace_type.RegRead _
-            | Trace_type.RegWrite _
-            | Trace_type.Syscall _
-            | Trace_type.MemLoad _
-            | Trace_type.MemStore _
-            | Trace_type.Not_retrieved
-            | Trace_type.Comment _
-            | Trace_type.Wave _ -> false
-        ) inst.Trace_type.concrete_infos in
+             | Trace_type.Libcall l when l.ident  = `strcmp -> true
+             | Trace_type.Libcall _
+             | Trace_type.NextAddr _
+             | Trace_type.RegRead _
+             | Trace_type.RegWrite _
+             | Trace_type.Syscall _
+             | Trace_type.MemLoad _
+             | Trace_type.MemStore _
+             | Trace_type.Not_retrieved
+             | Trace_type.Comment _
+             | Trace_type.Wave _ -> false
+          ) inst.Trace_type.concrete_infos in
       match l with
       | Trace_type.Libcall l when l.ident = `strcmp ->
         let strcmp = l.strcmp in
@@ -244,8 +244,8 @@ struct
       let open Trace_type in
       List.exists (
         fun x -> match x with
-        | Libcall _ -> true
-        | NextAddr _|RegRead (_, _)|RegWrite (_, _)|Syscall _|MemLoad (_, _)| MemStore (_, _)|Not_retrieved|Comment _|Wave _ -> false
+          | Libcall _ -> true
+          | NextAddr _|RegRead (_, _)|RegWrite (_, _)|Syscall _|MemLoad (_, _)| MemStore (_, _)|Not_retrieved|Comment _|Wave _ -> false
       ) inst.concrete_infos in
     let trace_raw = get_raw_trace trace in
     let call_stack = Stack.create () in
@@ -332,11 +332,12 @@ struct
       match dbas with
       | [] -> failwith "Try to invert no condition that can be inverted \n"
       | dba::tl ->
-        match  Dba_types.Statement.instruction dba with
-        | IkIf(_, JOuter addr,_) -> addr.Dba.base
-        | (IkAssign (_, _, _)|IkSJump (_, _)|IkDJump (_, _)|IkStop _|IkAssert (_, _)|IkIf (_, JInner _, _) |
-           IkAssume (_, _)|IkNondetAssume (_, _, _)|IkNondet (_, _, _)|IkUndef (_, _)|
-           IkMalloc (_, _, _)|IkFree (_, _)|IkPrint (_, _)) -> explore tl
+        let open Instr in
+        match Dba_types.Statement.instruction dba with
+        | If(_, JOuter addr,_) -> addr.Dba.base
+        | (Assign (_, _, _)|SJump (_, _)|DJump (_, _)|Stop _|Assert (_, _)|If (_, JInner _, _) |
+           Assume (_, _)|NondetAssume (_, _, _)|Nondet (_, _, _)|Undef (_, _)|
+           Malloc (_, _, _)|Free (_, _)|Print (_, _)) -> explore tl
     in
     let addr = explore x.inst.Trace_type.dbainstrs in
     let addr = Bitvector.value_of addr in
@@ -605,7 +606,7 @@ struct
       Conf_exploration.build_analysis_configuration tracename trace_config in
     if polcc
     then
-      config.Options.configuration <- config_to_cc config.Options.configuration;
+      config.Trace_config.configuration <- config_to_cc config.Trace_config.configuration;
     let trace_analyzer = new InvertChild.invert_child config in
     trace_analyzer#set_counter (get_conf_id trace_config);
     match child.location with

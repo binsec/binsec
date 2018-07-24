@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,7 +19,14 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module Disassembly = Parameters.Builder.True(
+include Cli.Make(
+struct
+  let shortname = "static"
+  let name = "Static analyses"
+end
+)
+
+module Disassembly = Builder.True(
   struct
     let name = "no-disassembly"
     let doc = "Restrict analysis to DBA file"
@@ -27,10 +34,10 @@ module Disassembly = Parameters.Builder.True(
   )
 
 
-module NaiveWidening = Parameters.Builder.False(
+module NaiveWidening = Builder.False(
   struct
-     let name = "naive-widening"
-     let doc = " Set widening points at first discovered addresses \
-                in loops by DFS, not necessarily just before a conditional"
+    let name = "naive-widening"
+    let doc = " Set widening points at first discovered addresses \
+               in loops by DFS, not necessarily just before a conditional"
   end
   )

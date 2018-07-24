@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,11 +25,14 @@ module type Accessor = sig
   val u16 : t -> int
   val u32 : t -> int
   val u64 : t -> int
+  val i8  : t -> int
+  val i16 : t -> int
+  val i32 : t -> int
 end
 
 type bytestream =
   | LoaderImg of Loader.Img.t
-  | BinStream of int * Basic_types.Binstream.t
+  | BinStream of int * Binstream.t
 
 type t = {
   content : bytestream ;
@@ -43,12 +46,12 @@ let of_binstream ?(cursor=0) ?(base=0) hstr =
 
 let of_nibbles ?(cursor=0) ?(base=0) str =
   Logger.debug "lreader of nibbles %s" str;
-  let hstr = Basic_types.Binstream.of_nibbles str in
+  let hstr = Binstream.of_nibbles str in
   of_binstream ~cursor ~base hstr
 
 let of_bytes ?(cursor=0) ?(base=0) str =
   Logger.debug "%s" str;
-  let hstr = Basic_types.Binstream.of_bytes str in
+  let hstr = Binstream.of_bytes str in
   of_binstream ~cursor ~base hstr
 
 let pp ppf r = Format.fprintf ppf "%@%x" r.cursor
@@ -57,7 +60,7 @@ let set_virtual_cursor r addr =
   match r with
   | { content = LoaderImg _; _ } -> r.cursor <- addr
   | { content = BinStream (base, _); _ } ->
-      r.cursor <- addr - base
+    r.cursor <- addr - base
 
 let get_virtual_cursor = function
   | { content = LoaderImg _; cursor } -> cursor
@@ -80,54 +83,81 @@ let read_cell r =
   match r.content with
   | LoaderImg img -> Loader.read_address img r.cursor
   | BinStream (_, hstr) ->
-    Basic_types.Binstream.get_byte hstr r.cursor
+    Binstream.get_byte_exn hstr r.cursor
 
 module Read = struct
-(* [read r n] reads [n] bytes from reader [r].
-   @returns a big-endian ordered byte list: the lowest address is at the end of
-   the list.
- *)
-let read r n =
-  let limit = r.cursor + n - 1 in
-  let rec loop acc =
-    if r.cursor > limit then acc (* ? *)
-    else begin
-      let acc = read_cell r :: acc in
-      advance r 1;
-      loop acc
-    end
-  in loop []
+  (* [read r n] reads [n] bytes from reader [r].
+     @return a big-endian ordered byte list: the lowest address is at the end of
+     the list.
+  *)
+  let read r n =
+    let limit = r.cursor + n - 1 in
+    let rec loop acc =
+      if r.cursor > limit then acc (* ? *)
+      else begin
+        let acc = read_cell r :: acc in
+        advance r 1;
+        loop acc
+      end
+    in loop []
 
-let u8 r =
-  match read r 1 with
-  | [x] -> x
-  | _ -> assert false
+  (* unsigned 8 bits int *)
+  let u8 r =
+    match read r 1 with
+    | [x] -> x
+    | _ -> assert false
 
-let u16 r = to_int (read r 2)
+  let u16 r = to_int (read r 2)
 
-let u32 r = to_int (read r 4)
+  let u32 r = to_int (read r 4)
 
-let u64 r = to_int (read r 8)
-(* This function is not correct:
-   It returns a 63-bits long caml integer while the read value is potentially 64 bits long.
-*)
+  (* This function is not correct:
+     It returns a 63-bits long caml integer while the read value is potentially 64 bits long.
+  *)
+  let u64 r = to_int (read r 8)
+
+  (* signed 8 bits int *)
+  let i8 r =
+    let x = u8 r in
+    if x >= 0x80 then x - 0xff - 1 else x
+
+  let i16 r =
+    let x = u16 r in
+    if x >= 0x8000 then x - 0xffff - 1 else x
+
+  let i32 r =
+    let x = u32 r in
+    if x >= 0x80000000 then x - 0xffffffff - 1 else x
 
 end
 
 (** Peeking functions *)
 module Peek = struct
-let peek r n =
-  let b = to_int (Read.read r n) in
-  rewind r n;
-  b
+  let peek r n =
+    let b = to_int (Read.read r n) in
+    rewind r n;
+    b
 
-let u8 r  = peek r 1
+  let u8 r  = peek r 1
 
-let u16 r = peek r 2
+  let u16 r = peek r 2
 
-let u32 r = peek r 4
+  let u32 r = peek r 4
 
-let u64 r = peek r 8
+  let u64 r = peek r 8
+
+  (* signed 8 bits int *)
+  let i8 r =
+    let x = u8 r in
+    if x >= 0x80 then x - 0xff - 1 else x
+
+  let i16 r =
+    let x = u16 r in
+    if x >= 0x8000 then x - 0xffff - 1 else x
+
+  let i32 r =
+    let x = u32 r in
+    if x >= 0x80000000 then x - 0xffffffff - 1 else x
 end
 
 let get_slice r start_address end_address =

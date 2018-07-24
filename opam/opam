@@ -1,34 +1,38 @@
 opam-version: "1.2"
 name: "binsec"
-version: "0.1"
-maintainer: "richard.binochon@cea.fr"
+version: "0.2"
+maintainer: "richard.bonichon@cea.fr"
 authors: [
 "Adel Djoudi"
 "Benjamin Farinier"
-"Feist Josselin"
-"Frédéric Besson"
-"Guillaume Jeanne"
+"Frédéric Recoules"
 "Josselin Feist"
+"Lesly-Ann Daniel"
+"Manh-Dung Nguyen"
+"Mathilde Ollivier"
+"Matthieu Lemerre"
+"Olivier Nicole"
 "Richard Bonichon"
 "Robin David"
 "Ta Thanh Dinh"
+"Yaëlle Vinçont"
 ]
-homepage: "http://binsec.gforge.inria.fr/"
+homepage: "https://binsec.github.io"
 license: "GNU Lesser General Public License version 2.1"
-#dev-repo: "https://.../.git"
-doc: ["http://binsec.gforge.inria.fr/apiref/index.html"]
+doc: ["http://binsec.github.io/apiref/index.html"]
 bug-reports: "mailto:binsec _at_ saxifrage.saclay.cea.fr"
 tags: [
+  "binary code analysis"
+  "symbolic execution"
   "deductive"
   "program verification"
   "formal specification"
   "automated theorem prover"
-  "Binary"
   "plugins"
   "abstract interpretation"
   "dataflow analysis"
   "linking"
-  "disassemble"
+  "disassembly"
 ]
 
 build: [
@@ -36,7 +40,8 @@ build: [
                                               # the configure *cannot* yet be
                                               # generated
   ["sh" "-eux" "./run_configure.sh" "--prefix" prefix]
-  [make "-C" "src" "-j%{jobs}%"]
+  [make "-C" "src" "depend"]
+  [make "-C" "src"  "-j%{jobs}%"]
 ]
 
 install: [
@@ -51,15 +56,6 @@ remove: [
   [make "-C" "src" "uninstall"]
 ]
 
-# build-doc: [
-#    [make "-C" "doc" "download"]
-#    [make "-C" "doc" "FRAMAC_DOCDIR=%{frama-c:doc}%" "install"]
-# ]
-
-# build-test: [
-#   [make "-j%{jobs}%" "PTESTS_OPTS=-error-code" "tests"]
-# ]
-
 depends: [
   "ocamlgraph" { >= "1.8.5" & < "1.9~" }
   "ocamlfind"
@@ -70,13 +66,4 @@ depends: [
   "llvm"
 ]
 
-depopts: [
-]
-
-messages: [
-]
-
-conflicts: [
-]
-
-available: [ ocaml-version >= "4.02.3" ]
+available: [ ocaml-version >= "4.04.2" ]

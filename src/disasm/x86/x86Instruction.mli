@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,7 +21,7 @@
 
 (** Interface for X86 instructions *)
 
-include Disasm_types.BasicInstruction with type mnemonic = X86Types.instruction_kind
+include Instruction.Basic with type mnemonic = X86Types.instruction_kind
 
 
-val to_generic_instruction : t -> Disasm_types.GenericInstruction.t
+val to_generic_instruction : t -> Instruction.Generic.t

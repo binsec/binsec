@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -54,8 +54,8 @@ type trace_concrete_infos =
 type trace_inst = {
   thread : int32;   (** What thread id the instruction belong to *)
   location : int64; (** location of the instruction (address) *)
-  opcode : string;  (** mnemonic of the instruction *)
-  opcode_bytes: string; (** opcode bytes *)
+  mnemonic : string;  (** mnemonic of the instruction *)
+  opcode : string; (** opcode bytes *)
   decoded : bool;   (** either the instruction was decoded by the decoder or not *)
   mutable dbainstrs : Dba_types.Statement.t list; (** DBA IR of the instruction *)
   mutable concrete_infos : trace_concrete_infos list (** concrete(runtime) infos of the instruction *)
@@ -63,7 +63,7 @@ type trace_inst = {
 
 (** Trace type *)
 type trace = {
-  instrs : trace_inst InstrMap.t; (** instructions indexed by theirs trace offset *)
+  instrs : trace_inst Basic_types.Int.Map.t; (** instructions indexed by theirs trace offset *)
   complete : bool;                (** either the whole trace have been read (might be useful for huge trace) *)
   metadatas : (metadata list) Basic_types.Int.Map.t; (** Metadatas indexed by the offset in the trace where they appeared *)
   address_size : int;             (** Size of addresses *)
@@ -89,8 +89,8 @@ val empty_trace: trace
 
 (** {2 Utility functions to query the concrete infos}
 
-{b All this functions raise {!Not_found_in_concrete_infos} of the
-value or the information queried is not found in the infos}
+    {b All this functions raise {!Not_found_in_concrete_infos} of the
+    value or the information queried is not found in the infos}
 *)
 
 val conc_infos_available: conc_infos -> bool

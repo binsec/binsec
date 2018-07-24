@@ -21,6 +21,10 @@ var ebp : 32     ;
 var esi : 32     ; 
 var edi : 32     ; 
 
+var fs  : 16     ;
+var gs  : 16     ;
+
+
 var mm0 : 64     ; 
 var mm1 : 64     ; 
 var mm2 : 64     ; 

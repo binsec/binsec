@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,7 +33,7 @@ sig
   type conditionsList = Smt_bitvectors.smtBvExprAlt list
   type djmpsMap = Caddress.Set.t AddressStack.Map.t
   type stopList = Caddress.Set.t
-  type insert_instrs = Dba.instruction list Caddress.Map.t
+  type insert_instrs = Dba.Instr.t list Caddress.Map.t
   type replace_instrs = Dba_types.instruction_sequence Caddress.Map.t
   type localThresholdsType = (int array * int array * int array * int array)
   type globalThresholdsType =
@@ -44,14 +44,14 @@ sig
 
   val analyse:
     Dba.address ->
-    Dba.instruction list ->
-    Disasm_types.pmap ->
+    Dba.Instr.t list ->
+    Pmap.t ->
     insert_instrs ->
     replace_instrs ->
     stopList ->
     thresholdsType ->
     wideningType ->
-    statesMap * conditionsList * Disasm_types.pmap * djmpsMap * Caddress.Set.t
+    statesMap * conditionsList * Pmap.t * djmpsMap * Caddress.Set.t
 
 end
 
@@ -66,8 +66,8 @@ struct
   type conditionsList = Smt_bitvectors.smtBvExprAlt list
   type djmpsMap =  Caddress.Set.t AddressStack.Map.t
   type stopList = Caddress.Set.t
-  type insert_instrs = Dba.instruction list Caddress.Map.t
-  type replace_instrs = (Dba.address * Dba.instruction) list Caddress.Map.t
+  type insert_instrs = Dba.Instr.t list Caddress.Map.t
+  type replace_instrs = (Dba.address * Dba.Instr.t) list Caddress.Map.t
   type localThresholdsType = (int array * int array * int array * int array)
   type globalThresholdsType = (int array * int array * int array * int array) Caddress.Map.t
   type thresholdsType = localThresholdsType * globalThresholdsType
@@ -77,7 +77,7 @@ struct
     AddressStack.Map.fold (fun (addr, _, _) new_set acc ->
         let old_set =
           try Caddress.Map.find addr acc with Not_found -> Caddress.Set.empty in
-      Caddress.Map.add addr (Caddress.Set.union old_set new_set) acc
+        Caddress.Map.add addr (Caddress.Set.union old_set new_set) acc
       ) djmps Caddress.Map.empty
 
 
@@ -93,7 +93,7 @@ struct
 
 
   let replace_stub addr r_insts insts =
-    try Disasm_types.add_chained_instr (Caddress.Map.find addr r_insts) insts
+    try Pmap.add_chained_instr (Caddress.Map.find addr r_insts) insts
     with Not_found -> insts
 
   let _wp_analysis addrStack states insts w_pts m =
@@ -138,7 +138,7 @@ struct
         log_exception
           Errors.Enumerate_Top
           (Dba_types.Statement.create addr instr) (m, equalities)
-        (*        ([], insts, assumes, djmps, cache, (w_pts,unrolled_loops)) *)
+      (*        ([], insts, assumes, djmps, cache, (w_pts,unrolled_loops)) *)
       | exn ->
         log_exception exn (Dba_types.Statement.create addr instr) (m, equalities)
         (* [], insts, assumes, djmps, cache, (w_pts, unrolled_loops) *)
@@ -153,7 +153,7 @@ struct
       if loop = 0 then
         try AddressStack.Map.find (addr, cstack, 1) states
         with Not_found ->
-           bottom_state, bottom_flgs, bottom_equalities, AddressStack.Set.empty
+          bottom_state, bottom_flgs, bottom_equalities, AddressStack.Set.empty
       else bottom_state, bottom_flgs, bottom_equalities, AddressStack.Set.empty
 
   let join addrStack addr preds m' m flgs' flgs w_pts equalities' equalities =
@@ -306,7 +306,7 @@ struct
 
   let string_of_final_states states stops =
     let f elem acc = Format.asprintf "%a %s"
-         Dba_types.AddressStack.pp elem acc in
+        Dba_types.AddressStack.pp elem acc in
     AddressStack.Map.fold (
       fun (a, _stack, _loop) (m, _flags, equalities, preds) acc ->
         if (Caddress.Set.mem a stops) then (
@@ -322,9 +322,9 @@ struct
   let set_analysis_outputs insts djmps l0 visited =
     let djmps =
       AddressStack.Map.fold (fun (addr, _stack, _loop) addrs acc ->
-        let addrs' = try Caddress.Map.find addr acc with Not_found -> Caddress.Set.empty in
-        Caddress.Map.add addr (Caddress.Set.union addrs addrs') acc
-      ) djmps Caddress.Map.empty
+          let addrs' = try Caddress.Map.find addr acc with Not_found -> Caddress.Set.empty in
+          Caddress.Map.add addr (Caddress.Set.union addrs addrs') acc
+        ) djmps Caddress.Map.empty
     in
     let ast = Ast_builder.make insts djmps in
     let cs = Caddress.Map.empty in
@@ -382,22 +382,32 @@ let preprocess_and_analyze analyze program config =
     stops w d
 
 
-let run ?(dba_file=None) ~configuration_file () =
-  let config = configuration_file |> Binsec_utils.read_optional_config_file in
+let run ?(dba_file=None) ~configuration_file  =
+  let config = configuration_file |> Parse_utils.read_optional_config_file in
   let program =
     match dba_file with
-    | None -> Binsec_utils.load_dba_definition (Machine.ISA.get ())
-    | Some filename -> Binsec_utils.read_dba_file filename
+    | None -> Parse_utils.load_dba_definition (Kernel_options.Machine.ISA.get ())
+    | Some filename -> Parse_utils.read_dba_file filename
   in
   let (module State) =
     let open Ai_options in
     match Domain.get () with
-    | Domain.TaintedKset ->
-      (module Reduced_product.Make (Kset) (Taint): Ai_sigs.AbstractDomain)
-    | Domain.Kset ->
-      (module Nonrelational.Make(Kset): Ai_sigs.AbstractDomain)
-    | Domain.Interval ->
-      (module Nonrelational.Make(Range): Ai_sigs.AbstractDomain)
+    | TaintedKset ->
+       (module Reduced_product.Make (Kset) (Taint): Ai_sigs.AbstractDomain)
+    | Kset ->
+       (module Nonrelational.Make(Kset): Ai_sigs.AbstractDomain)
+    | Interval ->
+       (module Nonrelational.Make(Range): Ai_sigs.AbstractDomain)
   in
   let module A = Make(State) in
   preprocess_and_analyze A.analyze program config
+
+
+let cli_run  () =
+  if Ai_options.is_enabled () then
+    let configuration_file = Kernel_options.Dba_config.get_opt () in
+    let dba_file = Kernel_options.Dba_file.get_opt () in
+    run ~dba_file ~configuration_file
+
+let _ =
+  Cli.Boot.enlist ~name:"ai" ~f:cli_run

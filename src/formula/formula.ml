@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,539 +19,1284 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Smtlib2print
-open Solver
-open Formula_type
-open Formula_optim
-open Common_piqi
-open Smtlib2
-open Smtlib2_visitor
-open Basic_types
+type status =
+  | SAT
+  | UNSAT
+  | TIMEOUT
+  | UNKNOWN
 
-let last_k = ref 0
+let status_to_exit_code = function
+  | SAT -> 0
+  | UNSAT -> 10
+  | TIMEOUT -> 11
+  | UNKNOWN -> 12
 
-exception Exit_path_predicate
+type bl_unop =
+  | BlNot
 
-let pp_vars (f:formula): unit =
-  Logger.result "@[<v 0>|------ Symbolic Store ------|@ ";
-  SymbVar.iter
-    (fun name (i,j,f) ->
-       Logger.result "%s{%i, %i} = %s@ " name i j (smtbvexpr_to_string f))
-    f.vars;
-  Logger.result "|----------------------------|@]@."
+type bl_bnop =
+  | BlImply
+  | BlAnd
+  | BlOr
+  | BlXor
 
-let optim_str (f:formula): string =
-  let s = if f.optim_cst_prop then "C" else "" in
-  let s = if f.optim_rebase then s^"R" else s in
-  let s = if f.optim_row then s^"W" else s in
-  let s = if f.optim_rowplus then s^"H" else s in
-  let s = if f.optim_eq_prop then s^"E" else s in
-  if s = "" then "NONE" else s
+type bl_comp =
+  | BlEqual
+  | BlDistinct
 
-let base_varname s =
-  Str.string_match (Str.regexp "^[a-zA-Z]*") s 0 |> ignore;
-  Str.matched_string s
+type bv_unop =
+  | BvNot
+  | BvNeg
+  | BvRepeat of int
+  | BvZeroExtend of int
+  | BvSignExtend of int
+  | BvRotateLeft of int
+  | BvRotateRight of int
+  | BvExtract of int Interval.t
 
-let _reset_symbvar (f:formula): formula =
-  {f with vars = SymbVar.empty}
+type bv_bnop =
+  | BvConcat
+  | BvAnd
+  | BvNand
+  | BvOr
+  | BvNor
+  | BvXor
+  | BvXnor
+  | BvCmp
+  | BvAdd
+  | BvSub
+  | BvMul
+  | BvUdiv
+  | BvSdiv
+  | BvUrem
+  | BvSrem
+  | BvSmod
+  | BvShl
+  | BvAshr
+  | BvLshr
 
-let inc_varindex (f:formula) (name:string): int SymbVar.t =
-  try
-    let value = SymbVar.find name f.varsindex in
-    SymbVar.add name (value+1) f.varsindex
-  with Not_found ->
-    SymbVar.add name 1 f.varsindex
+type bv_comp =
+  | BvEqual
+  | BvDistinct
+  | BvUlt
+  | BvUle
+  | BvUgt
+  | BvUge
+  | BvSlt
+  | BvSle
+  | BvSgt
+  | BvSge
 
-let get_varindex (f:formula) (name:string): int =
-  try
-    SymbVar.find name f.varsindex
-  with Not_found -> 0
+type ax_comp =
+  | AxEqual
+  | AxDistinct
 
-let contains_variable (f:formula) (name:string) =
-  SymbVar.mem name f.vars
+type sort = BlSort | BvSort of int | AxSort of int * int
 
-let print_simplifications f p1 p2 p3 =
-  Logger.warning ~level:2 "@[<v 0>⎧in:[%s]@ ⎪row:[%s]@ ⎩out:[%s]@]"
-    (String_utils.remove_newline (f p1))
-    (String_utils.remove_newline (f p2))
-    (String_utils.remove_newline (f p3))
+type bl_var = {
+  bl_hash : int   ;
+  bl_name : string;
+}
+type bv_var = {
+  bv_hash : int   ;
+  bv_name : string;
+  bv_size : int   ;
+}
+type ax_var = {
+  ax_hash : int   ;
+  ax_name : string;
+  idx_size : int  ;
+  elt_size : int  ;
+}
 
-let apply_optimizations_abvexpr (f:formula) (new_name:string) (f_expr:smt_abv_expr) : smt_abv_expr * hybrid_mem_t =
-  (* CONSTANT PROPAGATION *)
-  let new_e = if f.optim_cst_prop then propagate_cst_abv f f_expr else f_expr in
-  let new_e = if f.optim_rebase then rebase_abvexpr f new_e else new_e in (* REBASE OPTIM *)
-  let new_e' = if f.optim_row then read_over_write_abv f new_e else new_e in (* READ over WRITE  *)
-  let new_e = if f.optim_rowplus then read_over_write_hybrid_abv f new_e' else new_e' in (* ROW Hyrbid OPTIM *)
-  let new_e = if f.optim_cst_prop then propagate_cst_abv f new_e else new_e in (* CONSTANTE PROPAGATION #2 *)
-  let new_hybrid_mem, new_e'' = if f.optim_rowplus then update_hybrid_memory f new_name new_e else f.hybrid_memory, new_e in (* ROW Hybrid *)
-  let new_e = if f.optim_cst_prop then propagate_cst_abv f new_e'' else new_e'' in (* CONSTANTE PROPAGATION #3 *)
-  if not(abvexpr_equal new_e' new_e) then
-    print_simplifications (smtabvexpr_to_string ~inline:false) new_e' new_e'' new_e;
-  new_e, new_hybrid_mem
+type var =
+  | BlVar of bl_var
+  | BvVar of bv_var
+  | AxVar of ax_var
 
-let apply_optimizations_expr (f:formula) (f_expr:smt_expr): smt_expr =
-  let new_f = if f.optim_cst_prop then propagate_cst f f_expr else f_expr in (* CONSTANT PROPAGATION *)
-  let new_f = if f.optim_rebase then rebase_expr f new_f else new_f in (* REBASE OPTIM *)
-  let new_f' = if f.optim_row then read_over_write f new_f else new_f in (* READ over WRITE OPTIM *)
-  let new_f' = if f.optim_cst_prop then propagate_cst f new_f' else new_f' in (* CONSTANT PROPAGATION *)
-  let new_f'' = if f.optim_rowplus then read_over_write_hybrid f new_f' else new_f' in(* ROW Hybrid OPTIM *)
-  let new_f = if f.optim_cst_prop then propagate_cst f new_f'' else new_f'' in (* CONSTANT PROPAGATION #2 *)
-  if not(expr_equal new_f' new_f) then
-    print_simplifications (smtexpr_to_string ~inline:false) new_f' new_f'' new_f;
-  new_f
+type term_desc =
+  | BlTerm of bl_term
+  | BvTerm of bv_term
+  | AxTerm of ax_term
 
-let apply_optimizations_expr_list (f:formula) (l:smt_expr list): smt_expr list =
-  List.fold_left (fun acc i ->
-      let new_e = apply_optimizations_expr f i in
-      match new_e with
-      | SmtTrue -> acc
-      | _ -> i::acc
-    ) [] l
+and term = {
+  term_hash : int;
+  term_desc : term_desc;
+}
 
-(* ------- Memory functions ------- *)
-let store_memory (f:formula) ?(constraints=[]) (mem_f:smt_abv_expr): formula =
-  let new_name = "memory" ^ (string_of_int (get_varindex f "memory")) in
-  let new_memory = SmtABvArray(new_name, f.addr_size, 8) in
-  let new_mem, new_hybrid_mem = apply_optimizations_abvexpr f new_name mem_f in
-  let constraints = apply_optimizations_expr_list f constraints in
-  let newdef = VarDefinition(SmtABvArrayExpr new_memory, SmtABvArrayExpr new_mem, constraints) in
-  let newoptimap = SymbVar.add new_name (f.global_counter,(SmtABvArrayExpr new_memory, SmtABvArrayExpr new_mem, constraints)) f.optim_map in
-  let opu, opb, slts = List.fold_left (fun (opua,opba,sltsa) i -> let _,_, a,b,c,_ = stat_expr i in (opua+a,opba+b,sltsa+c)) (0,0,0) constraints in
-  {f with memory=new_memory;
-          varsindex=inc_varindex f "memory";
-          path=newdef::f.path;
-          nb_store=f.nb_store+1;
-          nb_op=f.nb_op+opu+opb;
-          nb_load=f.nb_load+slts;
-          global_counter=f.global_counter+1;
-          optim_map=newoptimap;
-          nb_constraint=f.nb_constraint+(List.length constraints);
-          hybrid_memory=new_hybrid_mem;
-  }
-(* --------------------------------- *)
+and bl_term_desc =
+  | BlTrue
+  | BlFalse
+  | BlFun  of bl_var * term list
+  | BlLet  of def list * bl_term
+  | BlUnop of bl_unop * bl_term
+  | BlBnop of bl_bnop * bl_term * bl_term
+  | BlComp of bl_comp * bl_term * bl_term
+  | BvComp of bv_comp * bv_term * bv_term
+  | AxComp of ax_comp * ax_term * ax_term
+  | BlIte  of bl_term * bl_term * bl_term
 
-(* ------- Variables functions ------ *)
-let add_symbolic_variable (f:formula) (name:string) ?(restrict_of=0) (low:int) (high:int): formula =
-  Logger.debug ~level:2 "Create var %s{%d,%d}" name low high;
-  let size = high-low+1 in
-  let new_var = if restrict_of != 0 then SmtBvVar(name, restrict_of) else SmtBvVar(name, size) in
-  let input = if restrict_of != 0 then SmtBv(name, restrict_of) else SmtBv(name, size) in
-  let new_input = SmtVarSet.add input f.inputs in  (* Create a new bitvector variable **declaration** as symbolic input *)
-  let low, high = if restrict_of != 0 then 0,(restrict_of-1) else low, high in
-  Logger.debug ~level:2 "Create var %s{%d,%d} := %s" name low high (smtbvexpr_to_string new_var);
-  let new_vars = SymbVar.add name (low, high, new_var) f.vars in (* Add it to the map *)
-  let new_vari = SymbVar.add name 0 f.varsindex in
-  {f with inputs=new_input; vars=new_vars; varsindex=new_vari; nb_input=f.nb_input+1}   (* Return the formula *)
+and bl_term = {
+  bl_term_hash : int;
+  bl_term_desc : bl_term_desc;
+}
 
+and bv_term_desc =
+  | BvCst  of Bitvector.t
+  | BvFun  of bv_var * term list
+  | BvLet  of def list * bv_term
+  | BvUnop of bv_unop * bv_term
+  | BvBnop of bv_bnop * bv_term * bv_term
+  | BvIte  of bl_term * bv_term * bv_term
+  | Select of int * ax_term * bv_term
 
-let apply_optimizations_bvexpr (f:formula) (f_expr:smt_bv_expr): smt_bv_expr =
-  let new_e = if f.optim_cst_prop then propagate_cst_bv f f_expr else f_expr in (* CONSTANTE PROPAGATION *)
-  let new_e = if f.optim_rebase then rebase_bvexpr f new_e else new_e in (* REBASE OPTIM *)
-  let new_e' = if f.optim_row then read_over_write_bv f new_e else new_e in (* READ over WRITE OPTIM *)
-  let new_e'' = if f.optim_rowplus then read_over_write_hybrid_bv f new_e' else new_e' in (* ROW Hyrbid OPTIM *)
-  let new_e = if f.optim_cst_prop then propagate_cst_bv f new_e'' else new_e'' in (* CONSTANTE PROPAGATION #2 *)
-  if not (bvexpr_equal new_e' new_e) then
-    print_simplifications (smtbvexpr_to_string ~inline:false) new_e' new_e'' new_e;
-  new_e
+and bv_term = {
+  bv_term_hash : int;
+  bv_term_desc : bv_term_desc;
+  bv_term_size : int;
+}
 
+and ax_term_desc =
+  | AxFun  of ax_var * term list
+  | AxLet  of def list * ax_term
+  | AxIte  of bl_term * ax_term * ax_term
+  | Store  of int * ax_term * bv_term * bv_term
 
+and ax_term = {
+  ax_term_hash : int;
+  ax_term_desc : ax_term_desc;
+  idx_term_size : int;
+  elt_term_size : int;
+}
 
-let add_constraint (f:formula) (constr:smt_expr): formula =
-  (* Add constraint in path only if it is symbolic(otherwise useless) *)
-  let new_constr = apply_optimizations_expr f constr in
-  let _, _, op_unary, op_binary, selects, _ = stat_expr new_constr in
-  if is_symbolic_expr new_constr && not (smtexpr_is_true new_constr)
-     && new_constr <> f.last_constraint
-  then
-    {f with path = Constraint new_constr :: f.path;
-            last_constraint = new_constr;
-            nb_constraint = f.nb_constraint + 1;
-            nb_op = f.nb_op + op_unary + op_binary;
-            nb_load = f.nb_load + selects}
-  else
-    f
-(* Note: The last_constraint optim does not work for constraints attached to variable definition
-   since we cannot know in advance if the variable definition will remain in the formula. *)
+and def_desc =
+  | BlDef  of bl_var * decl list * bl_term
+  | BvDef  of bv_var * decl list * bv_term
+  | AxDef  of ax_var * decl list * ax_term
 
-let change_variable (f:formula) (name:string) (fullsize:int) (low:int) (high:int) ?(constraints=[]) (e:smt_bv_expr): formula =
-  let new_name = name ^ (string_of_int (get_varindex f name)) in
-  let new_fullvar = SmtBvVar(new_name, fullsize) in
-  let exists = SymbVar.mem name f.vars in
-  let l_old, h_old, var_f =
-    if exists then SymbVar.find name f.vars
+and def = {
+  def_hash : int;
+  def_desc : def_desc;
+}
+
+and decl_desc =
+  | BlDecl of bl_var * sort list
+  | BvDecl of bv_var * sort list
+  | AxDecl of ax_var * sort list
+
+and decl = {
+  decl_hash : int;
+  decl_desc : decl_desc;
+}
+
+type entry_desc =
+  | Declare of decl
+  | Define  of def
+  | Assert  of bl_term
+  | Comment of string
+  | Echo of string
+  | Check_sat
+
+type entry = {
+  entry_hash : int;
+  entry_desc : entry_desc;
+}
+
+type formula = {
+  entries : entry Sequence.t;
+}
+
+(* Some utilities *)
+
+let equal_bl_term (bl1: bl_term) (bl2: bl_term) = bl1 = bl2
+let equal_bv_term (bv1: bv_term) (bv2: bv_term) = bv1 = bv2
+let equal_ax_term (ax1: ax_term) (ax2: ax_term) = ax1 = ax2
+
+let is_bl_cst bl =
+  match bl.bl_term_desc with
+  | BlTrue -> Some true
+  | BlFalse -> Some false
+  | BlFun (_,_) -> None
+  | BlLet (_,_) -> None
+  | BlUnop (_,_) -> None
+  | BlBnop (_,_,_) -> None
+  | BlComp (_,_,_) -> None
+  | BvComp (_,_,_) -> None
+  | AxComp (_,_,_) -> None
+  | BlIte (_,_,_) -> None
+
+let is_bv_cst bv =
+  match bv.bv_term_desc with
+  | BvCst bv -> Some bv
+  | BvFun (_,_) -> None
+  | BvLet (_,_) -> None
+  | BvUnop (_,_) -> None
+  | BvBnop (_,_,_) -> None
+  | BvIte (_,_,_) -> None
+  | Select (_,_,_) -> None
+
+(* Smart constructors *)
+
+let bl_var bl_name =
+  let bl_hash = Hashtbl.hash (bl_name) in
+  { bl_hash; bl_name }
+
+let bv_var bv_name bv_size =
+  let bv_hash = Hashtbl.hash (bv_name, bv_size) in
+  { bv_hash; bv_name; bv_size }
+
+let ax_var ax_name idx_size elt_size =
+  let ax_hash = Hashtbl.hash (ax_name, idx_size, elt_size) in
+  { ax_hash; ax_name; idx_size; elt_size }
+
+let bl_sort = BlSort
+let bv_sort i = BvSort i
+let ax_sort i j = AxSort (i,j)
+
+let list_hash (f: 'a -> int) (l: 'a list) =
+  Hashtbl.hash (List.map f l)
+
+let term_desc_hash = function
+  | BlTerm bl -> Hashtbl.hash bl.bl_term_hash
+  | BvTerm bv -> Hashtbl.hash bv.bv_term_hash
+  | AxTerm ax -> Hashtbl.hash ax.ax_term_hash
+
+let term term_desc =
+  let term_hash = term_desc_hash term_desc in
+  { term_hash; term_desc }
+
+let mk_bl_term bl = term (BlTerm bl)
+let mk_bv_term bv = term (BvTerm bv)
+let mk_ax_term ax = term (AxTerm ax)
+
+let mk_bv_cst bv =
+  let bv_term_hash = -(Hashtbl.hash bv) in
+  let bv_term_desc = BvCst bv in
+  let bv_term_size = Bitvector.size_of bv in
+  { bv_term_hash; bv_term_desc; bv_term_size }
+
+(* Boolean terms *)
+
+let mk_bl_true =
+  let bl_term_hash = -(Hashtbl.hash BlTrue) in
+  { bl_term_hash; bl_term_desc = BlTrue }
+
+let mk_bl_false =
+  let bl_term_hash = -(Hashtbl.hash BlFalse) in
+  { bl_term_hash; bl_term_desc = BlFalse }
+
+let rec bl_term bl_term_desc =
+  match bl_term_desc with
+  | BlTrue -> mk_bl_true
+  | BlFalse -> mk_bl_false
+
+  | BlFun (v,ls) ->
+    let bl_term_hash =
+      Hashtbl.hash (v.bl_hash, list_hash (fun tm -> tm.term_hash)  ls)
+    in { bl_term_hash; bl_term_desc }
+
+  | BlLet ([],bl) -> bl
+  | BlLet (bn,bl) ->
+    let bl_term_hash =
+      Hashtbl.hash (list_hash (fun df -> df.def_hash) bn, bl.bl_term_hash)
+    in { bl_term_hash; bl_term_desc }
+
+  | BlUnop (u,bl) ->
+    (match is_bl_cst bl with
+     | None ->
+       (match bl.bl_term_desc with
+        | BlUnop (BlNot, bl) -> bl
+        | BvComp (c, bv1, bv2) ->
+          let c =
+            match c with
+            | BvEqual -> BvDistinct
+            | BvDistinct -> BvEqual
+            | BvUlt -> BvUge
+            | BvUle -> BvUgt
+            | BvUgt -> BvUle
+            | BvUge -> BvUlt
+            | BvSlt -> BvSge
+            | BvSle -> BvSgt
+            | BvSgt -> BvSle
+            | BvSge -> BvSlt
+          in bl_term (BvComp (c, bv1, bv2))
+        | _ ->
+          let bl_term_hash = Hashtbl.hash (u, bl.bl_term_hash) in
+          { bl_term_hash; bl_term_desc })
+     | Some bl ->
+       match u with
+       | BlNot -> if bl then mk_bl_false else mk_bl_true)
+
+  | BlBnop (b,bl1,bl2) ->
+    (match is_bl_cst bl1, is_bl_cst bl2 with
+     | None, None ->
+       (* syntactic equality *)
+       if equal_bl_term bl1 bl2 then
+         match b with
+         | BlImply -> mk_bl_true
+         | BlAnd -> bl1
+         | BlOr -> bl1
+         | BlXor -> mk_bl_false
+       else
+         let bl_term_hash =
+           Hashtbl.hash (b, bl1.bl_term_hash, bl2.bl_term_hash)
+         in { bl_term_hash; bl_term_desc }
+
+     | Some bl1, None ->
+       (match b with
+        | BlImply -> if not bl1 then mk_bl_true else bl2
+        | BlAnd -> if bl1 then bl2 else mk_bl_false
+        | BlOr  -> if bl1 then mk_bl_true else bl2
+        | BlXor -> if bl1 then mk_bl_not bl2 else bl2)
+
+     | None, Some bl2 ->
+       (match b with
+        | BlImply -> if bl2 then mk_bl_true else bl1
+        | BlAnd -> if bl2 then bl1 else mk_bl_false
+        | BlOr  -> if bl2 then mk_bl_true else bl1
+        | BlXor -> if bl2 then mk_bl_not bl1 else bl1)
+
+     | Some bl1, Some bl2 ->
+       if (match b with
+           | BlImply -> not bl1 || bl2
+           | BlAnd -> bl1 && bl2
+           | BlOr  -> bl1 || bl2
+           | BlXor -> bl1 <> bl2)
+       then mk_bl_true else mk_bl_false)
+
+  | BlComp (c,bl1,bl2) ->
+    (match is_bl_cst bl1, is_bl_cst bl2 with
+     | None, None ->
+       (* syntactic equality *)
+       if equal_bl_term bl1 bl2 then
+         match c with
+         | BlEqual -> mk_bl_true
+         | BlDistinct -> mk_bl_false
+       else
+         let bl_term_hash =
+           Hashtbl.hash (c, bl1.bl_term_hash, bl2.bl_term_hash)
+         in { bl_term_hash; bl_term_desc }
+
+     | None, Some bl2 ->
+       (match c with
+        | BlEqual -> if bl2 then bl1 else mk_bl_not bl1
+        | BlDistinct -> if bl2 then mk_bl_not bl1 else bl1)
+
+     | Some bl1, None ->
+       (match c with
+        | BlEqual -> if bl1 then bl2 else mk_bl_not bl2
+        | BlDistinct -> if bl1 then mk_bl_not bl2 else bl2)
+
+     | Some bl1, Some bl2 ->
+       if (match c with
+           | BlEqual -> bl1 = bl2
+           | BlDistinct -> bl1 <> bl2)
+       then mk_bl_true else mk_bl_false)
+
+  | BvComp (c,bv1,bv2) ->
+    let bl_term_hash = Hashtbl.hash (c, bv1.bv_term_hash, bv2.bv_term_hash) in
+    (match is_bv_cst bv1, is_bv_cst bv2 with
+     | None, None ->
+       (* syntactic equality *)
+       if equal_bv_term bv1 bv2 then
+         match c with
+         | BvEqual | BvUle | BvUge | BvSle | BvSge -> mk_bl_true
+         | BvDistinct | BvUlt | BvUgt | BvSlt | BvSgt -> mk_bl_false
+       else { bl_term_hash; bl_term_desc }
+
+     | Some _, None ->
+       let c =
+         match c with
+         | BvEqual | BvDistinct -> c
+         | BvUlt -> BvUgt
+         | BvUle -> BvUge
+         | BvUgt -> BvUlt
+         | BvUge -> BvUle
+         | BvSlt -> BvSgt
+         | BvSle -> BvSge
+         | BvSgt -> BvSlt
+         | BvSge -> BvSle
+       in bl_term (BvComp (c, bv2, bv1))
+
+     | None, Some bv ->
+       (match c with
+        | BvEqual ->
+          (match bv1.bv_term_desc with
+           | BvUnop (BvNot, bv') ->
+             mk_bv_equal bv' (mk_bv_cst (Bitvector.lognot bv))
+           | BvBnop (BvCmp,bv1,bv2) ->
+             if Bitvector.is_one bv
+             then mk_bv_equal bv1 bv2
+             else mk_bv_distinct bv1 bv2
+           | BvBnop (BvAdd,bv1,bv2) ->
+             (match is_bv_cst bv2 with
+              | Some bv2 -> mk_bv_equal bv1 (mk_bv_cst (Bitvector.sub bv bv2))
+              | None -> { bl_term_hash; bl_term_desc })
+           | BvBnop (BvSub,bv1,bv2) ->
+             (match is_bv_cst bv1 with
+              | Some bv1 -> mk_bv_equal bv2 (mk_bv_cst (Bitvector.sub bv1 bv))
+              | None ->
+                match is_bv_cst bv2 with
+                | Some bv2 -> mk_bv_equal bv1 (mk_bv_cst (Bitvector.add bv bv2))
+                | None -> { bl_term_hash; bl_term_desc })
+           | BvIte (bl,bv1,bv2) ->
+             (match is_bv_cst bv1, is_bv_cst bv2 with
+              | None, None | None, Some _ | Some _, None -> { bl_term_hash; bl_term_desc }
+              | Some bv1, Some bv2 ->
+                if Bitvector.(equal bv bv1 && not (equal bv bv2)) then bl
+                else if Bitvector.(not (equal bv bv1) && equal bv bv2) then mk_bl_not bl
+                else { bl_term_hash; bl_term_desc })
+           | _ -> { bl_term_hash; bl_term_desc })
+
+        | BvDistinct ->
+          (match bv1.bv_term_desc with
+           | BvUnop (BvNot, bv') ->
+             mk_bv_distinct bv' (mk_bv_cst (Bitvector.lognot bv))
+           | BvBnop (BvCmp,bv1,bv2) ->
+             if Bitvector.is_zero bv
+             then mk_bv_equal bv1 bv2
+             else mk_bv_distinct bv1 bv2
+           | BvIte (bl,bv1,bv2) ->
+             (match is_bv_cst bv1, is_bv_cst bv2 with
+              | None, None | None, Some _ | Some _, None -> { bl_term_hash; bl_term_desc }
+              | Some bv1, Some bv2 ->
+                if Bitvector.(not (equal bv bv1) && equal bv bv2) then bl
+                else if Bitvector.(equal bv bv1 && not (equal bv bv2)) then mk_bl_not bl
+                else { bl_term_hash; bl_term_desc })
+           | _ -> { bl_term_hash; bl_term_desc })
+
+        | _ -> { bl_term_hash; bl_term_desc })
+
+     | Some bv1, Some bv2 ->
+       let open Bitvector in
+       if (match c with
+           | BvEqual -> equal bv1 bv2
+           | BvDistinct -> diff bv1 bv2
+           | BvUlt -> ult bv1 bv2
+           | BvUle -> ule bv1 bv2
+           | BvUgt -> ugt bv1 bv2
+           | BvUge -> uge bv1 bv2
+           | BvSlt -> slt bv1 bv2
+           | BvSle -> sle bv1 bv2
+           | BvSgt -> sgt bv1 bv2
+           | BvSge -> sge bv1 bv2)
+       then mk_bl_true else mk_bl_false)
+
+  | AxComp (c,ax1,ax2) ->
+    (* syntactic equality *)
+    if equal_ax_term ax1 ax2 then
+      match c with
+      | AxEqual -> mk_bl_true
+      | AxDistinct -> mk_bl_false
     else
-      (Logger.debug ~level:2 "%s[%d]{%d,%d} does not exist add it.." name fullsize low high;
-       0, fullsize-1, SmtBvVar(name, fullsize))
-  in
-  let _new_vars = SymbVar.add name (l_old, h_old, new_fullvar) f.vars in
-  let new_e =
-    if l_old = low && h_old = high then e
-    else if l_old <= low && high <= h_old then
-      let tmp_e = if high < h_old then SmtBvBinary(SmtBvConcat, SmtBvUnary(SmtBvExtract(high+1,h_old),var_f), e) else e in
-      let tmp_e = if low > l_old then SmtBvBinary(SmtBvConcat, tmp_e,  SmtBvUnary(SmtBvExtract(l_old,low-1),var_f)) else tmp_e in
-      tmp_e
-    else
-      (pp_vars f;
-       failwith (Printf.sprintf "disjoint variables %s store{%d,%d} old{%d,%d}\n" name low high l_old h_old))
-  in
-  let new_e = apply_optimizations_bvexpr f new_e in
-  match new_e with
-  | SmtBvCst(_)
-  | SmtBvVar(_) when f.optim_eq_prop ->
-    (* let _:unit = Printf.sprintf "Internalize %s:%s"  name (smtbvexpr_to_string new_e) |> Logger.debug 0 in *)
-    let new_vars = SymbVar.add name (l_old, h_old, new_e) f.vars in
-    let new_f = List.fold_left (fun acc i -> add_constraint acc i) f constraints in
-    {new_f with vars=new_vars}
-  | _ ->
-    let new_name = name ^ (string_of_int (get_varindex f name)) in
-    let new_fullvar = SmtBvVar(new_name, fullsize) in
-    let new_var = (l_old, h_old, new_fullvar) in
-    let newlet = VarDefinition(SmtBvExpr new_fullvar, SmtBvExpr new_e, constraints) in
-    let newoptimap = SymbVar.add new_name (f.global_counter,(SmtBvExpr new_fullvar, SmtBvExpr new_e, constraints)) f.optim_map in
-    let gc = f.global_counter + 1 in
-    let _, _, op_unary, op_binary, selects, _ = stat_bvexpr new_e in
-    let opu, opb, slts = List.fold_left (fun (opua,opba,sltsa) i -> let _,_, a,b,c,_ = stat_expr i in (opua+a,opba+b,sltsa+c)) (0,0,0) constraints in
-    let nbop = f.nb_op+op_unary+op_binary+opu+opb in
-    let nbcst = f.nb_constraint+(List.length constraints) in
-    let nbload = f.nb_load+selects+slts in
-    if not(exists) && fullsize != (high-low+1) then
-      let tmp = add_symbolic_variable f name ~restrict_of:fullsize low high in
-      { tmp with vars=SymbVar.add name new_var tmp.vars; varsindex=inc_varindex f name; path=newlet::f.path; nb_let=f.nb_let+1; nb_op=nbop; nb_load=nbload; optim_map=newoptimap; nb_constraint=nbcst; global_counter=gc}
-    else
-      {f with vars=SymbVar.add name new_var f.vars; varsindex=inc_varindex f name; path=newlet::f.path; nb_let=f.nb_let+1; nb_op=nbop; nb_load=nbload; optim_map=newoptimap; nb_constraint=nbcst;global_counter=gc}
+      let bl_term_hash =
+        Hashtbl.hash (c, ax1.ax_term_hash, ax2.ax_term_hash)
+      in { bl_term_hash; bl_term_desc }
 
+  | BlIte (bl,bl1,bl2) ->
+    (match is_bl_cst bl with
+     | Some bl -> if bl then bl1 else bl2
+     | None ->
+       if equal_bl_term bl1 bl2 then bl1
+       else
+         let bl_term_hash =
+           Hashtbl.hash (bl.bl_term_hash, bl1.bl_term_hash, bl2.bl_term_hash)
+         in { bl_term_hash; bl_term_desc })
 
+and mk_bl_not bl = bl_term (BlUnop (BlNot, bl))
 
-let new_tmpvar (f:formula) (size:int) : formula * smt_bv_expr =  (* Create a new variable name *)
-  let index = get_varindex f "tmp" in
-  let new_varid = "tmp" ^ (string_of_int index) in
-  let new_mem_var = SmtBvVar(new_varid, size) in
-  {f with varsindex=inc_varindex f "tmp"}, new_mem_var
+and mk_bv_equal bv1 bv2 = bl_term (BvComp (BvEqual, bv1, bv2))
 
-let new_variable_name (f:formula) (name:string): string * formula =
-  let new_name = name^(string_of_int (get_varindex f name)) in
-  new_name, {f with varsindex=inc_varindex f name}
+and mk_bv_distinct bv1 bv2 = bl_term (BvComp (BvDistinct, bv1, bv2))
 
-let add_symbolic_input (f:formula) (name:string) (size:int): formula =
-  {f with inputs=(SmtVarSet.add (SmtBv(name, size)) f.inputs); nb_input=f.nb_input+1}
+let mk_bl_fun fn lst     = bl_term (BlFun (fn,lst))
+let mk_bl_let bn bl      = bl_term (BlLet (bn, bl))
+let mk_bl_unop u bl      = bl_term (BlUnop (u,bl))
+let mk_bl_bnop b bl1 bl2 = bl_term (BlBnop (b,bl1,bl2))
+let mk_bl_comp c bl1 bl2 = bl_term (BlComp (c,bl1,bl2))
+let mk_bv_comp c bv1 bv2 = bl_term (BvComp (c,bv1,bv2))
+let mk_ax_comp c ax1 ax2 = bl_term (AxComp (c,ax1,ax2))
+let mk_bl_ite bl bl1 bl2 = bl_term (BlIte (bl,bl1,bl2))
 
+(* Bitvector terms *)
 
-let add_comment (f:formula) (comment:string): formula =
-  {f with path=(Comment(comment))::f.path}
+let bv_unop_size u bv =
+  (match u with
+   | BvNot | BvNeg -> bv.bv_term_size
+   | BvRepeat i ->
+     assert (i >= 1); i * bv.bv_term_size
+   | BvZeroExtend i | BvSignExtend i ->
+     assert (i >= 0); i + bv.bv_term_size
+   | BvRotateLeft i | BvRotateRight i ->
+     assert (i >= 0); bv.bv_term_size
+   | BvExtract i ->
+     i.Interval.hi - i.Interval.lo + 1)
 
+let bv_bnop_size b bv1 bv2 =
+  (match b with
+   | BvConcat -> bv1.bv_term_size + bv2.bv_term_size
+   | BvCmp -> assert (bv1.bv_term_size = bv2.bv_term_size); 1
+   | BvAnd | BvNand
+   | BvOr  | BvNor
+   | BvXor | BvXnor
+   | BvAdd | BvSub | BvMul
+   | BvUdiv | BvSdiv
+   | BvUrem | BvSrem | BvSmod
+   | BvShl  | BvAshr | BvLshr ->
+     assert (bv1.bv_term_size = bv2.bv_term_size); bv1.bv_term_size)
 
-let add_initial_state (f:formula) (init_st:int Basic_types.Addr64.Map.t): formula =
-  let newpath = (Comment("Initial state"))::f.path in
-  let newpath = Basic_types.Addr64.Map.fold (fun key value acc ->
-      (Constraint(SmtComp(SmtBvExpr(SmtABvSelect(f.memory,
-                                                 SmtBvCst(Bitvector.create (Bigint.big_int_of_int64 key) f.addr_size))),
-                          SmtBvExpr(SmtBvCst(Bitvector.create (Bigint.big_int_of_int value) 8)))))::acc
-    ) init_st newpath in
-  {f with path=newpath}
+let mk_bv_zero = mk_bv_cst Bitvector.zero
+let mk_bv_one  = mk_bv_cst Bitvector.one
 
+let mk_bv_zeros n = mk_bv_cst (Bitvector.zeros n)
+let mk_bv_ones  n = mk_bv_cst (Bitvector.ones n)
+let mk_bv_fill  n = mk_bv_cst (Bitvector.fill n)
 
-let get_var_or_create (f:formula) (name:string) (fullsize:int) (low:int) (high:int): formula * smt_bv_expr =
-  if SymbVar.mem name f.vars then
-    let (l, h, var_f) = SymbVar.find name f.vars in
-    match (l, h, var_f) with
-    | (l, h, varf) when (l = low && h = high) -> f, varf
-    | (l, h, varf) when (l <= low && high <= h) -> f, smtbv_extract varf low high
-    | _ ->failwith (Printf.sprintf "invalid variable size %s{%d,%d}" name low high)
-  else
-    let new_name,new_f = new_variable_name f name in
-    let new_name = if new_name = name^"0" then name else new_name in
-    let rest = if high-low+1 = fullsize then 0 else fullsize in
-    let new_f = add_symbolic_variable new_f new_name ~restrict_of:rest low high in
-    let new_var = if rest = 0 then SmtBvVar(new_name,(high-low+1)) else SmtBvUnary(SmtBvExtract(low,high),SmtBvVar(new_name, rest)) in
-    new_f, new_var
+let rec bv_term bv_term_desc =
+  match bv_term_desc with
+  | BvCst bv -> mk_bv_cst bv
 
+  | BvFun (v,ls) ->
+    let bv_term_size = v.bv_size in
+    let bv_term_hash =
+      Hashtbl.hash (v.bv_hash, list_hash (fun tm -> tm.term_hash) ls)
+    in { bv_term_hash; bv_term_desc; bv_term_size }
 
-(* ------------------ For formula building ---------------- *)
-let prune_useless_path_entries  _ ?(pruning=true) (path:path_t) (pred:smt_expr): path_t * String.Set.t * String.Set.t * SmtVarSet.t =
-  (* Warning: for this function to work path should iterated from end->begin.
-   * It is the case by default as items are pushed on the head) *)
-  let visitor = new get_var_visitor in
-  let flattener_visitor = new memory_flattener_visitor in
-  visitor#visit_smt_expr pred;                (* visit the predicate to get variable used *)
-  let vars_kept = ref String.Set.empty in
-  let add_vars exprs = List.iter (fun i -> visitor#visit_smt_expr i) exprs in
-  let add_name name = vars_kept := String.Set.add name !vars_kept in
-  let new_path =
-    List.fold_left (fun acc item ->
-        match item with
-        | Comment _ -> item::acc
-        | VarDefinition(let_var,let_expr,csts) ->
-          begin match let_var with
-            | SmtBvExpr(SmtBvVar(name,_))
-            | SmtABvArrayExpr(SmtABvArray(name,_,_)) ->
-              if String.Set.mem name visitor#get_vars || not(pruning) then
-                begin
-                  add_name name;
-                  let let_expr =
-                    if !Options.flatten_memory
-                    then flattener_visitor#visit_smt_expr let_expr
-                    else let_expr
-                  in
-                  let csts =
-                    if !Options.flatten_memory
-                    then List.map (fun i -> flattener_visitor#visit_smt_expr i) csts
-                    else csts
-                  in
-                  add_vars (let_expr::csts);
-                  VarDefinition(let_var, let_expr, csts)::acc
-                end
-              else acc
-            | _ -> acc
-          end
-        | Constraint cst ->
-          let cst =
-            if !Options.flatten_memory
-            then flattener_visitor#visit_smt_expr cst
-            else cst
-          in
-          add_vars [cst] ;
-          Constraint(cst)::acc
-      ) [] path
-  in
-  Logger.debug ~level:2
-    "Path:%d Vars:%d Kept:%d"
-    (List.length new_path) (String.Set.cardinal visitor#get_vars)
-    (String.Set.cardinal !vars_kept);
-  List.rev new_path, visitor#get_vars, !vars_kept, flattener_visitor#get_new_symbols ()
+  | BvLet ([],bv) -> bv
+  | BvLet (bn,bv) ->
+    let bv_term_size = bv.bv_term_size in
+    let bv_term_hash =
+      Hashtbl.hash (list_hash (fun df -> df.def_hash) bn, bv.bv_term_hash)
+    in { bv_term_hash; bv_term_desc; bv_term_size }
 
-let prune_useless_path_entries_prek (inputs:SmtVarSet.t) (ksteps:int) ?(pruning=true) (path:path_t) (pred:smt_expr): path_t * String.Set.t * String.Set.t * SmtVarSet.t =
-  let visitor = new get_var_visitor in
-  visitor#visit_smt_expr pred;               (* visit the predicate to get variable used *)
-  let vars_kept = ref String.Set.empty in
-  Logger.debug ~level:2
-    "Path length %d kept:%d"
-    (List.length path) (String.Set.cardinal visitor#get_vars);
-  let vars_defined = ref (to_stringmap inputs) in
-  (* Put directly all inputs so that they will be ignored in the no_pending_vars function *)
-  let counter = ref (0-1) in
-  let stop_backwarding = ref false in
-  let path_len = List.length path in
-  let add_vars exprs = List.iter (fun i -> visitor#visit_smt_expr i) exprs in
-  let add_name name = vars_kept := String.Set.add name !vars_kept in
-  let new_path = ref [] in
-  begin try
-      List.iter (fun item ->
-          if ksteps <> 0 && !counter >= ksteps then
-            begin
-              Logger.debug ~level:1 "limit reached.." ;
-              last_k := ksteps;
-              raise Exit_path_predicate
-            end
+  | BvUnop (u,bv) ->
+    (match is_bv_cst bv with
+     | None ->
+       let bv_term_size = bv_unop_size u bv in
+       let bv_term_hash = Hashtbl.hash (u, bv.bv_term_hash) in
+       (match u with
+        | BvNot ->
+          (match bv.bv_term_desc with
+           | BvUnop (BvNot, bv) -> bv
+           | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+
+        | BvNeg ->
+          (match bv.bv_term_desc with
+           | BvUnop (BvNeg, bv) -> bv
+           | BvBnop (BvAdd, bv1, bv2) ->
+             (match is_bv_cst bv1, is_bv_cst bv2 with
+              | Some bv1, None -> mk_bv_sub (mk_bv_cst (Bitvector.neg bv1)) bv2
+              | None, Some bv2 -> mk_bv_sub (mk_bv_cst (Bitvector.neg bv2)) bv1
+              | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+           | BvBnop (BvSub, bv1, bv2) -> mk_bv_sub bv2 bv1
+           | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+
+        | BvRepeat i ->
+          if i = 1 then bv
           else
-            match item with
-            | Comment _ -> counter := !counter + 1 ; new_path := item::!new_path
-            | VarDefinition(let_var,let_expr,csts) ->
-              begin match let_var with
-                | SmtBvExpr(SmtBvVar(name,_))
-                | SmtABvArrayExpr(SmtABvArray(name,_,_)) ->
-                  if String.Set.mem name visitor#get_vars || not(pruning) then
-                    begin
-                      add_name name;
-                      add_vars (let_expr::csts);
-                      vars_defined := String.Set.add name !vars_defined;
-                      new_path := item::!new_path
-                    end
-                  else
-                    ()
-                | _ -> ()
-              end
-            | Constraint cst -> add_vars [cst] ; new_path := item::!new_path
-        ) path;
-    with Exit_path_predicate -> ()
-  end;
-  if not(!stop_backwarding) then last_k := path_len;
-  Logger.debug ~level:2
-    "Path:%d Vars:%d Kept:%d"
-    (List.length !new_path)
-    (String.Set.cardinal visitor#get_vars) (String.Set.cardinal !vars_kept);
-  List.rev !new_path, visitor#get_vars, !vars_kept, SmtVarSet.empty
+            (match bv.bv_term_desc with
+             | BvUnop (BvRepeat j, bv) ->
+               bv_term (BvUnop (BvRepeat (i*j), bv))
+             |  _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+
+        | BvZeroExtend i ->
+          if i = 0 then bv
+          else
+            (match bv.bv_term_desc with
+             | BvUnop (BvZeroExtend j, bv) ->
+               bv_term (BvUnop (BvZeroExtend (i+j), bv))
+             |  _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+
+        | BvSignExtend i ->
+          if i = 0 then bv
+          else
+            (match bv.bv_term_desc with
+             | BvUnop (BvSignExtend j, bv) ->
+               bv_term (BvUnop (BvSignExtend (i+j), bv))
+             |  _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+
+        | BvRotateLeft i ->
+          if i = 0 then bv
+          else
+            (match bv.bv_term_desc with
+             | BvUnop (BvRotateLeft j, bv) ->
+               bv_term (BvUnop (BvRotateLeft ((i+j) mod bv_term_size), bv))
+             | BvUnop (BvRotateRight j, bv) ->
+               if i > j then bv_term (BvUnop (BvRotateLeft (i-j), bv))
+               else bv_term (BvUnop (BvRotateRight (j-i), bv))
+             | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+
+        | BvRotateRight i ->
+          if i = 0 then bv
+          else
+            (match bv.bv_term_desc with
+             | BvUnop (BvRotateLeft j, bv) ->
+               if i > j then bv_term (BvUnop (BvRotateRight (i-j), bv))
+               else bv_term (BvUnop (BvRotateLeft (j-i), bv))
+             | BvUnop (BvRotateRight j, bv) ->
+               bv_term (BvUnop (BvRotateRight ((i+j) mod bv_term_size), bv))
+             | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+
+        | BvExtract i ->
+          if i.Interval.lo = 0 && i.Interval.hi = bv.bv_term_size - 1 then bv
+          else
+            match bv.bv_term_desc with
+            | BvUnop (BvZeroExtend _, bv) ->
+              if i.Interval.hi < bv.bv_term_size
+              then bv_term (BvUnop (BvExtract i, bv))
+              else if i.Interval.lo >= bv.bv_term_size
+              then mk_bv_zeros bv_term_size
+              else { bv_term_hash; bv_term_desc; bv_term_size }
+            | BvUnop (BvSignExtend _, bv) ->
+              if i.Interval.hi < bv.bv_term_size
+              then bv_term (BvUnop (BvExtract i, bv))
+              else { bv_term_hash; bv_term_desc; bv_term_size }
+            | BvUnop (BvExtract j, bv) ->
+              let lo = i.Interval.lo + j.Interval.lo in
+              let hi = i.Interval.hi + j.Interval.lo in
+              bv_term (BvUnop (BvExtract Interval.{lo; hi}, bv))
+            | BvBnop (BvConcat, bv1, bv2) ->
+              if i.Interval.hi < bv2.bv_term_size
+              then bv_term (BvUnop (BvExtract i, bv2))
+              else if i.Interval.lo >= bv2.bv_term_size
+              then
+                let lo = i.Interval.lo - bv2.bv_term_size in
+                let hi = i.Interval.hi - bv2.bv_term_size in
+                bv_term (BvUnop (BvExtract Interval.{lo; hi}, bv1))
+              else { bv_term_hash; bv_term_desc; bv_term_size }
+            | Select (n, ax, bv) ->
+              let lo = i.Interval.lo / ax.elt_term_size in
+              let hi = i.Interval.hi / ax.elt_term_size in
+              if lo > 0 || hi < n-1 then
+                let b  = Bitvector.create (Bigint.big_int_of_int lo) bv.bv_term_size in
+                let bv = bv_term (Select (hi-lo+1, ax, mk_bv_add bv (mk_bv_cst b))) in
+                let hi = i.Interval.hi - lo * ax.elt_term_size in
+                let lo = i.Interval.lo - lo * ax.elt_term_size in
+                bv_term (BvUnop (BvExtract Interval.{lo; hi}, bv))
+              else { bv_term_hash; bv_term_desc; bv_term_size }
+            | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+
+     | Some bv ->
+       let open Bitvector in
+       mk_bv_cst
+         (match u with
+          | BvNot -> lognot bv
+          | BvNeg -> neg bv
+          | BvRepeat i -> concat (Basic_types.List.make i bv)
+          | BvZeroExtend i -> extend bv (size_of bv + i)
+          | BvSignExtend i -> extend_signed bv (size_of bv + i)
+          | BvRotateLeft i -> rotate_left bv i
+          | BvRotateRight i -> rotate_right bv i
+          | BvExtract i -> extract bv i))
+
+  | BvBnop (b,bv1,bv2) ->
+    let bv_term_size = bv_bnop_size b bv1 bv2 in
+    let bv_term_hash = Hashtbl.hash (b, bv1.bv_term_hash, bv2.bv_term_hash) in
+    (match is_bv_cst bv1, is_bv_cst bv2 with
+     | None, None ->
+       (match b with
+        | BvAnd | BvOr ->
+          if equal_bv_term bv1 bv2 then bv1
+          else { bv_term_hash; bv_term_desc; bv_term_size }
+        | BvNand | BvNor ->
+          if equal_bv_term bv1 bv2 then bv_term (BvUnop (BvNot, bv1))
+          else { bv_term_hash; bv_term_desc; bv_term_size }
+        | BvXor ->
+          if equal_bv_term bv1 bv2 then mk_bv_zeros bv_term_size
+          else { bv_term_hash; bv_term_desc; bv_term_size }
+        | BvXnor ->
+          if equal_bv_term bv1 bv2 then mk_bv_fill bv_term_size
+          else { bv_term_hash; bv_term_desc; bv_term_size }
+        | BvCmp ->
+          if equal_bv_term bv1 bv2 then mk_bv_one
+          else { bv_term_hash; bv_term_desc; bv_term_size }
+
+        | BvAdd ->
+          (match bv1.bv_term_desc, bv2.bv_term_desc with
+           | _, BvUnop (BvNeg, bv2) -> mk_bv_sub bv1 bv2
+           | BvUnop (BvNeg, bv1), _ -> mk_bv_sub bv2 bv1
+
+           | BvBnop (BvAdd, bv11, bv12), BvBnop (BvAdd, bv21, bv22) -> (* (w+x) + (y+z) *)
+             (match is_bv_cst bv11, is_bv_cst bv12,
+                    is_bv_cst bv21, is_bv_cst bv22 with
+             | Some bv11, None, Some bv21, None ->
+               mk_bv_add (mk_bv_add bv12 bv22) (mk_bv_cst (Bitvector.add bv11 bv21))
+             | Some bv11, None, None, Some bv22 ->
+               mk_bv_add (mk_bv_add bv12 bv21) (mk_bv_cst (Bitvector.add bv11 bv22))
+             | None, Some bv12, Some bv21, None ->
+               mk_bv_add (mk_bv_add bv11 bv22) (mk_bv_cst (Bitvector.add bv12 bv21))
+             | None, Some bv12, None, Some bv22 ->
+               mk_bv_add (mk_bv_add bv11 bv21) (mk_bv_cst (Bitvector.add bv12 bv22))
+             | Some _, None, None, None ->
+               mk_bv_add (mk_bv_add bv12 bv2) bv11
+             | None, Some _, None, None ->
+               mk_bv_add (mk_bv_add bv11 bv2) bv12
+             | None, None, Some _, None ->
+               mk_bv_add (mk_bv_add bv1 bv22) bv21
+             | None, None, None, Some _ ->
+               mk_bv_add (mk_bv_add bv1 bv21) bv22
+             | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+
+           | BvBnop (BvSub, bv11, bv12), BvBnop (BvSub, bv21, bv22) -> (* (w-x) + (y-z) *)
+             mk_bv_sub (mk_bv_add bv11 bv21) (mk_bv_add bv12 bv22)
+
+           | BvBnop (BvAdd, bv11, bv12), BvBnop (BvSub, bv21, bv22) -> (* (w+x) + (y-z) *)
+             (match is_bv_cst bv11, is_bv_cst bv12,
+                    is_bv_cst bv21, is_bv_cst bv22 with
+             | Some bv11, None, Some bv21, None ->
+               mk_bv_add (mk_bv_sub bv12 bv22) (mk_bv_cst (Bitvector.add bv11 bv21))
+             | Some bv11, None, None, Some bv22 ->
+               mk_bv_add (mk_bv_add bv12 bv21) (mk_bv_cst (Bitvector.sub bv11 bv22))
+             | None, Some bv12, Some bv21, None ->
+               mk_bv_add (mk_bv_sub bv11 bv22) (mk_bv_cst (Bitvector.add bv12 bv21))
+             | None, Some bv12, None, Some bv22 ->
+               mk_bv_add (mk_bv_add bv11 bv21) (mk_bv_cst (Bitvector.sub bv12 bv22))
+             | Some _, None, None, None ->
+               mk_bv_add (mk_bv_add bv12 bv2) bv11
+             | None, Some _, None, None ->
+               mk_bv_add (mk_bv_add bv11 bv2) bv12
+             | None, None, Some _, None ->
+               mk_bv_add (mk_bv_sub bv1 bv22) bv21
+             | None, None, None, Some _ ->
+               mk_bv_sub (mk_bv_add bv1 bv21) bv22
+             | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+
+           | BvBnop (BvSub, _, _), BvBnop (BvAdd, _, _) -> (* (w-x) + (y+z) *)
+             mk_bv_add bv2 bv1
+
+           | _, _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+
+        | BvSub ->
+          if equal_bv_term bv1 bv2 then mk_bv_zeros bv_term_size
+          else
+            (match bv1.bv_term_desc, bv2.bv_term_desc with
+             | _, BvUnop (BvNeg, bv2) -> mk_bv_add bv1 bv2
+
+             | _, BvBnop (BvSub, bv21, bv22) -> (* x - (y-z) *)
+               mk_bv_add bv1 (mk_bv_sub bv22 bv21)
+
+             | BvBnop (BvAdd, bv11, bv12), BvBnop (BvAdd, bv21, bv22) -> (* (w+x) - (y+z) *)
+               (match is_bv_cst bv11, is_bv_cst bv12,
+                      is_bv_cst bv21, is_bv_cst bv22 with
+               | Some bv11, None, Some bv21, None ->
+                 mk_bv_add (mk_bv_sub bv12 bv22) (mk_bv_cst (Bitvector.sub bv11 bv21))
+               | Some bv11, None, None, Some bv22 ->
+                 mk_bv_add (mk_bv_sub bv21 bv12) (mk_bv_cst (Bitvector.sub bv11 bv22))
+               | None, Some bv12, Some bv21, None ->
+                 mk_bv_add (mk_bv_sub bv11 bv22) (mk_bv_cst (Bitvector.sub bv21 bv12))
+               | None, Some bv12, None, Some bv22 ->
+                 mk_bv_add (mk_bv_sub bv11 bv21) (mk_bv_cst (Bitvector.sub bv12 bv22))
+               | Some _, None, None, None ->
+                 mk_bv_add (mk_bv_sub bv12 bv2) bv11
+               | None, Some _, None, None ->
+                 mk_bv_add (mk_bv_sub bv11 bv2) bv12
+               | None, None, Some _, None ->
+                 mk_bv_sub (mk_bv_sub bv1 bv22) bv21
+               | None, None, None, Some _ ->
+                 mk_bv_sub (mk_bv_sub bv1 bv21) bv22
+               | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+
+             | BvBnop (BvSub, bv11, bv12), BvBnop (BvAdd, bv21, bv22) ->
+               (match is_bv_cst bv11, is_bv_cst bv12,
+                      is_bv_cst bv21, is_bv_cst bv22 with
+               | Some bv11, None, Some bv21, None ->
+                 mk_bv_sub (mk_bv_cst (Bitvector.sub bv11 bv21)) (mk_bv_add bv12 bv22)
+               | Some bv11, None, None, Some bv22 ->
+                 mk_bv_sub (mk_bv_cst (Bitvector.sub bv11 bv22)) (mk_bv_add bv12 bv21)
+               | None, Some bv12, Some bv21, None ->
+                 mk_bv_sub (mk_bv_sub bv11 bv22) (mk_bv_cst (Bitvector.add bv12 bv21))
+               | None, Some bv12, None, Some bv22 ->
+                 mk_bv_sub (mk_bv_sub bv11 bv21) (mk_bv_cst (Bitvector.add bv12 bv22))
+               | Some _, None, None, None ->
+                 mk_bv_sub bv11 (mk_bv_add bv2 bv12)
+               | None, Some _, None, None ->
+                 mk_bv_sub (mk_bv_sub bv11 bv2) bv12
+               | None, None, Some _, None ->
+                 mk_bv_sub (mk_bv_sub bv1 bv22) bv21
+               | None, None, None, Some _ ->
+                 mk_bv_sub (mk_bv_sub bv1 bv21) bv22
+               | _, _, _, _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+
+             | BvUnop (BvNeg, bv), BvBnop (BvAdd, bv1, bv2) -> (* -x - (y+z) *)
+               (match is_bv_cst bv1, is_bv_cst bv2 with
+                | Some bv1, None -> mk_bv_sub (mk_bv_cst (Bitvector.neg bv1)) (mk_bv_add bv bv2)
+                | None, Some bv2 -> mk_bv_sub (mk_bv_cst (Bitvector.neg bv2)) (mk_bv_add bv bv1)
+                | _, _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+
+             | _, _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+
+        | BvConcat ->
+          (match bv1.bv_term_desc, bv2.bv_term_desc with
+           | BvUnop (BvExtract i, b1), BvUnop (BvExtract j, b2) ->
+             if i.Interval.lo = j.Interval.hi + 1
+             then
+               if equal_bv_term b1 b2
+               then bv_term (BvUnop (BvExtract Interval.{lo = j.lo; hi = i.hi}, b1))
+               else
+                 match b1.bv_term_desc with
+                 | BvUnop (BvZeroExtend _, bv)
+                 | BvUnop (BvSignExtend _, bv) ->
+                   if j.Interval.hi < bv.bv_term_size && equal_bv_term bv bv2
+                   then bv_term (BvUnop (BvExtract Interval.{lo = j.lo; hi = i.hi}, b1))
+                   else { bv_term_hash; bv_term_desc; bv_term_size }
+                 | _ -> { bv_term_hash; bv_term_desc; bv_term_size }
+             else { bv_term_hash; bv_term_desc; bv_term_size }
+           | _, _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+
+        | BvMul  | BvUdiv | BvSdiv
+        | BvUrem | BvSrem | BvSmod
+        | BvShl  | BvAshr | BvLshr ->
+          { bv_term_hash; bv_term_desc; bv_term_size })
+
+     | None, Some bv ->
+       (match b with
+        | BvAnd ->
+          if Bitvector.is_zeros bv then bv2
+          else if Bitvector.is_fill bv then bv1
+          else { bv_term_hash; bv_term_desc; bv_term_size }
+        | BvNand ->
+          if Bitvector.is_zeros bv then mk_bv_fill bv_term_size
+          else if Bitvector.is_fill bv then bv_term (BvUnop (BvNot, bv1))
+          else { bv_term_hash; bv_term_desc; bv_term_size }
+        | BvOr ->
+          if Bitvector.is_fill bv then bv2
+          else if Bitvector.is_zeros bv then bv1
+          else { bv_term_hash; bv_term_desc; bv_term_size }
+        | BvNor ->
+          if Bitvector.is_fill bv then mk_bv_zeros bv_term_size
+          else if Bitvector.is_zeros bv then bv_term (BvUnop (BvNot, bv1))
+          else { bv_term_hash; bv_term_desc; bv_term_size }
+        | BvXor ->
+          if Bitvector.is_zeros bv then bv1
+          else if Bitvector.is_fill bv then bv_term (BvUnop (BvNot, bv1))
+          else { bv_term_hash; bv_term_desc; bv_term_size }
+        | BvXnor ->
+          if Bitvector.is_zeros bv then bv_term (BvUnop (BvNot, bv1))
+          else if Bitvector.is_fill bv then bv1
+          else { bv_term_hash; bv_term_desc; bv_term_size }
+
+        | BvAdd ->
+          if Bitvector.is_zeros bv then bv1
+          else if Bitvector.is_neg bv then
+            mk_bv_sub bv1 (mk_bv_cst (Bitvector.neg bv))
+          else
+            (match bv1.bv_term_desc with
+             | BvUnop (BvNeg, bv1) -> mk_bv_sub bv2 bv1
+             | BvBnop (BvAdd, bv1, bv2) ->
+               (match is_bv_cst bv1, is_bv_cst bv2 with
+                | Some bv1, None -> mk_bv_add bv2 (mk_bv_cst (Bitvector.add bv bv1))
+                | None, Some bv2 -> mk_bv_add bv1 (mk_bv_cst (Bitvector.add bv bv2))
+                | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+             | BvBnop (BvSub, bv1, bv2) ->
+               (match is_bv_cst bv1, is_bv_cst bv2 with
+                | Some bv1, None -> mk_bv_sub (mk_bv_cst (Bitvector.add bv bv1)) bv2
+                | None, Some bv2 -> mk_bv_add bv1 (mk_bv_cst (Bitvector.sub bv bv2))
+                | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+             | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+
+        | BvSub ->
+          if Bitvector.is_zeros bv then bv1
+          else if Bitvector.is_neg bv then
+            mk_bv_add bv1 (mk_bv_cst (Bitvector.neg bv))
+          else
+            (match bv1.bv_term_desc with
+             | BvUnop (BvNeg, bv1) -> mk_bv_sub (mk_bv_cst (Bitvector.neg bv)) bv1
+             | BvBnop (BvAdd, bv1, bv2) ->
+               (match is_bv_cst bv1, is_bv_cst bv2 with
+                | Some bv1, None -> mk_bv_add bv2 (mk_bv_cst (Bitvector.sub bv1 bv))
+                | None, Some bv2 -> mk_bv_add bv1 (mk_bv_cst (Bitvector.sub bv2 bv))
+                | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+             | BvBnop (BvSub, bv1, bv2) -> mk_bv_sub bv1 (mk_bv_add bv2 (mk_bv_cst bv))
+             | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+
+        | BvMul ->
+          if Bitvector.is_zeros bv then bv2
+          else if Bitvector.is_ones bv then bv1
+          else { bv_term_hash; bv_term_desc; bv_term_size }
+
+        | BvShl  | BvAshr | BvLshr ->
+          if Bitvector.is_zeros bv then bv1
+          else { bv_term_hash; bv_term_desc; bv_term_size }
+
+        | BvUdiv | BvSdiv ->
+          if Bitvector.is_ones bv then bv1
+          else { bv_term_hash; bv_term_desc; bv_term_size }
+
+        | BvConcat | BvCmp
+        | BvUrem | BvSrem | BvSmod -> { bv_term_hash; bv_term_desc; bv_term_size })
 
 
-let prune_useless_inputs (inputs:SmtVarSet.t) (vars:String.Set.t) (pushed:String.Set.t): SmtVarSet.t =
-  SmtVarSet.filter (fun i ->
-      match i with
-      | SmtBv(name, _)
-      | SmtABv(name, _, _) -> String.Set.mem name vars && not(String.Set.mem name pushed)
-    ) inputs
+     | Some bv, None ->
+       (match b with
+        | BvAnd | BvNand
+        | BvOr  | BvNor
+        | BvXor | BvXnor
+        | BvAdd | BvMul
+        | BvCmp -> bv_term (BvBnop (b, bv2, bv1))
+        | BvSub ->
+          if Bitvector.is_zeros bv then mk_bv_neg bv2
+          else
+            (match bv2.bv_term_desc with
+             | BvUnop (BvNeg, bv2) -> mk_bv_add bv1 bv2
+             | BvBnop (BvAdd, bv1, bv2) ->
+               (match is_bv_cst bv1, is_bv_cst bv2 with
+                | Some bv1, None -> mk_bv_sub (mk_bv_cst (Bitvector.sub bv bv1)) bv2
+                | None, Some bv2 -> mk_bv_sub (mk_bv_cst (Bitvector.sub bv bv2)) bv1
+                | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+             | BvBnop (BvSub, bv1, bv2) -> mk_bv_sub (mk_bv_add bv2 (mk_bv_cst bv)) bv1
+             | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+        | BvUdiv | BvSdiv ->
+          if Bitvector.is_zeros bv then mk_bv_zeros bv_term_size
+          else { bv_term_hash; bv_term_desc; bv_term_size }
+        | BvConcat
+        | BvUrem | BvSrem | BvSmod
+        | BvShl  | BvAshr | BvLshr -> { bv_term_hash; bv_term_desc; bv_term_size })
 
-let get_missing_path_entries (f:formula) (vars:String.Set.t) (kept:String.Set.t): path_t * String.Set.t * input_t =
-  let inputs = to_stringmap f.inputs in
-  let missing_vars = String.Set.diff vars (String.Set.union kept (String.Set.union f.pushed_variable inputs)) in (* Vars to backtrack in optim_map *)
-  let visitor = new get_var_visitor in
-  let rec recurse allvars lets current_vars k =
-    let lli = String.Set.fold (fun i acc -> if SymbVar.mem i f.optim_map then (SymbVar.find i f.optim_map)::acc else acc ) current_vars [] in (* get all lets *)
-    let newvars =
-      List.fold_left (fun acc (_, (_, e, csts)) ->
-          (* Visit all lets to gather all the vars into them *)
-          visitor#visit_smt_expr e;
-          List.iter (fun c -> visitor#visit_smt_expr c) csts;
-          let newvars = visitor#get_vars in
-          visitor#clear ();
-          String.Set.union acc newvars
-        ) String.Set.empty lli
+     | Some bv1, Some bv2 ->
+       let open Bigint in
+       let open Bitvector in
+       mk_bv_cst
+         (match b with
+          | BvConcat -> append bv1 bv2
+          | BvAnd -> logand bv1 bv2
+          | BvNand-> lognot (logand bv1 bv2)
+          | BvOr  -> logor bv1 bv2
+          | BvNor -> lognot (logor bv1 bv2)
+          | BvXor -> logxor bv1 bv2
+          | BvXnor-> lognot (logxor bv1 bv2)
+          | BvCmp -> if equal bv1 bv2 then one else zero
+          | BvAdd -> add bv1 bv2
+          | BvSub -> sub bv1 bv2
+          | BvMul -> mul bv1 bv2
+          | BvUdiv -> udiv bv1 bv2
+          | BvSdiv -> sdiv bv1 bv2
+          | BvUrem -> urem bv1 bv2
+          | BvSrem -> srem bv1 bv2
+          | BvSmod -> smod bv1 bv2
+          | BvShl  -> shift_left bv1 (int_of_big_int (value_of bv2))
+          | BvAshr -> shift_right_signed bv1 (int_of_big_int (value_of bv2))
+          | BvLshr -> shift_right bv1 (int_of_big_int (value_of bv2))))
+
+  | BvIte (bl,bv1,bv2) ->
+    assert (bv1.bv_term_size = bv2.bv_term_size);
+    (match is_bl_cst bl with
+     | Some bl -> if bl then bv1 else bv2
+     | None ->
+       if equal_bv_term bv1 bv2 then bv1
+       else
+         let bv_term_hash = Hashtbl.hash (bl, bv1.bv_term_hash, bv2.bv_term_hash) in
+         let bv_term_size = bv1.bv_term_size in
+         match is_bv_cst bv1, is_bv_cst bv2 with
+         | None, None | None, Some _ | Some _, None -> { bv_term_hash; bv_term_desc; bv_term_size }
+         | Some b1, Some b2 ->
+           if Bitvector.is_zero b1 && Bitvector.is_one b2
+           then bv_term (BvIte (mk_bl_not bl, bv1, bv2))
+           else if Bitvector.is_one b1 && Bitvector.is_zero b2
+           then
+             match bl.bl_term_desc with
+             | BvComp (BvEqual, bv1, bv2) ->
+               bv_term (BvBnop (BvCmp, bv1, bv2))
+             | BvComp (BvDistinct, bv1, bv2) ->
+               bv_term (BvUnop (BvNot, bv_term (BvBnop (BvCmp, bv1, bv2))))
+             | _ -> { bv_term_hash; bv_term_desc; bv_term_size }
+           else { bv_term_hash; bv_term_desc; bv_term_size })
+
+  | Select (n,ax,bv) ->
+    assert (n > 0);
+    assert (ax.idx_term_size = bv.bv_term_size);
+    let bv_term_hash = Hashtbl.hash (n, ax.ax_term_hash, bv.bv_term_hash) in
+    let bv_term_size = n * ax.elt_term_size in
+    { bv_term_hash; bv_term_desc; bv_term_size }
+
+and mk_bv_neg bv = bv_term (BvUnop (BvNeg, bv))
+
+and mk_bv_add bv1 bv2 = bv_term (BvBnop (BvAdd, bv1, bv2))
+
+and mk_bv_sub bv1 bv2 = bv_term (BvBnop (BvSub, bv1, bv2))
+
+let mk_bv_fun fn lst     = bv_term (BvFun (fn,lst))
+let mk_bv_let bn bv      = bv_term (BvLet (bn, bv))
+let mk_bv_unop u bv      = bv_term (BvUnop (u,bv))
+let mk_bv_bnop b bv1 bv2 = bv_term (BvBnop (b,bv1,bv2))
+let mk_bv_ite bl bv1 bv2 = bv_term (BvIte (bl,bv1,bv2))
+let mk_select n ax bv    = bv_term (Select (n,ax,bv))
+
+(* Array terms *)
+
+let ax_term ax_term_desc =
+  match ax_term_desc with
+  | AxFun (v,l) ->
+    let ax_term_hash =
+      Hashtbl.hash (v.ax_hash, list_hash (fun tm -> tm.term_hash) l)
     in
-    (* vars that also need to be backtracked *)
-    let remaining =
-      String.Set.diff newvars
-        (String.Set.union f.pushed_variable
-           (String.Set.union current_vars
-              (String.Set.union allvars inputs))) in
-    (* Keep all vars so that we can filter inputs later on *)
-    let all = String.Set.union allvars
-        (String.Set.union current_vars newvars) in
-    (* Return if there is no any other vars to backtrack *)
-    let lets = lli @ lets in
-    if String.Set.is_empty remaining then all, lets
-    else begin
-      Logger.debug ~level:2
-        "recurse %d [%s]"
-        k (String.Set.fold (fun acc i -> acc^" "^i) remaining "");
-      recurse all lets remaining (k + 1)
-    end
-  in
-  let allvars, lets = recurse vars [] missing_vars 0 in
-  let final_lets = List.map (fun (_, (a, b, c)) -> VarDefinition(a,b,c)) (List.sort (fun (i1,_) (i2,_) -> compare i1 i2) lets) in
-  final_lets, allvars, f.inputs
+    let idx_term_size = v.idx_size in
+    let elt_term_size = v.elt_size in
+    { ax_term_hash; ax_term_desc; idx_term_size; elt_term_size }
 
-let get_missing_path_entries_prek (f:formula) (vars:String.Set.t) (kept:String.Set.t): path_t * String.Set.t * input_t =
-  let inputs = ref f.inputs in
-  let missing_vars = String.Set.diff vars (String.Set.union kept (String.Set.union f.pushed_variable (to_stringmap f.inputs))) in
-  Logger.debug ~level:1
-    "prek missing path entries: card kept:%d card missing:%d"
-    (String.Set.cardinal kept) (String.Set.cardinal missing_vars);
-  (* let vars_seen = ref String.Map.empty in *)
-  let additional_vars = ref String.Set.empty in
-  let lets = String.Set.fold (fun e acc ->
-      let name = e in
-      additional_vars := String.Set.add name !additional_vars;
-      if SmtVarSet.mem (SmtBv(name,0)) !inputs || SmtVarSet.mem (SmtABv(name,0,0)) !inputs then
-        acc (* Does nothing if the var is already in inputs *)
-      else begin
-        Logger.warning ~level:2 "%s not found in inputs so add it [in optim_map:%b]" e (SymbVar.mem e f.optim_map);
-        try
-          match SymbVar.find e f.optim_map with
-          | (_, (SmtBvExpr(SmtBvVar(_, sz)),_,_)) ->
-            inputs := SmtVarSet.add (SmtBv(name,sz)) !inputs;
-            acc(* VarDefinition(SmtBvExpr(SmtBvVar(e,sz)), SmtBvExpr(SmtBvVar(name, sz)), [])::acc *)
-          | (_,(SmtABvArrayExpr(SmtABvArray(_, szi, sz)),_,_)) ->
-            additional_vars := String.Set.add (base_varname name) !additional_vars;
-            inputs := SmtVarSet.add (SmtABv(base_varname name,szi,sz)) !inputs;
-            VarDefinition(SmtABvArrayExpr(SmtABvArray(e,szi, sz)), SmtABvArrayExpr(SmtABvArray(base_varname name, szi, sz)), [])::acc
-          (* Link all the memoriy names on the same memory *)
-        | _ -> Logger.error "%s definitely not found..." e; acc
-        with Not_found ->
-          let _,_,sz = X86Util.reg_to_extract e in
-          inputs := SmtVarSet.add (SmtBv(name,sz+1)) !inputs; acc(* Not so sure it should be ignored *)
-      end
-    ) missing_vars [] in
-  lets, String.Set.union vars !additional_vars, !inputs
+  | AxLet ([],ax) -> ax
+  | AxLet (bn,ax) ->
+    let ax_term_hash =
+      Hashtbl.hash (list_hash (fun df -> df.def_hash) bn, ax.ax_term_hash)
+    in
+    let idx_term_size = ax.idx_term_size in
+    let elt_term_size = ax.elt_term_size in
+    { ax_term_hash; ax_term_desc; idx_term_size; elt_term_size }
 
-let append_to_file (file:string) (content:string): unit =
-  let fd = open_out_gen [Open_append;Open_wronly;Open_text] 644 file in
-  output_string fd content;
-  close_out fd
+  | AxIte (bl,ax1,ax2) ->
+    assert (ax1.idx_term_size = ax2.idx_term_size);
+    assert (ax1.elt_term_size = ax2.elt_term_size);
+    (match is_bl_cst bl with
+     | Some bl -> if bl then ax1 else ax2
+     | None ->
+       if equal_ax_term ax1 ax2 then ax1
+       else
+         let ax_term_hash = Hashtbl.hash (bl, ax1.ax_term_hash, ax2.ax_term_hash) in
+         let idx_term_size = ax1.idx_term_size in
+         let elt_term_size = ax1.elt_term_size in
+         { ax_term_hash; ax_term_desc; idx_term_size; elt_term_size })
 
-let build_formula (f:formula) (predicate:smt_expr) ?(ksteps=0) ?(forward=true) ?(pruning=true) ?(push=true) ?(dump="") (chan:out_channel) (solver:solver_t): formula * Smtlib2.smt_result option =     (* Generate the file of the formula *)
-  let write_string s =
-    Printf.fprintf chan "%s\n" s;
-    if dump <> "" then append_to_file dump (s^"\n")
-  in
-  last_k := ksteps;
-  let predicate = apply_optimizations_expr f predicate in
-  let pruning_function = if forward then prune_useless_path_entries else (prune_useless_path_entries_prek f.inputs) in
-  let filtered_path, vars, vars_kept,inputs_additional = pruning_function ~pruning ksteps f.path predicate in (* Prune lets, and get all variables encountered with vars of lets kept *)
-  let missing_path_f = if forward then get_missing_path_entries else get_missing_path_entries_prek in
-  let missing_lets, vars, new_inputs = missing_path_f f vars vars_kept in (* Get a set of the missing variable *)
-  let inputs = prune_useless_inputs new_inputs vars f.pushed_variable in
-  let qed = Qed.create_qed_checker f in
-  Qed.qed_check_entry qed (Constraint(predicate));
-  List.iter (fun i -> Qed.qed_check_entry qed i) filtered_path;
-  let filtered_path = missing_lets@(List.rev filtered_path) in
-  let nblets, nbcsts, vars_kept = List.fold_left
-      (fun (num,numc,vars) i ->
-         match i with
-         | Comment _ -> (num, numc, vars)
-         | Constraint _ -> (num, numc+1, vars)
-         | VarDefinition (i,_,l) ->
-           begin match i with
-             | SmtBvExpr(SmtBvVar(name,_))
-             | SmtABvArrayExpr(SmtABvArray(name,_,_)) -> (1+num, numc+(List.length l), String.Set.add name vars)
-             | _ -> (1+num, numc+(List.length l), vars)
-           end)
-      (0, 0, String.Set.empty) filtered_path
-  in
-  let inputs = if !Options.flatten_memory then SmtVarSet.union inputs inputs_additional else inputs in
-  write_string (Printf.sprintf "%s\n" (smtvarset_to_string inputs)); (* Write all symbolic input (free variables) *)
-  let inline = is_boolector solver in
-  let visitor = new statistics_visitor in
-  let onetime_comment = ref "" in
-  let write_com_if_exist () = if not(!onetime_comment = "") then (write_string (Printf.sprintf "\n; ------[ %s ]------" !onetime_comment); onetime_comment := "") in
-  let rec aux lets =
-    match lets with
-    | [] -> ()
-    | (Comment s)::tl ->
-      onetime_comment := s;
-      aux tl
-    | (Constraint cst)::tl ->
-      write_com_if_exist ();
-      visitor#visit_smt_expr cst;
-      write_string (Printf.sprintf "(assert %s)" (smtexpr_to_string ~inline cst));
-      aux tl
-    | (VarDefinition(var, exp, csts))::tl ->
-      write_com_if_exist ();
-      visitor#visit_smt_expr exp;
-      List.iter (fun i -> visitor#visit_smt_expr i) csts;
-      let var_s = smtexpr_to_string ~inline var in
-      let exp_s = smtexpr_to_string ~inline exp in
-      begin match var with
-        | SmtBvExpr(SmtBvVar(_, sz)) ->
-          write_string (Printf.sprintf "(define-fun %s () (_ BitVec %d) %s)" var_s sz exp_s);
-        | SmtABvArrayExpr(SmtABvArray(_, a, c)) ->
-          write_string (Printf.sprintf "(define-fun %s () (Array (_ BitVec %d) (_ BitVec %d)) %s)" var_s a c exp_s);
-        | _ -> failwith "impossible"
-      end;
-      List.iter (fun i -> write_string (Printf.sprintf "(assert %s)" (smtexpr_to_string ~inline i))) csts;
-      aux tl
-  in
-  aux filtered_path;
-  if push then write_string "\n(push 1)\n";
-  write_string (Printf.sprintf "(assert %s)\n" (smtexpr_to_string ~inline predicate));
-  let _, _, uop, bop, ld, st = visitor#get_stats in
-  let pushed = String.Set.union f.pushed_variable (String.Set.union vars_kept (to_stringmap inputs)) in
-  let newinput = if pruning then f.inputs else SmtVarSet.empty in
-  let nbin = SmtVarSet.cardinal inputs in
-  let new_f =
-    {f with pushed_variable=pushed; path=[]; inputs=newinput; nb_let=nblets; nb_load=ld; nb_store=st;
-            nb_op=uop+bop; nb_input=nbin; nb_constraint=nbcsts}
-  in
-  new_f, Qed.qed_get_status qed
+  | Store (n,ax,bv1,bv2) ->
+    assert (n > 0);
+    assert (ax.idx_term_size = bv1.bv_term_size);
+    assert (n * ax.elt_term_size = bv2.bv_term_size);
+    let ax_term_hash =
+      Hashtbl.hash (n, ax.ax_term_hash, bv1.bv_term_hash, bv2.bv_term_hash)
+    in
+    let idx_term_size = ax.idx_term_size in
+    let elt_term_size = ax.elt_term_size in
+    { ax_term_hash; ax_term_desc; idx_term_size; elt_term_size }
 
+let mk_ax_fun fn lst       = ax_term (AxFun (fn,lst))
+let mk_ax_let bn ax        = ax_term (AxLet (bn, ax))
+let mk_ax_ite bl ax1 ax2   = ax_term (AxIte (bl,ax1,ax2))
+let mk_store  n ax bv1 bv2 = ax_term (Store (n,ax,bv1,bv2))
 
-let build_formula_file (f:formula) (pred:smt_expr) ?(ksteps=0) ?(forward=true) ?(pruning=true) (name:string) (solver:solver_t): formula * Smtlib2.smt_result option =     (* Generate the file of the formula *)
-  let file = open_out name in
-  Printf.fprintf file "%s\n\n" (smt_header ()); (* Write all symbolic input (free variables) *)
-  if not(is_boolector solver) then Printf.fprintf file "%s\n\n" (smt_functions ());
-  let newf, status = build_formula f pred ~pruning ~push:false ~ksteps ~forward file solver in
-  close_out file;
-  newf, status
+(* Definition, declaration and entries *)
 
-let build_formula_incremental (f:formula) (pred:smt_expr) ?(ksteps=0) ?(forward=true) ?(pruning=true) ?(push=true) ?(file="") (session:solver_session) (solver:solver_t): formula * Smtlib2.smt_result option =
-  build_formula f pred ~pruning ~push ~ksteps ~forward ~dump:file session.stdin solver
-(* ------------------------------------------------------- *)
+let def_desc_hash = function
+  | BlDef (v,ls,bl) ->
+    Hashtbl.hash (v.bl_hash, list_hash (fun dc -> dc.decl_hash) ls, bl.bl_term_hash)
+  | BvDef (v,ls,bv) ->
+    Hashtbl.hash (v.bv_hash, list_hash (fun dc -> dc.decl_hash) ls, bv.bv_term_hash)
+  | AxDef (v,ls,ax) ->
+    Hashtbl.hash (v.ax_hash, list_hash (fun dc -> dc.decl_hash) ls, ax.ax_term_hash)
 
+let def def_desc =
+  let def_hash = def_desc_hash def_desc in
+  { def_hash; def_desc }
 
-(* ------------- Stats functions ------------ *)
-let get_stat_formula (f:formula): (int * int * int * int * int * int) =
-  f.nb_input, f.nb_load, f.nb_store, f.nb_let, f.nb_op, f.nb_constraint
+let mk_bl_def v lst bl = def (BlDef (v,lst,bl))
+let mk_bv_def v lst bv = def (BvDef (v,lst,bv))
+let mk_ax_def v lst ax = def (AxDef (v,lst,ax))
 
-let pp_stat_formula (f:formula): unit =
-  let i, ld, st, le, op, cst = get_stat_formula f in
-  Logger.result
-    "Inputs:%d  Load:%d  Store:%d  Vars:%d  Ops:%d  Constraints:%d@."
-    i ld st le op cst
-(* --------------------------------- *)
+let decl_desc_hash = function
+  | BlDecl (v,ls) -> Hashtbl.hash (v.bl_hash, ls)
+  | BvDecl (v,ls) -> Hashtbl.hash (v.bv_hash, ls)
+  | AxDecl (v,ls) -> Hashtbl.hash (v.ax_hash, ls)
+
+let decl decl_desc =
+  let decl_hash = decl_desc_hash decl_desc in
+  { decl_hash; decl_desc }
+
+let mk_bl_decl v lst = decl (BlDecl (v,lst))
+let mk_bv_decl v lst = decl (BvDecl (v,lst))
+let mk_ax_decl v lst = decl (AxDecl (v,lst))
+
+let entry_desc_hash = function
+  | Declare dc -> Hashtbl.hash dc.decl_hash
+  | Define  df -> Hashtbl.hash df.def_hash
+  | Assert  bl -> Hashtbl.hash bl.bl_term_hash
+  | Comment s  -> Hashtbl.hash s
+  | Echo s  -> Hashtbl.hash s
+  | Check_sat  -> 0
+
+let entry entry_desc =
+  let entry_hash = entry_desc_hash entry_desc in
+  { entry_hash; entry_desc }
+
+let mk_declare dc = entry (Declare dc)
+let mk_define  df = entry (Define df)
+let mk_assert  bl = entry (Assert bl)
+let mk_comment s  = entry (Comment s)
+let mk_echo s  = entry (Echo s)
+let mk_check_sat  = entry (Check_sat)        
+
+(* Some helpers *)
+
+let mk_bl_var bl = mk_bl_fun bl []
+let mk_bv_var bv = mk_bv_fun bv []
+let mk_ax_var ax = mk_ax_fun ax []
+
+let mk_bl_not bl = mk_bl_unop BlNot bl
+
+let mk_bv_not bv = mk_bv_unop BvNot bv
+let mk_bv_neg bv = mk_bv_unop BvNeg bv
+
+let mk_bv_repeat       i bv = mk_bv_unop (BvRepeat i) bv
+let mk_bv_zero_extend  i bv = mk_bv_unop (BvZeroExtend i) bv
+let mk_bv_sign_extend  i bv = mk_bv_unop (BvSignExtend i) bv
+let mk_bv_rotate_left  i bv = mk_bv_unop (BvRotateLeft i) bv
+let mk_bv_rotate_right i bv = mk_bv_unop (BvRotateRight i) bv
+let mk_bv_extract      i bv = mk_bv_unop (BvExtract i) bv
+
+let mk_bl_imply bl1 bl2  = mk_bl_bnop BlImply bl1 bl2
+let mk_bl_and bl1 bl2    = mk_bl_bnop BlAnd bl1 bl2
+let mk_bl_or bl1 bl2     = mk_bl_bnop BlOr bl1 bl2
+let mk_bl_xor bl1 bl2    = mk_bl_bnop BlXor bl1 bl2
+
+let mk_bv_concat bv1 bv2 = mk_bv_bnop BvConcat bv1 bv2
+let mk_bv_and bv1 bv2    = mk_bv_bnop BvAnd bv1 bv2
+let mk_bv_nand bv1 bv2   = mk_bv_bnop BvNand bv1 bv2
+let mk_bv_or bv1 bv2     = mk_bv_bnop BvOr bv1 bv2
+let mk_bv_nor bv1 bv2    = mk_bv_bnop BvNor bv1 bv2
+let mk_bv_xor bv1 bv2    = mk_bv_bnop BvXor bv1 bv2
+let mk_bv_xnor bv1 bv2   = mk_bv_bnop BvXnor bv1 bv2
+let mk_bv_cmp bv1 bv2    = mk_bv_bnop BvCmp bv1 bv2
+let mk_bv_add bv1 bv2    = mk_bv_bnop BvAdd bv1 bv2
+let mk_bv_sub bv1 bv2    = mk_bv_bnop BvSub bv1 bv2
+let mk_bv_mul bv1 bv2    = mk_bv_bnop BvMul bv1 bv2
+let mk_bv_udiv bv1 bv2   = mk_bv_bnop BvUdiv bv1 bv2
+let mk_bv_sdiv bv1 bv2   = mk_bv_bnop BvSdiv bv1 bv2
+let mk_bv_urem bv1 bv2   = mk_bv_bnop BvUrem bv1 bv2
+let mk_bv_srem bv1 bv2   = mk_bv_bnop BvSrem bv1 bv2
+let mk_bv_smod bv1 bv2   = mk_bv_bnop BvSmod bv1 bv2
+let mk_bv_shl bv1 bv2    = mk_bv_bnop BvShl bv1 bv2
+let mk_bv_ashr bv1 bv2   = mk_bv_bnop BvAshr bv1 bv2
+let mk_bv_lshr bv1 bv2   = mk_bv_bnop BvLshr bv1 bv2
+
+let mk_bl_equal    bl1 bl2 = mk_bl_comp BlEqual    bl1 bl2
+let mk_bl_distinct bl1 bl2 = mk_bl_comp BlDistinct bl1 bl2
+let mk_bv_equal    bv1 bv2 = mk_bv_comp BvEqual    bv1 bv2
+let mk_bv_distinct bv1 bv2 = mk_bv_comp BvDistinct bv1 bv2
+let mk_ax_equal    ax1 ax2 = mk_ax_comp AxEqual    ax1 ax2
+let mk_ax_distinct ax1 ax2 = mk_ax_comp AxDistinct ax1 ax2
+
+let mk_bv_ult bv1 bv2 = mk_bv_comp BvUlt bv1 bv2
+let mk_bv_ule bv1 bv2 = mk_bv_comp BvUle bv1 bv2
+let mk_bv_ugt bv1 bv2 = mk_bv_comp BvUgt bv1 bv2
+let mk_bv_uge bv1 bv2 = mk_bv_comp BvUge bv1 bv2
+let mk_bv_slt bv1 bv2 = mk_bv_comp BvSlt bv1 bv2
+let mk_bv_sle bv1 bv2 = mk_bv_comp BvSle bv1 bv2
+let mk_bv_sgt bv1 bv2 = mk_bv_comp BvSgt bv1 bv2
+let mk_bv_sge bv1 bv2 = mk_bv_comp BvSge bv1 bv2
+
+let mk_bv_add_int bv i =
+  mk_bv_add bv
+    (mk_bv_cst (Bitvector.create (Bigint.big_int_of_int i) bv.bv_term_size))
+
+let mk_bv_sub_int bv i =
+  mk_bv_sub bv
+    (mk_bv_cst (Bitvector.create (Bigint.big_int_of_int i) bv.bv_term_size))
+
+(* Sequence reification *)
+
+let empty = { entries = Sequence.empty }
+let length fm = Sequence.length fm.entries
+let append fm1 fm2 = { entries = Sequence.append fm1.entries fm2.entries }
+
+let push_front en fm = { entries = Sequence.push_front en fm.entries }
+let push_back  en fm = { entries = Sequence.push_back  en fm.entries }
+
+let push_front_declare dc fm = push_front (mk_declare dc) fm
+let push_front_define  df fm = push_front (mk_define  df) fm
+let push_front_assert  bl fm = push_front (mk_assert  bl) fm
+let push_front_comment s  fm = push_front (mk_comment s)  fm
+let push_front_echo s  fm = push_front (mk_echo s)  fm
+let push_front_check_sat fm = push_front (mk_check_sat)  fm        
+
+let push_back_declare dc fm = push_back (mk_declare dc) fm
+let push_back_define  df fm = push_back (mk_define  df) fm
+let push_back_assert  bl fm = push_back (mk_assert  bl) fm
+let push_back_comment s  fm = push_back (mk_comment s)  fm
+let push_back_echo s  fm = push_back (mk_echo s)  fm
+let push_back_check_sat fm = push_back (mk_check_sat)  fm        
+    
+
+let peek_front fm = Sequence.peek_front fm.entries
+let peek_back  fm = Sequence.peek_back  fm.entries
+
+let pop_front fm =
+  match Sequence.pop_front fm.entries with
+  | Some entries -> Some { entries }
+  | None -> None
+let pop_back fm =
+  match Sequence.pop_back fm.entries with
+  | Some entries -> Some { entries }
+  | None -> None
+
+let map_forward  f fm = { entries = Sequence.map_forward  f fm.entries }
+let map_backward f fm = { entries = Sequence.map_backward f fm.entries }
+
+let iter_forward  f fm = Sequence.iter_forward  f fm.entries
+let iter_backward f fm = Sequence.iter_backward f fm.entries
+
+let fold_forward  f fm acc = Sequence.fold_forward  f fm.entries acc
+let fold_backward f fm acc = Sequence.fold_backward f fm.entries acc
+
+(* Modules *)
+
+module VarSet = Set.Make
+    (struct
+      type t = var
+      let compare = compare
+    end)
+
+module BlVarSet = Set.Make
+    (struct
+      type t = bl_var
+      let compare = compare
+    end)
+
+module BvVarSet = Set.Make
+    (struct
+      type t = bv_var
+      let compare = compare
+    end)
+
+module AxVarSet = Set.Make
+    (struct
+      type t = ax_var
+      let compare = compare
+    end)
+
+module BlVarHashtbl = Hashtbl.Make
+    (struct
+      type t = bl_var
+      let equal bl1 bl2 = bl1 = bl2
+      let hash bl = bl.bl_hash
+    end)
+
+module BvVarHashtbl = Hashtbl.Make
+    (struct
+      type t = bv_var
+      let equal bv1 bv2 = bv1 = bv2
+      let hash bv = bv.bv_hash
+    end)
+
+module AxVarHashtbl = Hashtbl.Make
+    (struct
+      type t = ax_var
+      let equal ax1 ax2 = ax1 = ax2
+      let hash ax = ax.ax_hash
+    end)
+
+module BlTermHashtbl = Hashtbl.Make
+    (struct
+      type t = bl_term
+      let equal bl1 bl2 = bl1 = bl2
+      let hash bl = bl.bl_term_hash
+    end)
+
+module BvTermHashtbl = Hashtbl.Make
+    (struct
+      type t = bv_term
+      let equal bv1 bv2 = bv1 = bv2
+      let hash bv = bv.bv_term_hash
+    end)
+
+module AxTermHashtbl = Hashtbl.Make
+    (struct
+      type t = ax_term
+      let equal ax1 ax2 = ax1 = ax2
+      let hash ax = ax.ax_term_hash
+    end)

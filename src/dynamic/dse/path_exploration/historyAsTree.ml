@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -34,15 +34,15 @@ struct
     Utils.unsafe_get_opt (TraceDSE_v.trace_to_list_addr trace)
 
   let contains tree trace =
-     match tree with
-     | None -> Logger.debug "First trace to tree"; false
-     | Some tree ->
-       let lists_addr = trace_to_addrs trace in
-       let c = TracesToTree.contains tree lists_addr in
-       let len = List.length lists_addr in
-       if c then Logger.debug "Trace already saw (%d): skipping it" len
-       else Logger.debug "Trace never saw (%d)" len;
-       c
+    match tree with
+    | None -> Logger.debug "First trace to tree"; false
+    | Some tree ->
+      let lists_addr = trace_to_addrs trace in
+      let c = TracesToTree.contains tree lists_addr in
+      let len = List.length lists_addr in
+      if c then Logger.debug "Trace already saw (%d): skipping it" len
+      else Logger.debug "Trace never saw (%d)" len;
+      c
 
 
 

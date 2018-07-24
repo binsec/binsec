@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -28,16 +28,16 @@ let (tbl:fd) = Hashtbl.create 20
 let reset () = Hashtbl.reset tbl
 
 (* if fd exist, remove it *)
-let add_fd fd name = 
-  Logger.debug "Size fd %d, new file %s" (Hashtbl.length tbl) name;         
+let add_fd fd name =
+  Logger.debug "Size fd %d, new file %s" (Hashtbl.length tbl) name;
   Hashtbl.replace tbl fd name;;
 
-let list_fd () = 
+let list_fd () =
   Logger.debug "Size fd %d" (Hashtbl.length tbl);
-  Hashtbl.fold (fun key vals l -> (key,vals) :: l) tbl [];; 
+  Hashtbl.fold (fun key vals l -> (key,vals) :: l) tbl [];;
 
-let get_name fd = 
-  try 
+let get_name fd =
+  try
     Some (Hashtbl.find tbl fd)
   with
   | Not_found -> None

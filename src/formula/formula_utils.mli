@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,59 +19,78 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** High level formula manipulation *)
+(** Utility functions for formula creation *)
 
-open Smtlib2
+open Formula
 
-(** {2 Registers/Variables} *)
+type stats = {
+  var : int; cst : int;
+  unop : int; bnop : int; comp : int;
+  select : int; store : int;
+}
+;;
 
-(** [concretize_register name value env] concretize
-    the register [name] with the value [value]. This
-    function solely add a constraint on the current
-    register value. *)
-val concretize_register : string -> smt_bv_expr -> Path_pred_env.t -> unit
+val bl_term_stats : bl_term -> stats
+val bv_term_stats : bv_term -> stats
+val ax_term_stats : ax_term -> stats
 
-(** replace the register value with the given [smt_bv_expr]
-    @deprecated use [logicalize_register] instead
-*)
-val replace_register : string -> smt_bv_expr -> Path_pred_env.t -> unit
+val bl_term_variables : bl_term -> VarSet.t
+val bv_term_variables : bv_term -> VarSet.t
+val ax_term_variables : ax_term -> VarSet.t
 
-(** convert the DBA expression in SMT and then call [replace_register] *)
-val logicalize_register : string -> Dba.expr -> Path_pred_env.t -> unit
+(** @return [true] if the expression is syntactically symbolic
+    meaning there is at least one variable *)
+val is_symbolic_bl_term : bl_term -> bool
+val is_symbolic_bv_term : bv_term -> bool
+val is_symbolic_ax_term : ax_term -> bool
 
-(** [symbolize_register name ~is_full_name prefix] create
-    a new symbol and assign it in the register [name]. 
-    [~is_full_name] define only use [prefix] as symbol 
-    name otherwise concatenate [prefix] and [name]*)
-val symbolize_register : string -> ?is_full_name:bool -> string -> Path_pred_env.t -> unit
+(* Some accessors *)
 
-(** symbolize the register and then concretize it. It
-    has in effect to constraint the new symbol with the
-    concrete value. (reset history) *)
-val symbolize_and_then_concretize_register : string -> smt_bv_expr -> string -> Path_pred_env.t -> unit
+val bv_size : bv_term -> int
+val ax_size : ax_term -> int * int (* idx_size, elt_size *)
 
+val bv_desc_size : bv_term_desc -> int
+val ax_desc_size : ax_term_desc -> int * int (* idx_size, elt_size *)
 
-(** {2 Memory} *)
+val is_bl_desc_cst : bl_term_desc -> bool option
+val is_bv_desc_cst : bv_term_desc -> Bitvector.t option
 
-(** [replace_memory addr data env] perform a store operation of
-    every bytes of [data] starting at [addr]
-    @deprecated use [logicalize_memory] instead *)
-val replace_memory : int64 -> string -> Path_pred_env.t -> unit
+val is_bl_cst : bl_term -> bool option
+val is_bv_cst : bv_term -> Bitvector.t option
 
-(** [concretize_memory dba_addr data env] add constraints on the
-    memory at the logical address [dba_addr] for every bytes
-    of [data] *)
-val concretize_memory : Dba.expr -> string -> Path_pred_env.t -> unit
+val is_bl_desc_var : bl_term_desc -> bl_var option
+val is_bv_desc_var : bv_term_desc -> bv_var option
+val is_ax_desc_var : ax_term_desc -> ax_var option
 
-(** [symbolize_memory_one_octet addr prefix env] symbolize the the byte
-    at address [addr] and prefix the new input symbol by [prefix] *)
-val symbolize_memory_one_octet : int64 -> string -> Path_pred_env.t -> unit
+val is_bl_var : bl_term -> bl_var option
+val is_bv_var : bv_term -> bv_var option
+val is_ax_var : ax_term -> ax_var option
 
-(** [symbolize_memory dba_addr prefix ~i size env] symbolize the memory
-    starting at the address [dba_addr] up to [size]. All input symbols
-    created will be prefixed by [prefix] *)
-val symbolize_memory : Dba.expr -> string -> ?i:int -> int -> Path_pred_env.t -> unit
+val is_select : bv_term -> (int * ax_term * bv_term) option
+val is_store  : ax_term -> (int * ax_term * bv_term * bv_term) option
 
-(** [logicalize_memory addr content] put [content] at [addr]
-    by performing a logical store in memory *)
-val logicalize_memory : Dba.expr -> Dba.expr -> Path_pred_env.t -> unit
+val var_hash : var -> int
+
+val bl_var_hash : bl_var -> int
+val bv_var_hash : bv_var -> int
+val ax_var_hash : ax_var -> int
+
+val var_name : var -> string
+
+val bl_var_name : bl_var -> string
+val bv_var_name : bv_var -> string
+val ax_var_name : ax_var -> string
+
+val bl_term_desc_name : bl_term_desc -> string option
+val bv_term_desc_name : bv_term_desc -> string option
+val ax_term_desc_name : ax_term_desc -> string option
+
+val bl_term_name : bl_term -> string option
+val bv_term_name : bv_term -> string option
+val ax_term_name : ax_term -> string option
+
+val decl_desc_name : decl_desc -> string
+val def_desc_name  : def_desc  -> string
+
+val decl_name : decl -> string
+val def_name  : def  -> string

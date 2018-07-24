@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,48 +27,48 @@ open Dba_printer.Ascii
 module Expr = struct
   exception Fold_const_failed
 
-let rec fold_expr e =
-  let open Bitvector in
-  match e with
-  | ExprVar(_name,_sz,_) -> raise Fold_const_failed
-  | ExprLoad(_sz,_endian,_e) -> raise Fold_const_failed
-  | ExprCst(`Constant, v) -> v
-  | ExprUnary(uop, e1) ->
-    begin match uop with
-      | Dba.UMinus -> neg (fold_expr e1)
-      | Dba.Not -> lognot (fold_expr e1)
-    end
-  | ExprBinary(bop, e1, e2) ->
-    let apply f a b = f a b |> of_bool in
-    let int_snd f a b = f a (Bigint.int_of_big_int (Bitvector.value_of b)) in
-    let f = match bop with
-      | Plus -> add | Minus -> sub | MultU -> umul
-      | MultS -> smul | DivU -> udiv | DivS -> sdiv
-      | ModU -> srem | ModS -> smod
-      | Or -> logor | And -> logand | Xor -> logxor
-      | Concat -> append
-      | LShift  -> int_snd shift_left
-      | RShiftU -> int_snd shift_right
-      | RShiftS -> int_snd shift_right_signed
-      | LeftRotate  -> int_snd rotate_left
-      | RightRotate -> int_snd rotate_right
-      | Eq -> apply equal | Diff -> apply diff
-      | LeqU -> apply ule | LtU -> apply ult
-      | GeqU -> apply uge | GtU -> apply ugt
-      | LeqS -> apply sle | LtS -> apply slt
-      | GeqS -> apply sge | GtS -> apply sgt
-    in
-    f (fold_expr e1) (fold_expr e2)
-  | ExprRestrict(e1, l, h) ->
-    extract (fold_expr e1) l h
-  | ExprExtU(e1, sz) ->
-    Bitvector.extend (fold_expr e1) sz
-  | ExprExtS(e1, sz) ->
-    Bitvector.extend_signed (fold_expr e1) sz
-  | ExprIte(_c, _e1, _e2) ->
-    (* TODO: Implement for cond *)
-    raise Fold_const_failed
-  | _ -> raise Fold_const_failed
+  let rec fold_expr e =
+    let open Bitvector in
+    match e with
+    | Expr.Var(_name,_sz,_) -> raise Fold_const_failed
+    | Expr.Load(_sz,_endian,_e) -> raise Fold_const_failed
+    | Expr.Cst(`Constant, v) -> v
+    | Expr.Unary(uop, e) ->
+      let e' = fold_expr e in
+      let f =
+        match uop with
+        | Dba.Unary_op.UMinus -> neg
+        | Dba.Unary_op.Not -> lognot
+        | Dba.Unary_op.Uext sz -> fun e -> Bitvector.extend e sz
+        | Dba.Unary_op.Sext sz -> fun e -> Bitvector.extend_signed e sz
+        | Dba.Unary_op.Restrict i -> fun e -> extract e i
+      in f e'
+    | Expr.Binary(bop, e1, e2) ->
+      let open Binary_op in
+      let apply f a b = f a b |> of_bool in
+      let int_snd f a b = f a (Bigint.int_of_big_int (Bitvector.value_of b)) in
+      let f = match bop with
+        | Plus -> add | Minus -> sub | Mult -> mul
+        | DivU -> udiv | DivS -> sdiv
+        | ModU -> srem | ModS -> smod
+        | Or -> logor | And -> logand | Xor -> logxor
+        | Concat -> append
+        | LShift  -> int_snd shift_left
+        | RShiftU -> int_snd shift_right
+        | RShiftS -> int_snd shift_right_signed
+        | LeftRotate  -> int_snd rotate_left
+        | RightRotate -> int_snd rotate_right
+        | Eq -> apply equal | Diff -> apply diff
+        | LeqU -> apply ule | LtU -> apply ult
+        | GeqU -> apply uge | GtU -> apply ugt
+        | LeqS -> apply sle | LtS -> apply slt
+        | GeqS -> apply sge | GtS -> apply sgt
+      in
+      f (fold_expr e1) (fold_expr e2)
+    | Expr.Ite(_c, _e1, _e2) ->
+      (* TODO: Implement for cond *)
+      raise Fold_const_failed
+    | _ -> raise Fold_const_failed
 
 end
 let eval_alternatives eval_expr eq alternatives =
@@ -83,19 +83,20 @@ let eval_alternatives eval_expr eq alternatives =
 
 (* *****  check size (basic typing) in DBAs   *)
 let rec computesize_dbaexpr e: int =  (* size: bits *)
+  let open! Dba in
   match e with
-  | ExprVar(_, sz, _) ->
+  | Expr.Var(_, sz, _) ->
     if sz > 0 then sz else begin
-      Logger.fatal "Negatively sized expression %a" pp_expr e;
+      Logger.fatal "Negatively sized expression %a" pp_bl_term e;
       raise Bad_exp_size
     end
-  | ExprLoad (size_byte, _, bexpr) as e -> (* read by bytes *)
+  | Expr.Load (size_byte, _, bexpr) as e -> (* read by bytes *)
     let sz = computesize_dbaexpr bexpr in
     if 0 < size_byte then
       (if sz = Machine.Word_size.get () then size_byte * 8
        else raise Bad_exp_size)
-    else raise (Bad_bound (asprintf "%a" pp_expr e))
-  | ExprCst(_, cval) ->
+    else raise (Bad_bound (asprintf "%a" pp_bl_term e))
+  | Expr.Cst(_, cval) ->
     let sz = Bitvector.size_of cval in
     let v = Bitvector.value_of cval in
     let sign = Bigint.sign_big_int v in
@@ -104,18 +105,28 @@ let rec computesize_dbaexpr e: int =  (* size: bits *)
     if sz > 0 && (sign = 1 || sign = 0) && lt_max
     then sz
     else raise Bad_exp_size
-  | ExprUnary (_, bexpr) -> computesize_dbaexpr bexpr
-
-  | ExprBinary(bop,bexpr1,bexpr2) -> (
+  | Expr.Unary(uop, bexpr) as e ->
+    let n' = computesize_dbaexpr bexpr in
+    begin match uop with
+      | Unary_op.Uext n | Unary_op.Sext n ->
+        if n' <= n then n
+        else raise (Bad_bound (asprintf "%a" pp_bl_term e))
+      | Unary_op.UMinus | Unary_op.Not -> n'
+      | Unary_op.Restrict {Interval.lo; Interval.hi} ->
+        if hi <= n' then hi - lo + 1
+        else raise (Bad_bound (asprintf "%a" pp_bl_term e))
+    end
+  | Expr.Binary(bop,bexpr1,bexpr2) -> (
+      let open Binary_op in
       match bop with
-      | Plus | Minus | MultU | MultS | DivU
+      | Plus | Minus | Mult | DivU
       | DivS | ModU | ModS | Or | And | Xor ->
         let (sz1, sz2) =
           (computesize_dbaexpr bexpr1, computesize_dbaexpr bexpr2) in
         if sz1 = sz2 then sz1
         else
           raise
-            (Size_error(asprintf "%a, sizes %d != %d" pp_expr e sz1 sz2))
+            (Size_error(asprintf "%a, sizes %d != %d" pp_bl_term e sz1 sz2))
       | LShift | RShiftU | RShiftS | LeftRotate
       | RightRotate -> computesize_dbaexpr bexpr1
       | Concat ->
@@ -126,45 +137,24 @@ let rec computesize_dbaexpr e: int =  (* size: bits *)
       | LeqS | LtS | GeqS | GtS ->
         let sz1 = computesize_dbaexpr bexpr1 in
         let sz2 = computesize_dbaexpr bexpr2 in
-        if (sz1 = sz2) then 1 (* reifie mais check coherence*)
+        if sz1 = sz2 then 1 (* reifie mais check coherence*)
         else
-          raise (Size_error(Format.asprintf "%a, sizes %d != %d"
-                              pp_expr e sz1 sz2))
+          let msg = Format.asprintf "%a, sizes %d != %d" pp_bl_term e sz1 sz2 in
+          raise (Size_error msg)
     )
 
-  | ExprRestrict(bexpr,i,j) as e ->
-    let sz = (computesize_dbaexpr bexpr) in
-    if ((i<=j) && (0<=i) && (j<sz)) then j-i+1
-    else raise (Bad_bound (asprintf "%a" pp_expr e))
 
-  | ExprExtU(bexpr,n) as e ->
-    let n' = computesize_dbaexpr bexpr in
-    if (n' <= n) then n
-    else raise (Bad_bound (asprintf "%a" pp_expr e))
-  | ExprExtS(bexpr,n) as e ->
-    let n' = computesize_dbaexpr bexpr in
-    if (n' <= n) then n
-    else raise (Bad_bound (asprintf "%a" pp_expr e))
-  | ExprIte(bcond,be1,be2) ->
+  | Expr.Ite(bcond,be1,be2) ->
     let sz1 = computesize_dbaexpr be1 in
     let sz2 = computesize_dbaexpr be2 in
-    if ((checksize_dbacond(bcond)) && (sz1=sz2)) then sz1
-    else raise (Size_error("Ite branches size different"))
-  | ExprAlternative (e_list, _) ->
-    eval_alternatives computesize_dbaexpr (=) e_list
+    let c_size = computesize_dbaexpr bcond in
+    if c_size = 1 && sz1 =sz2 then sz1
+    else raise (Size_error "Ite branches size different")
 
-and checksize_dbacond (bcond : cond) : bool =
-  match bcond with
-    CondReif(bexp) -> let sz = computesize_dbaexpr(bexp) in
-    if (sz=1) then true
-    else raise (Size_error("Reification cond should be of size=1"))
-  | CondNot(bc) -> checksize_dbacond(bc)
-  | CondAnd(bc1,bc2) ->
-    (checksize_dbacond bc1) && (checksize_dbacond bc2)
-  | CondOr(bc1,bc2) ->
-    (checksize_dbacond bc1) && (checksize_dbacond bc2)
-  | True -> true
-  | False -> true
+and checksize_dbacond e
+  =
+  let sz = computesize_dbaexpr e in
+  sz = 1 || failwith "Expressions used in conditional must be of size 1"
 
 let is_positive = Bigint.le_big_int Bigint.zero_big_int
 
@@ -182,59 +172,63 @@ let checksize_address addr =
 let computesize_dbalhs blhs : int  =
   (* taille en bits *) (* plante si erreur *)
   match  blhs with
-  | LhsVar(_, size, _) -> size
-  | LhsVarRestrict(_name,size,i,j) ->
+  | LValue.Var(_, size, _) -> size
+  | LValue.Restrict(_name,size, {Interval.lo=i; Interval.hi=j}) ->
     if ((i<=j) || (0<=i) || (j<size)) then j-i+1
     else raise (Bad_bound (Format.asprintf "{%d,%d}" i j))
-  | LhsStore(size_byte,_endian,bexpr) ->
+  | LValue.Store(size_byte,_endian,bexpr) ->
     if (0 < size_byte) then
       let sz = (computesize_dbaexpr bexpr) in
       if (sz = Machine.Word_size.get ()) then size_byte * 8
       else ((raise Bad_exp_size))
     else
-      let msg = Format.asprintf "@[%a, _, %d]" pp_expr bexpr size_byte in
+      let msg = Format.asprintf "@[%a, _, %d]" pp_bl_term bexpr size_byte in
       raise (Bad_bound msg)
 
-let checksize_instruction (binkd : instruction) : bool =
+let valid_condition e = computesize_dbaexpr e = 1 || assert false
+
+let checksize_instruction binkd =
+  let open Instr in
   match binkd with
-  | IkAssign(blhs, bexpr, _addr) ->
+  | Assign(blhs, bexpr, _addr) ->
     let sz1 = computesize_dbalhs blhs
     and sz2 = computesize_dbaexpr bexpr in
     sz1 = sz2
-  | IkSJump(JOuter addr,_) -> checksize_address addr
-  | IkSJump(JInner _, _) -> true
+  | SJump(JOuter addr,_) -> checksize_address addr
+  | SJump(JInner _, _) -> true
 
-  | IkDJump(expr,_) ->
+  | DJump(expr,_) ->
     let sz = computesize_dbaexpr(expr) in
     sz = Machine.Word_size.get ()
-  | IkIf(bcond, JOuter addr1, _id2) ->
-    if (checksize_address addr1)
-    then checksize_dbacond(bcond)
+  | If(bcond, JOuter addr1, _id2) ->
+    if checksize_address addr1
+    then valid_condition bcond
     else raise Bad_address_size
-  | IkIf(bcond, JInner _id1, _id2) -> checksize_dbacond(bcond)
+  | If(bcond, JInner _id1, _id2) ->
+    valid_condition bcond
 
-  | IkStop _ -> true
-  | IkPrint(l, _addr) ->
+  | Stop _ -> true
+  | Print(l, _addr) ->
     let f = function Exp x -> ignore (computesize_dbaexpr x)
                    | _ -> ()
     in
     List.iter f l; true
-  | IkNondetAssume (lhs_list, bcond, _addr) ->
+  | NondetAssume (lhs_list, bcond, _addr) ->
     let f x = ignore (computesize_dbalhs x) in
     List.iter f lhs_list;
-    checksize_dbacond bcond
-  | IkNondet (blhs, _, _addr) ->
+    valid_condition bcond
+  | Nondet (blhs, _, _addr) ->
     let _sz = (computesize_dbalhs blhs) in true
-  | IkAssume (bcond, _addr) ->
-    checksize_dbacond(bcond)
-  | IkAssert (bcond, _addr) ->
-    checksize_dbacond(bcond)
-  | IkMalloc (lhs, _bexpr, _addr) ->
-    let sz = (computesize_dbalhs lhs) in
+  | Assume (bcond, _addr) ->
+    valid_condition bcond
+  | Assert (bcond, _addr) ->
+    valid_condition bcond
+  | Malloc (lhs, _bexpr, _addr) ->
+    let sz = computesize_dbalhs lhs in
     (sz = Machine.Word_size.get ())
-  | IkFree (bexpr, _addr) ->
+  | Free (bexpr, _addr) ->
     let _sz = (computesize_dbaexpr bexpr) in true
-  | IkUndef (blhs, _addr) ->
+  | Undef (blhs, _addr) ->
     let _sz = (computesize_dbalhs blhs) in true
 
 
@@ -253,32 +247,21 @@ let globalize_address root_caddress = function
   | JOuter caddress -> caddress
 
 
-let rec substitute_dba_expr (m_e:expr) (r_e:expr) (e:expr): expr =
+let substitute_dba_expr m_e r_e e =
   (* Substitue matching_e(m_e) by replacement_e(r_e) in e *)
-  if e = m_e then
-    r_e
-  else
-    match e with
-    | Dba.ExprLoad (sz,en,expr) -> Dba.ExprLoad(sz, en, substitute_dba_expr m_e r_e expr)
-    | Dba.ExprUnary (uop, expr) -> Dba.ExprUnary(uop, substitute_dba_expr m_e r_e expr)
-    | Dba.ExprBinary(bop,expr1,expr2) ->
-      Dba.ExprBinary(bop, substitute_dba_expr m_e r_e expr1, substitute_dba_expr m_e r_e expr2)
-    | Dba.ExprRestrict(expr,i,j) -> Dba.ExprRestrict(substitute_dba_expr m_e r_e expr, i, j)
-    | Dba.ExprExtU(expr,n) -> Dba.ExprExtU(substitute_dba_expr m_e r_e expr, n)
-    | Dba.ExprExtS(expr,n) -> Dba.ExprExtS(substitute_dba_expr m_e r_e expr, n)
-    | Dba.ExprIte(cond,e1,e2) ->
-      Dba.ExprIte(substitute_dba_expr_cond m_e r_e cond, substitute_dba_expr m_e r_e e1, substitute_dba_expr m_e r_e e2)
-    | Dba.ExprAlternative (e_list, tag_option) ->
-      Dba.ExprAlternative (List.map (fun i -> substitute_dba_expr m_e r_e i) e_list, tag_option)
-    | _ -> e
-
-and substitute_dba_expr_cond (m_e:expr) (r_e:expr) (c:cond) : cond =
-  match c with
-  | Dba.CondReif(exp) -> Dba.CondReif(substitute_dba_expr m_e r_e exp)
-  | Dba.CondNot(c1) -> Dba.CondNot(substitute_dba_expr_cond m_e r_e c1)
-  | Dba.CondAnd(c1, c2) ->
-    Dba.CondAnd(substitute_dba_expr_cond m_e r_e c1, substitute_dba_expr_cond m_e r_e c2)
-  | Dba.CondOr(c1,c2) ->
-    Dba.CondOr(substitute_dba_expr_cond m_e r_e c1, substitute_dba_expr_cond m_e r_e c2)
-  | Dba.True -> c
-  | Dba.False -> c
+  let open! Dba in
+  let rec aux e =
+    if e = m_e then r_e
+    else
+      match e with
+      | Expr.Load (sz,en,expr) ->
+        let bysz = Size.Byte.create sz in
+        Expr.load bysz en (aux expr)
+      | Expr.Unary (uop, expr) ->
+        Expr.unary uop (aux expr)
+      | Expr.Binary(bop,expr1,expr2) ->
+        Expr.binary bop (aux expr1) (aux expr2)
+      | Expr.Ite(cond,e1,e2) ->
+        Expr.ite (aux cond) (aux e1) (aux e2)
+      | _ -> e
+  in aux e

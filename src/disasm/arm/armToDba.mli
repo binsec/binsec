@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,4 +19,5 @@
 (*                                                                        *)
 (**************************************************************************)
 
-val decode : Dba_types.Virtual_address.t -> Disasm_types.GenericInstruction.t * Dba_types.Block.t
+val decode :
+  Lreader.t -> Virtual_address.t -> Instruction.Generic.t * Dhunk.t

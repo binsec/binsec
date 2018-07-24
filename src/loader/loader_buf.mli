@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -18,6 +18,8 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
 (*                                                                        *)
 (**************************************************************************)
+
+(** Generic representation of loader buffers *)
 
 (** Thanks to def-lkb for the general idea: https://github.com/def-lkb/owee *)
 
@@ -94,4 +96,3 @@ include S with type t = (int, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Big
 (** [sub t len] returns a fresh cursor pointing to the beginning of a sub-buffer
   * of size [len] starting from [t], and advances [t] by [len]. *)
 val sub : cursor -> int -> cursor
-

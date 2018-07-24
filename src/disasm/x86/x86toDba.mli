@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -35,10 +35,17 @@ val native_instructions_decoded : unit -> int
 (** Number of decoded instructions.
     This is always equal to
     [fst (handled_instructions ()) + fst (unknown_instructions ())]
- *)
+*)
 
 val pp_unknown_instructions : Format.formatter -> unit -> unit
 
-val decode: Dba_types.Virtual_address.t -> X86Instruction.t * Dba_types.Block.t
+val decode:
+  Lreader.t -> Virtual_address.t -> X86Instruction.t * Dhunk.t
 
-val decode_string: Basic_types.Binstream.t -> int64 -> X86Instruction.t * Dba_types.Block.t
+val decode_binstream:
+  ?base_addr:Virtual_address.t -> Binstream.t -> X86Instruction.t * Dhunk.t
+(** [decode_binstream base_addr bstream] decodes a binary stream whose address
+    is supposed to be [base_addr] into an instruction and its DBA hunk encoding.
+
+    - [base_addr] defaults to 0
+*)

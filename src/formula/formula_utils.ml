@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,151 +19,368 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Smtlib2
-open Smtlib2_visitor
-open Smtlib2print
-open Formula_type
 open Formula
-open Decode_utils
 
-module Pp = Dba_printer.EICUnicode
+type stats = {
+  var : int; cst : int;
+  unop : int; bnop : int; comp : int;
+  select : int; store : int;
+}
 
-let concretize_value (name:string) (size:int) (low:int) (high:int) (f_expr:smt_bv_expr) (env:Path_pred_env.t): unit =
-  Logger.debug ~level:2 "Will concretize value %s[%d]{%d,%d}" name size low high;
-  let new_f, var_f = get_var_or_create env.Path_pred_env.formula name size low high in
-  (* let new_f = change_variable new_f name size low high var_f in *)
-  (* let new_f, var_f = get_var_or_create new_f name size low high in *)
-  let cst = SmtComp(SmtBvExpr(SmtBvBinary(SmtBvComp,var_f, f_expr)), one) in
-  let new_f = add_constraint new_f cst in
-  env.Path_pred_env.formula <- new_f
+let empty_stats = {
+  var = 0; cst = 0;
+  unop = 0; bnop = 0; comp = 0;
+  select = 0; store = 0;
+}
 
-let concretize_register (name:string) (f_expr:smt_bv_expr) (env:Path_pred_env.t): unit =
-  let fullname, low, high = X86Util.reg_to_extract name in
-  let fullname, l, h = X86Util.reg_to_extract fullname in
-  concretize_value fullname (h-l+1) low high f_expr env
+let rec term_stats acc tm =
+  term_desc_stats acc tm.term_desc
 
-let replace_value (name:string) (size:int) (low:int) (high:int) (f_expr:smt_bv_expr) (env:Path_pred_env.t): unit =
-  Logger.debug ~level:2 "Will logicalize value %s[%d]{%d,%d}" name size low high;
-  let new_f, var_f = get_var_or_create env.Path_pred_env.formula name size low high in
-  let final_f = replace_bvexpr f_expr SmtBvToken var_f in
-  let new_f = change_variable new_f name size low high final_f in
-  env.Path_pred_env.formula <- new_f
+and term_desc_stats acc = function
+  | BlTerm bl -> bl_term_stats acc bl
+  | BvTerm bv -> bv_term_stats acc bv
+  | AxTerm ax -> ax_term_stats acc ax
 
-let replace_register (name:string) (f_expr:smt_bv_expr) (env:Path_pred_env.t): unit =
-  let fullname, low, high = X86Util.reg_to_extract name in
-  let fullname, l, h = X86Util.reg_to_extract fullname in
-  replace_value fullname (h-l+1) low high f_expr env
+and bl_term_stats acc bl =
+  bl_term_desc_stats acc bl.bl_term_desc
 
-let logicalize_register (name:string) (expr:Dba.expr) (env:Path_pred_env.t): unit =
-  let f_expr, csts = env.Path_pred_env.analysis#expr_to_smt expr env in
-  env.Path_pred_env.formula <- List.fold_left (fun acc c -> add_constraint acc c) env.Path_pred_env.formula csts;
-  replace_register name f_expr env
+and bl_term_desc_stats acc = function
+  | BlTrue
+  | BlFalse -> {acc with cst = acc.cst+1}
+  | BlFun (_,ls) -> funs_stats {acc with var = acc.var+1} ls
+  | BlLet (bn,bl) -> bl_term_stats (lets_stats acc bn) bl
+  | BlUnop (_,bl) -> bl_term_stats {acc with unop = acc.unop+1} bl
+  | BlBnop (_,bl1,bl2) -> bl_term_stats (bl_term_stats {acc with bnop = acc.bnop+1} bl1) bl2
+  | BlComp (_,bl1,bl2) -> bl_term_stats (bl_term_stats {acc with bnop = acc.comp+1} bl1) bl2
+  | BvComp (_,bv1,bv2) -> bv_term_stats (bv_term_stats {acc with bnop = acc.comp+1} bv1) bv2
+  | AxComp (_,ax1,ax2) -> ax_term_stats (ax_term_stats {acc with bnop = acc.comp+1} ax1) ax2
+  | BlIte (bl,bl1,bl2) -> bl_term_stats (bl_term_stats (bl_term_stats acc bl) bl1) bl2
 
-let rec concretize_memory (expr_addr:Dba.expr) (data:string) (env:Path_pred_env.t): unit =
-  let sz = env.Path_pred_env.addr_size / 8 in
-  let aux size data_cst =
-    Logger.debug ~level:2 "Stub: concretize memory addr: [%a]==%s"
-      Pp.pp_expr expr_addr (smtbvexpr_to_string data_cst);
-    let f_select, csts =
-      env.Path_pred_env.analysis#expr_to_smt (Dba.ExprLoad(size, Dba.LittleEndian, expr_addr))
-        env in
-    let f_constraint =
-      SmtComp(SmtBvExpr(
-          SmtBvBinary(SmtBvComp,f_select, data_cst)), one) in
-    env.Path_pred_env.formula <- List.fold_left (fun acc c -> add_constraint acc c) env.Path_pred_env.formula (csts@[f_constraint]);
-    let new_addr =
-      Dba.ExprBinary(Dba.Plus,
-                     expr_addr,
-                     Dba.ExprCst(`Constant, Bitvector.create (Bigint.big_int_of_int size) env.Path_pred_env.addr_size)) in
-    concretize_memory new_addr (String_utils.lchop size data) env
-  in
-  match String.length data with
-  | 0 -> ()
-  | x when x >= sz ->
-    let chunk = String_utils.left sz data in
-    let data_cst =
-      SmtBvCst(Bitvector.create (string_to_big_int chunk) env.Path_pred_env.addr_size)
-    in aux sz data_cst
-  | _ -> (* Just do one *)
-    let data_cst =
-      SmtBvCst(Bitvector.create (String.get data 0 |> Char.code |> Bigint.big_int_of_int) 8) in
-    aux 1 data_cst
+and bv_term_stats acc bv =
+  bv_term_desc_stats acc bv.bv_term_desc
 
-let replace_memory (addr:int64) (data:string) (env:Path_pred_env.t): unit =
-  let len = String.length data in
-  let rec aux f i =
-    if i >= len then
-      f
-    else begin
-      let offset = Int64.add addr (Int64.of_int i) in
-      Logger.debug ~level:2 "Will store memory[%Lx]=0x%x" offset (Char.code (String.get data i));
-      let f_cnt = SmtBvCst(Bitvector.create (String.get data i |> Char.code |> Bigint.big_int_of_int)  8) in
-      let f_addr = SmtBvCst(Bitvector.create (Bigint.big_int_of_int64 offset) env.Path_pred_env.addr_size) in
-      let new_f = store_memory f (SmtABvStore(f.memory, f_addr, f_cnt)) in
-      aux new_f (i+1)
-    end
-  in
-  env.Path_pred_env.formula <- aux env.Path_pred_env.formula 0
+and bv_term_desc_stats acc = function
+  | BvCst _ -> {acc with cst = acc.cst+1}
+  | BvFun (_,ls) -> funs_stats {acc with var = acc.var+1} ls
+  | BvLet (bn,bv) -> bv_term_stats (lets_stats acc bn) bv
+  | BvUnop (_,bv) -> bv_term_stats {acc with unop = acc.unop+1} bv
+  | BvBnop (_,bv1,bv2) -> bv_term_stats (bv_term_stats {acc with bnop = acc.bnop+1} bv1) bv2
+  | BvIte  (bl,bv1,bv2) -> bv_term_stats (bv_term_stats (bl_term_stats acc bl) bv1) bv2
+  | Select (n,ax,bv) -> bv_term_stats (ax_term_stats {acc with select = acc.select+n} ax) bv
 
-let symbolize_value
-    (name:string) (size:int) (low:int) (high:int) ?(is_full_name = false)
-    (prefix_symbol:string) (env:Path_pred_env.t): unit =
-  Logger.debug ~level:2 "Will symbolise %s[%d]{%d,%d}" name size low high;
-  let final_name = if(is_full_name) then prefix_symbol else prefix_symbol^"_"^name in
-  let var_f = SmtBvVar(final_name,high-low+1) in
-  let new_f = add_symbolic_input env.Path_pred_env.formula final_name (high-low+1) in
-  env.Path_pred_env.formula <- change_variable new_f name size low high var_f
+and ax_term_stats acc ax =
+  ax_term_desc_stats acc ax.ax_term_desc
+
+and ax_term_desc_stats acc = function
+  | AxFun (_,ls) -> funs_stats {acc with var = acc.var+1} ls
+  | AxLet (bn,ax) -> ax_term_stats (lets_stats acc bn) ax
+  | AxIte (bl,ax1,ax2) -> ax_term_stats (ax_term_stats (bl_term_stats acc bl) ax1) ax2
+  | Store (n,ax,bv1,bv2) ->
+    bv_term_stats (bv_term_stats (ax_term_stats {acc with select = acc.select+n} ax) bv1) bv2
+
+and def_stats acc df =
+  def_desc_stats acc df.def_desc
+
+and def_desc_stats acc = function
+  | BlDef (_,_,bl) -> bl_term_stats acc bl
+  | BvDef (_,_,bv) -> bv_term_stats acc bv
+  | AxDef (_,_,ax) -> ax_term_stats acc ax
+
+and funs_stats acc ls =
+  List.fold_left term_stats acc ls
+
+and lets_stats acc ls =
+  List.fold_left def_stats acc ls
 
 
-let symbolize_register (name:string) ?(is_full_name = false) (prefix_symbol:string) (env:Path_pred_env.t): unit =
-  let fullname, low, high = X86Util.reg_to_extract name in
-  let fullname, l, h = X86Util.reg_to_extract fullname in
-  symbolize_value fullname  (h-l+1) low high ~is_full_name:is_full_name prefix_symbol env
+let bl_term_stats bl = bl_term_stats empty_stats bl
+let bv_term_stats bv = bv_term_stats empty_stats bv
+let ax_term_stats ax = ax_term_stats empty_stats ax
 
-let symbolize_memory_one_octet (addr:int64) (prefix_symbol:string)  (env:Path_pred_env.t): unit =
-  let f = env.Path_pred_env.formula in
-  let name = prefix_symbol in
-  let offset = addr in
-  let f_addr = SmtBvCst(Bitvector.create (Bigint.big_int_of_int64 offset) env.Path_pred_env.addr_size) in
-  let var_f = SmtBvVar(name,8) in
-  let new_f = add_symbolic_input f name 8 in
-  let new_f = store_memory new_f (SmtABvStore(new_f.memory, f_addr, var_f)) in
-  env.Path_pred_env.formula <- new_f
 
-let rec symbolize_memory (expr_addr:Dba.expr) (prefix_symbol:string) ?(i=0) (size:int) (env:Path_pred_env.t): unit =
-  let sz = env.Path_pred_env.addr_size/8 in
-  let aux in_sz =
-    let name =  if in_sz = size then prefix_symbol else prefix_symbol^"_"^(string_of_int i) in
-    Logger.debug ~level:2  "Stub: symbolize memory [%a]=%s"
-      Pp.pp_expr expr_addr name;
-    let addr = env.Path_pred_env.analysis#get_current_dbacodeaddress () in
-    let dba_instr =
-      Dba_types.Statement.create
-      addr
-      (Dba.IkAssign(Dba.LhsStore(in_sz, Dba.LittleEndian, expr_addr),
-                   Dba.ExprVar(name, in_sz * 8, None), addr.Dba.id)) in
-    env.Path_pred_env.analysis#exec dba_instr env;
-    let new_addr =
-      Dba_types.Expr.binary Dba.Plus expr_addr
-        (Dba_types.Expr.constant
-           (Bitvector.create (Bigint.big_int_of_int in_sz) env.Path_pred_env.addr_size)) in
-    symbolize_memory new_addr prefix_symbol ~i:(i+in_sz) size env
-  in
-  match size-i with
-  | 0 -> ()
-  | x when x >= sz -> aux sz
-  | _ -> aux 1
+let rec term_variables acc tm =
+  term_desc_variables acc tm.term_desc
 
-let logicalize_memory (expr_addr:Dba.expr) (expr_content:Dba.expr) (env:Path_pred_env.t): unit =
-  (* TODO: enforce the size of expr_content to be 8 bits size *)
-  let addr = env.Path_pred_env.analysis#get_current_dbacodeaddress () in
-  let in_sz = Dba_utils.computesize_dbaexpr expr_content in
-  let dba_instr =
-    Dba_types.Statement.create
-      addr
-    (Dba.IkAssign(Dba.LhsStore(in_sz/8, Dba.LittleEndian, expr_addr), expr_content, addr.Dba.id)) in
-  env.Path_pred_env.analysis#exec dba_instr env
+and term_desc_variables acc = function
+  | BlTerm bl -> bl_term_variables acc bl
+  | BvTerm bv -> bv_term_variables acc bv
+  | AxTerm ax -> ax_term_variables acc ax
 
-let symbolize_and_then_concretize_register (name:string) (f_expr:smt_bv_expr) (prefix_symbol:string) (env:Path_pred_env.t): unit =
-  symbolize_register name prefix_symbol env;
-  concretize_register name f_expr env (* TODO:attach this constraint to the variable declaration *)
+and bl_term_variables acc bl =
+  bl_term_desc_variables acc bl.bl_term_desc
+
+and bl_term_desc_variables acc = function
+  | BlTrue | BlFalse -> acc
+  | BlFun (v,ls) -> funs_variables (VarSet.add (BlVar v) acc) ls
+  | BlLet (bn,bl) -> bl_term_variables (lets_variables acc bn) bl
+  | BlUnop (_,bl) -> bl_term_variables acc bl
+  | BlBnop (_,bl1,bl2) -> bl_term_variables (bl_term_variables acc bl1) bl2
+  | BlComp (_,bl1,bl2) -> bl_term_variables (bl_term_variables acc bl1) bl2
+  | BvComp (_,bv1,bv2) -> bv_term_variables (bv_term_variables acc bv1) bv2
+  | AxComp (_,ax1,ax2) -> ax_term_variables (ax_term_variables acc ax1) ax2
+  | BlIte (bl,bl1,bl2) -> bl_term_variables (bl_term_variables (bl_term_variables acc bl) bl1) bl2
+
+and bv_term_variables acc bv =
+  bv_term_desc_variables acc bv.bv_term_desc
+
+and bv_term_desc_variables acc = function
+  | BvCst _ -> acc
+  | BvFun (v,ls) -> funs_variables (VarSet.add (BvVar v) acc) ls
+  | BvLet (bn,bv) -> bv_term_variables (lets_variables acc bn) bv
+  | BvUnop (_,bv) -> bv_term_variables acc bv
+  | BvBnop (_,bv1,bv2) -> bv_term_variables (bv_term_variables acc bv1) bv2
+  | BvIte (bl,bv1,bv2) -> bv_term_variables (bv_term_variables (bl_term_variables acc bl) bv1) bv2
+  | Select (_,ax,bv) -> bv_term_variables (ax_term_variables acc ax) bv
+
+and ax_term_variables acc ax =
+  ax_term_desc_variables acc ax.ax_term_desc
+
+and ax_term_desc_variables acc = function
+  | AxFun (v,ls) -> funs_variables (VarSet.add (AxVar v) acc) ls
+  | AxLet (bn,ax) -> ax_term_variables (lets_variables acc bn) ax
+  | AxIte (bl,ax1,ax2) -> ax_term_variables (ax_term_variables (bl_term_variables acc bl) ax1) ax2
+  | Store (_,ax,bv1,bv2) -> bv_term_variables (bv_term_variables (ax_term_variables acc ax) bv1) bv2
+
+and def_variables acc df =
+  def_desc_variables acc df.def_desc
+
+and def_desc_variables acc = function
+  | BlDef (_,_,bl) -> bl_term_variables acc bl
+  | BvDef (_,_,bv) -> bv_term_variables acc bv
+  | AxDef (_,_,ax) -> ax_term_variables acc ax
+
+and funs_variables acc ls =
+  List.fold_left term_variables acc ls
+
+and lets_variables acc ls =
+  List.fold_left def_variables acc ls
+
+
+let bl_term_variables bl = bl_term_variables VarSet.empty bl
+let bv_term_variables bv = bv_term_variables VarSet.empty bv
+let ax_term_variables ax = ax_term_variables VarSet.empty ax
+
+let is_symbolic_bl_term bl = (bl_term_stats bl).var > 0
+let is_symbolic_bv_term bv = (bv_term_stats bv).var > 0
+let is_symbolic_ax_term ax = (ax_term_stats ax).var > 0
+
+(* Some accessors *)
+
+let bv_size bv = bv.bv_term_size
+
+let ax_size ax = ax.idx_term_size, ax.elt_term_size
+
+let bv_desc_size = function
+  | BvCst bv -> Bitvector.size_of bv
+  | BvFun (v,_) -> v.bv_size
+  | BvLet (_,bv) -> bv_size bv
+  | BvUnop (u,bv) ->
+    (match u with
+     | BvNot | BvNeg -> bv_size bv
+     | BvRepeat i -> i * bv_size bv
+     | BvZeroExtend i
+     | BvSignExtend i -> i + bv_size bv
+     | BvRotateLeft _
+     | BvRotateRight _ -> bv_size bv
+     | BvExtract i -> i.Interval.hi - i.Interval.lo + 1)
+  | BvBnop (bv,bv1,bv2) ->
+    let bv1 = bv_size bv1 in
+    let bv2 = bv_size bv2 in
+    (match bv with
+     | BvConcat -> bv1 + bv2
+     | BvCmp -> assert (bv1 = bv2); 1
+     | BvAnd | BvNand
+     | BvOr  | BvNor
+     | BvXor | BvXnor
+     | BvAdd | BvSub | BvMul
+     | BvUdiv | BvSdiv
+     | BvUrem | BvSrem | BvSmod
+     | BvShl  | BvAshr | BvLshr -> assert (bv1 = bv2); bv1)
+  | BvIte (_,bv1,bv2) ->
+    let bv1 = bv_size bv1 in
+    let bv2 = bv_size bv2 in
+    assert (bv1 = bv2); bv1
+  | Select (n,ax,bv) ->
+    let bv = bv_size bv in
+    let idx, elt = ax_size ax in
+    assert (idx = bv); n * elt
+
+let ax_desc_size = function
+  | AxFun (v,_) -> v.idx_size, v.elt_size
+  | AxLet (_,ax) -> ax_size ax
+  | AxIte (_,ax1,ax2) ->
+    let idx1, elt1 = ax_size ax1 in
+    let idx2, elt2 = ax_size ax2 in
+    assert (idx1 = idx2);
+    assert (elt1 = elt2);
+    idx1, elt1
+  | Store (n,ax,bv1,bv2) ->
+    let idx, elt = ax_size ax in
+    let bv1 = bv_size bv1 in
+    let bv2 = bv_size bv2 in
+    assert (idx = bv1);
+    assert (n * elt = bv2);
+    idx, elt
+
+
+let is_bl_desc_cst = function
+  | BlTrue -> Some true
+  | BlFalse -> Some false
+  | BlFun (_,_) -> None
+  | BlLet (_,_) -> None
+  | BlUnop (_,_) -> None
+  | BlBnop (_,_,_) -> None
+  | BlComp (_,_,_) -> None
+  | BvComp (_,_,_) -> None
+  | AxComp (_,_,_) -> None
+  | BlIte (_,_,_) -> None
+
+let is_bl_cst bl =
+  is_bl_desc_cst bl.bl_term_desc
+
+let is_bv_desc_cst = function
+  | BvCst bv -> Some bv
+  | BvFun (_,_) -> None
+  | BvLet (_,_) -> None
+  | BvUnop (_,_) -> None
+  | BvBnop (_,_,_) -> None
+  | BvIte (_,_,_) -> None
+  | Select (_,_,_) -> None
+
+let is_bv_cst bv =
+  is_bv_desc_cst bv.bv_term_desc
+
+let is_bl_desc_var = function
+  | BlTrue -> None
+  | BlFalse -> None
+  | BlFun (v,l) ->
+    (match l with
+     | [] -> Some v
+     | _ :: _ -> None)
+  | BlLet (_,_) -> None
+  | BlUnop (_,_) -> None
+  | BlBnop (_,_,_) -> None
+  | BlComp (_,_,_) -> None
+  | BvComp (_,_,_) -> None
+  | AxComp (_,_,_) -> None
+  | BlIte (_,_,_) -> None
+
+let is_bl_var bl =
+  is_bl_desc_var bl.bl_term_desc
+
+let is_bv_desc_var = function
+  | BvCst _ -> None
+  | BvFun (v,l) ->
+    (match l with
+     | [] -> Some v
+     | _ :: _ -> None)
+  | BvLet (_,_) -> None
+  | BvUnop (_,_) -> None
+  | BvBnop (_,_,_) -> None
+  | BvIte (_,_,_) -> None
+  | Select (_,_,_) -> None
+
+let is_bv_var bv =
+  is_bv_desc_var bv.bv_term_desc
+
+let is_ax_desc_var = function
+  | AxFun (v,l) ->
+    (match l with
+     | [] -> Some v
+     | _ :: _ -> None)
+  | AxLet (_,_) -> None
+  | AxIte (_,_,_) -> None
+  | Store (_,_,_,_) -> None
+
+let is_ax_var ax =
+  is_ax_desc_var ax.ax_term_desc
+
+let is_select { bv_term_desc; _ } =
+  match bv_term_desc with
+  | Select (n,ax,bv) -> Some (n, ax, bv)
+  | BvCst _ -> None
+  | BvFun (_,_) -> None
+  | BvLet (_,_) -> None
+  | BvUnop (_,_) -> None
+  | BvBnop (_,_,_) -> None
+  | BvIte (_,_,_) -> None
+
+let is_store { ax_term_desc; _ } =
+  match ax_term_desc with
+  | Store (n,ax,bv1,bv2) -> Some (n, ax, bv1, bv2)
+  | AxFun (_,_) -> None
+  | AxLet (_,_) -> None
+  | AxIte (_,_,_) -> None
+
+
+let bl_var_hash bl = bl.bl_hash
+let bv_var_hash bv = bv.bv_hash
+let ax_var_hash ax = ax.ax_hash
+
+let var_hash = function
+  | BlVar v -> bl_var_hash v
+  | BvVar v -> bv_var_hash v
+  | AxVar v -> ax_var_hash v
+
+let bl_var_name bl = bl.bl_name
+let bv_var_name bv = bv.bv_name
+let ax_var_name ax = ax.ax_name
+
+
+let var_name = function
+  | BlVar v -> bl_var_name v
+  | BvVar v -> bv_var_name v
+  | AxVar v -> ax_var_name v
+
+let rec bl_term_desc_name = function
+  | BlFun (v,l) ->
+    (match l with
+     | [] -> Some v.bl_name
+     | _ :: _ -> None)
+  | BlLet (_,bl) -> bl_term_name bl
+  | BlTrue | BlFalse
+  | BlUnop _ | BlBnop _
+  | BlComp _ | BvComp _
+  | AxComp _ | BlIte  _ -> None
+
+and bl_term_name bl = bl_term_desc_name bl.bl_term_desc
+
+let rec bv_term_desc_name = function
+  | BvFun (v,l) ->
+    (match l with
+     | [] -> Some v.bv_name
+     | _ :: _ -> None)
+  | BvLet (_,bv) -> bv_term_name bv
+  | BvCst _  | BvIte _
+  | BvUnop _ | BvBnop _
+  | Select _ -> None
+
+and bv_term_name bv = bv_term_desc_name bv.bv_term_desc
+
+let rec ax_term_desc_name = function
+  | AxFun (v,l) ->
+    (match l with
+     | [] -> Some v.ax_name
+     | _ :: _ -> None)
+  | AxLet (_,ax) -> ax_term_name ax
+  | Store (_,ax,_,_) -> ax_term_name ax
+  | AxIte _ -> None
+
+and ax_term_name ax = ax_term_desc_name ax.ax_term_desc
+
+let decl_desc_name = function
+  | BlDecl (v,_) -> v.bl_name
+  | BvDecl (v,_) -> v.bv_name
+  | AxDecl (v,_) -> v.ax_name
+
+let decl_name dc =
+  decl_desc_name dc.decl_desc
+
+let def_desc_name = function
+  | BlDef (v,_,_) -> v.bl_name
+  | BvDef (v,_,_) -> v.bv_name
+  | AxDef (v,_,_) -> v.ax_name
+
+let def_name df =
+  def_desc_name df.def_desc
+

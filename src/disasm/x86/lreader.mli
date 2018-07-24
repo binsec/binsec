@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,23 +20,27 @@
 (**************************************************************************)
 
 (** Basic stream reader *)
+
 type bytestream
 
 type t
 
-(* {7 Constructors }*)
+(** {7 Constructors} *)
+
 val of_img : ?cursor:int -> Loader.Img.t -> t
 
 val of_nibbles : ?cursor:int -> ?base:int -> string -> t
+
 val of_bytes : ?cursor:int -> ?base:int -> string -> t
 
-val of_binstream : ?cursor:int -> ?base:int -> Basic_types.Binstream.t -> t
+val of_binstream : ?cursor:int -> ?base:int -> Binstream.t -> t
 
-(* {7 Pretty-printer} *)
+(** {7 Pretty-printer} *)
+
 val pp : Format.formatter -> t -> unit
 
-(* {7 Generic manipulation functions} *)
-val set_virtual_cursor : t -> int -> unit
+(** {7 Generic manipulation functions} *)
+
 val get_virtual_cursor : t -> int
 
 val rewind : t -> int -> unit
@@ -49,22 +53,34 @@ val advance : t -> int -> unit
 
 module type Accessor = sig
   type t
+  (* read an unsigned int *)
   val u8  : t -> int
   val u16 : t -> int
   val u32 : t -> int
   val u64 : t -> int
+  (* read a signed int *)
+  val i8  : t -> int
+  val i16 : t -> int
+  val i32 : t -> int
+  (* u64 is incorrect because the sign bit is ignored; no i64 *)
 end
 
-module Read : Accessor with type t:=t
+module Read : Accessor with type t := t
 (** Accessor functions of module [Read]
     read n=1, 2, 4, or 8 bytes and advance n bytes as well.
 *)
 
-module Peek : Accessor with type t:=t
 (** [Peek] is like [Read] but does not advance *)
+module Peek : sig
+  include Accessor with type t:=t
+
+  val peek : t -> int -> int
+  (** [peek loader n] peeks at the next [n] bytes of loader [loader] *)
+end
+
 
 val get_slice : t -> int -> int -> int list
-(* [get_slice addr_start addr_end] returns the list of bytes contained in the
-   interval [addr_start, addr_end[.
-   @assert addr_start < addr_end
+(** [get_slice addr_start addr_end] returns the list of bytes contained in the
+    interval from [addr_start] included to [addr_end] excluded.
+    @assert addr_start < addr_end
 *)

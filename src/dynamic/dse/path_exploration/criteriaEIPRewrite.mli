@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -25,4 +25,4 @@ module CriteriaEIPRewrite :
     val init_criteria : conf_criteria -> unit
     val verdict       : conf_criteria -> Conf_exploration.conf_t -> bool
     val stop_criteria : HistoryDSE_v(TraceDSE_v).history_t -> TraceDSE_v.child_t list -> bool
-end
+  end

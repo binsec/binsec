@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -35,9 +35,9 @@ module type S = sig
   val next_children : TypeTraceDSE.location_t option -> trace_t -> history_t -> children_t
 
   val add_children : children_t -> children_t -> children_t
-  
+
   val add_children_max_score : children_t -> child_t list -> (children_t * int)
-  
+
   val add_children_second_max_score : children_t -> child_t list -> (children_t * int)
 
   val set_score : score_input_t -> unit
@@ -55,5 +55,4 @@ module type TypeGuideDSE =
     S
   with type child_t = TraceDSE_v.child_t
    and type trace_t = TraceDSE_v.trace_t
-   and type history_t = HistoryDSE_v(TraceDSE_v).history_t 
-  
+   and type history_t = HistoryDSE_v(TraceDSE_v).history_t

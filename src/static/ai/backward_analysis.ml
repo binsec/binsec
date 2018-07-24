@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,43 +19,43 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Smtlib2
+open Formula
 open Dba
 open Normalize_instructions
 
 let update instr cur_addr pre_addr _ varIndexes vars lets inputs env =
+
   match instr with
-  | IkAssign (lhs, expr, _) ->
+  | Instr.Assign (lhs, expr, _) ->
     let new_let, _, inputs, varIndexes =
       assign_to_f lhs expr varIndexes vars inputs in
     new_let :: lets, env, inputs, varIndexes
-  | IkIf (cond, codeaddr, _) ->
+  | Instr.If (condition, codeaddr, _) ->
     let next_addr =
       match codeaddr with
       | JInner off -> Dba_types.Caddress.reid cur_addr off
       | JOuter addr -> addr
     in
     let c, inputs =
-      if Dba_types.Caddress.equal next_addr pre_addr then
-        cond_to_f cond inputs varIndexes
-      else
-        cond_to_f (Dba.CondNot cond) inputs varIndexes
+      let condition =
+        if Dba_types.Caddress.equal next_addr pre_addr then condition
+        else Expr.lognot condition
+      in cond_to_f ~condition inputs varIndexes
     in
-    lets, c :: env, inputs, varIndexes
-  | IkSJump (_, Some (Call _))
-  | IkDJump (_, Some (Call _)) (* -> raise Not_found  *)
-  | IkSJump (_, _)
-  | IkDJump (_, _)
-  | IkMalloc (_, _, _)
-  | IkFree (_, _)
-  | IkStop _
-  | IkAssert (_, _)
-  | IkAssume (_, _)
-  | IkNondetAssume (_, _, _)
-  | IkNondet (_, _, _)
-  | IkUndef (_, _)
-  | IkPrint (_, _) -> lets, env, inputs, varIndexes
-
+    lets, (mk_bv_equal c (mk_bv_one)) :: env, inputs, varIndexes
+  | Instr.SJump (_, Some (Call _))
+  | Instr.DJump (_, Some (Call _)) (* -> raise Not_found  *)
+  | Instr.SJump (_, _)
+  | Instr.DJump (_, _)
+  | Instr.Malloc (_, _, _)
+  | Instr.Free (_, _)
+  | Instr.Stop _
+  | Instr.Assert (_, _)
+  | Instr.Assume (_, _)
+  | Instr.NondetAssume (_, _, _)
+  | Instr.Nondet (_, _, _)
+  | Instr.Undef (_, _)
+  | Instr.Print (_, _) -> lets, env, inputs, varIndexes
 
 
 let values_to_assertions addrStack states varIndexes inputs f =
@@ -63,32 +63,30 @@ let values_to_assertions addrStack states varIndexes inputs f =
   f m varIndexes inputs
 
 
-
 let get_targeted_var instr _varIndexes =
   match instr with
-  | IkAssign (LhsStore (_, _, ExprVar(name, 32, _)), _, _) ->
+  | Instr.Assign (LValue.Store (_, _, Expr.Var(name, 32, _)), _, _)
+  | Instr.DJump (Expr.Var (name, 32, _), _) ->
     name ^ "0"
-  | IkDJump (ExprVar (name, 32, _), _) ->
-    name ^ "0"
-  | IkDJump (ExprLoad (sz, en,  expr), _) ->
-    let inputs = Smtlib2.SmtVarSet.empty in
+  | Instr.DJump (Expr.Load (sz, en,  expr), _) ->
+    let inputs = Formula.VarSet.empty in
     let varIndexes = Basic_types.String.Map.empty in
     let smt_v, _ = load_to_smt expr sz en inputs varIndexes in
-    Smtlib2print.smtbvexpr_to_string smt_v
+    Formula_pp.print_bv_term smt_v
 
-  | IkAssign (_, _, _)
-  | IkDJump (_, _)
-  | IkSJump (_, _)
-  | IkIf (_, _, _)
-  | IkStop _
-  | IkAssert (_, _)
-  | IkAssume (_, _)
-  | IkNondetAssume (_, _, _)
-  | IkNondet (_, _, _)
-  | IkUndef (_, _)
-  | IkMalloc (_, _, _)
-  | IkFree (_, _)
-  | IkPrint (_, _) ->
+  | Instr.Assign (_, _, _)
+  | Instr.DJump (_, _)
+  | Instr.SJump (_, _)
+  | Instr.If (_, _, _)
+  | Instr.Stop _
+  | Instr.Assert (_, _)
+  | Instr.Assume (_, _)
+  | Instr.NondetAssume (_, _, _)
+  | Instr.Nondet (_, _, _)
+  | Instr.Undef (_, _)
+  | Instr.Malloc (_, _, _)
+  | Instr.Free (_, _)
+  | Instr.Print (_, _) ->
     Logger.error "Instruction %a"
       Dba_printer.Ascii.pp_instruction instr;
     failwith "invalid targeted instruction in backward analysis!"
@@ -126,14 +124,14 @@ let backward_refine_elements addrStack states instrs f w_pts =
       let a =  Dba_types.AddressStack.Set.choose preds in
       let addr_pre, _, _ =  a in
       try
-          check_widening_point addr_pre w_pts;
-          backward_collect a addr (lets, env, inputs)
+        check_widening_point addr_pre w_pts;
+        backward_collect a addr (lets, env, inputs)
       with Not_found -> default
     else default
   in
   let addr, _, _ = addrStack in
   let instr, _ = Dba_types.Caddress.Map.find addr instrs in
-  let inputs = SmtVarSet.empty in
+  let inputs = VarSet.empty in
   let vars =  Basic_types.String.Map.empty in
   let varIndexes = Basic_types.String.Map.empty in
   let lets, env, inputs, varIndexes =

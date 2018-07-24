@@ -1,7 +1,7 @@
 ##########################################################################
-#  This file is part of Binsec.                                          #
+#  This file is part of BINSEC.                                          #
 #                                                                        #
-#  Copyright (C) 2016-2017                                               #
+#  Copyright (C) 2016-2018                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -32,7 +32,7 @@ PINSEC_BUILD_DIR = $(PINSEC_DIR)/build
 CMAKE = cmake
 PIN_ROOT_DIR ?= pin-2.14-71313-gcc.4.4.7-linux
 pinsec: protoc
-	$(MKDIR) $(PINSEC_BUILD_DIR)
+	$(MKDIR_P) $(PINSEC_BUILD_DIR)
 	$(PP) "Using PIN from $(PIN_ROOT_DIR)"
 	($(CD) $(PINSEC_BUILD_DIR); \
 	$(CMAKE) -DPIN_ROOT_DIR=$(PIN_ROOT_DIR) ..)
@@ -45,7 +45,10 @@ pinsec-clean:
 
 BINSEC_DIR = src
 binsec:
-	$(MAKE) -C $(BINSEC_DIR)
+ifeq ($(USE_OCAMLBUILD), no)
+	$(MAKE) -C $(BINSEC_DIR) depend
+endif
+	$(MAKE) -C $(BINSEC_DIR) -j
 
 binsec-clean:
 	$(MAKE) -C $(BINSEC_DIR) clean
@@ -62,6 +65,8 @@ veryclean: clean clean-configure
 tests:
 	$(MAKE) -C tests
 
+install:
+	$(MAKE) -C src install
 
 include $(PINSEC_DIR)/Targets.mk
 include $(BINSEC_DIR)/Targets.mk

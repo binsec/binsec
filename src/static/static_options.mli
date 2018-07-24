@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,7 +19,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Common command-line options for static analyses *)
-module Disassembly : Parameters.Boolean
+include Cli.S
 
-module NaiveWidening : Parameters.Boolean
+(** Common command-line options for static analyses *)
+module Disassembly : Cli.BOOLEAN
+
+module NaiveWidening : Cli.BOOLEAN

@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
@@ -24,7 +24,7 @@ val apply_libcall_policy :
   int -> Trace_type.trace_inst ->
   Common_piqi.call_convention_t ->
   Common_piqi.action ->
-  Path_pred_env.t ->
+  Path_predicate_env.t ->
   unit
 
 
@@ -41,4 +41,4 @@ val check_libcall_policy_consistency :
 val serialize_stack_params : Libcall_piqi.libcall_t -> string
 
 val apply_default_stub : int -> Common_piqi.call_convention_t
-  -> Path_pred_env.t -> unit
+  -> Path_predicate_env.t -> unit

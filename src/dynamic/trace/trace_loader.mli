@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -32,14 +32,14 @@ val parse_chunk: in_channel -> Trace_piqi.chunk_t option
 
 (** [complete_partial_trace trace chunk keep] complete [trace]
     with the chunk [chunk]. [keep] indicates either or not to
-    keep old instruction in the trace. Set to [true] if the 
+    keep old instruction in the trace. Set to [true] if the
     whole trace cannot fit in memory *)
 val complete_partial_trace: trace -> Trace_piqi.chunk_t -> bool -> trace
 
 (** read all chunks in the channel and put them in the trace *)
 val complete_all_partial_trace: trace -> in_channel -> trace
 
-(** start reading a trace from the given channel. It first 
+(** start reading a trace from the given channel. It first
     parse the trace header and load the first chunk. [?load_all]
     indicates either to load all the chunks or not *)
 val load_partial_trace_from_file : ?load_all:bool -> in_channel -> trace
@@ -49,11 +49,15 @@ val load_partial_trace_from_file : ?load_all:bool -> in_channel -> trace
 val load_partial_trace_from_string : string -> string -> trace
 
 (** print the whole trace *)
-val print_trace: Options.trace_format -> unit
+val print_trace: Trace_config.trace_format -> unit
 
-(** [get_load_content addr ~esp_value size infos] return the 
-    runtime data read in memory at [addr] of size [size] in 
+(** [get_load_content addr ~esp_value size infos] return the
+    runtime data read in memory at [addr] of size [size] in
     the instruction concrete informations [info]
 
     Warning:Do not modify [esp_value]*)
 val get_load_content: int64 -> ?esp_value:int64 -> int -> conc_infos -> string
+
+
+val as_cfg : Trace_config.t -> Instr_cfg.t
+val view_cfg : Trace_config.t -> unit

@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,10 +21,10 @@
 
 (** Opaque predicates analysis *)
 
-class opaque_analyzer : Options.trace_analysis_config ->
-        object inherit Path_predicate.dse_analysis
-end
+class opaque_analyzer : Trace_config.t ->
+  object inherit Path_predicate.dse_analysis
+  end
 
-class static_opaque_analyzer : Options.trace_analysis_config ->
-        object inherit Path_predicate.dse_analysis
-end
+class static_opaque_analyzer : Trace_config.t ->
+  object inherit Path_predicate.dse_analysis
+  end

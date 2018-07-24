@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -51,13 +51,17 @@ exception Stop_Unsupported of string
 exception Empty_env
 exception Div_by_zero
 
+exception Mismatched_instruction_size of Dba.Instr.t
+exception Mismatched_address_size of Dba.address
+
+
 (** {7 Constructors} *)
 val invalid_address : string -> 'a
 
 val not_yet_implemented : string -> 'a
 
-val mismatched_instruction_size : Dba.instruction -> 'a
+val mismatched_instruction_size : Dba.Instr.t -> 'a
 
 val mismatched_address_size : Dba.address -> 'a
 
-val assert_failure : Dba.address -> Dba.instruction -> 'a
+val assert_failure : Dba.address -> Dba.Instr.t -> 'a

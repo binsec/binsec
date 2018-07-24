@@ -29,6 +29,6 @@ sig
   type data_t
   val check_consistency: pol_t -> action -> bool
   val serialize_stack_params: data_t -> string
-  val apply_policy: pol_t -> data_t -> (module CallConvention) -> string -> conc_infos -> action -> Path_pred_env.t -> unit 
+  val apply_policy: pol_t -> data_t -> (module CallConvention) -> string -> conc_infos -> action -> Path_predicate_env.t -> unit
   val to_string: data_t -> string
 end

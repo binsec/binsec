@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,7 +24,7 @@ open Dba_printer.Ascii
 
 let pp_opcode ppf = function
   | Some s ->
-    fprintf ppf "%a" Disasm_types.GenericInstruction.pp_opcode s
+    fprintf ppf "%a" Instruction.Generic.pp_opcode s
   | None ->
     fprintf ppf "No opcode"
 
@@ -35,23 +35,23 @@ let initial_block_address_of_addressStack (addr, _, _) =
 
 let expression_of_instruction instr =
   match instr with
-  | Dba.IkMalloc (_, expr, _)
-  | Dba.IkFree (expr, _)
-  | Dba.IkAssign (_, expr, _)
-  | Dba.IkDJump (expr, _) -> Some expr
-  | Dba.IkStop _ -> Some (Dba.ExprVar ("eax", 32, None))
-  | Dba.IkSJump _
-  | Dba.IkIf _
-  | Dba.IkAssert _
-  | Dba.IkAssume _
-  | Dba.IkNondetAssume _
-  | Dba.IkNondet _
-  | Dba.IkUndef _
-  | Dba.IkPrint _ -> None
+  | Dba.Instr.Malloc (_, expr, _)
+  | Dba.Instr.Free (expr, _)
+  | Dba.Instr.Assign (_, expr, _)
+  | Dba.Instr.DJump (expr, _) -> Some expr
+  | Dba.Instr.Stop _ -> Some (Dba.Expr.var "eax" 32 None)
+  | Dba.Instr.SJump _
+  | Dba.Instr.If _
+  | Dba.Instr.Assert _
+  | Dba.Instr.Assume _
+  | Dba.Instr.NondetAssume _
+  | Dba.Instr.Nondet _
+  | Dba.Instr.Undef _
+  | Dba.Instr.Print _ -> None
 
 
 let pp_cstatus states (_, stack, loop) ppf  = function
-  | Dba.IkIf (_, Dba.JOuter address1, offset) ->
+  | Dba.Instr.If (_, Dba.JOuter address1, offset) ->
     let p addr loop =
       Dba_types.AddressStack.Map.mem (addr, stack, loop) states in
     let address2 = Dba_types.Caddress.reid address1 offset in
@@ -62,30 +62,30 @@ let pp_cstatus states (_, stack, loop) ppf  = function
     else if p address1 loop || p address1 (succ loop)
     then fprintf ppf "True"
     else fprintf ppf "False"
-  | Dba.IkAssign _
-  | Dba.IkSJump _
-  | Dba.IkDJump _
-  | Dba.IkIf _
-  | Dba.IkStop _
-  | Dba.IkAssert _
-  | Dba.IkAssume _
-  | Dba.IkNondetAssume _
-  | Dba.IkNondet _
-  | Dba.IkUndef _
-  | Dba.IkMalloc _
-  | Dba.IkFree _
-  | Dba.IkPrint _ -> fprintf ppf ""
+  | Dba.Instr.Assign _
+  | Dba.Instr.SJump _
+  | Dba.Instr.DJump _
+  | Dba.Instr.If _
+  | Dba.Instr.Stop _
+  | Dba.Instr.Assert _
+  | Dba.Instr.Assume _
+  | Dba.Instr.NondetAssume _
+  | Dba.Instr.Nondet _
+  | Dba.Instr.Undef _
+  | Dba.Instr.Malloc _
+  | Dba.Instr.Free _
+  | Dba.Instr.Print _ -> fprintf ppf ""
 
 
 let get_fun_addr instr addr djmps =
   match instr with
-  | Dba.IkDJump (_, Some (Dba.Call _fun_addr)) ->
-      begin
-        try let addrSet = Dba_types.AddressStack.Map.find addr djmps in
-            Some addrSet
-        with Not_found -> None
-      end
-  | Dba.IkSJump (Dba.JOuter addr, Some (Dba.Call _fun_addr)) ->
+  | Dba.Instr.DJump (_, Some (Dba.Call _fun_addr)) ->
+    begin
+      try let addrSet = Dba_types.AddressStack.Map.find addr djmps in
+        Some addrSet
+      with Not_found -> None
+    end
+  | Dba.Instr.SJump (Dba.JOuter addr, Some (Dba.Call _fun_addr)) ->
     Some (Dba_types.Caddress.Set.singleton addr)
   | _ -> None
 
@@ -101,14 +101,14 @@ let pp_entry_points states instructions ppf djmps =
       | Some fun_addrs ->
         Dba_types.Caddress.Set.fold
           (fun fun_addr visited ->
-          if not (Dba_types.Caddress.Set.mem fun_addr visited)
-          then begin
-            fprintf ppf "fun_%d: %a (%d)@ " !iter pp_code_address fun_addr n;
-            incr iter;
-            Dba_types.Caddress.Set.add fun_addr visited
-          end
-          else visited
-        ) fun_addrs visited
+             if not (Dba_types.Caddress.Set.mem fun_addr visited)
+             then begin
+               fprintf ppf "fun_%d: %a (%d)@ " !iter pp_code_address fun_addr n;
+               incr iter;
+               Dba_types.Caddress.Set.add fun_addr visited
+             end
+             else visited
+          ) fun_addrs visited
     with Not_found -> assert false
   in
   pp_open_vbox ppf 0;
@@ -138,7 +138,7 @@ let pp_dynamic_jumps ppf djmps =
 
 let pp_conditions ppf rcd_conds =
   let pp_aux addr (_, comp_cond) =
-    fprintf ppf "%a: %a@ " pp_code_address addr pp_cond comp_cond
+    fprintf ppf "%a: %a@ " pp_code_address addr pp_bl_term comp_cond
   in
   pp_open_vbox ppf 0;
   Dba_types.Caddress.Map.iter pp_aux rcd_conds;
@@ -163,7 +163,7 @@ let pp_instructions states instructions regs_of_state ppf rcd_conds =
         let natural_cond ppf () =
           try
             let _, cond = Dba_types.Caddress.Map.find addr rcd_conds in
-            Dba_printer.Ascii.pp_cond ppf cond
+            Dba_printer.Ascii.pp_bl_term ppf cond
           with Not_found -> fprintf ppf ""
         in
         Format.fprintf ppf "@[<h>%a: %a @[%a %a %a@]@]@ "
@@ -190,10 +190,10 @@ let pp_section ppf section_name =
 let pp_results ppf states instructions rcd_conds djmps regs_of_state =
   fprintf ppf
     "@[<v 0>\
-    %a@ %a@ @ \
-    %a@ %a@ @ \
-    %a@ %a@ @ \
-    %a@ %a@ @ \
+     %a@ %a@ @ \
+     %a@ %a@ @ \
+     %a@ %a@ @ \
+     %a@ %a@ @ \
      @]"
     pp_section "Analyzed instructions"
     (pp_instructions states instructions regs_of_state) rcd_conds

@@ -1,7 +1,7 @@
 /**************************************************************************/
-/*  This file is part of Binsec.                                          */
+/*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2017                                               */
+/*  Copyright (C) 2016-2018                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -25,25 +25,25 @@
 
   type labeladdress =
   | Label of string
-  | Address of jump_target
+  | Address of id jump_target
 
   type labeloffset =
   | LabelIf of string
   | OffsetIf of id
 
   type parserinstrkind =
-  | Assign of lhs * expr * id
-  | SJump of labeladdress * (tag option)
-  | DJump of expr * (tag option)
-  | If of cond * labeladdress * labeloffset
+  | Assign of LValue.t * Expr.t * id
+  | SJump of labeladdress * Tag.t option
+  | DJump of Expr.t * Tag.t option
+  | If of Expr.t * labeladdress * labeloffset
   | Stop of state option
-  | Assert of cond * id
-  | Assume of cond * id
-  | NondetAssume of (lhs list) * cond * id
-  | Nondet of lhs * region * id
-  | Undef of lhs * id
-  | Malloc of lhs * expr * id
-  | Free of expr * id
+  | Assert of Expr.t * id
+  | Assume of Expr.t * id
+  | NondetAssume of LValue.t list * Expr.t * id
+  | Nondet of LValue.t * region * id
+  | Undef of LValue.t * id
+  | Malloc of LValue.t * Expr.t * id
+  | Free of Expr.t * id
   | Print of printable list * id
 
 
@@ -62,31 +62,29 @@
     | i :: l ->
       let h =
         match i with
-          If(cond, thn, els) -> (
+        | If(cond, thn, els) -> (
             match thn, els with
             | Address a, OffsetIf b ->
-              Dba.IkIf(cond, a, b)
+              Instr.ite cond a b
             | Address a, LabelIf b -> (
-              try
-                let b' = Basic_types.String.Map.find b !locallabelMap in
-                Dba.IkIf(cond, a, b')
-              with Not_found ->
-                let message = "parser_infos.mly: jump to undefined label " ^ b in
-                failwith message
+              match Basic_types.String.Map.find b !locallabelMap with
+              | b' -> Instr.ite cond a b'
+              | exception Not_found ->
+                 let message = "parser_infos.mly: jump to undefined label " ^ b in
+                 failwith message
             )
             | Label b, OffsetIf a -> (
-              try
-                let b' = Basic_types.String.Map.find b !locallabelMap in
-                Dba.IkIf(cond, JInner b', a)
-              with Not_found ->
-                let message = "parsel_infos.mly: jump to undefined label " ^ b in
-                failwith message
+              match Basic_types.String.Map.find b !locallabelMap with
+              | b' -> Instr.ite cond (Jump_target.inner b') a
+              | exception Not_found ->
+                 let message = "parser_infos.mly: jump to undefined label " ^ b in
+                 failwith message
             )
             | Label a, LabelIf b -> (
               try
                 let a' = Basic_types.String.Map.find a !locallabelMap in
                 let b' = Basic_types.String.Map.find b !locallabelMap in
-                Dba.IkIf(cond, JInner a', b')
+                Instr.ite cond (Jump_target.inner a') b'
               with Not_found ->
                 let message = "parsel_infos.mly: jump to undefined label" in
                 failwith message
@@ -94,31 +92,29 @@
           )
         | SJump(dst, tag) -> (
           match dst with
-          | Address a ->
-            Dba.IkSJump(a, tag)
+          | Address a -> Instr.static_jump a ~tag
           | Label b -> (
-            try
-              let b' = Basic_types.String.Map.find b !locallabelMap in
-              Dba.IkSJump(JInner b', tag)
-            with Not_found ->
+            match Basic_types.String.Map.find b !locallabelMap with
+            | b' -> Instr.static_jump (Jump_target.inner b') ~tag
+            | exception Not_found ->
               let message = "parser_infos.mly: jump to undefined label " ^ b in
               failwith message
           )
         )
-        | Assign(lhs, expr, a) -> Dba.IkAssign(lhs, expr, a)
-        | DJump(dst, tag) -> Dba.IkDJump(dst, tag)
-        | Stop tag -> (Dba.IkStop tag)
-        | Undef (lhs, a) -> Dba.IkUndef(lhs, a)
-        | Malloc (a, b, c) -> Dba.IkMalloc (a, b, c)
-        | Free (a, b) -> Dba.IkFree (a, b)
-        | Assert (a, b) -> Dba.IkAssert (a, b)
-        | Assume (a, b) -> Dba.IkAssume (a, b)
-        | NondetAssume (a, b, c) -> Dba.IkNondetAssume (a, b, c)
-        | Nondet (a, b, c) -> Dba.IkNondet (a, b, c)
-        | Print (a, b) -> Dba.IkPrint (a, b)
+        | Assign(lhs, expr, a) -> Instr.assign lhs expr a
+        | DJump(dst, tag) -> Instr.dynamic_jump dst ~tag
+        | Stop tag -> Instr.stop tag
+        | Undef (lhs, a) -> Instr.undefined lhs a
+        | Malloc (a, b, c) -> Instr.malloc a b c
+        | Free (a, b) -> Instr.free a b
+        | Assert (a, b) -> Instr._assert a b
+        | Assume (a, b) -> Instr.assume a b
+        | NondetAssume (a, b, c) -> Instr.non_deterministic_assume a b c
+        | Nondet (a, b, c) -> Instr.non_deterministic a b c
+        | Print (a, b) -> Instr.print a b
       in let c = try (Dba_utils.checksize_instruction h)
         with
-          Errors.Assignment_size_conflict s ->
+        | Errors.Assignment_size_conflict s ->
             failwith("Assignment_size_conflict " ^ s ^" in info file")
         | Errors.Undeclared_variable s ->
           failwith ("Undeclared_variable " ^ s ^" in info file")
@@ -137,49 +133,63 @@
 
   let chain_insns addr insns =
     let rec aux addr insns l =
-      let last_instr = Dba.IkDJump(Dba.ExprVar("ret", 32, None), Some Dba.Return) in
+      let last_instr =
+        Instr.dynamic_jump (Expr.var "ret" 32 None) ~tag:(Some Dba.Return) in
       match insns with
       | [] -> [addr, last_instr]
       | i :: [] -> (
         match i with
-        | Dba.IkIf(cond, thn, els) -> (l @ [(addr, Dba.IkIf(cond, thn, els))])
-        | Dba.IkAssign(lhs, expr, _) ->
+        | Dba.Instr.If(cond, thn, els) -> l @ [addr, Instr.ite cond thn els]
+        | Dba.Instr.Assign(lhs, expr, _) ->
           l @
-          [addr, Dba.IkAssign(lhs, expr, addr.id + 1); incindex addr 1, last_instr]
-        | Dba.IkUndef (lhs, _) ->
+            [addr, Instr.assign lhs expr (addr.id + 1);
+             incindex addr 1, last_instr
+            ]
+        | Dba.Instr.Undef (lhs, _) ->
           l @
-          [addr, Dba.IkUndef (lhs, addr.id + 1); incindex addr 1, last_instr]
-        | Dba.IkSJump(dst, tag) -> (l @ [(addr, Dba.IkSJump(dst, tag))])
-        | Dba.IkDJump(dst, tag) -> (l @ [(addr, Dba.IkDJump(dst, tag))])
-        | Dba.IkStop st -> (l @ [(addr, Dba.IkStop st)])
-        | Dba.IkMalloc (a, b, _) -> (l @ [(addr, Dba.IkMalloc(a, b, addr.id + 1));
-                                         ((incindex addr 1), last_instr)])
-        | Dba.IkFree (a, _) -> (l @ [(addr, Dba.IkFree(a, addr.id + 1));
-                                    ((incindex addr 1), last_instr)])
-        | Dba.IkAssert (a, _) -> (l @ [(addr, Dba.IkAssert(a, addr.id + 1));
-                                      ((incindex addr 1), last_instr)])
-        | Dba.IkAssume (a, _) -> (l @ [(addr, Dba.IkAssume(a, addr.id + 1));
-                                      ((incindex addr 1), last_instr)])
-        | Dba.IkNondetAssume (a, b, _) -> (l @ [(addr, Dba.IkNondetAssume(a, b, addr.id + 1)); ((incindex addr 1), last_instr)])
-        | Dba.IkNondet (a, b, _) -> (l @ [(addr, Dba.IkNondet(a, b, addr.id + 1)); ((incindex addr 1), last_instr)])
-        | Dba.IkPrint (a, _) -> (l @ [(addr, Dba.IkPrint(a, addr.id + 1)); ((incindex addr 1), last_instr)])
+            [addr, Instr.undefined lhs (addr.id + 1);
+             incindex addr 1, last_instr]
+        | Dba.Instr.SJump _
+        | Dba.Instr.DJump _ as i -> l @ [(addr, i)]
+        | Dba.Instr.Stop _ -> l @ [addr, i]
+        | Dba.Instr.Malloc (a, b, _) ->
+           l @ [addr, Instr.malloc a b (addr.id + 1);
+                incindex addr 1, last_instr]
+        | Dba.Instr.Free (a, _) ->
+           l @ [addr, Instr.free a (addr.id + 1);
+                incindex addr 1, last_instr]
+        | Dba.Instr.Assert (a, _) ->
+           l @ [addr, Instr._assert a (addr.id + 1);
+                incindex addr 1, last_instr]
+        | Dba.Instr.Assume (a, _) ->
+           l @ [addr, Instr.assume a (addr.id + 1);
+                incindex addr 1, last_instr]
+        | Dba.Instr.NondetAssume (a, b, _) ->
+           l @ [addr, Instr.non_deterministic_assume a b (addr.id + 1);
+                incindex addr 1, last_instr]
+        | Dba.Instr.Nondet (a, b, _) ->
+           l @ [addr, Instr.non_deterministic a b (addr.id + 1);
+                incindex addr 1, last_instr]
+        | Dba.Instr.Print (a, _) ->
+           l @ [addr, Instr.print a (addr.id + 1);
+                incindex addr 1, last_instr]
       )
       | i :: insns ->
         let chained_i =
           match i with
-          | Dba.IkIf(cond, thn, els) -> Dba.IkIf(cond, thn, els)
-          | Dba.IkAssign(lhs, expr, _) -> Dba.IkAssign(lhs, expr, addr.id + 1)
-          | Dba.IkUndef (lhs, _) -> Dba.IkUndef(lhs, addr.id + 1)
-          | Dba.IkSJump(dst, tag) -> Dba.IkSJump(dst, tag)
-          | Dba.IkDJump(dst, tag) -> Dba.IkDJump(dst, tag)
-          | Dba.IkStop tag -> Dba.IkStop tag
-          | Dba.IkMalloc (a, b, _) -> Dba.IkMalloc (a, b, addr.id + 1)
-          | Dba.IkFree (a, _) -> Dba.IkFree (a, addr.id + 1)
-          | Dba.IkAssert (a, _) -> Dba.IkAssert (a, addr.id + 1)
-          | Dba.IkAssume (a, _) -> Dba.IkAssume (a, addr.id + 1)
-          | Dba.IkNondetAssume (a, b, _) -> Dba.IkNondetAssume (a, b, addr.id + 1)
-          | Dba.IkNondet (a, b, _) -> Dba.IkNondet (a, b, addr.id + 1)
-          | Dba.IkPrint (a, _) -> Dba.IkPrint (a, addr.id + 1)
+          | Dba.Instr.SJump _
+          | Dba.Instr.DJump _
+          | Dba.Instr.Stop  _
+          | Dba.Instr.If    _ -> i
+          | Dba.Instr.Assign _
+          | Dba.Instr.Undef _
+          | Dba.Instr.Malloc _
+          | Dba.Instr.Free _
+          | Dba.Instr.Assert _
+          | Dba.Instr.Assume _
+          | Dba.Instr.NondetAssume _
+          | Dba.Instr.Nondet _
+          | Dba.Instr.Print _ -> Dba_types.Instruction.set_successor i (addr.id + 1)
         in aux (incindex addr 1) insns (l @ [addr, chained_i])
     in
     aux addr insns []
@@ -208,9 +218,7 @@
 INFER SUPER
 %token EQQ NEQ LEU LES LTU LTS GEU GES GTU GTS
 %token LBRACE RBRACE LPAR RPAR LBRACKET RBRACKET COMMA ARROW ARROWINV STOP
-ALTERNATIVE
-%token ASSIGN TRUE FALSE IFJUMP ELSE ANNOT CALLFLAG
-RETURNFLAG ADDCARRY ADDOVERFLOW
+%token ASSIGN TRUE FALSE IFJUMP ELSE ANNOT CALLFLAG RETURNFLAG
 %token EOF
 
 %token HIGHSIGNEDTHRESHOLDS LOWSIGNEDTHRESHOLDS
@@ -238,8 +246,8 @@ configuration :
 infos:
 | eps=addresses_section(ENTR);    infos=infos;
       { Infos.set_entry_points
-          (Dba_types.Virtual_address.Set.of_list
-           @@ List.map Dba_types.Virtual_address.of_code_address eps)
+          (Virtual_address.Set.of_list
+           @@ List.map Dba_types.Caddress.to_virtual_address eps)
           infos }
 | stops=addresses_section(STOP); infos=infos;
   { Infos.set_stops (Dba_types.Caddress.Set.of_list stops) infos }
@@ -424,136 +432,134 @@ printargs :
  | STRING CONCAT printargs { (Str $1) :: $3 }
  | expr                    { [Exp $1] }
  | STRING                  { [Str $1] }
+;
 
 lhs :
- | IDENT INFER INT SUPER { let size = int_of_string $3 in
-                           Dba.LhsVar ($1, size, None)
-                         }
- | IDENT INFER INT SUPER LBRACE INT COMMA INT RBRACE {
-   let off1 = int_of_string $6 in
-   let off2 = int_of_string $8 in
-   let size = int_of_string $3 in
-   Dba.LhsVarRestrict ($1, size, off1, off2)
+ | id=IDENT; INFER sz=INT; SUPER
+ { let bitsize = Size.Bit.of_string sz in
+   Dba.LValue.var id ~bitsize None
  }
- | STORELOAD LBRACKET expr COMMA ARROW COMMA INT  RBRACKET {
-   let size = int_of_string $7 in Dba.LhsStore (size, BigEndian, $3)
+ | id=IDENT; INFER sz=INT; SUPER LBRACE lo=INT; COMMA hi=INT; RBRACE {
+   let off1 = int_of_string lo in
+   let off2 = int_of_string hi in
+   let size = Size.Bit.of_string sz in
+   Dba.LValue.restrict id size off1 off2
  }
- | STORELOAD LBRACKET expr COMMA ARROWINV COMMA INT RBRACKET {
-   let size = int_of_string $7 in Dba.LhsStore (size, LittleEndian, $3)
+ | STORELOAD LBRACKET e=expr; COMMA
+   endianness=ioption(terminated(endianness, COMMA));
+   bytes=INT; RBRACKET {
+   let size =  Size.Byte.of_string bytes in
+   let endia =
+     match endianness with
+     | Some _endianness -> _endianness
+     | None -> Dba_types.get_endianness () in
+   Dba.LValue.store size endia e
  }
- | STORELOAD LBRACKET expr COMMA INT RBRACKET {
-   let size = int_of_string $5 in
-   let endia = Dba_types.get_endianness () in Dba.LhsStore (size, endia, $3)
- }
+;
 
+endianness:
+ | ARROW     { Dba.BigEndian }
+ | ARROWINV  { Dba.LittleEndian }
+ ;
 
 expr:
  | INT INFER INT SUPER {
    let size = int_of_string $3 in
    let bigint = (Bigint.big_int_of_string $1) in
    let bv = Bitvector.create bigint size in
-   Dba.ExprCst (`Constant, bv)
+   Dba.Expr.constant bv
  }
 
  | HEXA {
    let s, size = $1 in
    let bigint = (Bigint.big_int_of_string s) in
    let bv = Bitvector.create bigint size in
-   Dba.ExprCst (`Constant, bv)
+   Dba.Expr.constant bv
  }
 
- | LPAR region COMMA INT INFER INT SUPER RPAR {
-   let bigint = (Bigint.big_int_of_string $4) in
+ | LPAR region=region; COMMA INT INFER INT SUPER RPAR {
+   let bigint = Bigint.big_int_of_string $4 in
    let size = int_of_string $6 in
    let bv = Bitvector.create bigint size in
-   Dba.ExprCst ($2, bv)
+   Dba.Expr.constant ~region bv
  }
 
- | LPAR region COMMA HEXA RPAR {
+ | LPAR region=region; COMMA HEXA RPAR {
    let s, size = $4 in
    let bigint = (Bigint.big_int_of_string s) in
    let bv = Bitvector.create bigint size in
-   Dba.ExprCst ($2, bv)
+   Dba.Expr.constant ~region bv
  }
 
  | IDENT {
-   Dba.ExprVar ($1, 32, None)
+   Dba.Expr.var $1 32 None
  }
 
  | STORELOAD LBRACKET expr COMMA ARROW COMMA INT RBRACKET {
-   let size = int_of_string $7 in
-   Dba.ExprLoad (size, BigEndian, $3 )
+   let size = int_of_string $7 |> Size.Byte.create in
+   Dba.Expr.load size BigEndian $3
  }
  | STORELOAD LBRACKET expr COMMA ARROWINV COMMA INT RBRACKET {
-   let size = int_of_string $7 in
-   Dba.ExprLoad (size, LittleEndian, $3)
+   let size = int_of_string $7 |> Size.Byte.create in
+   Dba.Expr.load size LittleEndian $3
  }
  | STORELOAD LBRACKET expr COMMA INT RBRACKET {
-   let size = int_of_string $5 in
-   let endia = Dba_types.get_endianness () in Dba.ExprLoad (size, endia, $3)
+   let size = int_of_string $5 |> Size.Byte.create in
+   let endia = Dba_types.get_endianness () in
+   Dba.Expr.load size endia $3
  }
 
 (*| MINUS expr %prec UMINUS { Dba.ExprUnary (Dba.UMinus, $2) }*)
- | NOT expr expr { Dba.ExprUnary (Dba.Not, $2) }
+ | NOT expr expr { Dba.Expr.lognot $2 }
 
  | LBRACE expr COMMA INT COMMA INT RBRACE {
    let off1 = int_of_string $4 in
    let off2 = int_of_string $6 in
-   Dba.ExprRestrict ($2, off1, off2)
+   Dba.Expr.restrict off1 off2 $2
  }
- | EXTU expr INT { let size = int_of_string $3 in Dba.ExprExtU ($2, size) }
- | EXTS expr INT { let size = int_of_string $3 in Dba.ExprExtS ($2, size) }
- | ALTERNATIVE LPAR exprs RPAR { Dba.ExprAlternative ($3, None) }
- | ALTERNATIVE LPAR alternativetag COLON exprs RPAR {
-   Dba.ExprAlternative ($5, Some $3)
- }
- | IFJUMP cond expr ELSE expr { Dba.ExprIte ($2, $3, $5) }
- | LPAR expr RPAR { $2 }
- | LPAR expr bin_op expr RPAR { Dba.ExprBinary ($3, $2 , $4) }
+ | EXTU expr INT { let size = int_of_string $3 in Dba.Expr.uext size $2 }
+ | EXTS expr INT { let size = int_of_string $3 in Dba.Expr.sext size $2 }
+ | IFJUMP expr expr ELSE expr { Dba.Expr.ite $2 $3 $5 }
+ | LPAR expr RPAR             { $2 }
+ | LPAR expr bin_op expr RPAR { Dba.Expr.binary $3 $2 $4 }
 
 
 bin_op :
- | MODU { Dba.ModU } /*TODO : check operators precedence */
- | MODS { Dba.ModS }
- | OR  { Dba.Or }
- | AND { Dba.And }
- | XOR { Dba.Xor }
- | CONCAT { Dba.Concat }
- | EQQ { Dba.Eq }
- | NEQ { Dba.Diff }
- | LEU { Dba.LeqU }
- | LTU { Dba.LtU  }
- | GEU { Dba.GeqU }
- | GTU { Dba.GtU }
- | LES { Dba.LeqS }
- | LTS { Dba.LtS }
- | GES { Dba.GeqS }
- | GTS { Dba.GtS }
- | PLUS  { Dba.Plus }
- | MINUS { Dba.Minus }
- | MULTU { Dba.MultU}
- | MULTS { Dba.MultS }
- | DIVU   { Dba.DivU}
- | DIVS     { Dba.DivS}
- | LSHIFT  { Dba.LShift }
- | RSHIFTU  { Dba.RShiftU}
- | RSHIFTS   { Dba.RShiftS }
- | LROTATE  { Dba.LeftRotate }
- | RROTATE  { Dba.RightRotate }
+ | MODU { Dba.Binary_op.ModU } /*TODO : check operators precedence */
+ | MODS { Dba.Binary_op.ModS }
+ | OR  { Dba.Binary_op.Or }
+ | AND { Dba.Binary_op.And }
+ | XOR { Dba.Binary_op.Xor }
+ | CONCAT { Dba.Binary_op.Concat }
+ | EQQ { Dba.Binary_op.Eq }
+ | NEQ { Dba.Binary_op.Diff }
+ | LEU { Dba.Binary_op.LeqU }
+ | LTU { Dba.Binary_op.LtU  }
+ | GEU { Dba.Binary_op.GeqU }
+ | GTU { Dba.Binary_op.GtU }
+ | LES { Dba.Binary_op.LeqS }
+ | LTS { Dba.Binary_op.LtS }
+ | GES { Dba.Binary_op.GeqS }
+ | GTS { Dba.Binary_op.GtS }
+ | PLUS  { Dba.Binary_op.Plus }
+ | MINUS { Dba.Binary_op.Minus }
+ | MULTU { Dba.Binary_op.Mult}
+ | MULTS { Dba.Binary_op.Mult}
+ | DIVU   { Dba.Binary_op.DivU}
+ | DIVS     { Dba.Binary_op.DivS}
+ | LSHIFT  { Dba.Binary_op.LShift }
+ | RSHIFTU  { Dba.Binary_op.RShiftU}
+ | RSHIFTS   { Dba.Binary_op.RShiftS }
+ | LROTATE  { Dba.Binary_op.LeftRotate }
+ | RROTATE  { Dba.Binary_op.RightRotate }
 
 region:
  | CONSTANT { `Constant }
  | STACK    { `Stack }
-
-alternativetag :
- | ADDCARRY { AddCarry }
- | ADDOVERFLOW { AddOverflow }
-
-exprs :
- | expr COMMA exprs { $1 :: $3 }
- | expr { [$1] }
+;
 
 cond :
- | TRUE { Dba.True }
- | FALSE { Dba.False }
- | expr { Dba.CondReif $1 }
+ | TRUE    { Dba.Expr.one }
+ | FALSE   { Dba.Expr.zero }
+ | e=expr  { e }
+;

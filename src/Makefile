@@ -1,7 +1,7 @@
 ##########################################################################
-#  This file is part of Binsec.                                          #
+#  This file is part of BINSEC.                                          #
 #                                                                        #
-#  Copyright (C) 2016-2017                                               #
+#  Copyright (C) 2016-2018                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -29,18 +29,35 @@ include ../Piqi.mk
 include ../Caml.mk
 
 all: $(EXE)
+debug: $(EXE).byt
 
 DOCDIR = binsec.docdir
 
-ifneq ($(OCAMLBUILD), no)
+# Check if the user can -- and wants to -- use ocamlbuild
+PLEASE_USE_OCAMLBUILD = yes
+ifeq ($(OCAMLBUILD), no)
+	PLEASE_USE_OCAMLBUILD = no
+endif
+
+ifeq ($(USE_OCAMLBUILD), no)
+	PLEASE_USE_OCAMLBUILD = no
+endif
+
+
+# If ocamlbuild is both available and demanded by the user
+ifneq ($(PLEASE_USE_OCAMLBUILD), no)
 
 $(EXE): piqi-ml config.ml
 	$(OCAMLBUILD) $(OCB_OPTIONS) main.native
 	$(CP) _build/main.native $(EXE)
 
+$(EXE).byt: piqi-ml config.ml
+	$(OCAMLBUILD) $(OCB_OPTIONS) -tag debug main.byte
+	$(CP) _build/main.byte $(EXE).byt
+
 clean::
 	$(OCAMLBUILD) -clean
-	$(RRM) piqi/*.ml piqi/*.piqi $(EXE)
+	$(RRM) $(PIQI_DIR)/*.ml $(PIQI_DIR)/*.piqi $(EXE)
 	$(RRM) *~ \#* */\#* */.\#*
 
 veryclean:: clean clean-configure
@@ -83,41 +100,44 @@ endif
 
 else
 
+ifneq ($(WARN_ERROR), no) 
+	CAMLWARNINGS +=  -warn-error +a
+endif
+
 PACKAGES=\
 	piqilib piqirun.ext \
-	ZMQ \
+	zmq \
 	zarith \
 	ocamlgraph \
 	llvm \
-	graphics \
 	str bigarray
 PKG_FLAGS=$(PACKAGES:%=-package %)
-CAMLFLAGS+=-w +a-4-3
+CAMLFLAGS+=-w +a-4-3-18
 CAMLBIN=$(CAMLFIND) ocamlopt $(PKG_FLAGS)
 CAMLBYT=$(CAMLFIND) ocamlc $(PKG_FLAGS)
 
-$(EXE): piqi-ml $(CMX_FILES)
+$(EXE):  $(CMX_FILES)
 	$(CAMLBIN) $(CAMLINCLUDES) -linkpkg -o $@ $(CMX_FILES)
 
-$(EXE).byt: piqi-ml $(CMO_FILES)
+$(EXE).byt: $(CMO_FILES)
 	$(CAMLBYT) $(CAMLINCLUDES) -linkpkg -o $@ $(CMO_FILES)
 
 
-
-beforedepend :: prepiqi $(PIQI_ML_FILES) $(GENERATED_FILES)
+beforedepend :: $(PIQI_ML_FILES) $(GENERATED_FILES)
 
 clean::
 	$(RRM) $(GENERATED_FILES)
 	for d in $(DIRS) .; do \
-		$(RRM) $$d/*.cmi $$d/*.cmo $$d/*.cmx $$d/*.o $$d/*.annot; \
+		$(RRM) $$d/*.cmi $$d/*.cmo $$d/*.cmx $$d/*.o $$d/*.cmt $$d/*.annot; \
 	done
 
-camldoc: $(CMI_FILES) $(CMO_FILES)
-	$(MKDIR) $(DOCDIR)
-	$(CAMLFIND) $(CAMLDOC) $(PKG_FLAGS) $(CAMLINCLUDES) \
-	-html -css-style ../ocamldoc.css -d $(DOCDIR) $(MLI_FILES)
-# The link to the CSS is relative to the final destination of the doc
+CAMLDOC_FLAGS=-sort -stars
 
+camldoc: $(CMI_FILES) $(CMO_FILES)
+	$(MKDIR_P) $(DOCDIR)
+	$(CAMLFIND) $(CAMLDOC) $(CAMLDOC_FLAGS) $(PKG_FLAGS) $(CAMLINCLUDES) \
+	-html -css-style "/assets/camldoc.css" -d $(DOCDIR) $(MLI_FILES)
+# The link to the CSS is relative to the final destination of the doc
 
 piqi/libcall_piqi.cmo: piqi/libcall_piqi.ml
 	$(PP_BYT) $@
@@ -141,10 +161,10 @@ config.ml: Makefile
 beforedepend :: config.ml
 
 install: $(EXE)
-	$(PP) "Install $(EXE) ($(BINDIR))"
-	install $(EXE) $(BINDIR)
-	$(PP) "Install $(SHARE_DIR) ($(BINSEC_SHARE_DIR))"
-	$(MKDIR) $(BINSEC_SHARE_DIR)
+	$(PP) "Install $(EXE) to $(BINDIR)"
+	$(INSTALL) $(EXE) $(BINDIR)
+	$(PP) "Install $(SHARE_DIR) to $(BINSEC_SHARE_DIR)"
+	$(MKDIR_P) $(BINSEC_SHARE_DIR)
 	$(CP) $(wildcard $(SHARE_DIR)/*) $(BINSEC_SHARE_DIR)
 
 .PHONY: uninstall
@@ -157,7 +177,7 @@ uninstall:
 .PHONY: $(SVG_FILES) doc-clean
 
 doc-clean:
-	$(RRM) -Rf $(DOCDIR) $(SVG_FILES)
+	$(RRM) $(DOCDIR) $(SVG_FILES)
 
 clean:: doc-clean
 

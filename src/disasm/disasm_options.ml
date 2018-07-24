@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,77 +20,109 @@
 (**************************************************************************)
 
 
+(* let simplification_levels = ["prog";"fun";"seq";"fun-no-inline";
+ *                              "seq-no-inline";"fun-no-sum";
+ *                              "seq-no-sum"]
+ *
+ * let simpl_fun = ref false
+ * let simpl_sequence = ref false
+ * let simpl_inline_calls = ref true
+ * let simpl_no_summaries = ref false
+ * let simpl = ref false
+ *
+ *
+ * let simplification_cli_handler =
+ *   Arg.Symbol (
+ *       simplification_levels,
+ *       (fun s ->
+ *         match (String.lowercase_ascii s) with
+ *         | "prog" -> simpl :=  true
+ *         | "fun" -> simpl := true; simpl_fun := true
+ *         | "seq" -> simpl := true; simpl_sequence := true
+ *         | "fun-no-inline" ->
+ *            simpl := true;
+ *            simpl_fun := true;
+ *            simpl_inline_calls := false
+ *         | "seq-no-inline" ->
+ *            simpl := true;
+ *            simpl_sequence := true;
+ *            simpl_inline_calls := false
+ *         | "fun-no-sum" ->
+ *            simpl := true;
+ *            simpl_fun := true;
+ *            simpl_no_summaries := true
+ *         | "seq-no-sum" ->
+ *            simpl := true;
+ *            simpl_sequence := true;
+ *            simpl_no_summaries := true
+ *         | _ ->
+ *            assert false)
+ *     ) *)
 
 
-let simplification_levels = ["prog";"fun";"seq";"fun-no-inline";
-                             "seq-no-inline";"fun-no-sum";
-                             "seq-no-sum"]
+include Cli.Make(
+struct
+  let name = "disassembly"
+  let shortname = "disasm"
+end
+)
 
-let simpl_fun = ref false
-let simpl_sequence = ref false
-let simpl_inline_calls = ref true
-let simpl_no_summaries = ref false
-let simpl = ref false
+type disassembly_mode =
+  | Recursive | Linear | Linear_byte_wise | Extended_linear
 
+module Disassembly_mode = struct
+  include Builder.Variant_choice_assoc(
+  struct
+  type t = disassembly_mode
 
-let simplification_cli_handler =
-  Arg.Symbol (
-    simplification_levels,
-    (fun s ->
-       match (String.lowercase s) with
-       | "prog" -> simpl :=  true
-       | "fun" -> simpl := true; simpl_fun := true
-       | "seq" -> simpl := true; simpl_sequence := true
-       | "fun-no-inline" ->
-         simpl := true;
-         simpl_fun := true;
-         simpl_inline_calls := false
-       | "seq-no-inline" ->
-         simpl := true;
-         simpl_sequence := true;
-         simpl_inline_calls := false
-       | "fun-no-sum" ->
-         simpl := true;
-         simpl_fun := true;
-         simpl_no_summaries := true
-       | "seq-no-sum" ->
-         simpl := true;
-         simpl_sequence := true;
-         simpl_no_summaries := true
-       | _ ->
-         assert false)
-  )
-
-
-module DisassemblyMode = struct
-  type t =
-    | Recursive | Linear | Linear_byte_wise | ExtendedLinear
-
-  let assoc_tbl = [
+  let assoc_map = [
     "rec", Recursive;
     "linear", Linear;
     "bytelinear", Linear_byte_wise;
-    "extlinear", ExtendedLinear;
+    "extlinear", Extended_linear;
   ]
 
-  let values = List.map fst assoc_tbl
-  
-  let set, get  =
-    let mode = ref Recursive in
-    (fun s -> mode := List.assoc (String.lowercase s) assoc_tbl),
-    (fun () -> !mode)
-
-  let set_recursive () = set "rec"
-  let set_linear () = set "linear"
-  let set_byte_wise_linear () = set "bytelinear"
-  let set_extended_linear () = set "reclinear"
-
-  let cli_handler = Arg.Symbol(values, set)
+  let default = Linear
+  let name = "mode"
+  let doc = " Set disassembly mode"
+  end)
 end
 
 
+type specifics =
+  | All
+  | NoInline
+  | NoSummaries
+
+type simplification =
+  | No_simplification
+  | Program
+  | Function of specifics
+  | Sequence of specifics
+
+module Simplification = Builder.Variant_choice_assoc(
+struct
+  type t = simplification
+
+  let assoc_map = [
+      "prog", Program;
+      "fun", Function All;
+      "seq", Sequence All;
+      "fun-no-inline", Function NoInline;
+      "seq-no-inline", Function NoInline;
+      "fun-no-sum", Function NoSummaries;
+      "seq-no-sum", Function NoSummaries;
+      "none", No_simplification;
+    ]
+
+  let default = No_simplification
+  let name = "simplify"
+  let doc = " Activate DBA simplification on given level"
+end
+)
+
 module DbaOutputFile = struct
-  include Parameters.Builder.String(
+  include Builder.String(
     struct
       let name = "o-dba"
       let default = "out.dba"
@@ -100,96 +132,122 @@ end
 
 
 module OpcodeOutputFile =
-  Parameters.Builder.OptionalString(
-    struct
-      let name = "dump"
-      let doc = " Set opcodes output file [stdout]"
-    end)
+  Builder.String_option(
+  struct
+    let name = "dump"
+    let doc = " Set opcodes output file [stdout]"
+  end)
 
 
 module NoLoaderMode =
-  Parameters.Builder.False(
+  Builder.False(
   struct
     let name = "no-loader"
-    let doc = "Do not use loader and starts at 0x0"
+    let doc = "Do not use loader and start at 0x0"
   end
   )
 
 module IgnoreUnhandledInstructions =
-  Parameters.Builder.True (
+  Builder.True (
   struct
     let name = "ignore-unhandled"
     let doc = "Skip unknown instructions"
   end
   )
 
-module ProtectedMode = Parameters.Builder.False (
+module ProtectedMode = Builder.False (
   struct
     let name = "protected-mode"
-    let doc = "Activate protected mode memory addressing (using segment selectors)"
+    let doc =
+      "Activate protected mode memory addressing (using segment selectors)"
   end
   )
 
 module ShowInstructionCount =
-  Parameters.Builder.False (
-      struct
-        let name = "show-instruction-count"
-        let doc = "Show a summary of encountered instructions"
-      end
-  )
-
-module Sections =
-  Parameters.Builder.StringSet (
-      struct
-        let name = "sections"
-        let doc = "Disassemble (linear) given comma separated list of sections"
-      end
-    )
-  
-let is_ignored_segment, mark_ignored_segment =
-  let h = Hashtbl.create 6 in
-  let segments = ([X86Types.FS; X86Types.GS; X86Types.CS; X86Types.SS; X86Types.DS; X86Types.ES;]) in
-  (* all segments ignored by default *)
-  List.iter (fun seg -> Hashtbl.add h seg true) segments;
-  (fun sreg -> Hashtbl.find h sreg),
-  (fun string ->
-     let segment =
-       match String.lowercase string with
-       | "fs" -> Some X86Types.FS
-       | "gs" -> Some X86Types.GS
-       | "cs" -> Some X86Types.CS
-       | "ss" -> Some X86Types.SS
-       | "ds" -> Some X86Types.DS
-       | "es" -> Some X86Types.ES
-       | _ -> Logger.info "Ignoring unknown segment %s" string; None
-     in
-     match segment with
-     | Some segment -> Hashtbl.replace h segment false
-     | None -> ()
-  )
-
-let mark_ignored_segments s =
-  List.iter mark_ignored_segment (Str.split (Str.regexp  ",") s)
-
-let set_file, get_file =
-  let file = ref None in
-  (fun s ->
-     (*     assert(Sys.file_exists s); *)
-     file := Some s
-  ),
-  (fun () ->
-     match !file with
-     | None -> ""
-     | Some f -> f
-  )
-
-
-module ArmDecoder = Parameters.Builder.String (
+  Builder.False (
   struct
-    let name = "arm-decoder"
-    let default = "armsec/bin/unisim-armsec-0.8.0 arm"
-    let doc = Format.sprintf " ARM decoder command [%s]" default
+    let name = "show-instruction-count"
+    let doc = "Show a summary of encountered instructions"
   end
   )
 
-module Logger = Logger.Make(struct let name = "disasm" end)
+module Sections =
+  Builder.String_set (
+  struct
+    let name = "sections"
+    let doc = "Disassemble given comma separated list of sections"
+  end
+  )
+
+module Functions =
+  Builder.String_set (
+  struct
+    let name = "functions"
+    let doc = "Disassemble given comma separated list of functions"
+  end
+  )
+
+module HandleSegments =
+  Builder.String_set(
+  struct
+    let name = "handle-seg"
+    let doc = "Activate set of segments"
+  end
+  )
+
+module SimplifiedDisassembly =
+  Builder.False
+    (struct
+      let name = "no-hunk-simplification"
+      let doc  = "Disable DBA hunks simplifications"
+    end
+    )
+
+
+module Decode_instruction =
+  Builder.String_option(struct
+      let name = "decode"
+      let doc = "Decode hexadecimal opcode"
+    end);;
+
+
+
+module Decode_replacement =
+  (* Note: we use any instead of a list, because we ',' in the dba
+     could be wrongly interpreted by the Cli. *)
+  Builder.Any(struct
+    let name = "decode-replacement"
+    let doc = "Replace instructions with a specific dba blocks. Syntax: (0xaddress -> dhunk)*"
+    type t = Dhunk.t Virtual_address.Map.t
+    let to_string x =
+      if Virtual_address.Map.is_empty x then "no substitution" else
+        Virtual_address.Map.fold (fun addr dhunk acc ->
+            acc ^ (Format.asprintf "0x%a -> %a\n" Virtual_address.pp addr Dhunk.pp dhunk)
+          ) x ""
+    ;;
+    let default = Virtual_address.Map.empty
+    let of_string s =
+      let l = Parser.dhunk_substitutions_eof Lexer.token @@ Lexing.from_string s in
+      let map = List.fold_left (fun acc (addr,dhunk) ->
+          Virtual_address.Map.add addr dhunk acc 
+        ) Virtual_address.Map.empty l
+      in
+      Logger.debug "parsed replacements\n%s" (to_string map);
+      map
+    ;;
+  end)
+;;
+
+module Decode_llvm =
+  Builder.String_option(struct
+      let name = "decode-llvm"
+      let doc = "Decode hexadecimal opcode as LLVM"
+    end)
+
+module CFG_graph =
+  Builder.False(struct
+      let name = "cfgraph"
+      let doc = "Print control-flow graph"
+    end
+)
+

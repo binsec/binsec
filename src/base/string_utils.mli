@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -42,6 +42,11 @@ val fold : ('a -> char -> 'a) -> 'a -> string -> 'a
 val for_all : (char -> bool) -> string -> bool
 val exists  : (char -> bool) -> string -> bool
 
+val index : (char -> bool) -> string -> int option
+(** [index p s] retrieves the first index of a character verifying predicate
+    [p]. [None] otherwise
+*)
+
 val remove_char : char -> string -> string
 (** [remove_char c s] creates a copy of [s] without any occurrence of [c] *)
 
@@ -61,7 +66,36 @@ val left : int -> string -> string
     [n] must be positive and smaller than the length of [s].
 *)
 
+val right : int -> string -> string
+(** [right n s] returns the [n] rightmost characters of [s].
+    [n] must be positive and smaller than the length of [s].
+*)
+
 val size_of_hexstring : string -> int
 (** [size_of_hexstring s] computes the size in bits of hexadecimal string [s].
     Unsafe function: it does not fully check that [s] is a valid hexstring.
 *)
+
+val contains : string -> string -> bool
+(** [contains subs s] return [true] if [subs] is a substring of [s]
+*)
+
+val split : sep:string -> string -> string list
+(** [split ~sep s] splits the string [s] into substrings, taking the string
+    [sep] as delimiter and returns the list of substrings.
+*)
+
+val cli_split : string -> string list
+(** [cli_split s] is [split ~sep:"," s] *)
+
+
+(** {3 Character functions}*)
+
+val is_char_printable : char -> bool
+(** [is_char_printable c] returns [true] if [c] is a terminal-printable ASCII
+    character
+*)
+
+val is_hex_char : char -> bool
+(** [is_hex_char c] returns [true] if [c] is a character representing a hex
+    number, i.e., 'a'-'z', 'A'-'Z', '0'-'9'.  *)

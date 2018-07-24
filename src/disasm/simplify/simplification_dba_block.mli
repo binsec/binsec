@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,8 +21,8 @@
 
 (** Intra-block simplifications *)
 
-val block_simplifications : Disasm_types.pmap -> Disasm_types.pmap
+val block_simplifications : Simplification_options.pmap -> Simplification_options.pmap
 
 module Constant_propagation : sig
-  val eval : Dba_types.Block.t -> Dba_types.Block.t
+  val eval : Dhunk.t -> Dhunk.t
 end

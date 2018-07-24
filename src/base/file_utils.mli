@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -31,3 +31,7 @@ val copy : string -> string -> unit
 val readlines : string -> string list
 (** [readlines filename] return the list of the lines of the complete text of
     the file [filename] *)
+
+val has_suffix : suffixes:string list -> string -> bool
+(** [has_suffix ~suffixes filenam] returns [true] if [filename] ends with any
+    of the provied [suffixes] *)

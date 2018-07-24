@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,17 +25,17 @@ module Make : functor (Val: Ai_sigs.Domain) ->
 sig
   type t
   type data
-  type thresholds = (int array * int array * int array * int array) 
+  type thresholds = (int array * int array * int array * int array)
 
   val create : unit -> t
 
   val bottom: t
 
-  val make : Dba.lhs -> Val.t -> t
+  val make : Dba.LValue.t -> Val.t -> t
 
-  val find : t -> Dba.lhs -> Dba.lhs option * Val.t option
+  val find : t -> Dba.LValue.t -> Dba.LValue.t option * Val.t option
 
-  val union : t -> Dba.lhs -> Dba.lhs -> Val.t -> t 
+  val union : t -> Dba.LValue.t -> Dba.LValue.t -> Val.t -> t
 
   val join : t -> t -> t
 
@@ -47,9 +47,9 @@ sig
 
   val print : t -> unit
 
-  val remove : t -> Dba.lhs -> t
+  val remove : t -> Dba.LValue.t -> t
 
-  val remove_syntax_overlaps : t -> Dba.lhs -> t
+  val remove_syntax_overlaps : t -> Dba.LValue.t -> t
 
   val copy_equalities : t -> t
 
@@ -57,9 +57,9 @@ sig
 
   val get_nb_classes : t -> int
 
-  val refine: Dba.expr -> Val.t -> t -> t
+  val refine: Dba.Expr.t -> Val.t -> t -> t
 
-  val is_same_class: t -> Dba.lhs -> Dba.lhs -> bool 
+  val is_same_class: t -> Dba.LValue.t -> Dba.LValue.t -> bool
 
-  val get_elements : t -> Dba.lhs list
+  val get_elements : t -> Dba.LValue.t list
 end

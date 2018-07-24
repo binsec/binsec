@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,4 +22,4 @@
 (** Sets of values of cardinality K *)
 module K_set : Set.S with type elt = Region_bitvector.t
 
-include Ai_sigs.Domain 
+include Ai_sigs.Domain

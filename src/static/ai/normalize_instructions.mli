@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,31 +19,37 @@
 (*                                                                        *)
 (**************************************************************************)
 
-val assign_to_f : Dba.lhs -> Dba.expr -> int Basic_types.String.Map.t
-  -> (int * int * Smtlib2.smt_bv_expr) Basic_types.String.Map.t -> Smtlib2.SmtVarSet.t
-  -> (Smtlib2.smt_expr * Smtlib2.smt_expr) * (int * int * Smtlib2.smt_bv_expr) Basic_types.String.Map.t * Smtlib2.SmtVarSet.t * int Basic_types.String.Map.t
+val assign_to_f :
+  Dba.LValue.t -> Dba.Expr.t -> int Basic_types.String.Map.t ->
+  (int * int * Formula.bv_term) Basic_types.String.Map.t ->
+  Formula.VarSet.t ->
+  Formula.def * (int * int * Formula.bv_term) Basic_types.String.Map.t
+  * Formula.VarSet.t * int Basic_types.String.Map.t
 
 val cond_to_f :
-  Dba.cond -> Smtlib2.SmtVarSet.t
-  -> int Basic_types.String.Map.t -> Smtlib2.smt_bv_expr * Smtlib2.SmtVarSet.t
+  condition:Dba.Expr.t -> Formula.VarSet.t ->
+  int Basic_types.String.Map.t -> Formula.bv_term * Formula.VarSet.t
 
 
 val load_to_smt :
-  Dba.expr -> Dba.size -> Dba.endianness -> Smtlib2.SmtVarSet.t ->
-  int Basic_types.String.Map.t -> Smtlib2.smt_bv_expr * Smtlib2.SmtVarSet.t
+  Dba.Expr.t -> Dba.size -> Dba.endianness -> Formula.VarSet.t ->
+  int Basic_types.String.Map.t -> Formula.bv_term * Formula.VarSet.t
 
 
 val apply_smt_elements_recovery :
-  (Smtlib2.smt_expr * Smtlib2.smt_expr) list -> Smtlib2.smt_bv_expr list ->
-  Smtlib2.SmtVarSet.t -> string -> int Basic_types.String.Map.t -> Region_bitvector.t list
+  Formula.def list -> Formula.bl_term list ->
+  Formula.VarSet.t -> string -> int Basic_types.String.Map.t -> Region_bitvector.t list
 
-val is_sat : (Smtlib2.smt_expr * Smtlib2.smt_expr) list * Smtlib2.smt_bv_expr list *
-Smtlib2.SmtVarSet.t * string * int Basic_types.String.Map.t -> string -> bool
+val is_sat :
+  Formula.def list * Formula.bl_term list *
+  Formula.VarSet.t * string * int Basic_types.String.Map.t -> string -> bool
 
-val get_upper_bound : (Smtlib2.smt_expr * Smtlib2.smt_expr) list * Smtlib2.smt_bv_expr list *
-Smtlib2.SmtVarSet.t * 'a * int Basic_types.String.Map.t ->
+val get_upper_bound :
+  Formula.def list * Formula.bl_term list *
+  Formula.VarSet.t * 'a * int Basic_types.String.Map.t ->
   string -> Bitvector.t -> Bitvector.t
 
-val get_lower_bound : (Smtlib2.smt_expr * Smtlib2.smt_expr) list * Smtlib2.smt_bv_expr list *
-Smtlib2.SmtVarSet.t * 'a * int Basic_types.String.Map.t ->
-string -> Bitvector.t -> Bitvector.t
+val get_lower_bound :
+  Formula.def list * Formula.bl_term list *
+  Formula.VarSet.t * 'a * int Basic_types.String.Map.t ->
+  string -> Bitvector.t -> Bitvector.t

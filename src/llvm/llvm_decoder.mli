@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,4 +19,4 @@
 (*                                                                        *)
 (**************************************************************************)
 
-val pretty: Format.formatter -> Dba_types.Block.t -> unit
+val pretty: Format.formatter -> Dhunk.t -> unit

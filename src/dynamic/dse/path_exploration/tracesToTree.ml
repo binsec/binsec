@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -72,7 +72,7 @@ let trace_to_list_addr filename =
         InstrMap.fold (
           fun _ (keep, elem, t) l ->
             if keep then (elem.location , t, []) :: l else l
-      ) inst_jmp []))
+        ) inst_jmp []))
   with _ -> None
 
 
@@ -236,18 +236,18 @@ let unsat_child tree loc =
 
 
 let rec contains tree l =
-    match l with
-    | [] -> true
-    | hd::tl ->
-        let (hd_addr,_,_) = hd in
-        if ((Int64.compare hd_addr tree.addr)!=0) then false
-        else
-            if (List.length tree.sons)=0 then true
-            else
-                List.fold_left (fun b x -> (||) b (contains x tl)) false tree.sons   
-(*  match l with
+  match l with
   | [] -> true
-  | (hd_addr, _, _) :: tl ->
+  | hd::tl ->
+    let (hd_addr,_,_) = hd in
+    if ((Int64.compare hd_addr tree.addr)!=0) then false
+    else
+    if (List.length tree.sons)=0 then true
+    else
+      List.fold_left (fun b x -> (||) b (contains x tl)) false tree.sons
+(*  match l with
+    | [] -> true
+    | (hd_addr, _, _) :: tl ->
     hd_addr = tree.addr
     &&
     ( List.length tree.sons = 0
@@ -273,12 +273,12 @@ let traces_to_dot filenames =
   | [] -> assert false
 
 (* Unused
-let trace_to_dot filename =
-  let list_addr = trace_to_list_addr filename in
-  let list_addr = Utils.unsafe_get_opt list_addr in
-  let tree = list_to_tree list_addr filename in
-  let oc = open_out (Printf.sprintf "%s.dot" filename) in
-  add_id_to_tree tree;
-  export_tree oc tree print_begin_dot print_end_dot print_node_dot;
-  close_out oc
+   let trace_to_dot filename =
+   let list_addr = trace_to_list_addr filename in
+   let list_addr = Utils.unsafe_get_opt list_addr in
+   let tree = list_to_tree list_addr filename in
+   let oc = open_out (Printf.sprintf "%s.dot" filename) in
+   add_id_to_tree tree;
+   export_tree oc tree print_begin_dot print_end_dot print_node_dot;
+   close_out oc
 *)

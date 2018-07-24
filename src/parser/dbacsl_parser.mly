@@ -1,7 +1,7 @@
 /**************************************************************************/
-/*  This file is part of Binsec.                                          */
+/*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2017                                               */
+/*  Copyright (C) 2016-2018                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -23,33 +23,36 @@
   open Dba
 
   let is_same_size_op op =
+    let open Dba.Binary_op in
     match op with
-    | Dba.Concat | Dba.LShift | Dba.RShiftU
-    | Dba.RShiftS  | Dba.LeftRotate | Dba.RightRotate -> false
+    | Concat | LShift | RShiftU
+    | RShiftS  | LeftRotate | RightRotate -> false
     | _ -> true
 
 
   let infer_binary_op_size left op right =
+    let open Dba.Expr in
+    let default () = binary op left right in
     if is_same_size_op op then
-      let sz1 = Parse_helpers.expr_size left in
-      let sz2 = Parse_helpers.expr_size right in
+      let sz1 = Dba.Expr.size_of left in
+      let sz2 = Dba.Expr.size_of right in
       if sz1 = 0 || sz2 = 0 then
         if sz1 = 0 then
-          Dba.ExprBinary(op, Parse_helpers.patch_expr_size left sz2, right)
+          binary op (Parse_helpers.patch_expr_size left sz2) right
         else
-          Dba.ExprBinary(op, left, Parse_helpers.patch_expr_size right sz1)
+          binary op left (Parse_helpers.patch_expr_size right sz1)
       else
         if sz1 <> sz2 then
           match left, right with
-          | (_,Dba.ExprCst(`Constant, bv)) -> Dba.ExprBinary(op, left,
-          Dba.ExprCst(`Constant, Bitvector.create (Bitvector.value_of bv) sz1))
-          | (Dba.ExprCst(`Constant, bv),_) -> Dba.ExprBinary(op,
-          Dba.ExprCst(`Constant, Bitvector.create (Bitvector.value_of bv) sz2), right)
-          | _ -> Printf.printf "Cannot infer size (mismatch remaining"; Dba.ExprBinary(op, left, right)
-        else
-          Dba.ExprBinary(op, left, right)
-    else
-      Dba.ExprBinary (op, left, right)
+          | (_,Dba.Expr.Cst(`Constant, bv)) ->
+             binary op left
+                    (constant (Bitvector.create (Bitvector.value_of bv) sz1))
+          | (Dba.Expr.Cst(`Constant, bv),_) ->
+             binary op
+                    (constant (Bitvector.create (Bitvector.value_of bv) sz2)) right
+          | _ -> Printf.printf "Cannot infer size (mismatch remaining"; default ()
+        else default ()
+    else default ()
 
 %}
 
@@ -82,61 +85,62 @@
 %nonassoc NOT
 
 %start term
-%type <Dba.instruction> term
+%type <Dba.Instr.t> term
 
 %%
 
 term:
-  | TERM_TOKEN ASSUME cond EOF { Dba.IkAssume($3, 0) }
-  | TERM_TOKEN ASSUME LPAR cond RPAR EOF { Dba.IkAssume($4, 0) }
-  | TERM_TOKEN ASSERT cond EOF { Dba.IkAssert ($3, 0) }
-  | TERM_TOKEN ASSERT LPAR cond RPAR EOF { Dba.IkAssert($4, 0) }
-  | cond EOF { Dba.IkAssert($1, 0) }
+  | TERM_TOKEN ASSUME c=cond; EOF
+  | TERM_TOKEN ASSUME LPAR c=cond; RPAR EOF { Dba.Instr.assume c 0 }
+  | TERM_TOKEN ASSERT c=cond; EOF
+  | TERM_TOKEN ASSERT LPAR c=cond; RPAR EOF
+  | c=cond EOF { Dba.Instr._assert c 0 }
+;
 
 expr:
   | INT INFER INT SUPER {
     let size = int_of_string $3 in
     let bigint = (Bigint.big_int_of_string $1) in
     let bv = Bitvector.create bigint size in
-    Dba.ExprCst (`Constant, bv)
+    Dba.Expr.constant bv
   }
   | INT {
-    let bigint = (Bigint.big_int_of_string $1) in
-    Dba.ExprCst (`Constant, (Bitvector.create bigint 0))
+    let bigint = Bigint.big_int_of_string $1 in
+    Expr.constant (Bitvector.create bigint 0)
   }
   | HEXA {
     let s, size = $1 in
     let bigint = Bigint.big_int_of_string s in
     let bv = Bitvector.create bigint size in
-    Dba.ExprCst (`Constant, bv)
+    Expr.constant bv
   }
-  | IDENT {
-    let var = Parse_helpers.expr_of_name $1 in
-    var
-  }
+  | IDENT { Parse_helpers.expr_of_name $1 }
   | STORELOAD LBRACKET expr COMMA INT RBRACKET {
-    let size = int_of_string $5 in
-    Dba.ExprLoad (size/8, LittleEndian, $3)
+    let size =
+      int_of_string $5
+      |> Size.Bit.create
+      |> Size.Byte.of_bitsize in
+    Dba.Expr.load size LittleEndian $3
   }
   | STORELOAD LBRACKET expr RBRACKET {
-    Dba.ExprLoad (0, LittleEndian, $3)
+    Dba.Expr.load (Size.Byte.create 0) LittleEndian $3
   }
-  | NOT expr %prec NOT { Dba.ExprUnary (Dba.Not, $2) }
-  | MINUS expr %prec UMINUS { Dba.ExprUnary (Dba.UMinus, $2) }
+  | NOT expr %prec NOT         { Dba.Expr.lognot $2 }
+  | MINUS e=expr; %prec UMINUS { Dba.Expr.uminus e }
   | LBRACE expr COMMA INT COMMA INT RBRACE {
     let off1 = int_of_string $4 in
     let off2 = int_of_string $6 in
-    Dba.ExprRestrict ($2, off1, off2)
+    Dba.Expr.restrict off1 off2 $2
   }
   | EXTU expr INT {
     let size = int_of_string $3 in
-    Dba.ExprExtU ($2, size)
+    Dba.Expr.uext size $2
   }
   | EXTS expr INT {
     let size = int_of_string $3 in
-    Dba.ExprExtS ($2, size)
+    Dba.Expr.sext size $2
   }
-  | IFJUMP cond expr ELSE expr { Dba.ExprIte ($2, $3, $5) }
+  | IFJUMP cond expr ELSE expr { Dba.Expr.ite $2 $3 $5 }
   | LPAR expr RPAR { $2 }
   | expr bin_op expr {
     infer_binary_op_size $1 $2 $3
@@ -146,40 +150,40 @@ expr:
   }
 
 bin_op :
- | MODU { Dba.ModU }
- | MODS { Dba.ModS }
- | OR  { Dba.Or }
- | AND { Dba.And }
- | XOR { Dba.Xor }
- | PLUS { Dba.Plus }
- | MINUS { Dba.Minus }
- | MULTU { Dba.MultU }
- | MULTS { Dba.MultS }
- | DIVU { Dba.DivU }
- | DIVS { Dba.DivS }
+ | MODU { Dba.Binary_op.ModU }
+ | MODS { Dba.Binary_op.ModS }
+ | OR  { Dba.Binary_op.Or }
+ | AND { Dba.Binary_op.And }
+ | XOR { Dba.Binary_op.Xor }
+ | PLUS { Dba.Binary_op.Plus }
+ | MINUS { Dba.Binary_op.Minus }
+ | MULTU { Dba.Binary_op.Mult }
+ | MULTS { Dba.Binary_op.Mult }
+ | DIVU { Dba.Binary_op.DivU }
+ | DIVS { Dba.Binary_op.DivS }
 
- | CONCAT { Dba.Concat }
+ | CONCAT { Dba.Binary_op.Concat }
 
- | EQQ { Dba.Eq }
- | EQQ2 { Dba.Eq }
- | NEQ { Dba.Diff }
- | NEQ2 { Dba.Diff }
- | LEU { Dba.LeqU }
- | LTU { Dba.LtU }
- | GEU { Dba.GeqU }
- | GTU { Dba.GtU }
- | LES { Dba.LeqS }
- | LTS { Dba.LtS }
- | GES { Dba.GeqS }
- | GTS { Dba.GtS }
+ | EQQ { Dba.Binary_op.Eq }
+ | EQQ2 { Dba.Binary_op.Eq }
+ | NEQ { Dba.Binary_op.Diff }
+ | NEQ2 { Dba.Binary_op.Diff }
+ | LEU { Dba.Binary_op.LeqU }
+ | LTU { Dba.Binary_op.LtU }
+ | GEU { Dba.Binary_op.GeqU }
+ | GTU { Dba.Binary_op.GtU }
+ | LES { Dba.Binary_op.LeqS }
+ | LTS { Dba.Binary_op.LtS }
+ | GES { Dba.Binary_op.GeqS }
+ | GTS { Dba.Binary_op.GtS }
 
- | LSHIFT  { Dba.LShift }
- | RSHIFTU  { Dba.RShiftU }
- | RSHIFTS   { Dba.RShiftS }
- | LROTATE  { Dba.LeftRotate }
- | RROTATE  { Dba.RightRotate }
+ | LSHIFT  { Dba.Binary_op.LShift }
+ | RSHIFTU  { Dba.Binary_op.RShiftU }
+ | RSHIFTS   { Dba.Binary_op.RShiftS }
+ | LROTATE  { Dba.Binary_op.LeftRotate }
+ | RROTATE  { Dba.Binary_op.RightRotate }
 
 cond :
- | TRUE { Dba.True }
- | FALSE { Dba.False }
- | expr { Dba.CondReif $1 }
+ | TRUE    { Dba.Expr._true }
+ | FALSE   { Dba.Expr._false }
+ | e=expr  { e }

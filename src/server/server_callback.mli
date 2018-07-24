@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,9 +22,9 @@
 (** Server callbacks handling the different kind of requests *)
 
 (** [request_dispatcher socket cmd data] Dispatch the given request to the appropriate handler.
-@param 1 cmd to execute
-@param 2 data payload recieved with the command
-@raise Stop when the worker is forced by the main server thread to stop *)
+    @param 1 cmd to execute
+    @param 2 data payload recieved with the command
+    @raise Stop when the worker is forced by the main server thread to stop *)
 val request_dispatcher : string -> string -> string -> unit
 
 exception Stop

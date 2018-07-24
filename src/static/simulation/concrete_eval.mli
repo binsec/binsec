@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,11 +20,11 @@
 (**************************************************************************)
 
 val eval_expr :
-  Dba.expr -> Region_bitvector.t Concrete_state.SubEnv.t Static_types.Env.t ->
-  Smt_bitvectors.smtBvExprAlt list -> Dba_types.Caddress.Set.t 
+  Dba.Expr.t -> Region_bitvector.t Concrete_state.SubEnv.t Static_types.Env.t ->
+  Smt_bitvectors.smtBvExprAlt list -> Dba_types.Caddress.Set.t
   -> Region_bitvector.t
 
-val eval_cond : Dba.cond ->
+val eval_cond : Dba.Expr.t ->
   Region_bitvector.t Concrete_state.SubEnv.t Static_types.Env.t ->
   Smt_bitvectors.smtBvExprAlt list -> Dba_types.Caddress.Set.t -> bool
 
@@ -39,11 +39,14 @@ val write :
 val read :
   Static_types.extended_variable -> Bigint.t ->
   Region_bitvector.t Concrete_state.SubEnv.t Static_types.Env.t ->
-           Smt_bitvectors.smtBvExprAlt list ->
-           Dba_types.Caddress.Set.t -> Region_bitvector.t
+  Smt_bitvectors.smtBvExprAlt list ->
+  Dba_types.Caddress.Set.t -> Region_bitvector.t
 
-val add_smt_cond : Dba.cond -> Region_bitvector.t Concrete_state.SubEnv.t Static_types.Env.t  -> Smt_bitvectors.smtBvExprAlt list ->
+val add_smt_cond :
+  Dba.Expr.t ->
+  Region_bitvector.t Concrete_state.SubEnv.t Static_types.Env.t ->
+  Smt_bitvectors.smtBvExprAlt list ->
   Dba_types.Caddress.Set.t -> Smt_bitvectors.smtBvExprAlt list
 
 val perm : Dba_types.permissions list Dba_types.Region.Map.t ref
-val permis : Dba.cond Dba_types.Rights.t ref
+val permis : Dba.Expr.t Dba_types.Rights.t ref

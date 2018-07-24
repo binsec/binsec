@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -37,3 +37,6 @@ let time f =
   let tend = Unix.gettimeofday () in
   tend -. tinitial, res
 
+let random_max_int =
+  let max_n = int_of_float (2. ** 30. -. 1.) in
+  fun () -> Random.int max_n

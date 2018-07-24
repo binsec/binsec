@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -30,24 +30,24 @@ val pp : Format.formatter -> color -> unit
 (** [pp ppf color] is [pp_with_prefix "#" ppf color] *)
 
 module FlatUI : sig
-  val turquoise    : color 
-  val greensea     : color 
-  val emerland     : color 
-  val nephritis    : color 
-  val peterriver   : color 
-  val belizehole   : color 
-  val amethyst     : color 
-  val wisteria     : color 
-  val wetasphalt   : color 
-  val midnightblue : color 
-  val sunflower    : color 
-  val orange       : color 
-  val carrot       : color 
-  val pumpkin      : color 
-  val alizarin     : color 
-  val pomegranate  : color 
-  val clouds       : color 
-  val silver       : color 
-  val concrete     : color 
-  val asbestos     : color 
+  val turquoise    : color
+  val greensea     : color
+  val emerland     : color
+  val nephritis    : color
+  val peterriver   : color
+  val belizehole   : color
+  val amethyst     : color
+  val wisteria     : color
+  val wetasphalt   : color
+  val midnightblue : color
+  val sunflower    : color
+  val orange       : color
+  val carrot       : color
+  val pumpkin      : color
+  val alizarin     : color
+  val pomegranate  : color
+  val clouds       : color
+  val silver       : color
+  val concrete     : color
+  val asbestos     : color
 end

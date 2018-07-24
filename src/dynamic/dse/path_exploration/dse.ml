@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -31,7 +31,7 @@ open GuideAsBFS
 open GuideAsRandom
 open GuideAsUAF
 open GuideAsStrcmp
-  
+
 module DSE
     (TraceDSE_v:TypeTraceDSE)
     (HistoryDSE_v:TypeHistoryDSE)
@@ -100,17 +100,17 @@ struct
               try
                 TraceDSE.get_inputs true child polcc
               with
-                | InvertChild.SHOULD_INIT ->
-                        let trace = TraceDSE.trace_of_child child in
-                        TraceDSE.clean trace;
-                        let trace_config = TraceDSE.config_of_trace trace in
-                        ignore (TraceDSE.get_trace program argv trace_config trace_limit_length);
-                        get_inputs child false
-                | InvertChild.TIMEOUT_SOLVER ->
-                  if not polcc then
-                    let _trace = TraceDSE.trace_of_child child in
-                    get_inputs child true
-                  else [] (* timeout of cc *)
+              | InvertChild.SHOULD_INIT ->
+                let trace = TraceDSE.trace_of_child child in
+                TraceDSE.clean trace;
+                let trace_config = TraceDSE.config_of_trace trace in
+                ignore (TraceDSE.get_trace program argv trace_config trace_limit_length);
+                get_inputs child false
+              | InvertChild.TIMEOUT_SOLVER ->
+                if not polcc then
+                  let _trace = TraceDSE.trace_of_child child in
+                  get_inputs child true
+                else [] (* timeout of cc *)
 
             in get_inputs child false
           in
@@ -190,11 +190,76 @@ struct
 end
 
 module DfsDSE = DSE (TraceAsFile) (HistoryAsTree) (CriteriaAsDefault) (GuideAsDFS)
-module DfsDSETree = DSE (TraceAsFile) (HistoryAsTree) (CriteriaAsDefault) (GuideAsDFS)
+
 module BfsDSE = DSE (TraceAsFile) (HistoryAsTree) (CriteriaAsDefault) (GuideAsBFS)
 module RandomDSE = DSE (TraceAsFile) (HistoryAsTree) (CriteriaAsDefault) (GuideAsRandom)
 module UAFDSE = DSE (TraceAsFile) (HistoryAsTree) (CriteriaAsUAF) (GuideAsUAF)
 
 
 module GuideAsStrcmpUAF = GuideAsStrcmp (GuideAsUAF)
-module UafStrcmpDSE = DSE (TraceAsFile) (HistoryAsTree) (CriteriaAsUAF) (GuideAsStrcmpUAF) 
+module UafStrcmpDSE = DSE (TraceAsFile) (HistoryAsTree) (CriteriaAsUAF) (GuideAsStrcmpUAF)
+
+
+
+let has_pin_pinsec () =
+  try
+    ignore(Sys.getenv "PIN");
+    ignore(Sys.getenv "PINSEC");
+    true
+  with
+    Not_found ->
+    Logger.error
+      "@[<v 2>\
+       Please define $PIN and $PINSEC:@ \
+       export PIN=...@ \
+       export PINSEC=../libpinsec.so\
+       @]";
+    false
+
+let run () =
+  if has_pin_pinsec () then
+    begin
+      let open Dse_options in
+      match Strategy.get () with
+      | Dot ->
+        let dir = "./" in
+        let children = Sys.readdir dir in
+        let traces =
+          Array.to_list children
+          |> List.filter
+               (fun x -> String.length x < 6 || String.sub x 0 6 = "trace_")
+        in
+        TracesToTree.traces_to_dot traces;
+      | Dfs ->
+         DfsDSE.explore
+           (Binary.get ())
+          (DSE_args.get ())
+          (Config_seed_file.get ())
+          (Max_trace_length.get ())
+          (RandomSeed.get ()) (Exploration_timeout.get ()) false
+      | Bfs ->
+        BfsDSE.explore (Binary.get ())
+          (DSE_args.get ())
+          (Config_seed_file.get ())
+          (Max_trace_length.get ())
+          (RandomSeed.get ()) (Exploration_timeout.get ()) false
+      | Random ->
+        RandomDSE.explore (Binary.get ()) (DSE_args.get ()) (Config_seed_file.get ())
+          (Max_trace_length.get ()) (RandomSeed.get ()) (Exploration_timeout.get ()) false
+      | Uaf ->
+        UAFDSE.set_score ("l_event","sp_alloc","sp_free","sp_use");
+        UAFDSE.set_criteria "l_event";
+        UAFDSE.explore (Binary.get ()) (DSE_args.get ()) (Config_seed_file.get ())
+          (Max_trace_length.get ()) (RandomSeed.get ()) (Exploration_timeout.get ()) false
+      | Uaf_Strcmp ->
+        UafStrcmpDSE.set_score ("l_event","sp_alloc","sp_free","sp_use");
+        UafStrcmpDSE.set_criteria "l_event";
+        UafStrcmpDSE.explore (Binary.get ()) (DSE_args.get ()) (Config_seed_file.get ())
+          (Max_trace_length.get ()) (RandomSeed.get ()) (Exploration_timeout.get ()) true
+    end
+
+let guarded_run () =
+  if Dse_options.is_enabled () then run ()
+
+let _ =
+  Cli.Boot.enlist ~name:"dse" ~f:guarded_run

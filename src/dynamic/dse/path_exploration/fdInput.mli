@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -21,7 +21,7 @@ type file_descr = int64
 type file_name = string
 
 val add_fd : file_descr -> file_name -> unit
-val reset : unit -> unit 
+val reset : unit -> unit
 val list_fd : unit -> (file_descr * file_name) list
 
 val get_name : file_descr -> file_name option

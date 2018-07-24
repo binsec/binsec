@@ -1,7 +1,7 @@
 ##########################################################################
-#  This file is part of Binsec.                                          #
+#  This file is part of BINSEC.                                          #
 #                                                                        #
-#  Copyright (C) 2016-2017                                               #
+#  Copyright (C) 2016-2018                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -23,26 +23,27 @@ AC_INIT()
 
 has_or_die ()
 {
-    if test "$1" = no; then
+    if test x"$1" = xno; then
         AC_MSG_ERROR($2)
     fi
 }
 
 has_lib_or_die ()
 {
-    if test "$1" = ""; then
+    if test x"$1" = "x"; then
         AC_MSG_ERROR($2)
     fi
 }
 
 AC_CHECK_PROG(MAKE, make, make, no)
+has_or_die $MAKE "Could not find GNU make"
 
 AC_CHECK_PROG(OCAMLFIND, ocamlfind, ocamlfind, no)
 has_or_die $OCAMLFIND "Could not find ocamlfind"
 
 # ocamlc bytecode compiler
 AC_CHECK_PROG(OCAMLC,ocamlc,ocamlc,no)
-if test "$OCAMLC" = no; then
+if test x"$OCAMLC" = xno; then
     AC_MSG_ERROR("Could not find ocamlc.")
 else
     AC_CHECK_PROG(OCAMLCDOTOPT,ocamlc.opt,ocamlc.opt, no)
@@ -54,12 +55,13 @@ fi
 
 AC_MSG_CHECKING([version of OCaml])
 OCAMLCVERSION=`$OCAMLC -version`
-LEAST_VERSION="4.02.1"
+LEAST_VERSION="4.04.2"
+MOST_VERSION="4.05.0"
 case $OCAMLCVERSION in
-     4.02*) AS_ECHO("Good! ($OCAMLCVERSION)");;
-     4.03*) AS_ECHO("Good! ($OCAMLCVERSION)");;
      4.04*) AS_ECHO("Good! ($OCAMLCVERSION)");;
-     *) AC_MSG_ERROR("Please use at least $LEAST_VERSION (found $OCAMLCVERSION).");;
+     4.05*) AS_ECHO("Good! ($OCAMLCVERSION)");;
+     # no support for 4.06.* && 4.07 due to piqilib dependency on optcomp which depends on ocaml < 4.06.0
+     *) AC_MSG_ERROR("Please use an ocaml version >= $LEAST_VERSION and <= $MOST_VERSION (found $OCAMLCVERSION).");;
 esac
 
 
@@ -81,20 +83,19 @@ else
 fi
 
 # ocamlbuild
-AC_CHECK_PROG(OCAMLBUILD,ocamlbuild,ocamlbuild,no)
-has_or_die $OCAMLBUILD "Could not find ocamlbuild"
+AC_CHECK_PROG(OCAMLBUILD, ocamlbuild, ocamlbuild, no)
 
-OCB_OPTIONS="-use-ocamlfind -no-hygiene -lflags ../loader_ml.o -libs nums,str -I ."
+if test "$OCAMLBUILD" == "no"; then
+   AC_MSG_WARN("Could not find ocamlbuild -- you will only be able to build BINSEC through make")
+fi
 
-AC_SUBST(OCAMLBUILD)
-AC_SUBST(OCB_OPTIONS)
-
+OCB_OPTIONS="-use-ocamlfind -I ."
 
 # ocamldep
 AC_CHECK_PROG(OCAMLDEP,ocamldep,ocamldep, no)
 has_or_die $OCAMLDEP "Could not find ocamldep"
 OCAMLDEPVERSION=`ocamldep -version | sed -e 's/ocamldep, version \(.*\)/\1/'`
-if test "$OCAMLDEPVERSION" != "$OCAMLCVERSION"; then
+if test x"$OCAMLDEPVERSION" != x"$OCAMLCVERSION"; then
        AC_MSG_ERROR("ocamldep version $OCAMLCVERSION conflicts with ocamlc version $OCAMLCVERSION. Should be the same.")
 fi
 
@@ -129,31 +130,31 @@ check_lib ()
 
 check_lib "ocamlgraph"
 OCAMLGRAPH=$MYLIBPATH
-if test "$LIB_FOUND" = "no"; then
+if test x"$LIB_FOUND" = x"no"; then
   AC_MSG_ERROR("ocamlgraph not found")
 fi
 
 check_lib "piqilib"
 PIQILIB=$MYLIBPATH
-if test "$LIB_FOUND" = "no"; then
+if test x"$LIB_FOUND" = x"no"; then
   AC_MSG_ERROR("piqilib not found")
 fi
 
 check_lib "zarith"
 ZARITH=$MYLIBPATH
-if test "$LIB_FOUND" = "no"; then
+if test x"$LIB_FOUND" = x"no"; then
   AC_MSG_ERROR("zarith not found")
 fi
 
-check_lib "ZMQ"
+check_lib "zmq"
 ZMQ=$MYLIBPATH
-if test "$LIB_FOUND" = "no"; then
+if test x"$LIB_FOUND" = x"no"; then
   AC_MSG_ERROR("zmq not found")
 fi
 
 check_lib "llvm"
 LLVM=$MYLIBPATH
-if test "$LIB_FOUND" = "no"; then
+if test x"$LIB_FOUND" = x"no"; then
   AC_MSG_ERROR("llvm not found")
 fi
 
@@ -173,7 +174,7 @@ has_or_die $PROTOC "Could not find protoc"
 # Optional libraries #
 ## ocamldoc
 AC_CHECK_PROG(OCAMLDOC, ocamldoc, ocamldoc, no)
-if test "$OCAMLDOC" = no; then
+if test x"$OCAMLDOC" = xno; then
     AC_MSG_WARN("Documentation generation disabled.")
 else
     OCAMLDOCVERSION=`ocamldoc -version`
@@ -181,45 +182,55 @@ fi
 
 
 AC_CHECK_PROG(CMAKE, cmake, cmake, no)
-if test "$CMAKE" = no; then
+if test x"$CMAKE" = xno; then
    AC_MSG_WARN("You will not be able to compile PINSEC")
 fi
 
 ## headache
 AC_CHECK_PROG(HEADACHE, headache, headache, no)
-if test "$HEADACHE" = no; then
+if test x"$HEADACHE" = xno; then
     AC_MSG_WARN("License generation disabled.")
 fi
 
 AC_CHECK_PROG(DOT, dot, dot, no)
-if test "$DOT" = no; then
+if test x"$DOT" = xno; then
     AC_MSG_WARN("dot not found: disabling documentation generation.")
 fi
 
 ## SMT Provers ##
 AC_CHECK_PROG(Z3, z3, z3, no)
-if test "$Z3" = no; then
+if test x"$Z3" = xno; then
     AC_MSG_WARN("z3 not found: some parts of binsec might not work.")
 fi
 
 AC_CHECK_PROG(CVC4, cvc4, cvc4, no)
-if test "$CVC4" = no; then
+if test x"$CVC4" = xno; then
     AC_MSG_WARN("cvc4 not found: some parts of binsec might not work.")
 fi
 
 AC_CHECK_PROG(YICES, yices-smt2, yices-smt2, no)
-if test "$YICES" = no; then
+if test x"$YICES" = xno; then
     AC_MSG_WARN("yices-smt2 not found: some parts of binsec might not work.")
 fi
 
 AC_CHECK_PROG(BOOLECTOR, boolector, boolector, no)
-if test "$BOOLECTOR" = no; then
+if test x"$BOOLECTOR" = xno; then
     AC_MSG_WARN("boolector not found: some parts of binsec might not work.")
 fi
 
+AC_CONFIG_COMMANDS([depend], [touch ${depend_file}], [depend_file="src/.depend"])
+
+PIQI_DIR="piqi"
+AC_CONFIG_COMMANDS([piqi_directory], [mkdir -p $dir],[dir="src/$PIQI_DIR"])
+
+# See https://www.gnu.org/software/autoconf/manual/autoconf-2.69/html_node/Particular-Programs.html
+AC_PROG_AWK
+AC_PROG_MKDIR_P
+AC_PROG_INSTALL
 
 # Substitutions #
-
+AC_SUBST(OCAMLBUILD)
+AC_SUBST(OCB_OPTIONS)
 AC_SUBST(OCAMLC)
 AC_SUBST(OCAMLOPT)
 AC_SUBST(OCAMLDEP)
@@ -232,13 +243,14 @@ AC_SUBST(HEADACHE)
 AC_SUBST(PIQI)
 AC_SUBST(PIQI2CAML)
 AC_SUBST(PROTOC)
+AC_SUBST(PIQI_DIR)
+AC_SUBST(AWK)
+AC_SUBST(MKDIR_P)
+AC_SUBST(INSTALL)
 
 AC_CONFIG_FILES([Config.mk], [chmod a-w Config.mk])
 AC_OUTPUT()
 
-depend_file="src/.depend"
-AS_ECHO(".depend: touching ${depend_file}")
-touch ${depend_file}
 
 AS_ECHO("")
 AS_ECHO("")

@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,7 +23,7 @@ open Syscall_piqi
 open Trace_type
 
 
-let dispatch_syscall (_:syscall_pol list) (_:trace_inst) (_:Path_pred_env.t): unit = 
+let dispatch_syscall (_:syscall_pol list) (_:trace_inst) (_:Path_predicate_env.t): unit =
   ()
 
 let is_syscall_opcode (opc:string): bool =

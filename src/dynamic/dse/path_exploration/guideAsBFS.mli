@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -21,8 +21,8 @@ module GuideAsBFS :
   functor (TraceDSE_v:TypeTraceDSE.TypeTraceDSE) ->
   functor (HistoryDSE_v:TypeHistoryDSE.TypeHistoryDSE) ->
     TypeGuideDSE.S
-      with type trace_t = TraceDSE_v.trace_t
-       and type child_t = TraceDSE_v.child_t
-       and type history_t = HistoryDSE_v(TraceDSE_v).history_t
-       and type score_input_t = string
-       and type score_t = int
+  with type trace_t = TraceDSE_v.trace_t
+   and type child_t = TraceDSE_v.child_t
+   and type history_t = HistoryDSE_v(TraceDSE_v).history_t
+   and type score_input_t = string
+   and type score_t = int

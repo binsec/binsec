@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,27 +21,27 @@
 
 let rec check_widening_pt addr addr_loop insts =
   match Dba_types.Caddress.Map.find addr insts |> fst with
-  | Dba.IkAssign (_, _, next)
-  | Dba.IkAssert (_, next)
-  | Dba.IkAssume (_, next)
-  | Dba.IkNondetAssume (_, _, next)
-  | Dba.IkNondet (_, _, next)
-  | Dba.IkUndef (_, next)
-  | Dba.IkMalloc (_, _, next)
-  | Dba.IkFree (_, next)
-  | Dba.IkPrint (_, next)
-  | Dba.IkSJump (Dba.JInner next, _) ->
+  | Dba.Instr.Assign (_, _, next)
+  | Dba.Instr.Assert (_, next)
+  | Dba.Instr.Assume (_, next)
+  | Dba.Instr.NondetAssume (_, _, next)
+  | Dba.Instr.Nondet (_, _, next)
+  | Dba.Instr.Undef (_, next)
+  | Dba.Instr.Malloc (_, _, next)
+  | Dba.Instr.Free (_, next)
+  | Dba.Instr.Print (_, next)
+  | Dba.Instr.SJump (Dba.JInner next, _) ->
     let anext = Dba_types.Caddress.reid addr next in
     if Dba_types.Caddress.equal anext addr_loop
     then None
     else check_widening_pt anext addr_loop insts
 
-  | Dba.IkSJump (Dba.JOuter a, _) ->
+  | Dba.Instr.SJump (Dba.JOuter a, _) ->
     if Dba_types.Caddress.equal a addr_loop
     then None
     else check_widening_pt a addr_loop insts
 
-  | Dba.IkIf (_, t, id2) ->
+  | Dba.Instr.If (_, t, id2) ->
     let a1 =
       match t with
       | Dba.JInner id -> Dba_types.Caddress.reid addr id
@@ -49,8 +49,8 @@ let rec check_widening_pt addr addr_loop insts =
     and a2 = Dba_types.Caddress.reid addr id2 in
     Some (addr, a1, a2)
 
-  | Dba.IkDJump _
-  | Dba.IkStop _ -> None
+  | Dba.Instr.DJump _
+  | Dba.Instr.Stop _ -> None
   | exception Not_found -> None
 
 
@@ -171,27 +171,27 @@ let get_widening_pts l0 insts w_delays djmps =
         let (inst, _) = Dba_types.Caddress.Map.find addr insts in
         let reid = Dba_types.Caddress.reid addr in
         match inst with
-        | Dba.IkAssign (_, _, next)
-        | Dba.IkAssert (_, next)
-        | Dba.IkAssume (_, next)
-        | Dba.IkNondetAssume (_, _, next)
-        | Dba.IkNondet (_, _, next)
-        | Dba.IkUndef (_, next)
-        | Dba.IkMalloc (_, _, next)
-        | Dba.IkFree (_, next)
-        | Dba.IkPrint (_, next) ->
+        | Dba.Instr.Assign (_, _, next)
+        | Dba.Instr.Assert (_, next)
+        | Dba.Instr.Assume (_, next)
+        | Dba.Instr.NondetAssume (_, _, next)
+        | Dba.Instr.Nondet (_, _, next)
+        | Dba.Instr.Undef (_, next)
+        | Dba.Instr.Malloc (_, _, next)
+        | Dba.Instr.Free (_, next)
+        | Dba.Instr.Print (_, next) ->
           addr_list := (reid next, None) :: addr_list_tl
-        | Dba.IkIf (_c, Dba.JInner next1, next2) ->
+        | Dba.Instr.If (_c, Dba.JInner next1, next2) ->
           addr_list :=
             (reid next1, Some !tag) :: (reid next2, Some !tag) :: addr_list_tl
-        | Dba.IkIf (_c, Dba.JOuter a_next, next) ->
+        | Dba.Instr.If (_c, Dba.JOuter a_next, next) ->
           addr_list :=
             (a_next, Some !tag) :: (reid next, Some !tag) :: addr_list_tl
-        | Dba.IkSJump (Dba.JInner next, _) ->
+        | Dba.Instr.SJump (Dba.JInner next, _) ->
           addr_list := (reid next, None) :: addr_list_tl
-        | Dba.IkSJump (Dba.JOuter a_next, _) ->
+        | Dba.Instr.SJump (Dba.JOuter a_next, _) ->
           addr_list := (a_next, None) :: addr_list_tl
-        | Dba.IkDJump _ ->
+        | Dba.Instr.DJump _ ->
           let successors =
             try Dba_types.Caddress.Map.find addr djmps
             with Not_found -> Dba_types.Caddress.Set.empty
@@ -201,7 +201,7 @@ let get_widening_pts l0 insts w_delays djmps =
               (fun addr_suiv acc -> (addr_suiv, Some !tag) :: acc) successors addr_list_tl
           in
           addr_list := new_addr_list
-        | Dba.IkStop _state -> addr_list := addr_list_tl
+        | Dba.Instr.Stop _state -> addr_list := addr_list_tl
       with
         Not_found -> addr_list := addr_list_tl
     )
@@ -215,19 +215,19 @@ let merge_maps =
 
 
 let discover_from_address disasm imap address =
-  let vaddr = Dba_types.Virtual_address.of_code_address address in
+  let vaddr = Dba_types.Caddress.to_virtual_address address in
   let add_block_starts addr _ set =
     if addr.Dba.id = 0 then
-      let open Dba_types.Virtual_address in
-      Set.add (of_code_address addr) set
+      let open Virtual_address in
+      Set.add (Dba_types.Caddress.to_virtual_address addr) set
     else set in
   let visited =
     Dba_types.Caddress.Map.fold
-      add_block_starts imap Dba_types.Virtual_address.Set.empty in
+      add_block_starts imap Virtual_address.Set.empty in
   let worklist = Disasm_core.W.singleton vaddr in
   let program = Disasm.Program.empty in
   let prog = disasm visited worklist program in
-  Disasm_types.Program.to_pmap prog.Disasm.Program.instructions
+  Pmap.of_program prog
   |> Simplification_dba.simplify_dba
 
 

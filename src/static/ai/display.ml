@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -52,12 +52,12 @@ let save_evaluation_counts, restore_evaluation_counts =
 let equality_use, get_equality_uses =
   let v = ref 0 in
   (fun stack lvalue expr ->
-      Logger.debug ~level:3 "using (%a = %a) %@ %a"
-        Dba_printer.Ascii.pp_lhs lvalue
-        Dba_printer.Ascii.pp_lhs expr
-        Dba_types.AddressStack.pp stack;
-      incr v)
-  ,(fun () -> !v)
+     Logger.debug ~level:3 "using (%a = %a) %@ %a"
+       Dba_printer.Ascii.pp_lhs lvalue
+       Dba_printer.Ascii.pp_lhs expr
+       Dba_types.AddressStack.pp stack;
+     incr v)
+,(fun () -> !v)
 
 let time_without_equalities = ref 0.
 
@@ -102,14 +102,14 @@ type message =
   | Unrollings of Dba_types.AddressStack.Map.key
   | Joins of Dba_types.AddressStack.Map.key
   | Equalities of string
-  | Assign of string * Dba.expr * string
-  | Guard of Dba.cond * string * string
+  | Assign of string * Dba.Expr.t * string
+  | Guard of Dba.Expr.t * string * string
   | Call of Dba.address * Dba.address
-  | RemoveEqualities of Dba.lhs * string
-  | Cond of Dba.cond * string
-  | CondNat of Dba.address * Dba.cond * string
-  | CondReplacement of Dba.cond * Dba.expr * Dba.expr * Dba.expr * Dba.expr * string
-  | Predicates of Dba.binary_op list
+  | RemoveEqualities of Dba.LValue.t * string
+  | Cond of Dba.Expr.t * string
+  | CondNat of Dba.address * Dba.Expr.t * string
+  | CondReplacement of Dba.Expr.t * Dba.Expr.t * Dba.Expr.t * Dba.Expr.t * Dba.Expr.t * string
+  | Predicates of Dba.Binary_op.t list
   | Djmps of Dba_types.Caddress.Set.t Dba_types.AddressStack.Map.t
   | Stats_flags
   | Stats_equalities
@@ -190,7 +190,7 @@ let display msg =
   | Unrollings (addrStack) ->
     Logger.debug ~level "%a: loop unrooling"
       Dba_types.AddressStack.pp addrStack;
-(*    widening_pts_string := !widening_pts_string ^ "\n" ^ message *)
+    (*    widening_pts_string := !widening_pts_string ^ "\n" ^ message *)
 
   | Joins addrStack ->
     Logger.debug ~level "%a : join" Dba_types.AddressStack.pp addrStack;
@@ -204,27 +204,27 @@ let display msg =
     Logger.debug ~level "%s" equalities
 
   | Assign (lhs, e, v) ->
-    Logger.debug ~level "%s := (%a = %s)" lhs pp_expr e v
+    Logger.debug ~level "%s := (%a = %s)" lhs pp_bl_term e v
 
   | Guard (cond, v1, v2) ->
     Logger.debug ~level "Guard (%a) = (%s, %s)"
-      Dba_printer.Ascii.pp_cond cond v1 v2
+      Dba_printer.Ascii.pp_bl_term cond v1 v2
 
   | Call (a, addr_ret) ->
     calls :=
-    !calls ^
-    (Format.asprintf "Call %a with ret %@ %a"
-       pp_code_address a
-       pp_code_address addr_ret)
+      !calls ^
+      (Format.asprintf "Call %a with ret %@ %a"
+         pp_code_address a
+         pp_code_address addr_ret)
 
   | Cond (cond, msg) ->
-    Logger.debug ~level "%s: %a" msg pp_cond cond
+    Logger.debug ~level "%s: %a" msg pp_bl_term cond
 
   | CondNat (addr, cond, msg) ->
     Logger.debug ~level
       "%a: natural cond recovered : %a (%s)"
       pp_code_address addr
-      pp_cond cond msg
+      pp_bl_term cond msg
 
 
   | CondReplacement (cond, op1, op2, v1, v2, msg) ->
@@ -236,17 +236,17 @@ let display msg =
        @[v1 = %a@]@ \
        @[v2 = %a@]@]"
       msg
-      Dba_printer.Ascii.pp_cond cond
-      pp_expr op1
-      pp_expr op2
-      pp_expr v1
-      pp_expr v2
+      Dba_printer.Ascii.pp_bl_term cond
+      pp_bl_term op1
+      pp_bl_term op2
+      pp_bl_term v1
+      pp_bl_term v2
 
 
   | Predicates predicates ->
     Logger.debug ~level "@[<hov 2>%a@]"
-    (Print_utils.pp_list ~pre:"[" ~post:"]" ~sep:", "
-       Dba_printer.Ascii.pp_binary_op) predicates
+      (Print_utils.pp_list ~pre:"[" ~post:"]" ~sep:", "
+         Dba_printer.Ascii.pp_binary_op) predicates
 
   | Djmps djmps ->
     let djmps =
@@ -270,44 +270,44 @@ let display msg =
 
   | Stats_flags ->
     Logger.result "& %d & %d & %d & %d & %f\n%!"
-      !Options.nb_nat_predicate_recovery_tries
-      !Options.nb_recovered_nat_predicates
-      !Options.nb_failed_nat_predicate_recoveries
-      !Options.nb_conditional_cache_uses
-      !Options.time_nat_flag_recovery ;
+      !Ai_options.nb_nat_predicate_recovery_tries
+      !Ai_options.nb_recovered_nat_predicates
+      !Ai_options.nb_failed_nat_predicate_recoveries
+      !Ai_options.nb_conditional_cache_uses
+      !Ai_options.time_nat_flag_recovery ;
 
 
   | Stats_equalities ->
-      Options.time_analysis := !Options.time_analysis -. !Options.time_redundant_evals;
-      let time_without_equalities =
-        !Options.time_analysis -. !Options.time_equalities in
-      Logger.result
-        "@[<v 0>\
-        Locations: %d@ \
-        Functions: %d@ \
-        Time (no eq): %0.2f@ \
-        Time : %.2f@ \
-        Neq (names): %d@ \
-        Neq (classes): %d@ \
-        Evaluations: %d@ \
-        Equality uses: %d@ \
-        Equality refinments: %d@ \
-        l-value evaluations %d@ \
-        l-value in equalities: %d@ \
-        Refined l-values: %d \
-         @]"
-        !nb_locs
-        !nb_func
-        time_without_equalities
-        !Options.time_analysis
-        !Options.nb_equalities_names
-        !Options.nb_equalities_classes
-        !nb_evals
-        (get_equality_uses ())
-        !Options.nb_equalities_refinement
-        !nb_evals_lhs
-        !nb_evals_lhs_in_equalities
-        !Options.nb_refined_lhs
+    Ai_options.time_analysis := !Ai_options.time_analysis -. !Ai_options.time_redundant_evals;
+    let time_without_equalities =
+      !Ai_options.time_analysis -. !Ai_options.time_equalities in
+    Logger.result
+      "@[<v 0>\
+       Locations: %d@ \
+       Functions: %d@ \
+       Time (no eq): %0.2f@ \
+       Time : %.2f@ \
+       Neq (names): %d@ \
+       Neq (classes): %d@ \
+       Evaluations: %d@ \
+       Equality uses: %d@ \
+       Equality refinments: %d@ \
+       l-value evaluations %d@ \
+       l-value in equalities: %d@ \
+       Refined l-values: %d \
+       @]"
+      !nb_locs
+      !nb_func
+      time_without_equalities
+      !Ai_options.time_analysis
+      !Ai_options.nb_equalities_names
+      !Ai_options.nb_equalities_classes
+      !nb_evals
+      (get_equality_uses ())
+      !Ai_options.nb_equalities_refinement
+      !nb_evals_lhs
+      !nb_evals_lhs_in_equalities
+      !Ai_options.nb_refined_lhs
 
 
 

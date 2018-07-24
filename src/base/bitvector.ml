@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -51,6 +51,12 @@ end
 open Internal
 type t = internal
 
+let compare t1 t2 =
+  let cmp = compare t1.size t2.size in
+  if cmp = 0
+  then Bigint.compare_big_int t1.value t2.value
+  else cmp
+
 let create value size = create value size
 let create_from_tuple (value, size) = create value size
 
@@ -81,7 +87,7 @@ let ones  size = create Bigint.unit_big_int size
 
 let fill ?lo ?hi size =
   let lo = match lo with None -> 0 | Some l -> l in
-  let hi = match hi with None -> size | Some h -> h in
+  let hi = match hi with None -> size - 1 | Some h -> h in
   if lo < 0 || hi >= size || hi < lo then invalid_arg "Invalid bitvector size";
   create
     (Bigint.shift_left_big_int
@@ -91,30 +97,24 @@ let fill ?lo ?hi size =
        lo)
     size
 
-let max_ubv n =
-  if n <= 0 then invalid_arg "Invalid bitvector size";
-  create
-    (Bigint.sub_big_int
-       (Bigint.shift_left_big_int Bigint.unit_big_int n)
-       Bigint.unit_big_int)
-    n
+let max_ubv n = fill n
 
-let max_sbv n =
+let max_sbv n = fill ~hi:(n - 1) n
+
+let min_sbv n =
   if n <= 0 then invalid_arg "Invalid bitvector size";
-  create
-    (Bigint.sub_big_int
-       (Bigint.shift_left_big_int Bigint.unit_big_int (n-1))
-       Bigint.unit_big_int)
-    n
+  create (Bigint.shift_left_big_int Bigint.unit_big_int (n-1)) n
 
 let is_zero bv = equal bv zero
 let is_one  bv = equal bv one
 
 let is_zeros bv = equal bv (zeros (size_of bv))
 let is_ones  bv = equal bv (ones  (size_of bv))
+let is_fill  bv = equal bv (fill  (size_of bv))
 
 let is_max_ubv bv = equal bv (max_ubv (size_of bv))
 let is_max_sbv bv = equal bv (max_sbv (size_of bv))
+let is_min_sbv bv = equal bv (min_sbv (size_of bv))
 
 
 (* Utils *)
@@ -172,8 +172,8 @@ let pred bv = create (Bigint.pred_big_int (value_of bv)) (size_of bv)
 
 let add bv1 bv2 = unsigned_apply Bigint.add_big_int bv1 bv2 "add"
 let sub bv1 bv2 = unsigned_apply Bigint.sub_big_int bv1 bv2 "sub"
+let mul bv1 bv2 = unsigned_apply Bigint.mult_big_int bv1 bv2 "mul"
 
-let umul bv1 bv2 = unsigned_apply Bigint.mult_big_int bv1 bv2 "umul"
 let udiv bv1 bv2 = unsigned_apply Bigint.div_big_int bv1 bv2 "udiv"
 let umod bv1 bv2 = unsigned_apply Bigint.mod_big_int bv1 bv2 "umod"
 let urem bv1 bv2 = unsigned_apply Bigint.mod_big_int bv1 bv2 "urem"
@@ -183,7 +183,6 @@ let pow bv1 bv2 = unsigned_apply Bigint.power_big_int_positive_big_int bv1 bv2 "
 let umax bv1 bv2 = if uge bv1 bv2 then bv1 else bv2
 let umin bv1 bv2 = if ule bv1 bv2 then bv1 else bv2
 
-let smul bv1 bv2 = signed_apply Bigint.mult_big_int bv1 bv2 "smul"
 let sdiv bv1 bv2 = signed_apply Bigint.div_big_int bv1 bv2 "sdiv"
 let smod bv1 bv2 = signed_apply Bigint.mod_big_int bv1 bv2 "smod"
 let srem bv1 bv2 = signed_apply
@@ -199,6 +198,7 @@ let smax bv1 bv2 = if sge bv1 bv2 then bv1 else bv2
 let smin bv1 bv2 = if sle bv1 bv2 then bv1 else bv2
 
 let is_neg bv = Bigint.lt_big_int (signed_of bv) Bigint.zero_big_int
+let is_pos bv = Bigint.gt_big_int (signed_of bv) Bigint.zero_big_int
 
 
 (* Logical *)
@@ -278,7 +278,7 @@ let concat = function
   | [] -> failwith "concat"
   | bv :: lst -> List.fold_left append bv lst
 
-let extract bv lo hi =
+let extract bv {Basic_types.lo; Basic_types.hi} =
   if (lo < 0) || (hi >= size_of bv) || (hi < lo)
   then
     let msg = Printf.sprintf "restrict %s [%i..%i]" (print bv) lo hi in
@@ -291,35 +291,58 @@ let extract bv lo hi =
 (* Conversion *)
 
 let to_hexstring bv : string =
-  let mask = Bigint.big_int_of_int 15 in
-  let rec loop acc bv =
-    if bv.size > 4 then
-      loop
-        (Printf.sprintf "%x%s"
-           (Bigint.int_of_big_int
-              (Bigint.and_big_int bv.value mask))
-           acc)
-        (create
-           (Bigint.shift_right_towards_zero_big_int bv.value 4)
-           (bv.size - 4))
-    else if bv.size > 0 then
-      Printf.sprintf "0x%x%s"
-        (Bigint.int_of_big_int
-           (Bigint.and_big_int bv.value
-              (Bigint.big_int_of_int (1 lsl bv.size - 1))))
-        acc
-    else Printf.sprintf "0x%s" acc
-  in loop "" bv
+  let size = (bv.size + 3) / 4 + 2 in
+  let init_fun = function
+    | 0 -> '0'
+    | 1 -> 'x'
+    | n ->
+      let offset = (size - n - 1) * 4 in
+      let digit = Bigint.extract_big_int bv.value offset 4
+                  |> Bigint.int_of_big_int in
+      let shift = if digit < 10 then 0x30 else 0x57 in
+      digit + shift |> char_of_int
+  in
+  String.init size init_fun
 
-let of_hexstring str =
+let to_bitstring bv : string =
+  let size = bv.size + 2 in
+  let init_fun = function
+    | 0 -> '0'
+    | 1 -> 'b'
+    | n ->
+      let offset = (size - n - 1) in
+      let digit = Bigint.extract_big_int bv.value offset 1
+                  |> Bigint.int_of_big_int in
+      digit + 0x30 |> char_of_int
+  in
+  String.init size init_fun
+
+let to_string bv =
+  if bv.size mod 4 == 0
+  then to_hexstring bv
+  else to_bitstring bv
+;;
+  
+
+
+let of_string str =
   let len = String.length str in
-  try
-    if (len > 2 && str.[0] = '0' && str.[1] = 'x')
-    then create (Bigint.big_int_of_string str) ((len - 2) * 4)
-    else if (len > 3 && (str.[0] = '-' || str.[0] = '+') && str.[1] = '0' && str.[2] = 'x')
-    then create (Bigint.big_int_of_string str) ((len - 3) * 4)
-    else failwith "of_hexstring"
-  with Failure _ -> failwith "of_hexstring"
+  if len < 3 then failwith "Bitvector.of_string : too short string" else
+    let size =
+      match str.[0], str.[1], str.[2] with
+      | '0', 'x', _ -> (len - 2) * 4
+      | '0', 'b', _ -> len - 2
+      | '+', '0', 'x'
+      | '-', '0', 'x' -> (len - 3) * 4
+      | '+', '0', 'b'
+      | '-', '0', 'b' -> len - 3
+      | _ -> failwith "Bitvector.of_string : should start with [+-]?0[xb]"
+    in
+    try
+      create (Bigint.big_int_of_string str) size
+    with Failure _ -> raise (Invalid_argument ("of_string : " ^ str))
+
+let of_hexstring = of_string
 
 let of_bool b = if b then one else zero
 let to_bool bv = not (is_zero bv)
@@ -330,8 +353,39 @@ let to_int32 bv  = Bigint.int32_of_big_int (signed_of bv)
 let of_int64 i64 = create (Bigint.big_int_of_int64 i64) 64
 let to_int64 bv  = Bigint.int64_of_big_int (signed_of bv)
 
+let of_int ~size i = create (Bigint.big_int_of_int i) size
+let to_int bv = Bigint.int_of_big_int (signed_of bv)
+
 let pp_hex ppf bv =
-    Format.fprintf ppf "{%s; %i}" (to_hexstring bv) bv.size
+  Format.fprintf ppf "%s" @@
+  if bv.size mod 4 == 0
+  then to_hexstring bv
+  else to_bitstring bv
+;;
+
+(* Should this replace pp_hex? *)
+let pp_hex_or_bin ppf bv =
+  Format.fprintf ppf "%s" @@ to_string bv
+;;
+
+
+module Random = struct
+
+  let bits sz = sz |> create @@ Bigint.big_int_of_int @@ Random.bits ()
+
+  let rec unroll sz bv =
+    if sz > 30 then bits 30 |> append bv |> unroll @@ sz - 30
+    else bits sz |> append bv
+
+  let rand = function
+    | sz when sz < 1 -> assert false
+    | 1 when Random.bool () -> one
+    | 1 -> zero
+    | sz when sz <= 30 -> bits sz
+    | sz -> bits 30 |> unroll @@ sz - 30
+end
+
+let rand = Random.rand
 
 module type Common =
 sig
@@ -347,6 +401,8 @@ sig
   val signed_of : t -> Bigint.t
   val size_of : t -> int
 
+  val compare : t -> t -> int
+
   val zero : t
   val one  : t
 
@@ -359,12 +415,15 @@ sig
 
   val is_zeros : t -> bool
   val is_ones  : t -> bool
+  val is_fill  : t -> bool
 
   val max_ubv : int -> t
   val max_sbv : int -> t
+  val min_sbv : int -> t
 
   val is_max_ubv : t -> bool
   val is_max_sbv : t -> bool
+  val is_min_sbv : t -> bool
 
   val equal : t -> t -> bool
   val diff  : t -> t -> bool
@@ -390,6 +449,7 @@ sig
   val smin : t -> t -> t
 
   val is_neg : t -> bool
+  val is_pos : t -> bool
 
   (* land, lor, lxor and lnot are keywords... *)
   include Sigs.Bitwise with type t := t
@@ -406,5 +466,5 @@ sig
 
   val append  : t -> t -> t
   val concat  : t list -> t
-  val extract : t -> int -> int -> t
+  val extract : t -> int Basic_types.interval -> t
 end

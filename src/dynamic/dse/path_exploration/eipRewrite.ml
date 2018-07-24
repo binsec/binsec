@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -18,89 +18,100 @@
 (**************************************************************************)
 
 open Dba
-open Path_pred_env
+open Path_predicate_env
 open Trace_type
-open Formula
-open Smtlib2
+open Path_predicate_formula
 open SymbolicInput
-open Options
 open Config_piqi
 open Configuration
 
+let get_addr_size e = e.Path_predicate_env.formula.addr_size
 
-let get_addr_size e = e.Path_pred_env.addr_size ;;
-
-class eip_rewrite (trace_config:Options.trace_analysis_config) =
+class eip_rewrite (trace_config:Trace_config.t) =
   object(self) inherit InvertChild.invert_child trace_config
 
     val mutable eip_is_rewrite = false
 
     method is_eip_rewrite = eip_is_rewrite
 
-    method add_eip_check predicate (env:Path_pred_env.t) =
-       (* First get the last name of esp and add +4 (because of ret ) *)
-        let _,esp = get_var_or_create env.formula "esp" (get_addr_size env) 0 31 in
-        let esp = SmtBvBinary(SmtBvSub,esp,(SmtBvCst(Bitvector.create (Bigint.big_int_of_int 0x4) (get_addr_size env)))) in
-        (* Get the last val of memory *)
-        let mem_name = "memory" ^ (string_of_int ((get_varindex env.formula "memory")-1)) in
-        (* Load value in esp +4 *)
-        let load_esp = SmtBvExpr(SmtABvLoad32(SmtABvArray(mem_name,0,(get_addr_size env)),esp)) in
-        let val_eip = SmtBvExpr(SmtBvCst(Bitvector.create (Bigint.big_int_of_int 0x41414141) (get_addr_size env))) in
-        (* compare esp +4 with \x41414141 *)
-        let new_predicate = SmtAnd(predicate,SmtComp(val_eip,load_esp)) in
-        new_predicate
+    method add_eip_check predicate (env:Path_predicate_env.t) =
+      let open Formula in
+      (* First get the last name of esp and add +4 (because of ret ) *)
+      let _, esp =
+        get_var_or_create env.formula "esp" (get_addr_size env) 0 31 in
+      let esp =
+        mk_bv_sub esp
+          (mk_bv_cst
+             (Bitvector.create (Bigint.big_int_of_int 0x4) (get_addr_size env)))
+      in
+      (* Get the last val of memory *)
+      let mem_name =
+        Printf.sprintf "memory%d" ((get_varindex env.formula "memory") - 1) in
+      (* Load value in esp +4 *)
+      let load_esp =
+        mk_select 4 (mk_ax_var (ax_var mem_name 0 (get_addr_size env))) esp in
+      let val_eip =
+        mk_bv_cst
+          (Bitvector.create (Bigint.big_int_of_int 0x41414141) (get_addr_size env))
+      in
+      (* compare esp +4 with \x41414141 *)
+      mk_bl_and predicate (mk_bv_equal val_eip load_esp)
 
-    method! visit_dbainstr_before (_key:int) (inst:trace_inst) (dbainst:Dba_types.Statement.t) (env:Path_pred_env.t) =
+    method! visit_dbainstr_before (_key:int) inst (dbainst:Dba_types.Statement.t) (env:Path_predicate_env.t) =
       let addr = inst.location in
       let it = try Hashtbl.find instruction_counter addr with Not_found -> 0 in
       let instruction = Dba_types.Statement.instruction dbainst in
+      let open Instr in
       (match instruction with
-        | IkIf _ | IkDJump _ -> name_trace <- Printf.sprintf "%s_0x%Lx-%d" name_trace addr it
-        | IkAssign (_, _, _)|IkSJump (_, _)|IkStop _|IkAssert (_, _)| IkAssume (_, _)
-        | IkNondetAssume (_, _, _)|IkNondet (_, _, _)
-        | IkUndef (_, _)|IkMalloc (_, _, _)|IkFree (_, _)|IkPrint (_, _)-> ()
+       | If _ | DJump _ -> name_trace <- Printf.sprintf "%s_0x%Lx-%d" name_trace addr it
+       | Assign _ | SJump _ | Stop _ | Assert _| Assume _
+       | NondetAssume _|Nondet _
+       | Undef _|Malloc _|Free _|Print _-> ()
       );
       (match instruction with
-      (* Try to invert all ret instruction *)
-      | IkDJump _  when inst.opcode ="ret" ->
-        begin
-        let formula_file = "formula-eip"^(name_trace)^".smt2" in
-        let static_predicate = self#build_cond_predicate True env in
-        let predicate = self#add_eip_check static_predicate env in
-        ignore @@ Formula.build_formula_file env.formula predicate formula_file trace_config.configuration.solver;
-        let result, model = Solver.solve_model formula_file trace_config.configuration.solver in
-        match result with
-        | SAT ->
-            eip_is_rewrite <- true;
-            Logger.debug "SAT!";
-            let new_inputs = SymbolicInput.update input_entries model in
-            let config = trace_config.configuration in
-            let new_inputs_export = SymbolicInput.export_inputs `patch new_inputs in
-            let inputs = self#update_inputs config.inputs new_inputs_export in
-            config.inputs <- inputs;
-            let new_file = "config-EIP-"^(name_trace(*Printf.sprintf "%04d" key*))^".json" in
-            let oc = open_out new_file in
-            (*  let opts = Piqirun_ext.make_options ~json_omit_missing_fields:true () in*)
-            let data = Config_piqi_ext.gen_configuration config `json_pretty in
-            output_string oc data;
-            close_out oc;
-            new_conf_files <- new_file::new_conf_files
+       (* Try to invert all ret instruction *)
+       | DJump _  when inst.mnemonic ="ret" ->
+         begin
+           let open Trace_config in
+           let open Formula in
+           let formula_file = "formula-eip"^(name_trace)^".smt2" in
+           let static_predicate = self#build_cond_predicate Dba.Expr.one env in
+           let predicate = self#add_eip_check static_predicate env in
+           ignore @@ Path_predicate_formula.build_formula_file env.formula predicate formula_file;
+           let result, model = Solver.solve_model formula_file trace_config.configuration.solver in
+           match result with
+           | SAT ->
+             eip_is_rewrite <- true;
+             Logger.debug "SAT!";
+             let new_inputs = SymbolicInput.update input_entries model in
+             let config = trace_config.configuration in
+             let new_inputs_export = SymbolicInput.export_inputs `patch new_inputs in
+             let inputs = self#update_inputs config.Configuration.inputs new_inputs_export in
+             config.Configuration.inputs <- inputs;
+             let new_file = "config-EIP-"^(name_trace(*Printf.sprintf "%04d" key*))^".json" in
+             let oc = open_out new_file in
+             (*  let opts = Piqirun_ext.make_options ~json_omit_missing_fields:true () in*)
+             let data = Config_piqi_ext.gen_configuration config `json_pretty in
+             output_string oc data;
+             close_out oc;
+             new_conf_files <- new_file::new_conf_files
 
-        | UNSAT | TIMEOUT | UNKNOWN ->
-          Logger.debug "inversed input of conditional jump at 0x%Lx not found"
-            inst.location
-        end
-      | IkDJump (_, _)| IkIf (_, _, _) | IkAssign (_, _, _)
-      | IkSJump (_, _)| IkStop _| IkAssert (_, _)
-      | IkAssume (_, _)
-      | IkNondetAssume (_, _, _)
-      |IkNondet (_, _, _)
-      |IkUndef (_, _)
-      |IkMalloc (_, _, _)
-      |IkFree (_, _)
-      |IkPrint (_, _)-> ()
+           | UNSAT | TIMEOUT | UNKNOWN ->
+             Logger.debug
+               "inversed input of conditional jump at 0x%Lx not found"
+               inst.location
+         end
+       | DJump _ | If _   | Assign _
+       | SJump _ | Stop _ | Assert _
+       | Assume _
+       | NondetAssume _
+       | Nondet _
+       | Undef _
+       | Malloc _
+       | Free _
+       | Print _ -> ()
       );
       Path_predicate.DoExec
 
 
-end;;
+  end;;

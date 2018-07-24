@@ -35,6 +35,8 @@
 
 (** Pretty-printers for X86 *)
 
+val pp_address : Format.formatter -> X86Types.address -> unit
+
 val pp_bytes : int -> Format.formatter -> int -> unit
 (** [pp_bytes n ppf v] prints the first [n] bytes of [v] into [ppf].
     [n] must be between 0 (excluded) and 4 (included) as [v] represents a X86
@@ -48,7 +50,3 @@ val pp_word :  Format.formatter -> int -> unit
 (** [pp_word ppf v] is [pp_bytes 4 ppf v] *)
 
 val pp_instr :  Format.formatter -> X86Types.instruction_kind -> unit
-
-
-
-

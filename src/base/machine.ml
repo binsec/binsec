@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -28,8 +28,16 @@ type isa =
   | X86
   | AMD64
   | PowerPC
-  | ARM
+  | ARMv7
   | Unknown
+
+let pp_isa ppf = function
+  | X86 -> Format.fprintf ppf "x86"
+  | AMD64 -> Format.fprintf ppf "amd64"
+  | PowerPC -> Format.fprintf ppf "powerpc"
+  | ARMv7 -> Format.fprintf ppf "arm32"
+  | Unknown -> Format.fprintf ppf "unknown"
+
 
 type endianness =
   | LittleEndian
@@ -63,12 +71,12 @@ module ISA =
   GetterSetterMake(
   struct
     type t = isa
-    let value = Unknown
+    let value = X86
     let pp ppf = function
       | X86 -> Format.fprintf ppf "x86"
       | AMD64 -> Format.fprintf ppf "amd64"
       | PowerPC -> Format.fprintf ppf "powerpc"
-      | ARM -> Format.fprintf ppf "arm"
+      | ARMv7 -> Format.fprintf ppf "armv7"
       | Unknown -> Format.fprintf ppf "unknown"
   end)
 
@@ -102,14 +110,14 @@ let set_amd64 () =
 
 let set_powerpc () = assert false
 
-let set_arm e =
-  ISA.set ARM;
+let set_armv7 e =
+  ISA.set ARMv7;
   Endianness.set e;
   Word_size.set 32
 
-let set_arm_little () = set_arm LittleEndian
+let set_armv7_little () = set_armv7 LittleEndian
 
-let set_arm_big () = set_arm BigEndian
+let set_armv7_big () = set_armv7 BigEndian
 
 let is_unknown () = ISA.get () = Unknown
 

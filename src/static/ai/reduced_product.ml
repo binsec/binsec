@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -41,7 +41,7 @@ struct
   type equalities = UF.t
   type thresholds = int array * int array * int array * int array
   type elementsRecord = Region_bitvector.t list Dba_types.AddressStack.Map.t
-  type naturalPredicatesRecord = (Dba.cond * Dba.cond) Dba_types.Caddress.Map.t
+  type naturalPredicatesRecord = (Dba.Expr.t * Dba.Expr.t) Dba_types.Caddress.Map.t
 
 
   let top = Some Static_types.Env.empty, High_level_predicate.empty, UF.create ()
@@ -255,7 +255,7 @@ struct
 
   let rec eval_expr expr s assumes global_regions : (Val1.t * Val2.t) * (Smt_bitvectors.smtBvExprAlt list)=
     match expr with
-    | Dba.ExprVar (st,size, _) -> (
+    | Dba.Expr.Var (st,size, _) -> (
         let v =
           try load (Static_types.Var (st, size)) Bigint.zero_big_int s assumes global_regions, assumes
           with Not_found ->
@@ -264,7 +264,7 @@ struct
         in v
       )
 
-    | Dba.ExprLoad (size, endianness, e) ->
+    | Dba.Expr.Load (size, endianness, e) ->
       let append_value (v1, v2) (w1, w2) =
         match endianness with
         | Dba.BigEndian    -> Val1.concat v1 w1, Val2.concat v2 w2
@@ -317,107 +317,83 @@ struct
       in values, assumes
 
 
-    | Dba.ExprCst (r, bv) -> (Val1.singleton (`Value (r, bv)), Val2.singleton (`Value (r, bv))), assumes
-    | Dba.ExprUnary (uop, expr) ->
-      let (val1, val2), assumes = eval_expr expr s assumes global_regions in
-      begin match uop with
-          Dba.UMinus -> (Val1.neg val1, Val2.neg val2), assumes
-        | Dba.Not -> (Val1.lognot val1, Val2.lognot val2), assumes
-      end
-    | Dba.ExprBinary (bop, expr1, expr2) ->
+    | Dba.Expr.Cst (r, bv) -> (Val1.singleton (`Value (r, bv)), Val2.singleton (`Value (r, bv))), assumes
+    | Dba.Expr.Unary (uop, expr) ->
+      let (v1, v2), assumes = eval_expr expr s assumes global_regions in
+      let f1, f2 =
+        match uop with
+        | Dba.Unary_op.UMinus -> Val1.neg, Val2.neg
+        | Dba.Unary_op.Not -> Val1.lognot, Val2.lognot
+        | Dba.Unary_op.Sext n ->
+          (fun v -> Val1.signed_extension v n), (fun v -> Val2.signed_extension v n)
+        | Dba.Unary_op.Uext n ->
+          (fun v -> Val1.extension v n), (fun v -> Val2.extension v n)
+        | Dba.Unary_op.Restrict {Interval.lo; Interval.hi;} ->
+          (fun v -> Val1.restrict v lo hi), (fun v -> Val2.restrict v lo hi)
+      in (f1 v1, f2 v2), assumes
+
+    | Dba.Expr.Binary (bop, expr1, expr2) ->
       let (val11, val12), assumes = (eval_expr expr1 s assumes global_regions) in
       let (val21, val22), assumes = (eval_expr expr2 s assumes global_regions) in
       begin match bop with
-        | Dba.Plus -> Val1.add val11 val21, Val2.add val12 val22
-        | Dba.Minus -> Val1.sub val11 val21, Val2.sub val12 val22
-        | Dba.MultU -> Val1.umul val11 val21, Val2.umul val12 val22
-        | Dba.MultS -> Val1.smul val11 val21, Val2.smul val12 val22
-        (* | Dba.Power -> Val1.power val11 val21, Val2.power val12 val22 *)
-        | Dba.DivU -> Val1.udiv val11 val21, Val2.udiv val12 val22
-        | Dba.DivS -> Val1.sdiv val11 val21, Val2.sdiv val12 val22
-        | Dba.ModU -> Val1.umod val11 val21, Val2.umod val12 val22
-        | Dba.ModS -> Val1.smod val11 val21, Val2.smod val12 val22
-        | Dba.Or -> Val1.logor val11 val21, Val2.logor val12 val22
-        | Dba.And -> Val1.logand val11 val21, Val2.logand val12 val22
-        | Dba.Xor -> Val1.logxor val11 val21, Val2.logxor val12 val22
-        | Dba.Concat -> Val1.concat val11 val21, Val2.concat val12 val22
-        | Dba.LShift -> Val1.lshift val11 val21, Val2.lshift val12 val22
-        | Dba.RShiftU -> Val1.rshiftU val11 val21, Val2.rshiftU val12 val22
-        | Dba.RShiftS	-> Val1.rshiftS val11 val21, Val2.rshiftS val12 val22
-        | Dba.LeftRotate -> Val1.rotate_left val11 val21, Val2.rotate_left val12 val22
-        | Dba.RightRotate -> Val1.rotate_right val11 val21, Val2.rotate_right val12 val22
-        | Dba.Eq -> Val1.eq val11 val21, Val2.eq val12 val22
+        | Dba.Binary_op.Plus -> Val1.add val11 val21, Val2.add val12 val22
+        | Dba.Binary_op.Minus -> Val1.sub val11 val21, Val2.sub val12 val22
+        | Dba.Binary_op.Mult -> Val1.mul val11 val21, Val2.mul val12 val22
+        (* | Dba.Binary_op.Power -> Val1.power val11 val21, Val2.power val12 val22 *)
+        | Dba.Binary_op.DivU -> Val1.udiv val11 val21, Val2.udiv val12 val22
+        | Dba.Binary_op.DivS -> Val1.sdiv val11 val21, Val2.sdiv val12 val22
+        | Dba.Binary_op.ModU -> Val1.umod val11 val21, Val2.umod val12 val22
+        | Dba.Binary_op.ModS -> Val1.smod val11 val21, Val2.smod val12 val22
+        | Dba.Binary_op.Or -> Val1.logor val11 val21, Val2.logor val12 val22
+        | Dba.Binary_op.And -> Val1.logand val11 val21, Val2.logand val12 val22
+        | Dba.Binary_op.Xor -> Val1.logxor val11 val21, Val2.logxor val12 val22
+        | Dba.Binary_op.Concat -> Val1.concat val11 val21, Val2.concat val12 val22
+        | Dba.Binary_op.LShift -> Val1.lshift val11 val21, Val2.lshift val12 val22
+        | Dba.Binary_op.RShiftU -> Val1.rshiftU val11 val21, Val2.rshiftU val12 val22
+        | Dba.Binary_op.RShiftS	-> Val1.rshiftS val11 val21, Val2.rshiftS val12 val22
+        | Dba.Binary_op.LeftRotate -> Val1.rotate_left val11 val21, Val2.rotate_left val12 val22
+        | Dba.Binary_op.RightRotate -> Val1.rotate_right val11 val21, Val2.rotate_right val12 val22
+        | Dba.Binary_op.Eq -> Val1.eq val11 val21, Val2.eq val12 val22
         (* TODO: check if two bit vectors of different sizes can be equal*)
-        | Dba.Diff -> Val1.diff val11 val21, Val2.diff val12 val22
-        | Dba.LeqU -> Val1.leqU val11 val21, Val2.leqU val12 val22
-        | Dba.LtU -> Val1.ltU val11 val21, Val2.ltU val12 val22
-        | Dba.GeqU -> Val1.geqU val11 val21, Val2.geqU val12 val22
-        | Dba.GtU -> Val1.gtU val11 val21, Val2.gtU val12 val22
-        | Dba.LeqS -> Val1.leqS val11 val21, Val2.leqS val12 val22
-        | Dba.LtS -> Val1.ltS val11 val21, Val2.ltS val12 val22
-        | Dba.GeqS -> Val1.geqS val11 val21, Val2.geqS val12 val22
-        | Dba.GtS -> Val1.gtS val11 val21, Val2.gtS val12 val22
+        | Dba.Binary_op.Diff -> Val1.diff val11 val21, Val2.diff val12 val22
+        | Dba.Binary_op.LeqU -> Val1.leqU val11 val21, Val2.leqU val12 val22
+        | Dba.Binary_op.LtU -> Val1.ltU val11 val21, Val2.ltU val12 val22
+        | Dba.Binary_op.GeqU -> Val1.geqU val11 val21, Val2.geqU val12 val22
+        | Dba.Binary_op.GtU -> Val1.gtU val11 val21, Val2.gtU val12 val22
+        | Dba.Binary_op.LeqS -> Val1.leqS val11 val21, Val2.leqS val12 val22
+        | Dba.Binary_op.LtS -> Val1.ltS val11 val21, Val2.ltS val12 val22
+        | Dba.Binary_op.GeqS -> Val1.geqS val11 val21, Val2.geqS val12 val22
+        | Dba.Binary_op.GtS -> Val1.gtS val11 val21, Val2.gtS val12 val22
       end, assumes
-    | Dba.ExprRestrict (expr, offset1, offset2) ->
-      let (val1, val2), assumes = (eval_expr expr s assumes global_regions) in
-      (Val1.restrict val1 offset1 offset2, Val2.restrict val2 offset1 offset2), assumes
-    | Dba.ExprExtU (expr, size) ->
-      let (val1, val2), assumes = (eval_expr expr s assumes global_regions) in
-      (Val1.extension val1 size, Val2.extension val2 size), assumes
-    | Dba.ExprExtS (expr, size) ->
-      let (val1, val2), assumes = (eval_expr expr s assumes global_regions) in
-      (Val1.signed_extension val1 size, Val2.signed_extension val2 size), assumes
-    | Dba.ExprIte (cond, expr1, expr2) ->
+    | Dba.Expr.Ite (cond, expr1, expr2) ->
       let cond, assumes = (eval_cond cond s assumes global_regions) in
       begin match cond with
-        | Ternary.True  -> eval_expr expr1 s assumes global_regions 
+        | Ternary.True  -> eval_expr expr1 s assumes global_regions
         | Ternary.False -> eval_expr expr2 s assumes global_regions
         | Ternary.Unknown ->
           let (val11, val12), assumes = (eval_expr expr1 s assumes global_regions) in
           let (val21, val22), assumes = (eval_expr expr2 s assumes global_regions) in
           (Val1.join val11 val21, Val2.join val12 val22), assumes
       end
-    | Dba.ExprAlternative (e_list, _) -> (* handle alternativeTag*)
-      let eval e = eval_expr e s assumes global_regions in
-      let eq ((v1, v2), _) ((w1, w2), _) = Val1.equal v1 w1 && Val2.equal v2 w2 in
-      Dba_utils.eval_alternatives eval eq e_list
 
-  and eval_cond c s  assumes global_regions =
-    match c with
-    | Dba.CondReif expr -> (
-        try
-          let (val1, val2), assumes = eval_expr expr s assumes global_regions in
-          let c1 = Val1.is_true val1 assumes global_regions in
-          let c2 = Val2.is_true val2 assumes global_regions in
-          begin match c1, c2 with
-            | Ternary.True, Ternary.True
-            | Ternary.False, Ternary.False -> c1, assumes
-            | Ternary.True, Ternary.False
-            | Ternary.False, Ternary.True ->
-              failwith "reducedProduct.ml: condition conflict"
-            | c , Ternary.Unknown
-            | Ternary.Unknown, c -> c, assumes
-          end
-        with Smt_bitvectors.Assume_condition smb ->
-          let assumes = smb :: assumes in
-          eval_cond c s assumes global_regions
-      )
-    | Dba.CondNot b ->
-      let b, assumes = (eval_cond b s assumes global_regions) in
-      Ternary.lognot b, assumes
 
-    | Dba.CondAnd (b1, b2) ->
-      let b1, assumes = (eval_cond b1 s assumes global_regions) in
-      let b2, assumes = (eval_cond b2 s assumes global_regions) in
-      Ternary.logand b1 b2, assumes
-
-    | Dba.CondOr (b1, b2) ->
-      let b1, assumes = (eval_cond b1 s assumes global_regions) in
-      let b2, assumes = (eval_cond b2 s assumes global_regions) in
-      Ternary.logor b1 b2, assumes
-
-    | Dba.True -> Ternary.True, assumes
-    | Dba.False -> Ternary.False, assumes
+  and eval_cond expr s  assumes global_regions =
+    try
+      let (val1, val2), assumes = eval_expr expr s assumes global_regions in
+      let c1 = Val1.is_true val1 assumes global_regions in
+      let c2 = Val2.is_true val2 assumes global_regions in
+      begin match c1, c2 with
+        | Ternary.True, Ternary.True
+        | Ternary.False, Ternary.False -> c1, assumes
+        | Ternary.True, Ternary.False
+        | Ternary.False, Ternary.True ->
+          failwith "reducedProduct.ml: condition conflict"
+        | c , Ternary.Unknown
+        | Ternary.Unknown, c -> c, assumes
+      end
+    with
+    | Smt_bitvectors.Assume_condition smb ->
+      eval_cond expr s (smb :: assumes) global_regions
 
   (* Checking read of memory permissions here *)
   and load x i m assumes global_regions =
@@ -426,8 +402,8 @@ struct
       SubEnv.find Bigint.zero_big_int (Static_types.Env.find x m)
     | Static_types.Array r ->
       let c =
-        (try Dba_types.Rights.find_read_right r !Concrete_eval.permis
-         with Not_found -> Dba.True) in
+        try Dba_types.Rights.find_read_right r !Concrete_eval.permis
+        with Not_found -> Dba.Expr.one in
       let b, _assumes = eval_cond c m assumes global_regions in
       match b with
       | Ternary.True ->
@@ -439,18 +415,18 @@ struct
   and store x i bv m assumes global_regions =
     match x with
     | Static_types.Var _ ->
-      let sub_m = (SubEnv.add Bigint.zero_big_int bv SubEnv.empty) in
+      let sub_m = SubEnv.add Bigint.zero_big_int bv SubEnv.empty in
       (Static_types.Env.add x sub_m m)
     | Static_types.Array r ->
-      let c = (try Dba_types.Rights.find_write_right r !Concrete_eval.permis
-               with Not_found -> Dba.True) in
+      let c = try Dba_types.Rights.find_write_right r !Concrete_eval.permis
+        with Not_found -> Dba.Expr.one in
       let b, _ = (eval_cond c m assumes global_regions) in
       match b with
       | Ternary.True ->
         let submap =
           (try Static_types.Env.find (Static_types.Array r) m
            with Not_found -> SubEnv.empty)
-          |> SubEnv.add i bv 
+          |> SubEnv.add i bv
         in Static_types.Env.add (Static_types.Array r) submap m
       | Ternary.False -> raise Errors.Write_permission_denied
       |	Ternary.Unknown -> failwith "write permission in True or False case"
@@ -470,7 +446,7 @@ struct
             | `Constant | `Stack -> true
             | `Malloc (_, malloc_size) ->
               not (gt_big_int (add_big_int i (big_int_of_int (size - 1)))
-                 malloc_size)
+                     malloc_size)
           in
           if (not check_region_size) || size < 1 then
             raise (Errors.Bad_bound "store, Little_endian case")
@@ -511,7 +487,7 @@ struct
             | `Constant | `Stack -> true
             | `Malloc (_, malloc_size) ->
               not (gt_big_int (add_big_int i (big_int_of_int (size - 1)))
-                 malloc_size)
+                     malloc_size)
 
           in
           if (not check_region_size) || size < 1 then
@@ -551,13 +527,13 @@ struct
     | Some s ->
       let v, assumes = eval_expr e s assumes global_regions in
       match lhs with
-      | Dba.LhsVar (st, size, _) ->
+      | Dba.LValue.Var (st, size, _) ->
         let sub_s = SubEnv.add (Bigint.zero_big_int) v SubEnv.empty in
         Some (Static_types.Env.add (Static_types.Var (st, size)) sub_s s), assumes
-      | Dba.LhsVarRestrict (_st, _size, _of1, _of2) ->
+      | Dba.LValue.Restrict (_st, _size, _) ->
         failwith "analyse.ml: restrict case not handled"
 
-      | Dba.LhsStore (size, endianness, expr) ->
+      | Dba.LValue.Store (size, endianness, expr) ->
         Some (store endianness size v expr s assumes global_regions), assumes
 
 
@@ -566,120 +542,91 @@ struct
     | None -> None, assumes
     | Some m ->
       match cond with
-      | Dba.CondReif expr ->
-        (match expr with
-         | Dba.ExprBinary (bop, exp1, exp2) ->
-           (match bop with
-              Dba.Eq | Dba.Diff | Dba.LeqU | Dba.LtU
-            | Dba.GeqU | Dba.GtU	| Dba.LeqS	| Dba.LtS
-            | Dba.GeqS | Dba.GtS ->
-              let v_1, v_2 =
-                let (val11, val12), assumes = (eval_expr exp1 m assumes global_regions) in
-                let (val21, val22), _ = (eval_expr exp2 m assumes global_regions) in
-                let g, d = Val1.guard bop val11 val21 in
-                let g', d' = Val2.guard bop val12 val22 in
-                (g, g'), (d, d')
-              in
-              let root_zero = SubEnv.singleton Bigint.zero_big_int in
-              (match exp1, exp2 with
-               | Dba.ExprVar (v1, size, _), Dba.ExprCst _ ->
-                 let sub_m = root_zero v_1 in
-                 Some (Static_types.Env.add (Static_types.Var (v1, size)) sub_m m), assumes
-               | Dba.ExprCst _, Dba.ExprVar (v2, size, _) ->
-                 let sub_m = root_zero v_2 in
-                 Some (Static_types.Env.add (Static_types.Var (v2, size)) sub_m m), assumes
-               | Dba.ExprVar (v1, _, _), Dba.ExprVar (v2, size, _) ->
-                 let sub_m = root_zero v_1 in
-                 let m = Static_types.Env.add (Static_types.Var (v1, size)) sub_m m in
-                 let sub_m = root_zero v_2 in
-                 Some (Static_types.Env.add (Static_types.Var (v2, size)) sub_m m), assumes
-               | Dba.ExprVar (v, size, _),
-                 Dba.ExprLoad (lsize, endianness, e) ->
-                 let sub_m = root_zero v_1 in
-                 let m = Static_types.Env.add (Static_types.Var (v, size)) sub_m m in
-                 Some (store endianness lsize v_2 e m assumes global_regions),
-                 assumes
-               | Dba.ExprLoad (size, endianness, e),
-                 Dba.ExprVar (v', size', _) ->
-                 let sub_m = root_zero v_2 in
-                 let m = Static_types.Env.add (Static_types.Var (v', size')) sub_m m in
-                 Some (store endianness size v_1 e m assumes global_regions), assumes
-               | Dba.ExprLoad (size1, endianness1, e1),
-                 Dba.ExprLoad (size2, endianness2, e2) ->
-                 let m = store endianness1 size1 v_1 e1 m assumes global_regions in
-                 Some (store endianness2 size2 v_2 e2 m assumes global_regions), assumes
-               | _, _ -> Some (m), assumes
-              )
-            | _ -> Some (m), assumes)
-         | Dba.ExprUnary (uop, expr) ->
-           ( match uop with
-             | Dba.Not ->
-               (match expr with
-                | Dba.ExprBinary (bop, expr1, expr2) ->
-                  (
-                    match bop with
-                    | Dba.Eq ->
-                      guard (Dba.CondReif (Dba.ExprBinary (Dba.Diff, expr1, expr2))) s assumes global_regions
-                    | Dba.Diff ->
-                      guard (Dba.CondReif (Dba.ExprBinary (Dba.Eq, expr1, expr2))) s assumes global_regions
-                    | Dba.LeqU ->
-                      guard (Dba.CondReif (Dba.ExprBinary (Dba.GtU, expr1, expr2))) s assumes global_regions
-                    | Dba.LtU ->
-                      guard (Dba.CondReif (Dba.ExprBinary (Dba.GeqU, expr1, expr2))) s assumes global_regions
-                    | Dba.GeqU ->
-                      guard (Dba.CondReif (Dba.ExprBinary (Dba.LtU, expr1, expr2))) s assumes global_regions
-                    | Dba.GtU ->
-                      guard (Dba.CondReif (Dba.ExprBinary (Dba.LeqU, expr1, expr2))) s assumes global_regions
-                    | Dba.LeqS ->
-                      guard (Dba.CondReif (Dba.ExprBinary (Dba.GtS, expr1, expr2))) s assumes global_regions
-                    | Dba.LtS ->
-                      guard (Dba.CondReif (Dba.ExprBinary (Dba.GeqS, expr1, expr2))) s assumes global_regions
-                    | Dba.GeqS ->
-                      guard (Dba.CondReif (Dba.ExprBinary (Dba.LtS, expr1, expr2))) s assumes global_regions
-                    | Dba.GtS ->
-                      guard (Dba.CondReif (Dba.ExprBinary (Dba.LeqS, expr1, expr2))) s assumes global_regions
-                    | Dba.Or ->
-                      guard (Dba.CondReif
-                               (Dba.ExprBinary
-                                  (Dba.And,
-                                   Dba.ExprUnary (Dba.Not, expr1),
-                                   Dba.ExprUnary (Dba.Not, expr2)))) s assumes global_regions
-                    | Dba.And ->
-                      guard (Dba.CondReif
-                               (Dba.ExprBinary
-                                  (Dba.Or,
-                                   Dba.ExprUnary (Dba.Not, expr1),
-                                   Dba.ExprUnary (Dba.Not, expr2)))) s assumes global_regions
-                    | _ -> Some (m), assumes
-                  )
-                | _ -> Some (m), assumes )
-             | _ -> Some (m), assumes)
-         | _ -> Some (m), assumes)
-      | Dba.CondNot b ->
-        (
-          match b with
-          | Dba.CondReif expr ->
-            guard (Dba.CondReif (Dba.ExprUnary (Dba.Not, expr))) s assumes global_regions
-          | Dba.CondNot b -> guard b s assumes global_regions
-          | Dba.CondAnd (_, _)
-          | Dba.CondOr (_, _) -> Some (m), assumes
-          | Dba.True -> Some (Static_types.Env.empty), assumes
-          | Dba.False -> Some (m), assumes
-        )
+      | Dba.Expr.Cst (_, bv) ->
+        let s' =
+          if Bitvector.is_zero bv then Some Static_types.Env.empty else s in
+        s', assumes
 
-      | Dba.CondAnd (_, _)
-      | Dba.CondOr (_, _)
-      | Dba.True -> Some (m), assumes
-      | Dba.False -> Some (Static_types.Env.empty), assumes
+      | Dba.Expr.Binary (bop, exp1, exp2) ->
+        (match bop with
+         | Dba.Binary_op.Eq | Dba.Binary_op.Diff | Dba.Binary_op.LeqU | Dba.Binary_op.LtU
+         | Dba.Binary_op.GeqU | Dba.Binary_op.GtU	| Dba.Binary_op.LeqS	| Dba.Binary_op.LtS
+         | Dba.Binary_op.GeqS | Dba.Binary_op.GtS ->
+           let v_1, v_2 =
+             let (val11, val12), assumes = eval_expr exp1 m assumes global_regions in
+             let (val21, val22), _ = eval_expr exp2 m assumes global_regions in
+             let g, d = Val1.guard bop val11 val21 in
+             let g', d' = Val2.guard bop val12 val22 in
+             (g, g'), (d, d')
+           in
+           let root_zero = SubEnv.singleton Bigint.zero_big_int in
+           (match exp1, exp2 with
+            | Dba.Expr.Var (v1, size, _), Dba.Expr.Cst _ ->
+              let sub_m = root_zero v_1 in
+              Some (Static_types.Env.add (Static_types.Var (v1, size)) sub_m m), assumes
+            | Dba.Expr.Cst _, Dba.Expr.Var (v2, size, _) ->
+              let sub_m = root_zero v_2 in
+              Some (Static_types.Env.add (Static_types.Var (v2, size)) sub_m m), assumes
+            | Dba.Expr.Var (v1, _, _), Dba.Expr.Var (v2, size, _) ->
+              let sub_m = root_zero v_1 in
+              let m = Static_types.Env.add (Static_types.Var (v1, size)) sub_m m in
+              let sub_m = root_zero v_2 in
+              Some (Static_types.Env.add (Static_types.Var (v2, size)) sub_m m), assumes
+            | Dba.Expr.Var (v, size, _),
+              Dba.Expr.Load (lsize, endianness, e) ->
+              let sub_m = root_zero v_1 in
+              let m = Static_types.Env.add (Static_types.Var (v, size)) sub_m m in
+              Some (store endianness lsize v_2 e m assumes global_regions),
+              assumes
+            | Dba.Expr.Load (size, endianness, e),
+              Dba.Expr.Var (v', size', _) ->
+              let sub_m = root_zero v_2 in
+              let m = Static_types.Env.add (Static_types.Var (v', size')) sub_m m in
+              Some (store endianness size v_1 e m assumes global_regions), assumes
+            | Dba.Expr.Load (size1, endianness1, e1),
+              Dba.Expr.Load (size2, endianness2, e2) ->
+              let m = store endianness1 size1 v_1 e1 m assumes global_regions in
+              Some (store endianness2 size2 v_2 e2 m assumes global_regions), assumes
+            | _, _ -> Some (m), assumes
+           )
+         | _ -> Some (m), assumes)
+      | Dba.Expr.Unary (uop, expr) ->
+        ( match uop with
+          | Dba.Unary_op.Not ->
+            (match expr with
+             | Dba.Expr.Binary (bop, e1, e2) ->
+               let k c = guard c s assumes global_regions in
+               begin
+                 match bop with
+                 | Dba.Binary_op.Eq   -> Dba.Expr.diff e1 e2 |> k
+                 | Dba.Binary_op.Diff -> Dba.Expr.eq e1 e2   |> k
+                 | Dba.Binary_op.LeqU -> Dba.Expr.ugt e1 e2  |> k
+                 | Dba.Binary_op.LtU  -> Dba.Expr.uge e1 e2  |> k
+                 | Dba.Binary_op.GeqU -> Dba.Expr.ult e1 e2  |> k
+                 | Dba.Binary_op.GtU  -> Dba.Expr.ule e1 e2  |> k
+                 | Dba.Binary_op.LeqS -> Dba.Expr.sgt e1 e2  |> k
+                 | Dba.Binary_op.LtS  -> Dba.Expr.sge e1 e2  |> k
+                 | Dba.Binary_op.GeqS -> Dba.Expr.slt e1 e2  |> k
+                 | Dba.Binary_op.GtS  -> Dba.Expr.sle e1 e2  |> k
+                 | Dba.Binary_op.Or   ->
+                   Dba.Expr.logand (Dba.Expr.lognot e1) (Dba.Expr.lognot e2) |> k
+                 | Dba.Binary_op.And  ->
+                   Dba.Expr.logor (Dba.Expr.lognot e1) (Dba.Expr.lognot e2) |> k
+                 | _ -> Some m, assumes
+               end
+             | _ -> Some m, assumes
+            )
+          | _ -> Some m, assumes)
+      | _ -> Some m, assumes
 
 
 
   let rec string_of_args args m assumes global_regions =
     (match args with
      | [] ->  ""
-     | (Dba.Str s) :: tl ->
+     | Dba.Str s :: tl ->
        (Scanf.unescaped s) ^ (string_of_args tl m assumes global_regions)
-     | (Dba.Exp e) :: tl ->
+     | Dba.Exp e :: tl ->
        let v, assumes = eval_expr e m assumes global_regions in
        let temp = "(" ^ (Val1.to_string (fst v) ^ ", " ^ Val2.to_string (snd v)) ^ ")" in
        temp ^ (string_of_args tl m assumes global_regions))
@@ -694,7 +641,7 @@ struct
       let m = Static_types.Env.add (Static_types.Var ("\\addr", Machine.Word_size.get ())) sub_m m in
       let c =
         try Dba_types.Rights.find_exec_right `Constant !Concrete_eval.permis
-        with Not_found ->  Dba.True
+        with Not_found ->  Dba.Expr.one
       in
       let b, _ = eval_cond c m assumes global_regions in
       match b with
@@ -717,14 +664,14 @@ struct
                     !Simulate.mallocs
               with Not_found -> failwith "Unbound free region"
             in begin
-            match st with
-            | Dba.Freeable when Bitvector.is_zero bv ->
-              Simulate.mallocs := Malloc_status.add (`Malloc (id, malloc_size))
-                  Dba.Freed !Simulate.mallocs
-            | Dba.Freed -> raise Errors.Freed_variable_access
-            | _ -> raise Errors.Invalid_free_address
-            (* |	Restrict ((`Malloc (id, malloc_size), bv), _, _) as v ->  *)
-            (*   raise (Unknown_value (Region_bitvector.string_of v)) *)
+              match st with
+              | Dba.Freeable when Bitvector.is_zero bv ->
+                Simulate.mallocs := Malloc_status.add (`Malloc (id, malloc_size))
+                    Dba.Freed !Simulate.mallocs
+              | Dba.Freed -> raise Errors.Freed_variable_access
+              | _ -> raise Errors.Invalid_free_address
+              (* |	Restrict ((`Malloc (id, malloc_size), bv), _, _) as v ->  *)
+              (*   raise (Unknown_value (Region_bitvector.string_of v)) *)
             end
           |	_ -> raise Errors.Invalid_free_region
         ) l;(* Perhaps we need to check empty set *)
@@ -798,7 +745,7 @@ struct
     | Some m ->
       let condi, assumes = eval_cond cond m assumes global_regions in
       match condi with
-      | Ternary.True 
+      | Ternary.True
       | Ternary.False ->
         let s, _assumes = guard cond s assumes global_regions in
         [addr_suiv, s, flgs, equalities]
@@ -817,7 +764,7 @@ struct
         [addr_suiv, s, flgs, equalities]
       else Errors.assert_failure addr instr
 
-  
+
   let resolve_nondet_assume lhslist cond s flgs equalities addr_suiv assumes global_regions =
     match s with
       None -> failwith "reduced_product.ml: resolve_nondet_assume with empty state"
@@ -825,29 +772,29 @@ struct
       let rec update_memory_nondet lhslist s assumes global_regions =
         match lhslist with
         | [] -> s, assumes
-        | [Dba.LhsVar (st, size, _)] ->
+        | [Dba.LValue.Var (st, size, _)] ->
           let sub_s =
             SubEnv.add (Bigint.zero_big_int) (Val1.universe, Val2.universe) SubEnv.empty
           in (Static_types.Env.add (Static_types.Var (st, size)) sub_s s), assumes
-        | [Dba.LhsVarRestrict (_st, _size, _of1, _of2)] ->
+        | [Dba.LValue.Restrict (_st, _size, _)] ->
           failwith "analyse.ml: restrict case not handled"
-        | [Dba.LhsStore (size, Dba.BigEndian, expr)] ->
+        | [Dba.LValue.Store (size, Dba.BigEndian, expr)] ->
           (store_big_endian size (Val1.universe, Val2.universe) expr s assumes global_regions), assumes
-        | [Dba.LhsStore (size, Dba.LittleEndian, expr)] ->
+        | [Dba.LValue.Store (size, Dba.LittleEndian, expr)] ->
           (store_little_endian size (Val1.universe, Val2.universe) expr s assumes global_regions), assumes
-        | (Dba.LhsVar (st, size, _)) :: tl ->
+        | (Dba.LValue.Var (st, size, _)) :: tl ->
           let m' =
             let sub_s =
               SubEnv.add (Bigint.zero_big_int) (Val1.universe, Val2.universe) SubEnv.empty
             in (Static_types.Env.add (Static_types.Var (st, size)) sub_s s)
           in update_memory_nondet tl m' assumes global_regions
-        | Dba.LhsVarRestrict (_st, _size, _of1, _of2) :: _tl ->
+        | Dba.LValue.Restrict (_st, _size, _) :: _tl ->
           failwith "reduced_product.ml: restrict case not handled"
-        | Dba.LhsStore (size, Dba.BigEndian, expr) :: tl ->
+        | Dba.LValue.Store (size, Dba.BigEndian, expr) :: tl ->
           let m' =
             store_big_endian size (Val1.universe, Val2.universe) expr s assumes global_regions in
           update_memory_nondet tl m' assumes global_regions
-        | (Dba.LhsStore (size, Dba.LittleEndian, expr)) :: tl ->
+        | (Dba.LValue.Store (size, Dba.LittleEndian, expr)) :: tl ->
           let m' = (store_little_endian size (Val1.universe, Val2.universe) expr s assumes global_regions) in
           update_memory_nondet tl m' assumes global_regions
       in
@@ -869,17 +816,17 @@ struct
     match s with
     | None -> failwith "resolve_nondet with empty state"
     | Some s ->
-      let m = 
+      let m =
         match lhs with
-        | Dba.LhsVar (st, size, _) ->
+        | Dba.LValue.Var (st, size, _) ->
           let sub_s =
             SubEnv.add (Bigint.zero_big_int) (Val1.universe, Val2.universe) SubEnv.empty
           in Some (Static_types.Env.add (Static_types.Var (st, size)) sub_s s)
-        | Dba.LhsVarRestrict (_st, _size, _of1, _of2) ->
+        | Dba.LValue.Restrict (_st, _size, _) ->
           failwith "analyse.ml: restrict case not handled"
-        | Dba.LhsStore (size, Dba.BigEndian, expr) ->
+        | Dba.LValue.Store (size, Dba.BigEndian, expr) ->
           Some (store_big_endian size (Val1.universe, Val2.universe) expr s assumes global_regions)
-        | Dba.LhsStore (size, Dba.LittleEndian, expr) ->
+        | Dba.LValue.Store (size, Dba.LittleEndian, expr) ->
           Some (store_little_endian size (Val1.universe, Val2.universe) expr s assumes global_regions) in
       [addr_suiv, m, flgs, equalities]
 
@@ -891,17 +838,17 @@ struct
     | None -> failwith "resolve_nondet with empty state"
     | Some s ->
       let m = match lhs with
-          Dba.LhsVar (st, size, _) ->
+          Dba.LValue.Var (st, size, _) ->
           let sub_s =
             SubEnv.add (Bigint.zero_big_int) (Val1.singleton (`Undef (Dba_utils.computesize_dbalhs lhs)), Val2.singleton (`Undef (Dba_utils.computesize_dbalhs lhs)))
               SubEnv.empty
           in Some (Static_types.Env.add (Static_types.Var (st, size)) sub_s s)
-        | Dba.LhsVarRestrict (_st, _size, _of1, _of2) ->
+        | Dba.LValue.Restrict (_st, _size, _) ->
           failwith "analyse.ml: restrict case not handled"
-        | Dba.LhsStore (size, Dba.BigEndian, expr) ->
+        | Dba.LValue.Store (size, Dba.BigEndian, expr) ->
           Some (store_big_endian size
                   (Val1.singleton (`Undef (Dba_utils.computesize_dbalhs lhs)), Val2.singleton (`Undef (Dba_utils.computesize_dbalhs lhs))) expr s assumes global_regions)
-        | Dba.LhsStore (size, Dba.LittleEndian, expr) ->
+        | Dba.LValue.Store (size, Dba.LittleEndian, expr) ->
           Some (store_little_endian size (Val1.singleton (`Undef (Dba_utils.computesize_dbalhs lhs)), Val2.singleton (`Undef (Dba_utils.computesize_dbalhs lhs))) expr s assumes global_regions) in
       [addr_suiv, m, flgs, equalities]
 
@@ -920,12 +867,12 @@ struct
     let (m, flags, equalities) = abs_vals in
     let (recordMap, rcd_conds) = cache in
     match instr with
-    | Dba.IkStop _ -> [], cache, assumes, djumps_map
-    | Dba.IkAssign (lhs, expr, id_suiv) ->
+    | Dba.Instr.Stop _ -> [], cache, assumes, djumps_map
+    | Dba.Instr.Assign (lhs, expr, id_suiv) ->
       let op, assumes = (assign lhs expr m assumes global_regions) in
       let flags = update_flags lhs expr flags in
       [(Dba_types.Caddress.reid addr id_suiv, cstack, loop), op, flags, equalities], cache, assumes, djumps_map
-    | Dba.IkMalloc (lhs, expr, id_suiv) ->
+    | Dba.Instr.Malloc (lhs, expr, id_suiv) ->
       let v, assumes =
         match m with
         | None -> failwith "unrelstate.ml: post malloc"
@@ -943,25 +890,29 @@ struct
       let bv = Bitvector.zeros (Machine.Word_size.get ()) in
       Simulate.mallocs :=
         Malloc_status.add region Dba.Freeable !Simulate.mallocs;
-      let op, assumes = (assign lhs (Dba.ExprCst (region, bv)) m assumes global_regions) in
-      [(Dba_types.Caddress.reid addr id_suiv, cstack, loop), op, flags, equalities], cache, assumes, djumps_map
-    | Dba.IkFree (expr, id_suiv) ->
+      let op, assumes = assign lhs (Dba.Expr.constant ~region bv) m assumes global_regions in
+      [(Dba_types.Caddress.reid addr id_suiv, cstack, loop), op, flags,
+       equalities], cache, assumes, djumps_map
+
+    | Dba.Instr.Free (expr, id_suiv) ->
       [((check_exec_permission (Dba_types.Caddress.reid addr id_suiv) m assumes global_regions), cstack, loop),
-       (free expr m assumes global_regions), flags, equalities], cache, assumes, djumps_map
-    | Dba.IkSJump (Dba.JInner id_suiv, _call_return_tag) ->
+       (free expr m assumes global_regions), flags, equalities], cache, assumes,
+      djumps_map
+
+    | Dba.Instr.SJump (Dba.JInner id_suiv, _call_return_tag) ->
       [(Dba_types.Caddress.reid addr id_suiv, cstack, loop), m, flags, equalities], cache, assumes, djumps_map
-    | Dba.IkSJump (Dba.JOuter addr_suiv, _call_return_tag) ->
+    | Dba.Instr.SJump (Dba.JOuter addr_suiv, _call_return_tag) ->
       [(addr_suiv, cstack, loop), m, flags, equalities], cache, assumes, djumps_map
     (********************************************************************)
-    | Dba.IkDJump (expr, _call_return_tag) ->
+    | Dba.Instr.DJump (expr, _call_return_tag) ->
       let a, rcd, djumps_map = resolve_jump addrStack expr m flags equalities recordMap assumes global_regions djumps_map in
       let cache = (rcd, rcd_conds) in
       a, cache, assumes, djumps_map
     (*******************************************************************)
-    | Dba.IkIf (cond, Dba.JOuter next_addr, id) ->
-      let cond, rcd_conds = retrieve_comparison cond flags addr rcd_conds in
+    | Dba.Instr.If (condition, Dba.JOuter next_addr, id) ->
+      let cond, rcd_conds = retrieve_comparison ~condition flags addr rcd_conds in
       let m1, assumes = guard cond m assumes global_regions in
-      let m2, assumes = guard (Dba.CondNot cond) m assumes global_regions in
+      let m2, assumes = guard (Dba.Expr.lognot cond) m assumes global_regions in
       let a1 = (* Dba_utils.globalize_address addr *) next_addr in
       let a2 = Dba_types.Caddress.reid addr id in
       let unrolleds = Ai_utils.unrolled_loops_at_address addr unrolled_loops in
@@ -971,11 +922,11 @@ struct
       let a = resolve_if cond m flags equalities m1 m2 addr_suiv1 addr_suiv2 assumes global_regions in
       let cache = (recordMap, rcd_conds) in
       a, cache, assumes, djumps_map
-    | Dba.IkIf (cond, Dba.JInner id_suiv1, id_suiv2) ->
+    | Dba.Instr.If (condition, Dba.JInner id_suiv1, id_suiv2) ->
       (* let loop, loop_a = loop in *)
-      let cond, rcd_conds = retrieve_comparison cond flags addr rcd_conds in
+      let cond, rcd_conds = retrieve_comparison ~condition flags addr rcd_conds in
       let m1, assumes = guard cond m assumes global_regions in
-      let m2, assumes = guard (Dba.CondNot cond) m assumes global_regions in
+      let m2, assumes = guard (Dba.Expr.lognot cond) m assumes global_regions in
       let a1 = Dba_types.Caddress.reid addr id_suiv1 in
       let a2 = Dba_types.Caddress.reid addr id_suiv2 in
       let loops =
@@ -988,13 +939,13 @@ struct
           if Dba_types.Caddress.Set.mem a1 loops
           then min (loop + 1) 100, 0
           else 0, min (loop + 1) 100
-        (* else if Basic_structs.Dba_types.Caddress.Set.cardinal loops = 2 *)
-        (* then if loop = 0  *)
-        (*   then min (loop + 1) 100, min (loop + 1) 100 *)
-        (*   else  *)
-        (*     if Basic_structs.Dba_types.Caddress.Set.mem a1 loops && Dba.compare_addresses a1 loop_a = 0 *)
-        (*     then min (loop + 1) 100, 0 *)
-        (*     else 0, min (loop + 1) 100 *)
+          (* else if Basic_structs.Dba_types.Caddress.Set.cardinal loops = 2 *)
+          (* then if loop = 0  *)
+          (*   then min (loop + 1) 100, min (loop + 1) 100 *)
+          (*   else  *)
+          (*     if Basic_structs.Dba_types.Caddress.Set.mem a1 loops && Dba.compare_addresses a1 loop_a = 0 *)
+          (*     then min (loop + 1) 100, 0 *)
+          (*     else 0, min (loop + 1) 100 *)
         else loop, loop
       in
       let a1 = (a1, cstack, loop1) in
@@ -1002,32 +953,32 @@ struct
       let a = resolve_if cond m flags equalities m1 m2 a1 a2 assumes global_regions in
       let cache = (recordMap, rcd_conds) in
       a, cache, assumes, djumps_map
-    | Dba.IkAssert (cond, id_suiv) ->
-      let cond, _rcd_cond = retrieve_comparison cond flags addr rcd_conds in
+    | Dba.Instr.Assert (condition, id_suiv) ->
+      let cond, _rcd_cond = retrieve_comparison ~condition flags addr rcd_conds in
       let a = (Dba_types.Caddress.reid addr id_suiv, cstack, loop) in
       let a = resolve_assert cond m flags equalities a instr assumes global_regions in
       let cache = (recordMap, rcd_conds) in
       a, cache, assumes, djumps_map
-    | Dba.IkAssume (cond, id_suiv) ->
-      let cond, rcd_conds = retrieve_comparison cond flags addr rcd_conds in
+    | Dba.Instr.Assume (condition, id_suiv) ->
+      let cond, rcd_conds = retrieve_comparison ~condition flags addr rcd_conds in
       let a_suiv = (Dba_types.Caddress.reid addr id_suiv, cstack, loop) in
       let a = resolve_assume cond m flags equalities a_suiv assumes global_regions in
       let cache = (recordMap, rcd_conds) in
       a, cache, assumes, djumps_map
-    | Dba.IkNondetAssume (lhslist, cond, id_suiv) ->
-      let cond, rcd_conds = retrieve_comparison cond flags addr rcd_conds in
+    | Dba.Instr.NondetAssume (lhslist, condition, id_suiv) ->
+      let cond, rcd_conds = retrieve_comparison ~condition flags addr rcd_conds in
       let a = (Dba_types.Caddress.reid addr id_suiv, cstack, loop) in
       let op, assumes = (resolve_nondet_assume lhslist cond m flags equalities a assumes global_regions) in
       let cache = (recordMap, rcd_conds) in
       op, cache, assumes, djumps_map
-    | Dba.IkNondet (lhs, region, id_suiv) ->
+    | Dba.Instr.Nondet (lhs, region, id_suiv) ->
       let a = (Dba_types.Caddress.reid addr id_suiv, cstack, loop) in
       let op = (resolve_nondet lhs region m flags equalities a assumes global_regions) in
       op, cache, assumes, djumps_map
-    | Dba.IkUndef (lhs, id_suiv) ->
+    | Dba.Instr.Undef (lhs, id_suiv) ->
       let a = (Dba_types.Caddress.reid addr id_suiv, cstack, loop) in
       (resolve_undef lhs m flags equalities a assumes global_regions), cache, assumes, djumps_map
-    | Dba.IkPrint (args, id_suiv) ->
+    | Dba.Instr.Print (args, id_suiv) ->
       let a = (Dba_types.Caddress.reid addr id_suiv, cstack, loop) in
       (resolve_print args m flags equalities a assumes global_regions), cache, assumes, djumps_map
 

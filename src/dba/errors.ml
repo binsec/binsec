@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -51,7 +51,7 @@ exception Empty_env
 exception Div_by_zero
 
 
-exception Mismatched_instruction_size of Dba.instruction
+exception Mismatched_instruction_size of Dba.Instr.t
 exception Mismatched_address_size of Dba.address
 
 let invalid_address msg =

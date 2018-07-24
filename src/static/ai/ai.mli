@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -32,8 +32,9 @@ sig
   type conditionsList = Smt_bitvectors.smtBvExprAlt list
   type djmpsMap = Caddress.Set.t AddressStack.Map.t
   type stopList = Caddress.Set.t
-  type insert_instrs = Dba.instruction list Caddress.Map.t
+  type insert_instrs = Dba.Instr.t list Caddress.Map.t
   type replace_instrs = Dba_types.instruction_sequence Caddress.Map.t
+
   type localThresholdsType = (int array * int array * int array * int array)
   type globalThresholdsType = (int array * int array * int array * int array) Caddress.Map.t
   type thresholdsType = localThresholdsType * globalThresholdsType
@@ -41,14 +42,14 @@ sig
 
   val analyse:
     Dba.address ->
-    Dba.instruction list ->
-    Disasm_types.pmap ->
+    Dba.Instr.t list ->
+    Pmap.t ->
     insert_instrs ->
     replace_instrs ->
     stopList ->
     thresholdsType ->
     wideningType ->
-    statesMap * conditionsList * Disasm_types.pmap  * djmpsMap * Caddress.Set.t
+    statesMap * conditionsList * Pmap.t  * djmpsMap * Caddress.Set.t
 
 end
 
@@ -56,4 +57,4 @@ end
 module Make (State: Ai_sigs.AbstractDomain): AbstractAnalysis
 
 val run :
-   ?dba_file:string option -> configuration_file:string option -> unit -> unit
+  ?dba_file:string option -> configuration_file:string option -> unit

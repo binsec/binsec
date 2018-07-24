@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,22 +22,21 @@
 (** Generic utility functions for DBA simplification *)
 
 val statistics :
-  (Dba.instruction * 'a) Dba_types.Caddress.Map.t -> int * int * int * int
+  (Dba.Instr.t * 'a) Dba_types.Caddress.Map.t -> int * int * int * int
 
 val display_results :
-  (Dba.instruction * 'a) Dba_types.Caddress.Map.t ->
+  (Dba.Instr.t * 'a) Dba_types.Caddress.Map.t ->
   Format.formatter -> float -> unit
 
 
-val must_lhs_expr_equal : Dba.lhs -> Dba.expr -> bool
+val must_lhs_expr_equal : Dba.LValue.t -> Dba.Expr.t -> bool
 
-val lhs_mustkilled_by_lhs : Dba.lhs -> Dba.lhs -> bool
-val lhs_mayused_in_expr : Dba.lhs -> Dba.expr -> bool
-val lhs_mayused_in_lhs : Dba.lhs -> Dba.lhs -> bool
-val lhs_mayused_in_bcond : Dba.lhs -> Dba.cond -> bool
+val lhs_mustkilled_by_lhs : Dba.LValue.t -> Dba.LValue.t -> bool
+val lhs_mayused_in_expr : Dba.LValue.t -> Dba.Expr.t -> bool
+val lhs_mayused_in_lhs : Dba.LValue.t -> Dba.LValue.t -> bool
 
 val is_not_mayused :
-  (Dba.instruction * 'a) Dba_types.Caddress.Map.t ->
-  Dba_types.Caddress.Map.key -> int -> Dba.lhs ->
+  (Dba.Instr.t * 'a) Dba_types.Caddress.Map.t ->
+  Dba_types.Caddress.Map.key -> int -> Dba.LValue.t ->
   bool Basic_types.String.Map.t Dba_types.Caddress.Map.t ->
   bool Basic_types.String.Map.t Dba_types.Caddress.Map.t * bool

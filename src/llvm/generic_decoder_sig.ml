@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -50,7 +50,7 @@ module type Expr_Input = sig
 
   val bin_of_bool: boolean -> binary M.m
   val bool_of_bin: binary -> boolean M.m
-  val select: boolean -> binary -> binary -> binary M.m
+  val select: binary -> binary -> binary -> binary M.m
 
   val get_var: size:int -> string -> binary M.m
   val load: size:int -> Dba.endianness -> binary -> binary M.m
@@ -69,7 +69,7 @@ module type Instr_Input = sig
   include Expr_Input with module M := State_Monad(State)
 
   val unknown: size:int ->  binary State_Monad(State).m
-  val undef: size:int ->  binary State_Monad(State).m      
+  val undef: size:int ->  binary State_Monad(State).m
 
   (* Note: could return a unit State_Monad(State).m instead, but this
      is more convenient. *)
@@ -78,7 +78,7 @@ module type Instr_Input = sig
 end
 
 type 'bin jump_target =
-  | Static of Dba.jump_target
+  | Static of Dba.id Dba.jump_target
   | Dynamic of 'bin
 
 type ('bool,'bin) jump_kind =
@@ -86,4 +86,3 @@ type ('bool,'bin) jump_kind =
   | JKJump of 'bin jump_target
   | JKStop
   | JKAssume of 'bool * 'bin jump_target
-

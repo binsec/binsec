@@ -33,26 +33,33 @@
 (*                                                                                 *)
 (***********************************************************************************)
 
+(** X86 utility functions *)
+
+
 val bitsize_of_xmm_mm : X86Types.xmm_mm -> int
 val bytesize_of_xmm_mm : X86Types.xmm_mm -> int
 val xmm_reg_to_string : X86Types.xmm_reg -> string
 val xmm_reg_to_mm_reg : X86Types.xmm_reg -> X86Types.mmx_reg
 
-val bitsize_of_simd_size  : X86Types.simd_size ->  Basic_types.BitSize.t
-val bytesize_of_simd_size : X86Types.simd_size -> Basic_types.ByteSize.t
+val bitsize_of_simd_size  : X86Types.simd_size ->  Size.Bit.t
+val bytesize_of_simd_size : X86Types.simd_size -> Size.Byte.t
 
-val bytesize_of_szmode : X86Types.sizeMode -> Basic_types.ByteSize.t
-val bitsize_of_szmode  : X86Types.sizeMode -> Basic_types.BitSize.t
+val bytesize_of_szmode : X86Types.sizeMode -> Size.Byte.t
+val bitsize_of_szmode  : X86Types.sizeMode -> Size.Bit.t
 
-val bytesize_of_mode : X86Types.mode -> Basic_types.ByteSize.t
-val bitsize_of_mode  : X86Types.mode -> Basic_types.BitSize.t
+val bytesize_of_mode : X86Types.mode -> Size.Byte.t
+val bitsize_of_mode  : X86Types.mode -> Size.Bit.t
 
+val bytesize_of_address_mode : X86Types.address_size_mode -> Size.Byte.t
+val bitsize_of_address_mode  : X86Types.address_size_mode -> Size.Bit.t
 
 
 val reg8_to_string : X86Types.reg8 -> string
 val reg8_to_int : X86Types.reg8 -> int
 
 val reg16_to_string : X86Types.reg16 -> string
+val reg16_to_reg32 : X86Types.reg16 -> X86Types.reg32
+
 
 val reg32_to_string : X86Types.reg32 -> string
 val reg32_to_string_8 : X86Types.reg32 -> string
@@ -60,8 +67,22 @@ val reg32_to_string_16 : X86Types.reg32 -> string
 
 val mm_reg_to_string : X86Types.mmx_reg -> string
 val int_to_reg32 : int -> X86Types.reg32
+
 val segment_reg_to_string : X86Types.segment_reg -> string
+
+val segment_of_string : string -> X86Types.segment_reg option
+(** [segment_of_string s] returns the [Some segment_reg] if [s] is a valid
+    segment name lie "fs" or "gs", [None] otherwise
+
+    A valid name is the 2 letters string representation of the algebraic data
+    type [X86Types.segment_reg].
+*)
+
+val segments : X86Types.segment_reg list
+(** The list of of possible segement registers *)
+
 val int_to_segment_reg : int -> X86Types.segment_reg
+
 val float_reg_to_string : X86Types.float_reg -> string
 val int_to_float_reg : int -> X86Types.float_reg
 val mmx_reg_to_string : X86Types.mmx_reg -> string
@@ -123,7 +144,13 @@ val read_rm8_with_spare :
 val read_rm16_with_spare :
   Lreader.t -> X86Types.reg16 X86Types.genop * int
 
-
 val reg_to_extract : string -> string * int * int
 val string_of_register_restrict : string -> int -> int -> string
 val get_flag_value : X86Types.flag -> int64 -> int64
+
+val switch_default_data_mode : X86Types.mode -> X86Types.mode
+(** Handle 0x66 prefix byte *)
+
+val switch_address_mode :
+  X86Types.address_size_mode -> X86Types.address_size_mode
+(** Handle 0x67 prefix byte *)

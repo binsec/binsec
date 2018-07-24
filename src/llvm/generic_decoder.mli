@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,13 +22,13 @@
 open Generic_decoder_sig;;
 
 module Decode_Expr(I:Expr_Input):sig
-  val expr: Dba.expr -> I.binary I.M.m
-  val cond: Dba.cond -> I.boolean I.M.m
+  val expr: Dba.Expr.t -> I.binary I.M.m
+  val cond: Dba.Expr.t -> I.boolean I.M.m
 end
 
 module Decode_Instr(S:Instr_Input):sig
   val instruction:
-    S.State.t -> Dba.instruction ->
+    S.State.t -> Dba.Instr.t ->
     (S.boolean,S.binary) Generic_decoder_sig.jump_kind * S.State.t
 
 end

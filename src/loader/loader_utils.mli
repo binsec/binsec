@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,15 +21,32 @@
 
 (** Loader utility functions *)
 
-val get_img : unit -> Loader.Img.t
+val find_section_by_name : string -> Loader.Img.t -> Loader.Section.t
 
-val find_section : string -> Loader.Img.t -> Loader.Section.t
+val section_slice_by_name : string -> Loader.Img.t -> int * int
+(** [section_slice section_name img] returns the interval [lo, hi] of virtual
+    addresses defining the section [section_name].
+*)
 
-val section_slice : string -> Loader.Img.t -> int * int 
-  
-val set_arch : unit -> unit
-(* [set_arch ()] retrieves and sets the machine as determined by the loader *)
+val find_section_by_address :
+  address:int -> Loader.Img.t -> Loader.Section.t option
 
-val get_byte_at : Bigint.t -> int
+val find_section_by_address_exn :
+  address:int -> Loader.Img.t -> Loader.Section.t
+(** @raise Failure exception if no such section exists *)
 
-val pp_loader_summary : Format.formatter -> string -> unit
+val section_slice_by_address : address:int -> Loader.Img.t -> int * int
+
+val find_section:
+  p:(Loader.Section.t -> bool) -> Loader.Img.t -> Loader.Section.t option
+
+val find_function : funcname:string -> Loader.Img.t -> int option
+
+val address_of_symbol : name:string -> Loader.Img.t -> int option
+(** [address_of_symbol ~name img] finds [Some address] where the symbole is
+ ** defined. Otherwise returns [None]. *)
+
+val get_byte_at : Loader.Img.t -> Bigint.t -> int
+
+
+val entry_point : Loader.Img.t -> Virtual_address.t

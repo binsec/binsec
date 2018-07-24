@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,43 +20,37 @@
 (**************************************************************************)
 
 class type inplace_visitor_t = object
-  method visit_alternative : Dba.exprs -> Dba.alternativeTag option -> unit
-  method visit_assert : Dba.cond -> unit
-  method visit_assign : Dba.lhs -> Dba.expr -> unit
-  method visit_assume : Dba.cond -> unit
-  method visit_binary : Dba.binary_op -> Dba.expr -> Dba.expr -> unit
-  method visit_cond : Dba.cond -> unit
-  method visit_cond_and : Dba.cond -> Dba.cond -> unit
-  method visit_cond_or : Dba.cond -> Dba.cond -> unit
+  method visit_assert : Dba.Expr.t -> unit
+  method visit_assign : Dba.LValue.t -> Dba.Expr.t -> unit
+  method visit_assume : Dba.Expr.t -> unit
+  method visit_binary : Dba.Binary_op.t -> Dba.Expr.t -> Dba.Expr.t -> unit
+  method visit_cond : Dba.Expr.t -> unit
   method visit_cst : Bitvector.t -> unit
   method visit_dbainstr : Dba_types.Statement.t -> unit
-  method visit_djump : Dba.expr -> unit
-  method visit_expr : Dba.expr -> unit
-  method visit_exts : Dba.expr -> Dba.size -> unit
-  method visit_extu : Dba.expr -> Dba.size -> unit
-  method visit_free : Dba.expr -> unit
-  method visit_if : Dba.cond -> Dba.jump_target -> Dba.id -> unit
-  method visit_instrkind : Dba.instruction -> unit
-  method visit_ite : Dba.cond -> Dba.expr -> Dba.expr -> unit
-  method visit_lhs : Dba.lhs -> unit
+  method visit_djump : Dba.Expr.t -> unit
+  method visit_expr : Dba.Expr.t -> unit
+  method visit_exts : Dba.Expr.t -> Dba.size -> unit
+  method visit_extu : Dba.Expr.t -> Dba.size -> unit
+  method visit_free : Dba.Expr.t -> unit
+  method visit_if : Dba.Expr.t -> Dba.id Dba.jump_target -> Dba.id -> unit
+  method visit_instrkind : Dba.Instr.t -> unit
+  method visit_ite : Dba.Expr.t -> Dba.Expr.t -> Dba.Expr.t -> unit
+  method visit_lhs : Dba.LValue.t -> unit
   method visit_lhs_var :
-    string -> Dba.size -> Dba.id -> Dba.id -> Dba.vartag option -> unit
-  method visit_load : Dba.size -> Dba.endianness -> Dba.expr -> unit
-  method visit_local_if : Dba.cond -> Dba.id -> Dba.id -> unit
-  method visit_malloc : Dba.lhs -> Dba.expr -> unit
-  method visit_nondet : Dba.lhs -> unit
-  method visit_nondet_assume : Dba.lhs list -> Dba.cond -> unit
-  method visit_remote_if : Dba.cond -> Dba.address -> Dba.id -> unit
-  method visit_restrict : Dba.expr -> Dba.id -> Dba.id -> unit
-  method visit_sjump : Dba.jump_target -> Dba.tag option -> unit
+    string -> Dba.size -> Dba.id -> Dba.id -> Dba.VarTag.t option -> unit
+  method visit_load : Dba.size -> Dba.endianness -> Dba.Expr.t -> unit
+  method visit_local_if : Dba.Expr.t -> Dba.id -> Dba.id -> unit
+  method visit_malloc : Dba.LValue.t -> Dba.Expr.t -> unit
+  method visit_nondet : Dba.LValue.t -> unit
+  method visit_nondet_assume : Dba.LValue.t list -> Dba.Expr.t -> unit
+  method visit_remote_if : Dba.Expr.t -> Dba.address -> Dba.id -> unit
+  method visit_restrict : Dba.Expr.t -> Dba.id -> Dba.id -> unit
+  method visit_sjump : Dba.id Dba.jump_target -> Dba.tag option -> unit
   method visit_stop : Dba.state option -> unit
-  method visit_store : Dba.size -> Dba.endianness -> Dba.expr -> unit
-  method visit_unary : Dba.unary_op -> Dba.expr -> unit
-  method visit_undef : Dba.lhs -> unit
-  method visit_var : string -> Dba.size -> Dba.vartag option -> unit
+  method visit_store : Dba.size -> Dba.endianness -> Dba.Expr.t -> unit
+  method visit_unary : Dba.Unary_op.t -> Dba.Expr.t -> unit
+  method visit_undef : Dba.LValue.t -> unit
+  method visit_var : string -> Dba.size -> Dba.VarTag.t option -> unit
 end
 
 class dba_inplace_visitor : inplace_visitor_t
-
-val get_var_dbainstr :
-  Dba_types.Block.t -> Basic_types.String.Set.t * Basic_types.String.Set.t

@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,6 +19,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-val remove_mustkill_lfp : Disasm_types.pmap -> Disasm_types.pmap
+val remove_mustkill_lfp : Simplification_options.pmap -> Simplification_options.pmap
 
-val remove_goto : Disasm_types.pmap -> Disasm_types.pmap
+val remove_goto : Simplification_options.pmap -> Simplification_options.pmap

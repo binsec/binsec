@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -30,7 +30,7 @@ sig
   val update_history : TraceDSE_v.trace_t -> history_t -> history_t
 
   val sat_child : history_t -> TraceDSE_v.child_t -> unit
-  
+
   val unsat_child : history_t -> TraceDSE_v.child_t -> unit
 
   val print_status : history_t -> unit

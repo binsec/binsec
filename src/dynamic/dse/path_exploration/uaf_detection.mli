@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -26,12 +26,12 @@ type heap_event_t =
 exception DOUBLEFREE of int * int64
 
 class uaf_detection :
-  Options.trace_analysis_config ->
+  Trace_config.t ->
   object inherit Path_predicate.dse_analysis
     val mutable alloc_addr : Int64.t ref
     val mutable alloc_nth : int ref
     method add_alloc :
-      Path_pred_env.t ->
+      Path_predicate_env.t ->
       Libcall_piqi.Libcall_piqi.uint64 ->
       Libcall_piqi.Libcall_piqi.uint64 -> bool -> unit
     method add_free : Libcall_piqi.Libcall_piqi.uint64 -> unit
@@ -39,13 +39,13 @@ class uaf_detection :
     method add_location_it_to_invert : int64 -> int -> unit
     method add_location_to_invert : int64 -> unit
     method add_free_check :
-      Smtlib2.smt_expr -> Path_pred_env.t -> Smtlib2.smt_expr
+      Formula.bl_term -> Path_predicate_env.t -> Formula.bl_term
     method add_uaf_check :
-      Smtlib2.smt_expr ->
-      string * Dba.size -> Path_pred_env.t -> Smtlib2.smt_expr
+      Formula.bl_term ->
+      string * Dba.size -> Path_predicate_env.t -> Formula.bl_term
     method call_free : Libcall_piqi.Libcall_piqi.free_t option -> unit
     method call_malloc :
-      Path_pred_env.t ->
+      Path_predicate_env.t ->
       Libcall_piqi.malloc_t option -> Int64.t -> int -> unit
     method change_entries :
       SymbolicInput.SymbolicInput.input_entries_t -> unit
@@ -54,7 +54,7 @@ class uaf_detection :
       Libcall_piqi.Libcall_piqi.uint64 list *
       Libcall_piqi.Libcall_piqi.uint64
     method check_lib :
-      Trace_type.trace_inst -> Path_pred_env.t -> int -> unit
+      Trace_type.trace_inst -> Path_predicate_env.t -> int -> unit
     method check_mmap :
       Trace_type.trace_concrete_infos list ->
       Common_piqi.Common_piqi.uint64 * Libcall_piqi.Libcall_piqi.uint64 *
@@ -63,7 +63,7 @@ class uaf_detection :
       Trace_type.trace_concrete_infos list ->
       Libcall_piqi.Libcall_piqi.uint64 * Libcall_piqi.Libcall_piqi.uint64 *
       Libcall_piqi.Libcall_piqi.uint64 * Libcall_piqi.Libcall_piqi.uint64
-    method check_with_visitor : string -> Path_pred_env.t -> unit
+    method check_with_visitor : string -> Path_predicate_env.t -> unit
     method get_new_conf_files : unit -> string list
     method init_entries : unit -> unit
     method is_uaf : unit -> bool

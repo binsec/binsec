@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,33 +23,48 @@
 
 val is_empty : 'a list -> bool
 (** [is_empty l] returns [true] if [l = []] *)
-  
+
 val take : int -> 'a list -> 'a list
 (** [take n l] returns up to the [n] first elements of list [l] *)
 
 val drop : int -> 'a list -> 'a list
-(** [drop n l] removes the [n] first elements of list [l] 
+(** [drop n l] removes the [n] first elements of list [l]
     if n is greater than the length of the list, returns [].
     @assumes n >= 0
 *)
 
 val last : 'a list -> 'a
-(** [last l] returns the last element of list l. 
+(** [last l] returns the last element of list l.
     Raise [Failure "last"] if the list is empty
 *)
 
 val rev_flatten : 'a list list -> 'a list
 (** [rev_flatten l] reverses and flatten the list of list [l] at the same time.
     It is the same as doing [List.flatten l |> List.rev] but tail-recursive and
-    more efficient. 
+    more efficient.
  **)
 
 
 val flat_map : ('a -> 'b list) -> 'a list -> 'b list
- (** [flat_map f l] is like [List.map f l |> List.flatten] but tail-recusrive
-     and more efficient *)
+(** [flat_map f l] is like [List.map f l |> List.flatten] but tail-recusrive
+    and more efficient *)
 
 val hd_hd : 'a list -> 'a * 'a
- (** [hd_hd l] gets the two first elements of a list.
-     @raise Failure "hd_hd" if [l] is empty or the singleton list
-  *)
+(** [hd_hd l] gets the two first elements of a list.
+    @raise Failure "hd_hd" if [l] is empty or the singleton list
+*)
+
+
+val map_if: ('a -> bool) -> ('a -> 'b) -> 'a list -> 'b list
+(** [map_if p f l] behaves like [map f l] but applied only on elements of
+    [l] verifying [p].
+
+    Tail recursive.
+*)
+
+val filter_map: ('b -> bool) -> ('a -> 'b) -> 'a list -> 'b list
+(** [filter_map p f l] behaves like [map f l] but applied only on elements [e]
+    of [l] verifying [p (f e)].
+
+    Tail recursive.
+*)

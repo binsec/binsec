@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,38 +23,37 @@ exception Elements_of_top
 
 let level = 3
 
-open Interval
+open Domain_interval
 module Value = struct
 
   type t = {
     region : Dba.region;
-    signed : Interval.Signed.t;
-    unsigned : Interval.Unsigned.t;
+    signed : Domain_interval.Signed.t;
+    unsigned : Domain_interval.Unsigned.t;
   }
 
   (* Invariant : all bitvector bounds of intervals must have the same size *)
-  let create region signed unsigned =
-    assert Bitvector.(size_of signed.Signed.lo = size_of unsigned.Unsigned.lo);
+  let create region (signed: Signed.t) (unsigned: Unsigned.t) =
+    assert (Bitvector.size_of signed.Interval.lo = Bitvector.size_of unsigned.Interval.lo);
     { region; signed; unsigned; }
 
   let constant = create `Constant
 
   let of_point bv =
-    let unsigned = Interval.Unsigned.of_point bv
-    and signed = Interval.Signed.of_point bv in
+    let unsigned = Domain_interval.Unsigned.of_point bv
+    and signed = Domain_interval.Signed.of_point bv in
     constant signed unsigned
 
   let relocate region t = { t with region }
 
   let same_range range t =
-    let open Interval.Unsigned in
-    let lo = range.lo and hi = range.hi in
-    { t with signed = Interval.Signed.create lo hi;
-             unsigned = Interval.Unsigned.create lo hi; }
+    let lo = range.Interval.lo and hi = range.Interval.hi in
+    { t with signed = Domain_interval.Signed.create lo hi;
+             unsigned = Domain_interval.Unsigned.create lo hi; }
 
-  let bool_true = constant Interval.Signed.bool_true Interval.Unsigned.bool_true
-  let bool_false = constant Interval.Signed.bool_false Interval.Unsigned.bool_false
-  let bool_any = constant Interval.Signed.bool_any Interval.Unsigned.bool_any
+  let bool_true = constant Domain_interval.Signed.bool_true Domain_interval.Unsigned.bool_true
+  let bool_false = constant Domain_interval.Signed.bool_false Domain_interval.Unsigned.bool_false
+  let bool_any = constant Domain_interval.Signed.bool_any Domain_interval.Unsigned.bool_any
 
   let _update p update_unsigned update_signed v1 v2 =
     if p v1.region v2.region then
@@ -74,7 +73,7 @@ module Value = struct
 
   let set_unsigned unsigned v = { v with unsigned }
   let set_signed signed v = { v with signed }
-  let set ~(signed:Interval.Signed.t) ~(unsigned:Interval.Unsigned.t) v =
+  let set ~(signed:Domain_interval.Signed.t) ~(unsigned:Domain_interval.Unsigned.t) v =
     set_signed signed (set_unsigned unsigned v)
 end
 
@@ -105,8 +104,8 @@ let meet p1 p2 =
   match p1, p2 with
   | None, _  | _, None -> None
   | Some i1, Some i2 ->
-    let l = Bitvector.umax i1.Unsigned.lo i2.Signed.lo in
-    let u = Bitvector.umin i1.Unsigned.hi i2.Signed.hi in
+    let l = Bitvector.umax i1.Interval.lo i2.Interval.lo in
+    let u = Bitvector.umin i1.Interval.hi i2.Interval.hi in
     if Bitvector.ugt l u then None else Some (Unsigned.create l u)
 
 
@@ -140,8 +139,8 @@ let pp ppf range =
     if not (is_constant_region v) then
       fprintf ppf "%@%a:" Dba_printer.Ascii.pp_region v.region;
     fprintf ppf "%a" Unsigned.pp v.unsigned;
-    if not (Bitvector.equal v.signed.Signed.lo v.unsigned.Unsigned.lo &&
-            Bitvector.equal v.signed.Signed.hi v.unsigned.Unsigned.hi)
+    if not (Bitvector.equal v.signed.Interval.lo v.unsigned.Interval.lo &&
+            Bitvector.equal v.signed.Interval.hi v.unsigned.Interval.hi)
     then fprintf ppf ":S %a" Signed.pp v.signed;
     fprintf ppf "@]"
 
@@ -242,9 +241,9 @@ let of_bounds (v1, v2) =
 let apply2 unsigned_f signed_f val1 val2 =
   match val1, val2 with
   | IVal Some v1, IVal Some v2 when same_region v1 v2 ->
-      let unsigned = unsigned_f v1.unsigned v2.unsigned in
-      let signed = signed_f v1.signed v2.signed in
-      mk_ival (Value.create v1.region signed unsigned)
+    let unsigned = unsigned_f v1.unsigned v2.unsigned in
+    let signed = signed_f v1.signed v2.signed in
+    mk_ival (Value.create v1.region signed unsigned)
   | IVal None, i -> i
   | i, IVal None -> i
   | Top, IVal _  -> Top
@@ -307,7 +306,7 @@ let widen val1 val2 thresholds =
   let thresholds1, thresholds2, thresholds3, thresholds4 = thresholds
   in
   let sub_widen_unsigned i1 i2 =
-    let open Unsigned in
+    let open Interval in
     let lo =
 
       if Bitvector.ule i1.lo i2.lo then i1.lo
@@ -319,7 +318,7 @@ let widen val1 val2 thresholds =
     in Unsigned.create lo hi
   in
   let sub_widen_signed i1 i2 =
-    let open Signed in
+    let open Interval in
     let lo =
       if Bitvector.sle i1.lo i2.lo then i1.lo
       else low_signed_threshold thresholds4 i2.lo
@@ -393,9 +392,9 @@ let sub val1 val2 =
   match val1, val2 with
   | IVal (Some { region = r1; unsigned = i1; signed = i2; }),
     IVal (Some { region = `Constant; unsigned = i1'; signed = i2'; })    ->
-      let unsigned = Unsigned.sub i1 i1' in
-      let signed = Signed.sub i2 i2' in
-      mk_ival (Value.create r1 signed unsigned)
+    let unsigned = Unsigned.sub i1 i1' in
+    let signed = Signed.sub i2 i2' in
+    mk_ival (Value.create r1 signed unsigned)
   | IVal Some v1, IVal Some v2 when same_region v1 v2 ->
     let unsigned = Unsigned.sub v1.unsigned v2.unsigned in
     let signed = Signed.sub v1.signed v2.signed in
@@ -407,29 +406,26 @@ let sub val1 val2 =
   | _, Top       -> Top
 
 
-let umul val1 val2 =
+let mul val1 val2 =
   let val1 = refine val1 in
   let val2 = refine val2 in
   match val1, val2 with
   | IVal (Some { region = `Constant; unsigned = i1; signed = i2 }),
     IVal (Some { region = `Constant; unsigned = i1'; signed = i2' }) ->
-    let v = Value.constant (Signed.umul i2 i2') (Unsigned.umul i1 i1') in
+    let v = Value.constant (Signed.mul i2 i2') (Unsigned.mul i1 i1') in
     mk_ival v
   | IVal (Some { region = r; unsigned = i1; signed = i2 }),
     IVal (Some { region = `Constant; unsigned = i1'; signed = i2' })
   | IVal (Some { region = `Constant; unsigned = i1'; signed = i2' }),
     IVal (Some { region = r; unsigned = i1; signed = i2 }) ->
     if Unsigned.is_unit i1'
-    then mk_ival (Value.create r (Signed.umul i2 i2') (Unsigned.umul i1 i1'))
+    then mk_ival (Value.create r (Signed.mul i2 i2') (Unsigned.mul i1 i1'))
     else Top
   | IVal None, _
   | _, IVal None -> IVal None
   | IVal (Some _), IVal (Some _)
   | Top, _
   | _, Top       -> Top
-
-
-let smul = umul
 
 let power _val1 _val2 = failwith "power"
 
@@ -504,7 +500,7 @@ let logand = top_apply Signed.logand Unsigned.logand
 
 let max value =
   match value with
-  | IVal Some v -> `Value (`Constant, v.unsigned.Unsigned.hi)
+  | IVal Some v -> `Value (`Constant, v.unsigned.Interval.hi)
   (* FIXME : REALLY ?*)
   | IVal None | Top ->
     (* Seems dubious that a bv of size -1 should ever be created: check that *)
@@ -545,14 +541,14 @@ let diff val1 val2 =
 
 let comparison_apply fsigned funsigned val1 val2 =
   match refine val1, refine val2 with
-    | IVal Some v1, IVal Some v2 when same_region v1 v2 ->
-      mk_ival (Value.apply2 fsigned funsigned v1 v2)
-    | IVal None, _
-    | _, IVal None
-    | Top, IVal _
-    | IVal _, Top
-    | IVal Some _, IVal Some _
-    | Top, Top -> mk_ival Value.bool_any
+  | IVal Some v1, IVal Some v2 when same_region v1 v2 ->
+    mk_ival (Value.apply2 fsigned funsigned v1 v2)
+  | IVal None, _
+  | _, IVal None
+  | Top, IVal _
+  | IVal _, Top
+  | IVal Some _, IVal Some _
+  | Top, Top -> mk_ival Value.bool_any
 
 let geqU = comparison_apply Signed.uge Unsigned.uge
 
@@ -608,12 +604,12 @@ let is_true value _assumes _global_regions =
   | IVal None -> failwith "empty in is_true interval"
   | IVal (Some { region =`Constant; unsigned; signed  }) ->
     if Bitvector.(
-        is_zeros unsigned.Unsigned.hi && is_zeros unsigned.Unsigned.lo
-        || is_zeros signed.Signed.hi && is_zeros signed.Signed.lo)
+        is_zeros unsigned.Interval.hi && is_zeros unsigned.Interval.lo
+        || is_zeros signed.Interval.hi && is_zeros signed.Interval.lo)
     then False
     else
-    if Bitvector.(is_one unsigned.Unsigned.hi && is_one unsigned.Unsigned.lo ||
-                  is_one signed.Signed.hi && is_one signed.Signed.lo)
+    if Bitvector.(is_one unsigned.Interval.hi && is_one unsigned.Interval.lo ||
+                  is_one signed.Interval.hi && is_one signed.Interval.lo)
     then True
     else Unknown
   | _ -> assert false
@@ -626,16 +622,17 @@ let rec guard binop val1 val2 =
   let val1 = refine val1
   and val2 = refine val2 in
   let v1, v2 =
+    let open Dba.Binary_op in
     match binop with
-    | Dba.Eq -> let i = meet val1 val2 in i, i
-    | Dba.LtU ->
+    | Eq -> let i = meet val1 val2 in i, i
+    | LtU ->
       begin
         match val1, val2 with
         | IVal Some v1, IVal Some v2 ->
-          let a = v1.unsigned.Unsigned.lo
-          and b = v1.unsigned.Unsigned.hi
-          and c = v2.unsigned.Unsigned.lo
-          and d = v2.unsigned.Unsigned.hi in
+          let a = v1.unsigned.Interval.lo
+          and b = v1.unsigned.Interval.hi
+          and c = v2.unsigned.Interval.lo
+          and d = v2.unsigned.Interval.hi in
           if same_region v1 v2
           then
             let min = Bitvector.umin (Bitvector.pred d) b in
@@ -653,11 +650,11 @@ let rec guard binop val1 val2 =
         | Top,
           IVal Some v when is_constant_region v ->
           let v1 =
-            if Bitvector.is_zero v.unsigned.Unsigned.hi then IVal None
+            if Bitvector.is_zero v.unsigned.Interval.hi then IVal None
             else
               let lo =
-                Bitvector.zeros (Bitvector.size_of v.unsigned.Unsigned.hi) in
-              let hi = Bitvector.pred v.unsigned.Unsigned.lo in
+                Bitvector.zeros (Bitvector.size_of v.unsigned.Interval.hi) in
+              let hi = Bitvector.pred v.unsigned.Interval.lo in
               let unsigned = Unsigned.create lo hi in
               let signed = Signed.topify v.signed in
               mk_ival (set_signed signed (set_unsigned unsigned v))
@@ -665,11 +662,11 @@ let rec guard binop val1 val2 =
 
         | IVal Some v, Top when is_constant_region v ->
           let v2 =
-            if Bitvector.is_max_ubv v.unsigned.Unsigned.lo then val2
+            if Bitvector.is_max_ubv v.unsigned.Interval.lo then val2
             else
-              let lo = Bitvector.succ v.unsigned.Unsigned.lo in
+              let lo = Bitvector.succ v.unsigned.Interval.lo in
               let hi =
-                Bitvector.max_ubv (Bitvector.size_of v.unsigned.Unsigned.lo) in
+                Bitvector.max_ubv (Bitvector.size_of v.unsigned.Interval.lo) in
               let unsigned = Unsigned.create lo hi in
               let signed = Signed.topify v.signed in
               mk_ival (set_signed signed (set_unsigned unsigned v))
@@ -677,18 +674,18 @@ let rec guard binop val1 val2 =
         | _, _ -> val1, val2
       end
 
-    | Dba.Diff ->
-      let val11, val21 = guard Dba.LtU val1 val2 in
-      let val22, val12 = guard Dba.LtU val2 val1 in
+    | Diff ->
+      let val11, val21 = guard LtU val1 val2 in
+      let val22, val12 = guard LtU val2 val1 in
       join val11 val12, join val21 val22
 
-    | Dba.GeqU ->
+    | GeqU ->
       begin
         match val1, val2 with
         | IVal Some v1, IVal Some v2 ->
           if same_region v1 v2
           then
-            let open Unsigned in
+            let open Interval in
             let min = Bitvector.umin v1.unsigned.hi v2.unsigned.hi in
             let max = Bitvector.umax v1.unsigned.lo v2.unsigned.lo in
             let x =
@@ -716,27 +713,27 @@ let rec guard binop val1 val2 =
         | _, _ -> val1, val2
       end
 
-    | Dba.LeqU -> guard Dba.GeqU val2 val1
+    | LeqU -> guard GeqU val2 val1
 
-    | Dba.GtU  -> guard Dba.LtU val2 val1
+    | GtU  -> guard LtU val2 val1
 
-    | Dba.LeqS ->
+    | LeqS ->
       begin
         match val1, val2 with
         | IVal Some v1, IVal Some v2 ->
           if same_region v1 v2 then
-            let min = Bitvector.smin v1.signed.Signed.hi v2.signed.Signed.hi
+            let min = Bitvector.smin v1.signed.Interval.hi v2.signed.Interval.hi
             and max =
-              Bitvector.smax v1.signed.Signed.lo v2.signed.Signed.lo in
+              Bitvector.smax v1.signed.Interval.lo v2.signed.Interval.lo in
             let x =
-              if Bitvector.sgt v1.signed.Signed.lo min then IVal None
+              if Bitvector.sgt v1.signed.Interval.lo min then IVal None
               else
-                let signed = Signed.create v1.signed.Signed.lo min in
+                let signed = Signed.create v1.signed.Interval.lo min in
                 mk_ival (set_signed signed v1)
             and y =
-              if Bitvector.slt v2.signed.Signed.hi max then IVal None
+              if Bitvector.slt v2.signed.Interval.hi max then IVal None
               else
-                let signed = Signed.create max v2.signed.Signed.hi in
+                let signed = Signed.create max v2.signed.Interval.hi in
                 mk_ival (set_signed signed v2)
             in x, y
           else val1, val2
@@ -751,11 +748,11 @@ let rec guard binop val1 val2 =
         | _, _ -> val1, val2
       end
 
-    | Dba.LtS  ->
+    | LtS  ->
       begin
         match val1, val2 with
         | IVal Some v1, IVal Some v2 when same_region v1 v2 ->
-          let open Signed in
+          let open Interval in
           let min = Bitvector.smin (Bitvector.pred v2.signed.hi) v2.signed.hi
           and max = Bitvector.smax (Bitvector.succ v1.signed.lo) v2.signed.lo in
           let x =
@@ -780,23 +777,23 @@ let rec guard binop val1 val2 =
         | _, _ -> val1, val2
       end
 
-    | Dba.GeqS ->
+    | GeqS ->
       begin
         match val1, val2 with
         | IVal Some v1,
           IVal Some v2 when same_region v1 v2 ->
-          let min = Bitvector.smin v1.signed.Signed.hi v2.signed.Signed.hi
-          and max = Bitvector.smax v2.signed.Signed.lo v2.signed.Signed.lo in
+          let min = Bitvector.smin v1.signed.Interval.hi v2.signed.Interval.hi
+          and max = Bitvector.smax v2.signed.Interval.lo v2.signed.Interval.lo in
           let x =
-            if Bitvector.sgt max v1.signed.Signed.hi then IVal None
+            if Bitvector.sgt max v1.signed.Interval.hi then IVal None
             else
-              let signed = Signed.create max v1.signed.Signed.hi in
+              let signed = Signed.create max v1.signed.Interval.hi in
               mk_ival (set_signed signed v1)
           and y =
-              if Bitvector.slt min v2.signed.Signed.lo then IVal None
-              else
-                let signed = Signed.create v2.signed.Signed.lo min in
-                mk_ival (set_signed signed v2)
+            if Bitvector.slt min v2.signed.Interval.lo then IVal None
+            else
+              let signed = Signed.create v2.signed.Interval.lo min in
+              mk_ival (set_signed signed v2)
           in x, y
         | Top, IVal Some v when is_constant_region v ->
           let signed = Signed.maxify v.signed
@@ -809,12 +806,12 @@ let rec guard binop val1 val2 =
         | _, _ -> val1, val2
       end
 
-    | Dba.GtS  ->
+    | GtS  ->
       begin
         match val1, val2 with
         | IVal Some v1,
           IVal Some v2 when same_region v1 v2 ->
-          let open Signed in
+          let open Interval in
           let min =
             Bitvector.smin (Bitvector.pred v1.signed.hi) v2.signed.hi
           and max =
@@ -866,9 +863,10 @@ let restrict value off1 off2 =
   | IVal None -> IVal None
   | IVal Some v (*{ region =`Constant; unsigned = (l1, u1); signed = _})*) when
       is_constant_region v ->
-    let open Unsigned in
-    let ulo = Bitvector.extract v.unsigned.lo off1 off2 in
-    let uhi = Bitvector.extract v.unsigned.hi off1 off2 in
+    let open Interval in
+    let interval = { Interval.lo = off1; Interval.hi = off2 } in
+    let ulo = Bitvector.extract v.unsigned.lo interval in
+    let uhi = Bitvector.extract v.unsigned.hi interval in
     let unsigned = Unsigned.create ulo uhi in
     let len = off2 - off1 + 1 in
     let signed = Signed.top len in
@@ -895,7 +893,7 @@ let concat val1 val2 =
   match val1, val2 with
   | IVal Some v1, IVal Some v2 when same_region v1 v2 && is_constant_region v1
     ->
-    let open Unsigned in
+    let open Interval in
     let lo = Bitvector.append v1.unsigned.lo v2.unsigned.lo in
     let hi = Bitvector.append v1.unsigned.hi v2.unsigned.hi in
     let unsigned = Unsigned.create lo hi in
@@ -905,20 +903,20 @@ let concat val1 val2 =
   | _, _ -> Top
 
 
-let to_smt value (var: Smtlib2.smt_bv_expr) : Smtlib2.smt_bv_expr list =
-  let open Smtlib2 in
-   match value with
+let to_smt value (var: Formula.bv_term) : Formula.bl_term list =
+  let open Formula in
+  match value with
   | Top -> []
   | IVal None -> []
   | IVal Some v ->
-    let u_low_bound  = SmtBvCst v.unsigned.Unsigned.lo in
-    let u_high_bound = SmtBvCst v.unsigned.Unsigned.hi in
-    let s_low_bound  = SmtBvCst v.signed.Signed.lo in
-    let s_high_bound = SmtBvCst v.signed.Signed.hi in
-    [SmtBvBinary (SmtBvUle, u_low_bound, var);
-     SmtBvBinary (SmtBvUle, var, u_high_bound);
-     SmtBvBinary (SmtBvSle, s_low_bound, var);
-     SmtBvBinary (SmtBvSle, var, s_high_bound)]
+    let u_low_bound  = mk_bv_cst v.unsigned.Interval.lo in
+    let u_high_bound = mk_bv_cst v.unsigned.Interval.hi in
+    let s_low_bound  = mk_bv_cst v.signed.Interval.lo in
+    let s_high_bound = mk_bv_cst v.signed.Interval.hi in
+    [mk_bv_ule u_low_bound var;
+     mk_bv_ule var u_high_bound;
+     mk_bv_sle s_low_bound var;
+     mk_bv_sle var s_high_bound]
 
 
 let smt_refine ival smt_env var =
@@ -926,7 +924,7 @@ let smt_refine ival smt_env var =
   | Top -> Top
   | IVal None -> IVal None
   | IVal Some v  ->
-    let open Unsigned in
+    let open Interval in
     let hi = Normalize_instructions.get_upper_bound smt_env var v.unsigned.hi
     and lo = Normalize_instructions.get_lower_bound smt_env var v.unsigned.lo
     in let unsigned = Unsigned.create lo hi in mk_ival (set_unsigned unsigned v)

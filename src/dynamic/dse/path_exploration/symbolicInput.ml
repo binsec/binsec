@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -64,7 +64,7 @@ sig
   val parse_config_json_conc       : string -> input_entries_t
 
   val export_inputs                : Common.action -> input_entries_t -> Config_piqi.input_t list
-(*  val update_config_json           : string -> ?new_file:string -> ?conc:input_entries_t -> ?patch:input_entries_t -> unit*)
+  (*  val update_config_json           : string -> ?new_file:string -> ?conc:input_entries_t -> ?patch:input_entries_t -> unit*)
 
   val find_input_from_name         : input_entries_t -> string -> input_entry_t
   val find_input_from_position     : input_entries_t -> int64 * int -> input_entry_t
@@ -85,7 +85,7 @@ struct
   type input_id_t =
     | Register of string * int          (* register name and size *)
     | Address of int64 * int            (* address and size *)
-    (*| Indirect of string * int            (* indirect, name and size *)*)
+  (*| Indirect of string * int            (* indirect, name and size *)*)
 
   type input_entry_t = { addr_input  : int64;
                          it_input    : int;
@@ -112,8 +112,8 @@ struct
 
   let get_value_of_input input_entries name =
     try
-       let input = List.find (fun x -> (String.compare x.name_input name) =0) input_entries in
-       input.value_input
+      let input = List.find (fun x -> (String.compare x.name_input name) =0) input_entries in
+      input.value_input
     with Not_found -> failwith (Printf.sprintf "Error %s not found\n" name)
 
   let get_input_entry_register (input_entry:input_entry_t) =
@@ -139,7 +139,7 @@ struct
     List.mapi (fun i c ->
         Int64.add addr @@ Int64.of_int i,
         Int64.of_int @@ Char.code c
-    )
+      )
 
   (*******************************************************************************)
 
@@ -203,9 +203,9 @@ struct
   (* transform list of inputs in symbolic input format *)
   let parse_inputs input_action piqi_inputs =
     let inputs = List.filter (fun pq_input -> pq_input.action = input_action
-        (* match pq_input.action with *)
-        (* | act_type -> act_type = input_type  | _ -> false *)
-      ) piqi_inputs
+    (* match pq_input.action with *)
+    (* | act_type -> act_type = input_type  | _ -> false *)
+                             ) piqi_inputs
     in
     let input_idx = ref 0 in
     List.fold_left (fun acc_inputs (input:Input_t.t) ->
@@ -255,13 +255,13 @@ struct
   (*******************************************************************************)
 
   (* Debuging function, please do not delete it until the release *)
- (* let print_input_info (input_entries:input_entries_t) =
-    List.iter (fun input_entry ->
-        let entry_addr = input_entry.addr_input
-        and entry_value = input_entry.value_input
-        and entry_name = input_entry.name_input in
-        Int64.to_int entry_addr |> (Int64.to_int entry_value |> Char.unsafe_chr |> Logger.debug "%s : %c (%d)\n" entry_name)
-      ) input_entries*)
+  (* let print_input_info (input_entries:input_entries_t) =
+     List.iter (fun input_entry ->
+         let entry_addr = input_entry.addr_input
+         and entry_value = input_entry.value_input
+         and entry_name = input_entry.name_input in
+         Int64.to_int entry_addr |> (Int64.to_int entry_value |> Char.unsafe_chr |> Logger.debug "%s : %c (%d)\n" entry_name)
+       ) input_entries*)
 
 
   let construct_register_json_format reg_entry input_value input_address input_iteration input_position input_action =
@@ -281,7 +281,7 @@ struct
        | 64 ->
          json_reg_value.Register_value_t.typeid <- `bit64;
          json_reg_value.Register_value_t.value_64 <- Some input_value
-        | s -> failwith (Printf.sprintf "Reg with wrong size ? %d" s)
+       | s -> failwith (Printf.sprintf "Reg with wrong size ? %d" s)
       );
       { Input_t.typeid = `reg;
         Input_t.address = input_address;
@@ -393,17 +393,17 @@ struct
       (fun x y -> compare (get_id y.name_input) (get_id x.name_input) ) l
 
   let update entries model =
-      List.map (
-        fun x ->
-          try
-            let new_val =
-              Bigint.int64_of_big_int (
-                Bitvector.value_of (
-                  Smt_model.find_register model
-                    (get_input_entry_name x)))
-            in modify_input_entry_value x new_val
-          with Not_found -> x
-      ) entries
+    List.map (
+      fun x ->
+        try
+          let new_val =
+            Bigint.int64_of_big_int (
+              Bitvector.value_of (
+                Smt_model.find_register model
+                  (get_input_entry_name x)))
+          in modify_input_entry_value x new_val
+        with Not_found -> x
+    ) entries
 
 
 end

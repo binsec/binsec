@@ -1,0 +1,162 @@
+(**************************************************************************)
+(*  This file is part of BINSEC.                                          *)
+(*                                                                        *)
+(*  Copyright (C) 2016-2018                                               *)
+(*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
+(*         alternatives)                                                  *)
+(*                                                                        *)
+(*  you can redistribute it and/or modify it under the terms of the GNU   *)
+(*  Lesser General Public License as published by the Free Software       *)
+(*  Foundation, version 2.1.                                              *)
+(*                                                                        *)
+(*  It is distributed in the hope that it will be useful,                 *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of        *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *)
+(*  GNU Lesser General Public License for more details.                   *)
+(*                                                                        *)
+(*  See the GNU Lesser General Public License version 2.1                 *)
+(*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
+(*                                                                        *)
+(**************************************************************************)
+
+(** Interface with SMT solvers *)
+
+(** This module provides basic functions to solve
+    SMT formulas, either by providing the file name
+    or directly by interacting with the SMT solver via
+    theirs incremental mode. *)
+
+module Command :
+sig
+  type command =
+    | PutEntry of Formula.entry
+    | CheckSat
+    | GetModel
+    | GetValue of Formula.term
+
+  val pp_command : Format.formatter -> command -> unit
+
+  val check_sat : command
+  val get_model : command
+  val get_value : Formula.term -> command
+  val put_entry : Formula.entry -> command
+end
+
+(** channels when interacting with solvers *)
+type solver_session = private {
+  solver: Common_piqi.solver_t;
+  stdin: out_channel;
+  stdout: in_channel;
+  stderr: in_channel;
+  (* a file to dump the session *)
+  dump : out_channel option;
+  (* everything printed to this formatter will be formatted to both stdin and
+   * dump *)
+  combined : Format.formatter;
+  incremental: bool;
+}
+
+(** default session constructor *)
+val default_session : ?file:string -> unit -> solver_session
+
+(** check that the given solver is boolector *)
+val is_boolector : [> `boolector ] -> bool
+
+(** print solver name **)
+val pp_solver : Format.formatter -> [< `boolector | `cvc4 | `yices | `z3 ] -> unit
+
+(** [start_interactive ~file ~timeout solver] starts an interactive session
+    with the solver [solver] and the given [~timeout] (default is none).
+    [~file] provides a debug output file where every command sent to the solver
+    are also copied. *)
+val start_interactive :
+  ?file:string -> ?timeout:int -> Common_piqi.solver_t -> solver_session
+
+(** stop the interactive session by closing the process *)
+val stop_interactive : solver_session -> unit
+
+(** [solve ~timeout file solver] solve the formula in [file]
+    with the given [~timeout] and the given [solver]. Only,
+    the SMT status is returned *)
+val solve:
+  ?timeout:int ->
+  string -> Common_piqi.solver_t -> Formula.status
+
+(** [solve_incremental ~expr ~debug session solver] solve
+    the current formula fed to the solver. An optional
+    smt_expr [~expr] can be provided which would be added
+    first. *)
+val solve_incremental :
+  ?term:Formula.bl_term option ->
+  solver_session -> Formula.status
+
+(** same as [solve] but also returns the model generated *)
+val solve_model :
+  ?timeout:int ->
+  string -> Common_piqi.solver_t -> Formula.status * Smt_model.t
+
+(** same as [solve_model] but also returns the computation time *)
+val solve_model_time :
+  ?timeout:int ->
+  ?get_model:bool ->
+  string -> Common_piqi.solver_t -> Formula.status * Smt_model.t * float
+
+(** same as [solve_incremental_model] but also returns the model generated *)
+val solve_incremental_model :
+  ?term:Formula.bl_term option ->
+  solver_session ->
+  Formula.status * Smt_model.t
+
+(** same as [solve_incremental_model] but also returns the
+    computation time *)
+val solve_incremental_model_time :
+  ?term:Formula.bl_term option ->
+  ?get_model:bool ->
+  solver_session ->
+  Formula.status * Smt_model.t * float
+
+(** same as [solve_incremental_model] but uses the smtlib2
+    [get-value] rather than [get-model] *)
+val solve_incremental_value :
+  ?term:Formula.bl_term option ->
+  Formula.bv_term ->
+  solver_session ->
+  Formula.status * Bitvector.t option
+
+(** send the [push] command to the solver *)
+val push : solver_session -> unit
+
+(** send the [pop] command to the solver *)
+val pop : solver_session -> unit
+
+(** returns a formatter st everything printed to the formatter will be sent to
+ * the solver **)
+
+val get_formatter_of_session : solver_session -> Format.formatter
+
+module Session : sig
+  type t
+
+  type output =
+    | Nil
+    | Model of Smt_model.t
+    | Sat of Formula.status
+    | Value of Bitvector.t
+
+  val create : ?file:string -> ?timeout:int -> Common_piqi.solver_t -> t
+  val destroy : t -> unit
+
+  val run : t -> Command.command -> output
+
+  val put_entry : t -> Formula.entry -> unit
+
+  (* run check-sat only if necessary (ie no assert has been issued since last
+   * check-sat *)
+  val check_sat : t -> Formula.status
+
+  (* run get-model only if necessary; you still have to make sure that the
+   * current formula is satisfiable *)
+  val get_model : t -> Smt_model.t
+
+  val get_value : t -> Formula.term -> Bitvector.t
+end

@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -32,13 +32,13 @@ type node_addr = int64
 type t = (node_addr * node_type * int64 list) list
 
 val contains : node_tree -> t -> bool
-val list_to_tree : t -> string -> node_tree 
+val list_to_tree : t -> string -> node_tree
 val add_list_to_tree : node_tree -> t -> string -> unit
 val add_id_to_tree : node_tree -> unit
 val sat_child : node_tree -> Exploration_type.location -> unit
 val unsat_child : node_tree -> Exploration_type.location -> unit
-    
+
 val traces_to_dot : string list -> unit
 val export : ?filename:string -> node_tree -> unit
-val loop_export : ?filename:string -> node_tree -> unit  
- 
+val loop_export : ?filename:string -> node_tree -> unit
+

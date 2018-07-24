@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,12 +23,19 @@
 
 module Program : sig
   type t = private {
-    instructions : Disasm_types.Program.t;
-    callsites    : Dba_types.Caddress.Set.t
+    instructions     : Instr_cfg.t;
+    callsites        : Virtual_address.Set.t;
+    entrypoints      : Virtual_address.Set.t;
+    unresolved_jumps : Virtual_address.Set.t
   }
 
   val empty : t
-  val create : Disasm_types.Program.t -> Dba_types.Caddress.Set.t  -> t
+  val create : ?callsites:Virtual_address.Set.t ->
+    ?entrypoints:Virtual_address.Set.t ->
+    ?unresolved_jumps:Virtual_address.Set.t ->
+    Instr_cfg.t ->  t
+  (** Default value for all sets is the empty set *)
+
   val pp : Format.formatter -> t -> unit
 end
 
@@ -38,7 +45,7 @@ module Recursive : sig
   val disassemble:
     ?jumps:Dba_types.Caddress.Set.elt list Dba_types.Caddress.Map.t ->
     ?stops:Dba_types.Caddress.Set.t ->
-    ?visited:Dba_types.Virtual_address.Set.t ->
+    ?visited:Virtual_address.Set.t ->
     ?worklist:Disasm_core.W.t ->
     Program.t ->
     Program.t
@@ -47,17 +54,17 @@ end
 
 val disassemble : Infos.t ->  Program.t
 
-val run : configuration_file:string option -> unit -> unit
+val file : filename:string -> Program.t
+
+val run : configuration_file:string option -> unit
 (** Run disassembly with stubs from [configuration_file] *)
 
 val decode : string -> unit
 (** [decode s] decodes the string opcode [s].
     @assumes [s] is an hexadecimal string, i.e. of the form [0-9a-f]+
- *)
+*)
 
 val decode_llvm : string -> unit
 (** [decode s] decodes the string opcode [s].
     @assumes [s] is an hexadecimal string, i.e. of the form [0-9a-f]+
- *)
-
-
+*)

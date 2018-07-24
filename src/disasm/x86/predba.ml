@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,61 +19,78 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* The DBA types without their successors, that will be added at instruction chaining (see chain_insns) *)
-(* For static jumps. Tags may indicate a probable call / return instruction *)
-type t =
-  | Assign of Dba.lhs * Dba.expr
-  | SJump of Dba.jump_target * Dba.tag option
-  | DJump of Dba.expr * Dba.tag option
-  | If of Dba.cond * Dba.jump_target
-  | Undef of Dba.lhs
-  | Nondet of Dba.lhs * Dba.region
+(* The DBA types without their successors.
+ * That will be added at instruction chaining (see chain_insns)
+ * For static jumps. Tags may indicate a probable call / return instruction
+*)
+
+open Disasm_options
+
+type 'a t =
+  | Assign of Dba.LValue.t * Dba.Expr.t
+  | SJump of 'a Dba.jump_target * Dba.tag option
+  | DJump of Dba.Expr.t * Dba.tag option
+  | If of Dba.Expr.t * 'a Dba.jump_target
+  | Undef of Dba.LValue.t
+  | Nondet of Dba.LValue.t * Dba.region
   | Stop of Dba.state
 
 
-let assign lval e = Assign (lval, e)
+let assign lval e =
+  Logger.debug ~level:5
+    "@[<hov 0>Assigning %a (%d) with %a (%d)@]"
+    Dba_printer.Ascii.pp_lhs lval
+    (Dba.LValue.size_of lval)
+    Dba_printer.Ascii.pp_bl_term e
+    (Dba.Expr.size_of e)
+  ;
+
+  assert (Dba.LValue.size_of lval = Dba.Expr.size_of e);
+  Assign (lval, e)
+
+let (<<-) = assign
 
 let static_jump ?(tag=None) jt = SJump (jt, tag)
 
 let dynamic_jump ?(tag=None) e = DJump (e, tag)
 
-let jif c jt = If (c, jt)
+let conditional_jump c jt = If (c, jt)
 
 let undefined lval = Undef lval
 
 let non_deterministic lval r = Nondet (lval, r)
 
 let stop s = Stop s
-  
+
 let needs_termination = function
-  | Dba.IkDJump _
-  | Dba.IkSJump (Dba.JOuter _, _)
-  | Dba.IkStop _ -> false
-  | Dba.IkAssume _ | Dba.IkAssert _
-  | Dba.IkNondetAssume _ | Dba.IkMalloc _
-  | Dba.IkFree _ | Dba.IkPrint _
-  | Dba.IkAssign _
-  | Dba.IkUndef _
-  | Dba.IkIf _
-  | Dba.IkNondet _
-  | Dba.IkSJump _ -> true
+  | Dba.Instr.DJump _
+  | Dba.Instr.SJump (Dba.JOuter _, _)
+  | Dba.Instr.Stop _ -> false
+  | Dba.Instr.Assume _ | Dba.Instr.Assert _
+  | Dba.Instr.NondetAssume _ | Dba.Instr.Malloc _
+  | Dba.Instr.Free _ | Dba.Instr.Print _
+  | Dba.Instr.Assign _
+  | Dba.Instr.Undef _
+  | Dba.Instr.If _
+  | Dba.Instr.Nondet _
+  | Dba.Instr.SJump _ -> true
 
 
 let to_dba_instruction next_id = function
-  | If (cond, thn) -> Dba_types.Instruction.ite cond thn next_id
-  | Assign (lhs, expr) -> Dba_types.Instruction.assign lhs expr next_id
-  | Undef lhs -> Dba_types.Instruction.undefined lhs next_id
-  | Nondet (lhs, region) -> Dba_types.Instruction.non_deterministic lhs region next_id
-  | SJump (dst, tag) -> Dba_types.Instruction.static_jump dst ~tag
-  | DJump (dst, tag) -> Dba_types.Instruction.dynamic_jump dst ~tag
-  | Stop st -> Dba_types.Instruction.stop (Some st)
+  | If (cond, thn) -> Dba.Instr.ite cond thn next_id
+  | Assign (lhs, expr) -> Dba.Instr.assign lhs expr next_id
+  | Undef lhs -> Dba.Instr.undefined lhs next_id
+  | Nondet (lhs, region) -> Dba.Instr.non_deterministic lhs region next_id
+  | SJump (dst, tag) -> Dba.Instr.static_jump dst ~tag
+  | DJump (dst, tag) -> Dba.Instr.dynamic_jump dst ~tag
+  | Stop st -> Dba.Instr.stop (Some st)
 
 (* [block_addr] is the physical address of the current DBA block.
    [next_addr] is where the next block is in the sequence.
    [instrucitons] is the list of instructions for this block.
 *)
 let blockify next_addr instructions =
-  let end_jump = Dba_types.Instruction.static_jump (Dba.JOuter next_addr) in
+  let end_jump = Dba.Instr.static_jump (Dba.JOuter next_addr) in
   (* The chained list is constructed in reverse order in acc *)
   let rec aux n acc = function
     | [] ->
@@ -87,4 +104,4 @@ let blockify next_addr instructions =
       let id = n + 1 in
       let dba_instr = to_dba_instruction id instr in
       aux id (dba_instr :: acc) instructions
-  in aux 0 [] instructions |> List.rev |> Dba_types.Block.of_list 
+  in aux 0 [] instructions |> List.rev |> Dhunk.of_list

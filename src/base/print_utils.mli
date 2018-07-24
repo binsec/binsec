@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,27 +21,41 @@
 
 (** Extra pretty-printing functions *)
 
+type sformat = (unit,Format.formatter,unit) Pervasives.format
+
+type 'a formatter = Format.formatter -> 'a -> unit
+
 val pp_list :
-  ?pre:string -> ?post:string -> ?sep:string ->
-  (Format.formatter -> 'a -> unit) ->
-  Format.formatter -> 'a list -> unit
+  ?pre:sformat -> ?post:sformat -> ?sep:sformat ->
+  'a formatter -> 'a list formatter
+(** [pp_list ~pre ~post ~sep pp_e ppf l] pretty-prints list [l] between opening
+    formatting indication [pre] and closing formatting indication [post] using
+    pretty-printer [pp_e] to print its elements, separating by formatting
+    indication [sep].
 
-val pp_as_string : ('a -> string) -> Format.formatter -> 'a -> unit
+    Default values are:
+    - the empty string formatting indication for [pre] and [post]
+    - ";" for [sep]
+*)
 
-val pp_opt_as_string : ('a -> string) -> Format.formatter -> 'a option -> unit
+val pp_as_string : ('a -> string) -> 'a formatter
+(** [pp_as_string f ppf v] *)
 
-val pp_opt :
-  (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a option -> unit
+val pp_opt_as_string : ('a -> string) -> 'a option formatter
 
-val string_from_pp : (Format.formatter -> 'a -> unit) -> 'a -> string
+val pp_opt : 'a formatter -> 'a option formatter
 
-val pp_dba_prelude : ?flat_memory:bool -> Format.formatter -> unit -> unit 
+val string_from_pp : 'a formatter -> 'a -> string
+(** [string_from_pp pp v] renders value [v] as string according to its
+    pretty-printer [pp] *)
 
-val pp_byte : ?prefixed:bool -> Format.formatter -> int -> unit
+val pp_dba_prelude : ?flat_memory:bool -> unit formatter
+
+val pp_byte : ?prefixed:bool -> int formatter
 (** [pp_byte prefixed ppf by] prints as hexadecimal byte [by] into [ppf]
     If [prefixed] is [true] (default) it also prepends "0x".
     This function assumes that [by] is between 0 ad 255.
- *)
+*)
 
 val pp_to_file :
-  filename:string -> (Format.formatter -> 'a -> unit) -> 'a -> unit 
+  filename:string -> 'a formatter -> 'a -> unit

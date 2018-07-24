@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -400,6 +400,14 @@ struct
   let size (_,s) = { raw = s.size_of_raw_data; virt = s.virtual_size }
 
   let header (_,s) = s
+  let has_flag f s =
+    let mask =
+      match f with
+      | Write -> 0x80000000
+      | Read -> 0x40000000
+      | Exec -> 0x20000000
+    in
+    (flag s) land mask = mask
 
 end
 
@@ -463,15 +471,15 @@ let find_section_by_addr_with_cache optional sections addr =
 let read_address ((_,o),s,_,b) addr =
   match find_section_by_addr_with_cache o s addr with
   | None ->
-     let msg = Format.sprintf "Unreachable virtual address %x" addr in
-     invalid_arg msg
+    let msg = Format.sprintf "Unreachable virtual address %x" addr in
+    invalid_arg msg
   | Some (s:section) ->
     let offset = addr - (rebase o s.virtual_address) in
     if offset >= s.size_of_raw_data then 0
     else b.{offset + s.pointer_to_raw_data}
 
 let write_address _ _ _ = assert false
-                        
+
 module Offset = Loader_buf.Make
     (struct
       type t = Img.t

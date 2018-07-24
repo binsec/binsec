@@ -1,7 +1,7 @@
 /**************************************************************************/
-/*  This file is part of Binsec.                                          */
+/*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2017                                               */
+/*  Copyright (C) 2016-2018                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -22,6 +22,7 @@
 %{
   open Dba
   open Policy_type
+  open Kernel_options
 
   let infer_size_variable (name:string): int =
     match name with
@@ -33,44 +34,45 @@
     | "dtemp" -> 64
     |  _ -> failwith "Unknown variable"
 
-  let infer_variable_lhs (name:string): lhs =
+  let infer_variable_lhs (name:string): LValue.t =
+    let open Dba.LValue in
+    let open Size.Bit in
     let first_char = String.get name 0 in
     if first_char = '_' || first_char =  '?' ||  first_char  = '!' then
-      if first_char = '_' then
-        Dba.LhsVar("*", 0, None)
-      else
-        Dba.LhsVar(name,0, None)
+      let name = if first_char = '_' then "*" else name in
+      var name ~bitsize:(Size.Bit.create 0) None
     else
+      let reg name = var name ~bitsize:bits32 None in
       match name with
-      | "al" -> Dba.LhsVarRestrict ("al", 32, 0, 7)
-      | "ah" -> Dba.LhsVarRestrict ("al", 32, 8, 15)
-      | "ax" -> Dba.LhsVarRestrict ("al", 32, 0, 15)
-      | "eax" -> Dba.LhsVar ("eax", 32, None)
-      | "bl" -> Dba.LhsVarRestrict ("bl", 32, 0, 7)
-      | "bh" -> Dba.LhsVarRestrict ("bh", 32, 8, 15)
-      | "bx" -> Dba.LhsVarRestrict ("bx", 32, 0, 15)
-      | "ebx" -> Dba.LhsVar ("ebx", 32, None)
-      | "cl" -> Dba.LhsVarRestrict ("cl", 32, 0, 7)
-      | "ch" -> Dba.LhsVarRestrict ("ch", 32, 8, 15)
-      | "cx" -> Dba.LhsVarRestrict ("cx", 32, 0, 15)
-      | "ecx" -> Dba.LhsVar ("ecx", 32, None)
-      | "dl" -> Dba.LhsVarRestrict ("dl", 32, 0, 7)
-      | "dh" -> Dba.LhsVarRestrict ("dh", 32, 8, 15)
-      | "dx" -> Dba.LhsVarRestrict ("dx", 32, 0, 15)
-      | "edx" -> Dba.LhsVar ("edx", 32, None)
-      | "di" -> Dba.LhsVarRestrict ("di", 32, 0, 15)
-      | "edi" -> Dba.LhsVar ("edi", 32, None)
-      | "si" -> Dba.LhsVarRestrict ("si", 32, 0, 15)
-      | "esi" -> Dba.LhsVar ("esi", 32, None)
-      | "bp" -> Dba.LhsVarRestrict ("bp", 32, 0, 15)
-      | "ebp" -> Dba.LhsVar ("ebp", 32, None)
-      | "sp" -> Dba.LhsVarRestrict ("sp", 32, 0, 15)
-      | "esp" -> Dba.LhsVar ("esp", 32, None)
-      | "btemp" -> Dba.LhsVar ("btemp", 8, None)
-      | "stemp" -> Dba.LhsVar ("stemp", 16, None)
-      | "temp" -> Dba.LhsVar ("temp", 32, None)
-      | "dtemp" -> Dba.LhsVar ("dtemp", 64, None)
-      | _ -> (Logger.error "Unknown LHS variable"; raise Parsing.Parse_error)
+      | "al" -> restrict "eax" bits32 0 7
+      | "ah" -> restrict "eax" bits32 8 15
+      | "ax" -> restrict "eax" bits32 0 15
+      | "eax" -> reg "eax"
+      | "bl" -> restrict "ebx" bits32 0 7
+      | "bh" -> restrict "ebx" bits32 8 15
+      | "bx" -> restrict "ebx" bits32 0 15
+      | "ebx" -> reg "ebx"
+      | "cl" -> restrict "ecx" bits32 0 7
+      | "ch" -> restrict "ecx" bits32 8 15
+      | "cx" -> restrict "ecx" bits32 0 15
+      | "ecx" -> reg "ecx"
+      | "dl" -> restrict "edx" bits32 0 7
+      | "dh" -> restrict "edx" bits32 8 15
+      | "dx" -> restrict "edx" bits32 0 15
+      | "edx" -> reg "edx"
+      | "di"  -> restrict "edi" bits32 0 15
+      | "edi" -> reg "edi"
+      | "si" -> restrict "esi" bits32 0 15
+      | "esi" -> reg "esi"
+      | "bp"  -> restrict "ebp" bits32 0 15
+      | "ebp" -> reg "ebp"
+      | "sp"  -> restrict "esp" bits32 0 15
+      | "esp" -> reg "esp"
+      | "btemp" -> var "btemp" ~bitsize:bits8 None
+      | "stemp" -> var "stemp" ~bitsize:bits16 None
+      | "temp" ->  var "temp"  ~bitsize:bits32 None
+      | "dtemp" -> var "dtemp" ~bitsize:bits64 None
+      | _ -> Logger.error "Unknown LHS variable"; raise Parsing.Parse_error
 
 %}
 
@@ -163,175 +165,170 @@ taint:
 
 
 inst:
-  | lhs ASSIGN expr {
-  let size = Parse_helpers.expr_size $3 in
-  let sizelhs = match $1 with Dba.LhsVar(_,sz,_) | Dba.LhsVarRestrict(_,sz,_,_) | Dba.LhsStore(sz,_,_) -> sz in
+  | lv=lhs; ASSIGN e=expr; {
+  let size = Dba.Expr.size_of e in
+  let sizelhs =
+    match lv with
+    | Dba.LValue.Var(_,sz,_)
+    | Dba.LValue.Restrict(_,sz,_)
+    | Dba.LValue.Store(sz,_,_) -> sz in
   Logger.debug ~level:2 "Lhs:%d | Expr (infered):%d" sizelhs size;
   let lhs =
-    if size != 0 then
-    match $1 with
-    | Dba.LhsVar(_n,sz,_) ->
+    if size <> 0 then
+    match lv with
+    | Dba.LValue.Var(_n, sz, _) ->
       Logger.debug ~level:2 "Var Size:%d" sz;
-      if sz <> size && sz <> 0 then raise Parsing.Parse_error else $1
-    | Dba.LhsVarRestrict(_,sz,l,h) ->
+      if sz <> size && sz <> 0 then raise Parsing.Parse_error else lv
+    | Dba.LValue.Restrict(_,sz, {Interval.lo=l; Interval.hi=h}) ->
       Logger.debug ~level:2 "VarR Size:%d" sz;
-      if size <> h -l + 1 && sz <> 0 then raise Parsing.Parse_error else $1
-    | Dba.LhsStore(sz,en,e) ->
-      Logger.debug ~level:2 "LhsStore Size:%d" sz;
-      if sz = 0 then Dba.LhsStore(size,en,e) else $1
-    else $1
+      if size <> h - l + 1 && sz <> 0 then raise Parsing.Parse_error else lv
+    | Dba.LValue.Store(sz,en,e) ->
+       Logger.debug ~level:2 "LhsStore Size:%d" sz;
+       if sz = 0 then
+         let bytes = Size.Byte.create size in
+         Dba.LValue.store bytes en e
+       else lv
+    else lv
   in
   let exp =
-    if size = 0 && sizelhs != 0 then
-    match $1 with
-    | Dba.LhsVar(_n,sz,_) -> Parse_helpers.patch_expr_size $3 sz
-    | Dba.LhsVarRestrict(_n,_sz,l,h) -> Parse_helpers.patch_expr_size $3 (h-l+1)
-    | Dba.LhsStore(sz,_en,_e) -> if sz != 0 then Parse_helpers.patch_expr_size $3 sz else $3
-    else $3
-  in
-  Dba.IkAssign (lhs, exp, 0)
+    if size = 0 && sizelhs <> 0 then
+    match lv with
+    | Dba.LValue.Var(_n,sz,_) -> Parse_helpers.patch_expr_size e sz
+    | Dba.LValue.Restrict(_n,_sz, {Interval.lo=l; Interval.hi=h}) ->
+    Parse_helpers.patch_expr_size e (h-l+1)
+    | Dba.LValue.Store(sz,_en,_e) ->
+       if sz <> 0 then Parse_helpers.patch_expr_size e sz else e
+    else e
+  in Dba.Instr.assign lhs exp 0
   }
-  | NEXT expr { Dba.IkDJump ($2, None) }
-  | IFJUMP cond NEXT expr ELSE NEXT expr {
-    Dba.IkIf ($2, JOuter (Dba_types.Caddress.block_start @@ Bitvector.zeros 32), 0)
+  | NEXT expr { Dba.Instr.dynamic_jump $2 }
+  | IFJUMP c=cond; NEXT expr ELSE NEXT expr {
+    Dba.Instr.ite c
+    (Dba.Jump_target.outer (Dba_types.Caddress.block_start @@ Bitvector.zeros 32)) 0
   }
 (*  | IFJUMP cond NEXT address ELSE NEXT INT {
-   Dba.IkIf ($2, JOuter $4, (int_of_string $7))
+   Dba.Instr.If ($2, JOuter $4, (int_of_string $7))
   }
   | IFJUMP cond NEXT INT ELSE NEXT INT {
-   Dba.IkIf ($2, JInner (int_of_string $4), (int_of_string $7))
+   Dba.Instr.If ($2, JInner (int_of_string $4), (int_of_string $7))
   }
 *)
 
 lhs :
-  | IDENT {
-    let var = infer_variable_lhs $1 in
-    var
+  | v=IDENT { infer_variable_lhs v }
+  | id=IDENT; LBRACE lo=INT; COMMA hi=INT; RBRACE
+  {
+    let off1 = int_of_string lo in
+    let off2 = int_of_string hi in
+    let size = infer_size_variable id |> Size.Bit.create in
+    Dba.LValue.restrict id size off1 off2
   }
-  | IDENT LBRACE INT COMMA INT RBRACE {
-    let off1 = int_of_string $3 in
-    let off2 = int_of_string $5 in
-    let size = infer_size_variable $1 in
-    Dba.LhsVarRestrict ($1, size, off1, off2)
+  | STORELOAD LBRACKET e=expr; sz=ioption(preceded(COMMA, INT)); RBRACKET
+  {
+    let bytesize =
+      match sz with
+      | None -> Size.Byte.create 0
+      | Some v -> Size.Byte.of_string v
+   in Dba.LValue.store bytesize LittleEndian e
   }
-  | STORELOAD LBRACKET expr COMMA INT RBRACKET {
-    let size = int_of_string $5 in Dba.LhsStore (size, LittleEndian, $3)
-  }
-  | STORELOAD LBRACKET expr RBRACKET {
-    Dba.LhsStore (0, LittleEndian, $3)
-  }
-
+;
 
 expr:
   | INT INFER INT SUPER {
     let size = int_of_string $3 in
-    let bigint = (Bigint.big_int_of_string $1) in
+    let bigint = Bigint.big_int_of_string $1 in
     let bv = Bitvector.create bigint size in
-    Dba.ExprCst (`Constant, bv)
+    Dba.Expr.constant bv
   }
   | INT {
-    let bigint = (Bigint.big_int_of_string $1) in
-    Dba.ExprCst (`Constant, Bitvector.create bigint 0)
+    let bigint = Bigint.big_int_of_string $1 in
+    Dba.Expr.constant (Bitvector.create bigint 0)
   }
   | HEXA {
     let s, size = $1 in
     let bigint = Bigint.big_int_of_string s in
     let bv = Bitvector.create bigint size in
-    Dba.ExprCst (`Constant, bv)
+    Dba.Expr.constant bv
   }
   | IDENT {
     let var = Parse_helpers.expr_of_name $1 in
     var
   }
   | STORELOAD LBRACKET expr COMMA INT RBRACKET {
-    let size = int_of_string $5 in
-    Dba.ExprLoad (size, LittleEndian, $3)
+    let size = int_of_string $5 |> Size.Byte.create in
+    Dba.Expr.load size LittleEndian $3
   }
   | STORELOAD LBRACKET expr RBRACKET {
-    Dba.ExprLoad (0, LittleEndian, $3)
+    Dba.Expr.load (Size.Byte.create 0) LittleEndian $3
   }
-  | NOT expr %prec NOT { Dba.ExprUnary (Dba.Not, $2) }
-  | MINUS expr %prec UMINUS { Dba.ExprUnary (Dba.UMinus, $2) }
+  | NOT expr %prec NOT      { Dba.Expr.lognot $2 }
+  | MINUS expr %prec UMINUS { Dba.Expr.uminus $2 }
   | LBRACE expr COMMA INT COMMA INT RBRACE {
     let off1 = int_of_string $4 in
     let off2 = int_of_string $6 in
-    Dba.ExprRestrict ($2, off1, off2)
+    Dba.Expr.restrict off1 off2 $2
   }
   | EXTU expr INT {
     let size = int_of_string $3 in
-    Dba.ExprExtU ($2, size)
+    Dba.Expr.uext size $2
   }
   | EXTS expr INT {
     let size = int_of_string $3 in
-    Dba.ExprExtS ($2, size)
+    Dba.Expr.sext size $2
   }
-  | IFJUMP cond expr ELSE expr { Dba.ExprIte ($2, $3, $5) }
+  | IFJUMP cond expr ELSE expr { Dba.Expr.ite $2 $3 $5 }
   | LPAR expr RPAR { $2 }
-  | expr bin_op expr {
-    let sz1 = Parse_helpers.expr_size $1 in
-    let sz2 = Parse_helpers.expr_size $3 in
-    if (sz1 = 0 && sz2 != 0) || (sz1 != 0 && sz2 = 0) then
-      match $2 with
-      | Dba.ModU | Dba.ModS | Dba.Or | Dba.And | Dba.Xor | Dba.Plus
-      | Dba.Minus | Dba.MultU | Dba.MultS | Dba.DivU | Dba.DivS ->
+  | e1=expr; bop=bin_op; e2=expr;
+  | LPAR e1=expr; bop=bin_op; e2=expr RPAR {
+    let sz1 = Dba.Expr.size_of e1 in
+    let sz2 = Dba.Expr.size_of e2 in
+    if sz1 = 0 && sz2 <> 0 || sz1 <> 0 && sz2 = 0 then
+      match bop with
+      | Dba.Binary_op.ModU | Dba.Binary_op.ModS | Dba.Binary_op.Or
+        | Dba.Binary_op.And | Dba.Binary_op.Xor | Dba.Binary_op.Plus
+        | Dba.Binary_op.Minus | Dba.Binary_op.Mult
+        | Dba.Binary_op.DivU | Dba.Binary_op.DivS ->
         if sz1 = 0 then
-          Dba.ExprBinary($2, Parse_helpers.patch_expr_size $1 sz2, $3)
+          Dba.Expr.binary bop (Parse_helpers.patch_expr_size e1 sz2) e2
         else
-          Dba.ExprBinary($2, $1, Parse_helpers.patch_expr_size $3 sz1)
-      | _ -> Dba.ExprBinary ($2, $1, $3)
-    else
-      Dba.ExprBinary ($2, $1, $3)
-  }
-  | LPAR expr bin_op expr RPAR {
-    let sz1 = Parse_helpers.expr_size $2 in
-    let sz2 = Parse_helpers.expr_size $4 in
-    if (sz1 = 0 && sz2 != 0) || (sz1 != 0 && sz2 = 0) then
-      match $3 with
-      | Dba.ModU | Dba.ModS | Dba.Or | Dba.And | Dba.Xor | Dba.Plus
-      | Dba.Minus | Dba.MultU | Dba.MultS | Dba.DivU | Dba.DivS ->
-        if sz1 = 0 then
-          Dba.ExprBinary($3, Parse_helpers.patch_expr_size $2 sz2, $4)
-        else
-          Dba.ExprBinary($3, $2, Parse_helpers.patch_expr_size $4 sz1)
-      | _ -> Dba.ExprBinary ($3, $2, $4)
-    else
-      Dba.ExprBinary ($3, $2, $4)
+          Dba.Expr.binary bop e1 (Parse_helpers.patch_expr_size e2 sz1)
+      | _ -> Dba.Expr.binary bop e1 e2
+    else Dba.Expr.binary bop e1 e2
   }
 
 
 bin_op :
- | MODU { Dba.ModU }
- | MODS { Dba.ModS }
- | OR  { Dba.Or }
- | AND { Dba.And }
- | XOR { Dba.Xor }
- | PLUS { Dba.Plus }
- | MINUS { Dba.Minus }
- | MULTU { Dba.MultU }
- | MULTS { Dba.MultS }
- | DIVU { Dba.DivU }
- | DIVS { Dba.DivS }
+ | MODU { Dba.Binary_op.ModU }
+ | MODS { Dba.Binary_op.ModS }
+ | OR  { Dba.Binary_op.Or }
+ | AND { Dba.Binary_op.And }
+ | XOR { Dba.Binary_op.Xor }
+ | PLUS { Dba.Binary_op.Plus }
+ | MINUS { Dba.Binary_op.Minus }
+ | MULTU { Dba.Binary_op.Mult }
+ | MULTS { Dba.Binary_op.Mult }
+ | DIVU { Dba.Binary_op.DivU }
+ | DIVS { Dba.Binary_op.DivS }
 
- | CONCAT { Dba.Concat }
+ | CONCAT { Dba.Binary_op.Concat }
 
- | EQQ { Dba.Eq }
- | NEQ { Dba.Diff }
- | LEU { Dba.LeqU }
- | LTU { Dba.LtU }
- | GEU { Dba.GeqU }
- | GTU { Dba.GtU }
- | LES { Dba.LeqS }
- | LTS { Dba.LtS }
- | GES { Dba.GeqS }
- | GTS { Dba.GtS }
-
- | LSHIFT  { Dba.LShift }
- | RSHIFTU  { Dba.RShiftU }
- | RSHIFTS   { Dba.RShiftS }
- | LROTATE  { Dba.LeftRotate }
- | RROTATE  { Dba.RightRotate }
+ | EQQ { Dba.Binary_op.Eq }
+ | NEQ { Dba.Binary_op.Diff }
+ | LEU { Dba.Binary_op.LeqU }
+ | LTU { Dba.Binary_op.LtU }
+ | GEU { Dba.Binary_op.GeqU }
+ | GTU { Dba.Binary_op.GtU }
+ | LES { Dba.Binary_op.LeqS }
+ | LTS { Dba.Binary_op.LtS }
+ | GES { Dba.Binary_op.GeqS }
+ | GTS { Dba.Binary_op.GtS }
+ | LSHIFT   { Dba.Binary_op.LShift }
+ | RSHIFTU  { Dba.Binary_op.RShiftU }
+ | RSHIFTS  { Dba.Binary_op.RShiftS }
+ | LROTATE  { Dba.Binary_op.LeftRotate }
+ | RROTATE  { Dba.Binary_op.RightRotate }
 
 cond :
- | TRUE { Dba.True }
- | FALSE { Dba.False }
- | expr { Dba.CondReif $1 }
+ | TRUE    { Dba.Expr.one }
+ | FALSE   { Dba.Expr.zero }
+ | e=expr  { e }

@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -36,4 +36,4 @@ val opcode_to_mnemonic : string -> Instruction_piqi.instr_ident
 (** Dispatch an instruction ident to the right symbolic
     stub *)
 val dispatch_instruction : Instruction_piqi.instr_pol list ->
-  Trace_type.trace_inst -> Path_pred_env.t -> unit
+  Trace_type.trace_inst -> Path_predicate_env.t -> unit

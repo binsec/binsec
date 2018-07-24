@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -44,17 +44,17 @@ struct
   type conf_criteria = string
 
   let init_criteria _c = ()
-  
+
   let verdict trace trace_config =
-    let config = Conf_exploration.build_analysis_configuration trace trace_config in 
+    let config = Conf_exploration.build_analysis_configuration trace trace_config in
     let analyzer = new EipRewrite.eip_rewrite config in
     analyzer#init_entries ();
     ignore(analyzer#compute);
     match analyzer#is_eip_rewrite with
     | true ->
-        Logger.debug "Buffer overflow found !@ Check : ";
-        List.iter (fun x -> Logger.debug "%s " x) (analyzer#get_new_conf_files ());
-        true
+      Logger.debug "Buffer overflow found !@ Check : ";
+      List.iter (fun x -> Logger.debug "%s " x) (analyzer#get_new_conf_files ());
+      true
     | false -> false
 
   (* we explore all execution paths, so stop criteria is always false *)

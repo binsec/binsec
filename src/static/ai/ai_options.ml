@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,33 +19,37 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module Domain = struct
-  type t =
+type domain =
     | TaintedKset
     | Kset
     | Interval
 
-  let values = ["kset"; "interval"; "taintedkset"]
-
-  let set, get =
-    let dom = ref Kset in
-    (fun d -> dom := d),
-    (fun () -> !dom)
-
-  let of_string s = 
-    match String.lowercase s with
-    | "kset" -> Kset
-    | "interval" -> Interval
-    | "taintedkset" -> TaintedKset
-    | _ -> assert false
-
-  let cli_handler = Arg.Symbol (values, (fun s -> set (of_string s)))
-      
+include Cli.Make(
+struct
+  let shortname = "ai"
+  let name = "Abstract interpretation"
 end
+)
+
+module Domain =
+  Builder.Variant_choice_assoc(
+      struct
+        type t = domain
+        let name = "domain"
+        let default = Kset
+        let doc = "Set domain for abstract interpretation"
+        let assoc_map = [
+            "kset", Kset;
+            "interval", Interval;
+            "taintedkset", TaintedKset;
+          ]
+      end
+    )
+
 
 
 module FailSoftMode =
-  Parameters.Builder.False(struct
+  Builder.False(struct
     let name = "failsoft-mode"
     let doc =
       " Allow analysis to switch to unsound mode when stumbling on jump T"
@@ -53,7 +57,7 @@ module FailSoftMode =
 
 
 module X86FlagPatterns =
-  Parameters.Builder.False(
+  Builder.False(
   struct
     let name = "x86-flag-patterns"
     let doc =
@@ -63,9 +67,35 @@ module X86FlagPatterns =
 
 
 module KSetSize =
-  Parameters.Builder.Integer(struct
+  Builder.Integer(struct
     let default = 100
     let name = "kmax"
     let doc = " Sets maximum kset cardinality (use with -abs-domain kset)"
   end
   )
+
+let time_simpl = ref 0.
+let time_disas = ref 0.
+let time_nat_flag_recovery = ref 0.
+let nb_conditional_cache_uses = ref 0
+let nb_recovered_nat_predicates = ref 0
+let nb_nat_predicate_recovery_tries = ref 0
+let nb_failed_nat_predicate_recoveries = ref 0
+let finalsize = ref 0
+let initsize = ref 0
+let itemps = ref 0
+let iflags = ref 0
+let ftemps = ref 0
+let fflags = ref 0
+(* --------------- *)
+
+
+(* Static analysis options *)
+let nb_equalities_names = ref 0
+let nb_equalities_classes = ref 0
+let time_analysis = ref 0.
+let time_equalities = ref 0.
+let time_redundant_evals = ref 0.
+let nb_equalities_refinement = ref 0
+let nb_refined_lhs = ref 0
+(* ------- *)

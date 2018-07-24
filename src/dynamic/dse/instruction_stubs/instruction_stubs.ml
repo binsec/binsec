@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,13 +22,12 @@
 open Trace_type
 open Instruction_piqi
 
-let opcode_to_mnemonic opc =
-  match opc with
+let opcode_to_mnemonic = function
   | "\x0f\xa2" -> `cpuid
   | _ -> `invalid_inst
 
-
-let dispatch_instruction (_:instr_pol list) (instr:trace_inst) (_:Path_pred_env.t): unit =
-  match  opcode_to_mnemonic instr.opcode with
+let dispatch_instruction (_:instr_pol list) instr _ =
+  match opcode_to_mnemonic instr.mnemonic with
   | `cpuid -> ()
-  | `invalid_inst -> Logger.warning ~level:2 "Undecoded instr ignored (no policy for it)"
+  | `invalid_inst ->
+    Logger.warning ~level:2 "Undecoded instr ignored (no policy for it)"

@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,8 +20,9 @@
 (**************************************************************************)
 
 let simplify_dba inst_map =
-  if !Disasm_options.simpl
-  then
+  match Disasm_options.Simplification.get () with
+  | Disasm_options.No_simplification -> inst_map
+  | _ ->
     begin
       let simplify () =
         Simplification_dba_prog.remove_mustkill_lfp inst_map |>
@@ -31,15 +32,13 @@ let simplify_dba inst_map =
       Logger.debug "Starting DBA simplification ...";
       let initsize, _initgoto, itemps, iflags =
         Simplification_dba_utils.statistics inst_map in
-      Options.initsize := !Options.initsize + initsize;
-      Options.itemps := !Options.itemps + itemps;
-      Options.iflags := !Options.iflags + iflags;
+      Ai_options.initsize := !Ai_options.initsize + initsize;
+      Ai_options.itemps := !Ai_options.itemps + itemps;
+      Ai_options.iflags := !Ai_options.iflags + iflags;
       let t, res = Utils.time simplify in
-      if !Options.display_statistics &&
+      if Simplification_options.Display_statistics.get () &&
          not (Dba_types.Caddress.Map.is_empty res) then
         Logger.info "%a"
           (Simplification_dba_utils.display_results res) t;
       res
     end
-  else
-    inst_map

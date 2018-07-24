@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,7 +20,7 @@
 (**************************************************************************)
 
 module L = Llvm
-let ctx = L.global_context();;  
+let ctx = L.global_context();;
 
 type 'a llvm_state = {
   llcontext: L.llcontext;
@@ -34,7 +34,7 @@ module StringHashtbl = Hashtbl.Make(struct
     include String;;
     let equal s1 s2 = compare s1 s2 = 0 ;;
     let hash = Hashtbl.hash
-  end 
+  end
   )
 type llvm_registers = L.llvalue StringHashtbl.t
 type other = {
@@ -63,7 +63,7 @@ module Binary = struct
 
   let ar2 f = fun ~size a b (llst:other llvm_state) ->
     let _ = size in (f a b "" llst.llbuilder, llst)
-  
+
   let blshr  = ar2 L.build_lshr
   let bashr  = ar2 L.build_ashr
   let bshl = ar2 L.build_shl
@@ -80,7 +80,7 @@ module Binary = struct
     let newtype = L.integer_type  llst.llcontext size in
     L.build_sext a newtype "" llst.llbuilder, llst
 
-  
+
   let bxor = ar2 L.build_xor
   let bor = ar2 L.build_or
   let band = ar2 L.build_and
@@ -111,7 +111,7 @@ module Binary = struct
   let bpred _x = fun ~size a b llst ->
     let _ = size in
     (L.build_icmp L.Icmp.Eq a b "" llst.llbuilder,llst)
-  
+
   let biult = bpred L.Icmp.Ult
   let biule = bpred L.Icmp.Ule
   let bislt = bpred L.Icmp.Slt
@@ -140,13 +140,13 @@ module LLVM_Decoder = struct
     (* TODO: Make sure that endianness matches the one of LLVM. *)
     let load ~size _endianness address llst =
       let to_type = L.pointer_type @@ L.integer_type llst.llcontext size in
-      let address = L.build_pointercast address to_type "" llst.llbuilder in      
+      let address = L.build_pointercast address to_type "" llst.llbuilder in
       L.build_load address "" llst.llbuilder, llst
     ;;
 
     let store ~size _endianness address value llst =
       let to_type = L.pointer_type @@ L.integer_type llst.llcontext size in
-      let address = L.build_pointercast address to_type "" llst.llbuilder in      
+      let address = L.build_pointercast address to_type "" llst.llbuilder in
       ignore @@ L.build_store address value llst.llbuilder;
       llst
     ;;
@@ -188,7 +188,7 @@ module LLVM_Decoder = struct
     let undef = unknown
 
   end
-  
+
   module Decode_Instr = Generic_decoder.Decode_Instr(Arg)
 
 end
@@ -209,7 +209,7 @@ module Jump_Target = struct
   let hash = function
     | Dynamic _x -> 1
     | Static x -> 2 + Hashtbl.hash x
-  
+
 end
 
 module Jump_Target_Hash = Hashtbl.Make(Jump_Target)
@@ -217,29 +217,27 @@ module Jump_Target_Hash = Hashtbl.Make(Jump_Target)
 open Generic_decoder_sig;;
 open Dba;;
 
-module IdHash = Hashtbl.Make(struct let hash = Hashtbl.hash let equal = (==) type t = int end)
-
 let get_jump_target jump_target_hash llst entry_block target =
-    try Jump_Target_Hash.find jump_target_hash target
-    with Not_found ->
-      let name =
-        match target with
-        | Dynamic _ -> "dynamic"
-        | Static(JInner id) -> "label" ^ (string_of_int id)
-        | Static(JOuter address) -> Format.asprintf "address%a" Dba_types.Caddress.pp_base address
-      in
-      let block = L.insert_block llst.llcontext name entry_block in
-      begin match target with
-        | Static(JInner _) -> ()
-        | _ ->
-          let builder = L.builder_at_end llst.llcontext block in
-          let _ = L.build_ret_void builder in
-          ()
-      end;
-      Jump_Target_Hash.replace jump_target_hash target block;
-      block
+  try Jump_Target_Hash.find jump_target_hash target
+  with Not_found ->
+    let name =
+      match target with
+      | Dynamic _ -> "dynamic"
+      | Static(JInner id) -> "label" ^ (string_of_int id)
+      | Static(JOuter address) -> Format.asprintf "address%a" Dba_types.Caddress.pp_base address
+    in
+    let block = L.insert_block llst.llcontext name entry_block in
+    begin match target with
+      | Static(JInner _) -> ()
+      | _ ->
+        let builder = L.builder_at_end llst.llcontext block in
+        let _ = L.build_ret_void builder in
+        ()
+    end;
+    Jump_Target_Hash.replace jump_target_hash target block;
+    block
 ;;
-  
+
 let decode_dba block =
   let llcontext = L.global_context() in
   let llmodule = L.create_module ctx "mymodule" in
@@ -271,7 +269,7 @@ let decode_dba block =
     ()
   end;
 
-  Dba_types.Block.iteri (fun id inst ->
+  Dhunk.iteri ~f:(fun id inst ->
       let llblock = get_jump_target (Static(JInner id)) in
       let llbuilder = L.builder_at_end llst.llcontext llblock in
       let llst = { llst with llbuilder } in

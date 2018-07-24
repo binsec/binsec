@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,14 +20,13 @@
 (**************************************************************************)
 
 open Path_predicate
-open Path_pred_env
+open Path_predicate_env
 open Config_piqi
 open Trace_type
-open Smtlib2print
+open Formula_pp
 open Decode_utils
 open Configuration
-open Options
-open Smtlib2
+open Formula
 
 open Analysis_config_piqi
 open Specific_parameters_t
@@ -36,7 +35,7 @@ open Standard_analysis
 
 
 let compare_st e1 e2 = if e1 = e2 then 0 else -1
-  
+
 module StatusSet = Set.Make (struct type t = callret_analysis_results_callret_status let compare = compare_st end)
 
 type labels = (* Violable | *) Aligned | Disaligned | Can_Return | Single | Multiple | Strong | Weak | Solver_Wrong | No_Call | Has_Returned
@@ -100,16 +99,16 @@ let status_to_final addr_st cnt_st is_egal additional_st: callret_analysis_resul
   match cnt_st with
   | `sat ->
     begin match addr_st with
-    | `sat -> st, [](* lbs *)
-    | `valid -> st, [Aligned] (* List.rev (Aligned::lbs) *)
-    | `unsat -> st, [Disaligned](* List.rev (Disaligned::lbs) *)
-    | `unknown -> st, []
+      | `sat -> st, [](* lbs *)
+      | `valid -> st, [Aligned] (* List.rev (Aligned::lbs) *)
+      | `unsat -> st, [Disaligned](* List.rev (Disaligned::lbs) *)
+      | `unknown -> st, []
     end
   | `valid ->
     begin match addr_st with
-    | `unknown | `sat -> `ok, []
-    | `valid -> `ok, [Strong; Aligned]
-    | `unsat -> `ok, [Weak; Disaligned]
+      | `unknown | `sat -> `ok, []
+      | `valid -> `ok, [Strong; Aligned]
+      | `unsat -> `ok, [Weak; Disaligned]
     end
   | `unsat ->
     if is_egal then
@@ -117,9 +116,9 @@ let status_to_final addr_st cnt_st is_egal additional_st: callret_analysis_resul
     else
       let card = match additional_st with | SAT -> [(*MULTIPLE*)] | UNSAT -> [Single] | _ -> [] in
       begin match addr_st with
-      | `unknown | `sat -> `viol, card
-      | `valid -> `viol, Aligned::card
-      | `unsat -> `viol, Strong::Disaligned::card
+        | `unknown | `sat -> `viol, card
+        | `valid -> `viol, Aligned::card
+        | `unsat -> `viol, Strong::Disaligned::card
       end
   | `unknown -> st, []
 
@@ -134,7 +133,7 @@ type ret_status = {
   returnsite: int64;
 }
 
-class callret_analyzer (input_config:Options.trace_analysis_config) =
+class callret_analyzer (input_config:Trace_config.t) =
   object(self) inherit dse_analysis input_config
 
     val mutable results = default_callret_analysis_results ()
@@ -153,6 +152,7 @@ class callret_analyzer (input_config:Options.trace_analysis_config) =
       name
 
     method! private pre_execution _ =
+      let open Trace_config in
       match input_config.configuration.additional_parameters with
       | None -> ()
       | Some params ->
@@ -166,43 +166,50 @@ class callret_analyzer (input_config:Options.trace_analysis_config) =
 
     method private next_is_jmp_not_traced (key:int): bool =
       let trace_instrs = trace.Trace_type.instrs in
-      InstrMap.mem (key+1) trace_instrs
+      InstrMap.mem (key + 1) trace_instrs
       &&
       let next_i = InstrMap.find (key+1) trace_instrs in
       match next_i.Trace_type.dbainstrs with
-      | { Dba_types.Statement.location = _; instruction = Dba.IkDJump(_, None) } :: _ ->
+      | { Dba_types.Statement.location = _; instruction = Dba.Instr.DJump(_, None) } :: _ ->
         not (is_traced next_i.Trace_type.concrete_infos)
       | _ :: _ | [] -> false
 
     method! private visit_dbainstr_before (key:int) (tr_inst:trace_inst)
-        (dba_inst:Dba_types.Statement.t) (env:Path_pred_env.t): trace_visit_action =
+        (dba_inst:Dba_types.Statement.t) (env:Path_predicate_env.t): trace_visit_action =
       let addr = tr_inst.location in
       match Dba_types.Statement.instruction dba_inst with
-      | Dba.IkSJump(_, Some(Dba.Call(_)))
-      | Dba.IkDJump(_, Some(Dba.Call(_))) ->
+      | Dba.Instr.SJump(_, Some(Dba.Call(_)))
+      | Dba.Instr.DJump(_, Some(Dba.Call(_))) ->
         if is_traced tr_inst.concrete_infos && not(self#next_is_jmp_not_traced key) then
-          let returnsite = get_store_content tr_inst.concrete_infos |> string_to_big_int |> Bigint.int64_of_big_int in
+          let returnsite =
+            get_store_content tr_inst.concrete_infos
+            |> string_to_big_int
+            |> Bigint.int64_of_big_int in
           let wit_addr = self#fresh_witness_name () in
-          let addr_e = Dba.ExprVar("esp",32, None) in
+          let addr_e = Dba.Expr.var "esp" 32 None in
           self#add_witness_variable wit_addr addr_e env;
           let wit_cnt = self#fresh_witness_name () in
-          let cnt_e = Dba.ExprLoad(4, Dba.LittleEndian, Dba.ExprVar("esp",32, None)) in
+          let cnt_e =
+            Dba.Expr.load (Size.Byte.create 4)
+              Dba.LittleEndian addr_e in
           self#add_witness_variable wit_cnt cnt_e env;
-          call_stack <- (key, addr, wit_addr, wit_cnt, returnsite)::call_stack;
+          call_stack <- (key, addr, wit_addr, wit_cnt, returnsite) :: call_stack;
           DoExec
         else
           DoExec
-      | Dba.IkDJump(e, Some(Dba.Return)) ->
+      | Dba.Instr.DJump(e, Some(Dba.Return)) ->
         let already_matched = Hashtbl.mem addr_matched addr in
         if  (not(uniq_match) && ((not(target_exists) && target_addr=0L) || (target_exists && target_addr=addr))) ||
             ((not(already_matched) && uniq_match) &&
-              ((target_exists && target_addr = addr) || (not(target_exists) && target_addr =0L))) then
+             ((target_exists && target_addr = addr) || (not(target_exists) && target_addr =0L))) then
           let ret_value = self#concretize_expr_bv e env in
           begin match call_stack with
             | [] ->
               Logger.warning "Nothing in call stack";
               let f = self#build_address_comparison_predicate e ret_value env in
-              let res,_,_ = self#solve_predicate (SmtNot(f)) ~push:true ~pop:false ~prek:25 env in
+              let res,_,_ =
+                self#solve_predicate (mk_bl_not f) ~push:true ~pop:false ~prek:25 env
+              in
               let labels = match res with | UNSAT -> [No_Call; Single] | _ -> [No_Call] in
               self#update_result addr `viol labels None (Bitvector.value_of ret_value |> Bigint.int64_of_big_int);
               Logger.result "#%d Ret:0x%Lx [-,-,-] (v:-, k:-) -> %a: [%s]" key addr pp_viol `viol (labels_to_s labels);
@@ -218,29 +225,31 @@ class callret_analyzer (input_config:Options.trace_analysis_config) =
         else
           (if call_stack <> [] then call_stack <- List.tl call_stack;
            DoExec)
-      | Dba.IkSJump(_,None) when not(is_traced tr_inst.concrete_infos) -> (* Static jump not traced is tail call *)
-        Logger.warning "Tail call detected #%d at:0x%Lx %s" key tr_inst.location tr_inst.opcode;
+      | Dba.Instr.SJump(_,None) when not(is_traced tr_inst.concrete_infos) -> (* Static jump not traced is tail call *)
+        Logger.warning "Tail call detected #%d at:0x%Lx %s" key tr_inst.location tr_inst.mnemonic;
         if call_stack <> [] then call_stack <- List.tl call_stack; (* Pop the last call *)
         DoExec
       | _ -> DoExec
 
     method private solve_violation (key:int) (addr:int64) (witness_addr:string) (witness_cnt:string) (ok:bool) (k_val:int)
-      (e:Dba.expr) (call_addr:int64) (ret_value:Bitvector.t) (env:Path_pred_env.t): unit =
-      let k_val = if !Options.experiment then -1 else k_val in
+        (e:Dba.Expr.t) (call_addr:int64) (ret_value:Bitvector.t) (env:Path_predicate_env.t): unit =
+      let k_val = if Kernel_options.Experimental.get () then -1 else k_val in
       match e with
-      | Dba.ExprLoad(_, _, e_addr) ->
+      | Dba.Expr.Load(_, _, e_addr) ->
         let f_addr =
-          self#build_witness_expr_comparison_predicate witness_addr env.addr_size e_addr env in
+          self#build_witness_expr_comparison_predicate
+            witness_addr env.formula.addr_size e_addr env in
         let f_cnt =
-          self#build_witness_expr_comparison_predicate witness_cnt env.addr_size e env in
-        (* let name = Printf.sprintf "/tmp/%d" key in *)
-        let res_addr,_,_ = self#solve_predicate f_addr (* ~name:(name^"_step1.smt2") *) ~push:true ~pop:true ~prek:k_val env in
+          self#build_witness_expr_comparison_predicate
+            witness_cnt env.formula.addr_size e env in
+        let res_addr,_,_ =
+          self#solve_predicate f_addr  ~push:true ~pop:true ~prek:k_val env in
         let res_addr2,_,_ =
-          self#solve_predicate (SmtNot(f_addr)) (* ~name:(name^"_step1.smt2") *) ~push:true ~pop:true ~prek:k_val env in
+          self#solve_predicate (mk_bl_not f_addr)  ~push:true ~pop:true ~prek:k_val env in
         let res_cnt,_,_ =
-          self#solve_predicate f_cnt (* ~name:(name^"_step2.smt2") *) ~push:true ~pop:true ~prek:k_val env in
+          self#solve_predicate f_cnt  ~push:true ~pop:true ~prek:k_val env in
         let res_cnt2,_,_ =
-          self#solve_predicate (SmtNot(f_cnt)) (* ~name:(name^"_step2.smt2") *) ~push:true ~pop:true ~prek:k_val env in
+          self#solve_predicate (mk_bl_not f_cnt)  ~push:true ~pop:true ~prek:k_val env in
         let addr_status = smt_res_to_e res_addr res_addr2 in
         let cnt_status = smt_res_to_e res_cnt res_cnt2 in
         let res_additional =
@@ -248,7 +257,7 @@ class callret_analyzer (input_config:Options.trace_analysis_config) =
           | UNSAT ->
             let f = self#build_address_comparison_predicate e ret_value env in
             let res,_,_ =
-              self#solve_predicate (SmtNot f) (* ~name:(name^"_step3.smt2") *) ~push:true ~pop:false ~prek:k_val env in res
+              self#solve_predicate (mk_bl_not f) ~push:true ~pop:false ~prek:k_val env in res
           | _ -> UNKNOWN
         in
         let final_st, labels = status_to_final addr_status cnt_status ok res_additional in
@@ -256,7 +265,7 @@ class callret_analyzer (input_config:Options.trace_analysis_config) =
         let ret_i64 = Bitvector.value_of ret_value |> Bigint.int64_of_big_int in
         let _ = self#update_result addr final_st labels (Some(call_addr)) ret_i64 in
         Logger.result "#%d Ret:0x%Lx [%a,%a,%a] (v:%b, k:%d) -> %a:%s"
-          key addr pp_smt_e addr_status pp_smt_e cnt_status pp_smt_result
+          key addr pp_smt_e addr_status pp_smt_e cnt_status pp_status
           res_additional (not ok) k_val pp_viol final_st label_s;
       | _ -> Logger.error "Ret not of the expected form !"
 
@@ -282,50 +291,50 @@ class callret_analyzer (input_config:Options.trace_analysis_config) =
         | lb::tl ->
           let _already_in = LabelSet.mem lb lbset in
           let newset =
-          match lb with
-          (* | Violable -> if acc_st = `ok && new_st = `ok then LabelSet.add lb lbset else lbset *)
-          | Aligned -> if LabelSet.mem Disaligned lbset then LabelSet.remove Disaligned lbset else LabelSet.add lb lbset
-          | Disaligned -> if LabelSet.mem Aligned lbset then LabelSet.remove Aligned lbset else LabelSet.add lb lbset
-          | Can_Return -> LabelSet.add lb lbset
-          | Single -> if LabelSet.mem Multiple lbset then LabelSet.remove Multiple lbset else LabelSet.add lb lbset
-          | Multiple -> if LabelSet.mem Single lbset then LabelSet.remove Single lbset else LabelSet.add lb lbset
-          | Strong -> if LabelSet.mem Weak lbset then LabelSet.remove Weak lbset else LabelSet.add lb lbset
-          | Weak -> if LabelSet.mem Strong lbset then LabelSet.remove Strong lbset else LabelSet.add lb lbset
-          | Solver_Wrong -> if acc_st <> new_st then lbset else LabelSet.add lb lbset
-          | No_Call -> if acc_st = `viol && not(LabelSet.mem No_Call lbset) then lbset else LabelSet.add lb lbset
-          | Has_Returned -> LabelSet.add lb (LabelSet.remove Can_Return lbset)
+            match lb with
+            (* | Violable -> if acc_st = `ok && new_st = `ok then LabelSet.add lb lbset else lbset *)
+            | Aligned -> if LabelSet.mem Disaligned lbset then LabelSet.remove Disaligned lbset else LabelSet.add lb lbset
+            | Disaligned -> if LabelSet.mem Aligned lbset then LabelSet.remove Aligned lbset else LabelSet.add lb lbset
+            | Can_Return -> LabelSet.add lb lbset
+            | Single -> if LabelSet.mem Multiple lbset then LabelSet.remove Multiple lbset else LabelSet.add lb lbset
+            | Multiple -> if LabelSet.mem Single lbset then LabelSet.remove Single lbset else LabelSet.add lb lbset
+            | Strong -> if LabelSet.mem Weak lbset then LabelSet.remove Weak lbset else LabelSet.add lb lbset
+            | Weak -> if LabelSet.mem Strong lbset then LabelSet.remove Strong lbset else LabelSet.add lb lbset
+            | Solver_Wrong -> if acc_st <> new_st then lbset else LabelSet.add lb lbset
+            | No_Call -> if acc_st = `viol && not(LabelSet.mem No_Call lbset) then lbset else LabelSet.add lb lbset
+            | Has_Returned -> LabelSet.add lb (LabelSet.remove Can_Return lbset)
           in
           merge_labels acc_st new_st newset tl
       in
       let consolidate_status (st, lbset) ret =
-      if is_wrong ret then
-        (st, lbset)
-      else
-        match st, ret.status with
-        | `ok, `viol ->
-          ret.status, LabelSet.of_list ret.labels |> LabelSet.remove Can_Return |> LabelSet.add Has_Returned  (* Delete all previous labels *)
-        | `viol, `ok ->
-          st, LabelSet.add Has_Returned lbset             (* Ignore all labels of the current *)
-        | `ok, `ok | `viol, `viol ->
-          st, merge_labels st ret.status lbset ret.labels
+        if is_wrong ret then
+          (st, lbset)
+        else
+          match st, ret.status with
+          | `ok, `viol ->
+            ret.status, LabelSet.of_list ret.labels |> LabelSet.remove Can_Return |> LabelSet.add Has_Returned  (* Delete all previous labels *)
+          | `viol, `ok ->
+            st, LabelSet.add Has_Returned lbset             (* Ignore all labels of the current *)
+          | `ok, `ok | `viol, `viol ->
+            st, merge_labels st ret.status lbset ret.labels
       in
       let consolidate_call_addrs rets =
         let final_calls = List.fold_left (fun set ret ->
-          match ret.call_addr with
-          | None -> set
-          | Some(addr) ->
-            try Basic_types.Int64.Map.add addr
-                  (StatusSet.add ret.status
-                     (Basic_types.Int64.Map.find addr set)) set
-            with Not_found ->
-              Basic_types.Int64.Map.add addr
-                (StatusSet.add ret.status StatusSet.empty) set
-            ) Basic_types.Int64.Map.empty rets
+            match ret.call_addr with
+            | None -> set
+            | Some(addr) ->
+              try Basic_types.Int64.Map.add addr
+                    (StatusSet.add ret.status
+                       (Basic_types.Int64.Map.find addr set)) set
+              with Not_found ->
+                Basic_types.Int64.Map.add addr
+                  (StatusSet.add ret.status StatusSet.empty) set
+          ) Basic_types.Int64.Map.empty rets
         in
         Basic_types.Int64.Map.fold (fun addr sts acc ->
             (StatusSet.fold
                (fun st nacc ->
-                 {addr; Callret_analysis_results_call_data.status = st} :: nacc
+                  {addr; Callret_analysis_results_call_data.status = st} :: nacc
                ) sts []) @ acc)
           final_calls []
       in
@@ -357,12 +366,17 @@ class callret_analyzer (input_config:Options.trace_analysis_config) =
     method! private post_execution _ =
       Hashtbl.iter (fun addr st -> self#add_ret_results addr st) ret_map;
       let data = Piqirun.to_string (gen_callret_analysis_results results) in
+      let open Trace_config in
       match input_config.trace_input with
       | Chunked (_,_) ->
         self#print_stats ();
-        let polname = Filename.basename !Options.pol_name |> Filename.chop_extension  in
-        let trace_name = Filename.basename input_config.trace_file |> Filename.chop_extension  in
-        let filename = Printf.sprintf "%s/%s_callret_%s.pb" (Filename.dirname input_config.trace_file) trace_name polname in
+        let polname = Policy_utils.policy_file () in
+        let trace_name =
+          Filename.basename input_config.trace_file
+          |> Filename.chop_extension  in
+        let filename =
+          Printf.sprintf "%s/%s_callret_%s.pb"
+            (Filename.dirname input_config.trace_file) trace_name polname in
         let ic = open_out filename in
         output_string ic data;
         close_out ic;

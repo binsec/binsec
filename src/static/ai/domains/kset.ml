@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -275,9 +275,7 @@ let _csub c ks = addc (neg ks) c
 
 let sub ks1 ks2 = add ks1 (neg ks2)
 
-let umul = apply Region_bitvector.umul
-
-let smul = apply Region_bitvector.smul
+let mul = apply Region_bitvector.mul
 
 let power = apply Region_bitvector.pow
 
@@ -386,14 +384,14 @@ let filter_exists f ks1 ks2 =
   filter (fun elt1 -> exists (fun elt2 -> is_true (f elt1 elt2)) ks2) ks1,
   filter (fun elt1 -> exists (fun elt2 -> is_true (f elt1 elt2)) ks1) ks2
 
-  
+
 let guard op ks1 ks2 =
   let ks_1, ks_2 =
     (match op with
-     | Dba.Eq ->
+     | Dba.Binary_op.Eq ->
        let ks = meet ks1 ks2 in ks, ks
-     | Dba.Diff -> filter_exists Region_bitvector.diff ks1 ks2
-     | Dba.LeqU -> 
+     | Dba.Binary_op.Diff -> filter_exists Region_bitvector.diff ks1 ks2
+     | Dba.Binary_op.LeqU ->
        (filter (fun elt1 ->
             exists (fun elt2 ->
                 let c = (Region_bitvector.leqU elt1 elt2) in
@@ -402,7 +400,7 @@ let guard op ks1 ks2 =
             exists (fun elt2 ->
                 let c = (Region_bitvector.geqU elt1 elt2) in
                 is_true c) ks1) ks2)
-     | Dba.LtU ->
+     | Dba.Binary_op.LtU ->
        (filter (fun elt1 ->
             exists (fun elt2 ->
                 let c = (Region_bitvector.ltU elt1 elt2) in
@@ -411,7 +409,7 @@ let guard op ks1 ks2 =
             exists (fun elt2 ->
                 let c = (Region_bitvector.gtU elt1 elt2) in
                 is_true c) ks1) ks2)
-     | Dba.GeqU ->
+     | Dba.Binary_op.GeqU ->
        (filter (fun elt1 ->
             exists (fun elt2 ->
                 let c = (Region_bitvector.geqU elt1 elt2) in
@@ -420,7 +418,7 @@ let guard op ks1 ks2 =
             exists (fun elt2 ->
                 let c = (Region_bitvector.leqU elt1 elt2) in
                 is_true c) ks1) ks2)
-     | Dba.GtU ->
+     | Dba.Binary_op.GtU ->
        (filter (fun elt1 ->
             exists (fun elt2 ->
                 let c = (Region_bitvector.gtU elt1 elt2) in
@@ -429,7 +427,7 @@ let guard op ks1 ks2 =
             exists (fun elt2 ->
                 let c = (Region_bitvector.ltU elt1 elt2) in
                 is_true c) ks1) ks2)
-     | Dba.LeqS ->
+     | Dba.Binary_op.LeqS ->
        (filter (fun elt1 ->
             exists (fun elt2 ->
                 let c = (Region_bitvector.leqS elt1 elt2) in
@@ -438,7 +436,7 @@ let guard op ks1 ks2 =
             exists (fun elt2 ->
                 let c = (Region_bitvector.geqS elt1 elt2) in
                 is_true c) ks1) ks2)
-     | Dba.LtS ->
+     | Dba.Binary_op.LtS ->
        (filter (fun elt1 ->
             exists (fun elt2 ->
                 let c = (Region_bitvector.ltS elt1 elt2) in
@@ -447,7 +445,7 @@ let guard op ks1 ks2 =
             exists (fun elt2 ->
                 let c = (Region_bitvector.gtS elt1 elt2) in
                 is_true c) ks1) ks2)
-     | Dba.GeqS ->
+     | Dba.Binary_op.GeqS ->
        (filter (fun elt1 ->
             exists (fun elt2 ->
                 let c = (Region_bitvector.geqS elt1 elt2) in
@@ -456,7 +454,7 @@ let guard op ks1 ks2 =
             exists (fun elt2 ->
                 let c = (Region_bitvector.leqS elt1 elt2) in
                 is_true c) ks1) ks2)
-     | Dba.GtS ->
+     | Dba.Binary_op.GtS ->
        (filter (fun elt1 ->
             exists (fun elt2 ->
                 let c = (Region_bitvector.gtS elt1 elt2) in
@@ -493,7 +491,7 @@ let is_true kset assumes glbs =
           | `SymbSmt smb ->
             let e = Region_bitvector.get_expr smb 1 assumes glbs in
             begin match e with
-              | Dba.ExprCst (`Constant, b)
+              | Dba.Expr.Cst (`Constant, b)
                 when Bitvector.size_of b = 1 -> Bitvector.value_of b
               | _ -> raise (Bad_region "Evaluating non cst condition1")
             end
@@ -508,7 +506,7 @@ let is_true kset assumes glbs =
             | `SymbSmt smb ->
               let e = Region_bitvector.get_expr smb 1 assumes glbs in
               begin match e with
-                | Dba.ExprCst (`Constant, b) when Bitvector.size_of b = 1 ->
+                | Dba.Expr.Cst (`Constant, b) when Bitvector.size_of b = 1 ->
                   Bigint.eq_big_int (Bitvector.value_of b) b'
                 | _ -> raise (Bad_region "Evaluating non cst condition3")
               end
@@ -525,7 +523,7 @@ let is_true kset assumes glbs =
   end
 
 
-let to_smt (kset: t) (var: Smtlib2.smt_bv_expr) : Smtlib2.smt_bv_expr list =
+let to_smt (kset: t) (var: Formula.bv_term) : Formula.bl_term list =
   match kset with
     Top _p -> []
   | Proper_kset (_k, set) ->
@@ -533,13 +531,9 @@ let to_smt (kset: t) (var: Smtlib2.smt_bv_expr) : Smtlib2.smt_bv_expr list =
       K_set.fold (fun rbv acc ->
           match rbv with
           | `Value (_r, bv) ->
-            let bv = Smtlib2.SmtBvCst bv in
-            Smtlib2.SmtBvBinary (
-              Smtlib2.SmtBvOr,
-              (Smtlib2.SmtBvBinary (Smtlib2.SmtBvComp, bv, var)),
-              acc)
+            Formula.(mk_bl_or (mk_bv_equal (mk_bv_cst bv) var) acc)
           | _ -> acc
-        ) set (Smtlib2.SmtBvCst (Bitvector.zero))
+        ) set Formula.mk_bl_false
     in
     [expr]
 
@@ -551,7 +545,7 @@ let smt_refine kset env_smt var =
     let set = K_set.filter (fun rbv ->
         match rbv with
         | `Value (_r, bv) ->
-          let cond = Smtlib2print.smtbvexpr_to_string (Smtlib2.SmtBvCst bv) in
+          let cond = Formula_pp.print_bv_term (Formula.mk_bv_cst bv) in
           let conds = Format.asprintf "(assert (= %s %s))@\n" var cond in
           Normalize_instructions.is_sat env_smt conds
         | _ -> true

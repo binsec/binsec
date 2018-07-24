@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,7 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-type zmq_socket = [`Router] ZMQ.Socket.t
+type zmq_socket = [`Router] Zmq.Socket.t
 
 val frontend_socket: zmq_socket ref
 

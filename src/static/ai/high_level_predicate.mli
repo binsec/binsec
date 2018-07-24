@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -26,7 +26,7 @@ type t
 val empty : t
 val bottom : t
 
-val update_flags : Dba.lhs -> Dba.expr -> t -> t
+val update_flags : Dba.LValue.t -> Dba.Expr.t -> t -> t
 
 (** {2 Operations} *)
 val join : t -> t -> t
@@ -36,6 +36,6 @@ val leq : t -> t -> bool
 
 
 val retrieve_comparison :
-  Dba.cond -> t -> Dba.address ->
-  (Dba.cond * Dba.cond) Dba_types.Caddress.Map.t ->
-  Dba.cond * (Dba.cond * Dba.cond) Dba_types.Caddress.Map.t
+  condition:Dba.Expr.t -> t -> Dba.address ->
+  (Dba.Expr.t * Dba.Expr.t) Dba_types.Caddress.Map.t ->
+  Dba.Expr.t * (Dba.Expr.t * Dba.Expr.t) Dba_types.Caddress.Map.t

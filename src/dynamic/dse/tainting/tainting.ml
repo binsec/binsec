@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -37,7 +37,7 @@ class tainting_engine (strat:taint_strategy) =
       current_taint <- TaintInfoSet.add t current_taint
 
     method private is_syscall (instr:trace_inst): bool =
-      instr.opcode = "\xcd\x80"
+      instr.mnemonic = "\xcd\x80"
     (* Might should have sysenter, and calls to windows API *)
 
     method private syscall_taint_stub _ : taint_infos list = []
@@ -68,72 +68,72 @@ class tainting_engine (strat:taint_strategy) =
         else begin
           List.iter (fun dbainst ->
               current_taint <- TaintInfoSet.empty;
-                match Dba_types.Statement.instruction dbainst with
-                | Dba.IkAssign(lhs,e,_) ->
-                  begin
-                    let res_expr = self#expr_to_taint e instr.concrete_infos in
-                    match lhs with
-                    | Dba.LhsVar(name, size, _) ->
-                      begin
+              match Dba_types.Statement.instruction dbainst with
+              | Dba.Instr.Assign(lhs,e,_) ->
+                begin
+                  let res_expr = self#expr_to_taint e instr.concrete_infos in
+                  match lhs with
+                  | Dba.LValue.Var(name, size, _) ->
+                    begin
+                      match res_expr with
+                      | NoTaint -> self#untaint_register name
+                      | _ ->
+                        self#taint_register name (self#tI_to_tP res_expr);
+                        let info =
+                          LhsVar(
+                            name, 0, size - 1,
+                            self#fold_taint (self#tI_to_tP res_expr))
+                        in self#push_infos info
+                    end
+                  | Dba.LValue.Restrict(name, size, {Interval.lo=low; Interval.hi=high}) ->
+                    begin
+                      let t =
                         match res_expr with
-                        | NoTaint -> self#untaint_register name
+                        | NoTaint ->
+                          self#untaint_register name; res_expr
                         | _ ->
-                          self#taint_register name (self#tI_to_tP res_expr);
-                          let info =
-                            LhsVar(
-                              name, 0, size - 1,
-                              self#fold_taint (self#tI_to_tP res_expr))
-                          in self#push_infos info
-                      end
-                    | Dba.LhsVarRestrict(name, size, low, high) ->
-                      begin
-                        let t =
-                          match res_expr with
-                          | NoTaint ->
-                            self#untaint_register name; res_expr
-                          | _ ->
-                            let source_taint = self#get_taint_register name in
-                            let new_taint =
-                              self#restrict_to_mix size low high source_taint res_expr in
-                            self#taint_register name (self#tI_to_tP new_taint);
-                            new_taint
-                        in
-                        self#push_infos (LhsVar(name,low,high,self#fold_taint (self#tI_to_tP t)))
-                      end
-                    | Dba.LhsStore(size, _, expr) ->
-                      begin
-                        let conc_addr = get_store_addr instr.concrete_infos in
-                        let t_addr =
-                          self#expr_to_taint expr instr.concrete_infos in
-                        (match res_expr with
-                         | NoTaint ->
-                           begin
-                             match strat with
-                             | May ->
-                               if Dba_types.Expr.is_symbolic expr
-                               then all_mem_tainted <- false (* should do something else? *)
-                             | Must -> if not (Dba_types.Expr.is_symbolic expr) then
-                                 self#untaint_memory conc_addr size
-                             | MustConc -> self#untaint_memory conc_addr size
-                           end
-                         | _ ->
-                           begin
-                             match strat with
-                             | May ->
-                               if Dba_types.Expr.is_symbolic expr then all_mem_tainted <- true
-                             | Must ->
-                               if not (Dba_types.Expr.is_symbolic expr) then
-                                 self#taint_memory conc_addr size (self#tI_to_tP res_expr)
-                             | MustConc -> self#taint_memory conc_addr size (self#tI_to_tP res_expr)
-                           end);
-                        self#push_infos (Store(self#fold_taint (self#tI_to_tP res_expr)));
-                        self#push_infos (StoreAddr(t_addr))
-                      end
-                  end
-                | Dba.IkDJump(e,_) -> ignore (self#expr_to_taint e instr.concrete_infos)
-                | Dba.IkIf(c,_,_) -> ignore (self#cond_to_taint c instr.concrete_infos)
-                | _ -> (); (* Don't give a f*** of all other instructions *)
-              final_taint <- current_taint::final_taint
+                          let source_taint = self#get_taint_register name in
+                          let new_taint =
+                            self#restrict_to_mix size low high source_taint res_expr in
+                          self#taint_register name (self#tI_to_tP new_taint);
+                          new_taint
+                      in
+                      self#push_infos (LhsVar(name,low,high,self#fold_taint (self#tI_to_tP t)))
+                    end
+                  | Dba.LValue.Store(size, _, expr) ->
+                    begin
+                      let conc_addr = get_store_addr instr.concrete_infos in
+                      let t_addr =
+                        self#expr_to_taint expr instr.concrete_infos in
+                      (match res_expr with
+                       | NoTaint ->
+                         begin
+                           match strat with
+                           | May ->
+                             if Dba_types.Expr.is_symbolic expr
+                             then all_mem_tainted <- false (* should do something else? *)
+                           | Must -> if not (Dba_types.Expr.is_symbolic expr) then
+                               self#untaint_memory conc_addr size
+                           | MustConc -> self#untaint_memory conc_addr size
+                         end
+                       | _ ->
+                         begin
+                           match strat with
+                           | May ->
+                             if Dba_types.Expr.is_symbolic expr then all_mem_tainted <- true
+                           | Must ->
+                             if not (Dba_types.Expr.is_symbolic expr) then
+                               self#taint_memory conc_addr size (self#tI_to_tP res_expr)
+                           | MustConc -> self#taint_memory conc_addr size (self#tI_to_tP res_expr)
+                         end);
+                      self#push_infos (Store(self#fold_taint (self#tI_to_tP res_expr)));
+                      self#push_infos (StoreAddr(t_addr))
+                    end
+                end
+              | Dba.Instr.DJump(e,_) -> ignore (self#expr_to_taint e instr.concrete_infos)
+              | Dba.Instr.If(c,_,_) -> ignore (self#cond_to_taint c instr.concrete_infos)
+              | _ -> (); (* Don't give a f*** of all other instructions *)
+                final_taint <- current_taint::final_taint
             ) instr.dbainstrs;
           List.rev final_taint
         end
@@ -231,9 +231,9 @@ class tainting_engine (strat:taint_strategy) =
     method private at_least_one_byte_tainted (): bool =
       Basic_types.Addr64.Map.exists
         (fun _ v ->
-          match v with
-          | TaintI | TaintP ->  true
-          | _ -> false
+           match v with
+           | TaintI | TaintP ->  true
+           | _ -> false
         ) memory_taint
 
     method is_tainted (t:taint): bool =
@@ -243,13 +243,13 @@ class tainting_engine (strat:taint_strategy) =
       | TaintMix _ -> Logger.debug "is_tainted called on TaintMix\n"; false
       | _ -> false
 
-    method expr_to_taint (e:Dba.expr) (infos:trace_concrete_infos list): taint =
+    method expr_to_taint (e:Dba.Expr.t) (infos:trace_concrete_infos list): taint =
       match e with
-      | Dba.ExprVar(name,size,_) ->
+      | Dba.Expr.Var(name,size,_) ->
         let taint = self#get_taint_register name in
         self#push_infos (Variable(name,0,size-1,taint));
         taint
-      | Dba.ExprLoad(size, _, e) ->
+      | Dba.Expr.Load(size, _, e) ->
         if all_mem_tainted then TaintP
 
         else
@@ -271,16 +271,48 @@ class tainting_engine (strat:taint_strategy) =
           self#push_infos (LoadAddr(taint_addr));
           t
 
-      | Dba.ExprCst(_,_) -> NoTaint
+      | Dba.Expr.Cst(_,_) -> NoTaint
+      | Dba.Expr.Unary((Dba.Unary_op.Uext size | Dba.Unary_op.Sext size), e1) ->
+        let taint = self#expr_to_taint e1 infos in
+        begin
+          match taint with (* The point is should really consider the extension tainted ?? *)
+          | TaintMix l ->
+            let rec aux k t = if k != 0 then t::(aux (k-1) t) else [] in
+            TaintMix (aux (size/8) (List.hd l) @ l)
+          | _ -> taint
+        end
+      | Dba.Expr.Unary(Dba.Unary_op.Restrict
+                         {Interval.lo = low; Interval.hi = high;}, e1) ->
+        let taint =
+          match e1 with
+          | Dba.Expr.Var(name, _,_) -> self#get_taint_register name
+          | _ -> self#expr_to_taint e1 infos in
+        let taint_final =
+          match taint with (* In case of TaintMix try to return only exctracted bytes *)
+          | TaintMix l ->
+            let rec aux k low high =
+              if k >= 0 then
+                if k < high && k >= low then
+                  (List.nth (List.rev l) k)::(aux (k-1) low high)
+                else aux (k-1) low high
+              else []
+            in TaintMix (aux ((List.length l)-1) ((low+1)/8) ((high+1)/8))
+          | _ -> taint
+        in begin
+          match e1 with
+          | Dba.Expr.Var(name,_,_) -> self#push_infos (Variable(name,low,high,taint)); taint
+          | _ -> taint_final
+        end
 
-      | Dba.ExprUnary(_, e1) ->
+
+      | Dba.Expr.Unary(_, e1) ->
         let taint = self#fold_taint (self#expr_to_taint e1 infos) in
         if self#is_tainted taint then (* Consider unary op to preserve taint.. *)
           TaintP
         else
           NoTaint
 
-      | Dba.ExprBinary(_, e1, e2) ->
+      | Dba.Expr.Binary(_, e1, e2) ->
         let t1 = self#fold_taint (self#expr_to_taint e1 infos) in
         let t2 = self#fold_taint (self#expr_to_taint e2 infos) in
         if self#is_tainted t1 || self#is_tainted t2 then
@@ -288,61 +320,17 @@ class tainting_engine (strat:taint_strategy) =
         else
           NoTaint
 
-      | Dba.ExprRestrict(e1, low, high) ->
-        begin
-          let taint = (match e1 with | Dba.ExprVar(name, _,_) -> self#get_taint_register name | _ -> self#expr_to_taint e1 infos) in
-          let taint_final =
-            (match taint with (* In case of TaintMix try to return only exctracted bytes *)
-             | TaintMix(l) ->
-               let rec aux k low high =
-                 if k >= 0 then
-                   if k < high && k >= low then
-                     (List.nth (List.rev l) k)::(aux (k-1) low high)
-                   else aux (k-1) low high
-                 else []
-               in
-               TaintMix(aux ((List.length l)-1) ((low+1)/8) ((high+1)/8))
-             | _ -> taint)
-          in
-          begin
-            match e1 with
-            | Dba.ExprVar(name,_,_) -> self#push_infos (Variable(name,low,high,taint)); taint
-            | _ -> taint_final
-          end
-
-
-        end
-      | Dba.ExprExtU(e1,size) | Dba.ExprExtS(e1,size) ->
-        let taint = self#expr_to_taint e1 infos in
-        begin
-          match taint with (* The point is should really consider the extension tainted ?? *)
-          | TaintMix(l) -> let rec aux k t = if k != 0 then t::(aux (k-1) t) else [] in TaintMix((aux (size/8) (List.hd l))@l)
-          | _ -> taint
-        end
-
-      | Dba.ExprIte(c,e1,e2) -> (* How should we propagate taint ? *)
+      | Dba.Expr.Ite(c,e1,e2) -> (* How should we propagate taint ? *)
         let tc1 = self#cond_to_taint c infos in
         let te1 = self#expr_to_taint e1 infos in
         let te2 = self#expr_to_taint e2 infos in
         if self#is_tainted tc1 && (self#is_tainted te1 || self#is_tainted te2) then TaintP else NoTaint
-      (* For now consider the result if the condition is tainted and at least on of the two memebers *)
-
-      | Dba.ExprAlternative(l,_) -> self#expr_to_taint (List.hd l) infos
+    (* For now consider the result if the condition is tainted and at least on of the two memebers *)
 
 
-    method private cond_to_taint (c:Dba.cond) (infos:trace_concrete_infos list): taint =
-      match c with
-      | Dba.CondReif(e) -> self#expr_to_taint e infos
-      | Dba.CondNot(c1) -> self#cond_to_taint c1 infos
-      | Dba.CondAnd(c1,c2) ->
-        let tc1 = self#cond_to_taint c1 infos in
-        let tc2 = self#cond_to_taint c2 infos in
-        if self#is_tainted tc1 && self#is_tainted tc2 then TaintP else NoTaint
-      | Dba.CondOr(c1,c2) ->
-        let tc1 = self#cond_to_taint c1 infos in
-        let tc2 = self#cond_to_taint c2 infos in
-        if self#is_tainted tc1 || self#is_tainted tc2 then TaintP else NoTaint
-      | Dba.True | Dba.False -> NoTaint
+
+    method private cond_to_taint e (infos:trace_concrete_infos list): taint =
+      self#expr_to_taint e infos
 
     method private print_mem (): unit =
       Basic_types.Addr64.Map.iter (fun k v -> Logger.debug "%Lx:%s " k (taint_to_string v)) memory_taint;

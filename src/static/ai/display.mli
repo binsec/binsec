@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -32,14 +32,14 @@ type message =
   | Unrollings of Dba_types.AddressStack.Map.key
   | Joins of Dba_types.AddressStack.Map.key
   | Equalities of string
-  | Assign of string * Dba.expr * string
-  | Guard of Dba.cond * string * string
+  | Assign of string * Dba.Expr.t * string
+  | Guard of Dba.Expr.t * string * string
   | Call of Dba.address * Dba.address
-  | RemoveEqualities of Dba.lhs * string
-  | Cond of Dba.cond * string
-  | CondNat of Dba.address * Dba.cond * string
-  | CondReplacement of Dba.cond * Dba.expr * Dba.expr * Dba.expr * Dba.expr * string
-  | Predicates of Dba.binary_op list
+  | RemoveEqualities of Dba.LValue.t * string
+  | Cond of Dba.Expr.t * string
+  | CondNat of Dba.address * Dba.Expr.t * string
+  | CondReplacement of Dba.Expr.t * Dba.Expr.t * Dba.Expr.t * Dba.Expr.t * Dba.Expr.t * string
+  | Predicates of Dba.Binary_op.t list
   | Djmps of Dba_types.Caddress.Set.t Dba_types.AddressStack.Map.t
   | Stats_flags
   | Stats_equalities
@@ -66,7 +66,7 @@ val increase_function_count : unit -> unit
 val increase_lhs_evaluation_count : unit -> unit
 val increase_lhseq_evaluation_count : unit -> unit
 
-val equality_use : Dba_types.AddressStack.t -> Dba.lhs -> Dba.lhs -> unit
+val equality_use : Dba_types.AddressStack.t -> Dba.LValue.t -> Dba.LValue.t -> unit
 val get_equality_uses : unit -> int
 
 val add_call : Bigint.t -> unit

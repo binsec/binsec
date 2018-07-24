@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,13 +21,16 @@
 
 open Dba
 
+type pmap  =
+  (Dba.Instr.t * Instruction.Generic.t option)
+    Dba_types.Caddress.Map.t
 
 type dbastmt = {
-  mutable instr : instruction;
+  mutable instr : Dba.Instr.t;
   mutable preds : Dba_types.Caddress.Set.t;
   mutable succs : Dba_types.Caddress.Set.t;
   mutable closed_succs : bool;
-  mutable binstr : Disasm_types.GenericInstruction.t option ;
+  mutable binstr : Instruction.Generic.t option ;
   mutable heuristical_succs : Dba_types.Caddress.Set.t;
   (* Experimental field (for Call immediate successor) *)
 }
@@ -41,38 +44,38 @@ let make inst_map djumps_map =
   let opt_addr = ref Caddress.Set.empty in
   let get_successors inst addr =
     match inst with
-    | Dba.IkSJump (JInner off, tgs) ->
+    | Dba.Instr.SJump (JInner off, tgs) ->
       (match tgs with
        | Some (Dba.Call ad) -> opt_addr := Caddress.Set.singleton ad
        | _ -> ());
       let addr = Caddress.reid addr off in
       Caddress.Set.singleton addr, true
-    | Dba.IkSJump (JOuter a, tgs) ->
+    | Dba.Instr.SJump (JOuter a, tgs) ->
       (match tgs with
        | Some (Dba.Call ad) -> opt_addr := Caddress.Set.singleton ad
        | _ -> ());
       Caddress.Set.singleton a, true
-    | Dba.IkDJump _ ->
+    | Dba.Instr.DJump _ ->
       begin
         try Caddress.Map.find addr djumps_map, false
         with Not_found -> Caddress.Set.empty, false
       end
-    | Dba.IkIf (_, JInner off1, off2) ->
+    | Dba.Instr.If (_, JInner off1, off2) ->
       let a1 = Caddress.reid addr off1
       and a2 = Caddress.reid addr off2 in
       Caddress.Set.add a1 (Caddress.Set.singleton a2), true
-    | Dba.IkIf (_, JOuter a, off2) ->
+    | Dba.Instr.If (_, JOuter a, off2) ->
       Caddress.Set.add a (Caddress.Set.singleton (Caddress.reid addr off2)), true
-    | Dba.IkStop _ -> Caddress.Set.empty, true
-    | Dba.IkAssign (_, _, off)
-    | Dba.IkAssert (_, off)
-    | Dba.IkAssume (_, off)
-    | Dba.IkNondetAssume (_, _, off)
-    | Dba.IkNondet (_, _, off)
-    | Dba.IkUndef (_, off)
-    | Dba.IkMalloc (_, _, off)
-    | Dba.IkFree (_, off)
-    | Dba.IkPrint (_, off) -> Caddress.Set.singleton (Caddress.reid addr off), true
+    | Dba.Instr.Stop _ -> Caddress.Set.empty, true
+    | Dba.Instr.Assign (_, _, off)
+    | Dba.Instr.Assert (_, off)
+    | Dba.Instr.Assume (_, off)
+    | Dba.Instr.NondetAssume (_, _, off)
+    | Dba.Instr.Nondet (_, _, off)
+    | Dba.Instr.Undef (_, off)
+    | Dba.Instr.Malloc (_, _, off)
+    | Dba.Instr.Free (_, off)
+    | Dba.Instr.Print (_, off) -> Caddress.Set.singleton (Caddress.reid addr off), true
   in
   let build_aux current_address (inst, opc) ast =
     let successors, closed_successors =
@@ -146,25 +149,25 @@ let build_sequences_map ast l0 dba_display =
       if dba_display then item.succs
       else
         match instr with
-        | Dba.IkSJump (JOuter a, _) -> Dba_types.Caddress.Set.singleton a
-        | Dba.IkIf (_, JInner off1, off2) ->
+        | Dba.Instr.SJump (JOuter a, _) -> Dba_types.Caddress.Set.singleton a
+        | Dba.Instr.If (_, JInner off1, off2) ->
           let a1 = Caddress.reid addr off1
           and a2 = Caddress.reid addr off2 in
           Dba_types.Caddress.Set.union (get_successors a1) (get_successors a2)
-        | Dba.IkIf (_, JOuter a, off2) ->
+        | Dba.Instr.If (_, JOuter a, off2) ->
           Dba_types.Caddress.Set.add a (get_successors (Caddress.reid addr off2))
-        | Dba.IkDJump (_, _) -> item.succs
-        | Dba.IkStop _ -> Dba_types.Caddress.Set.empty
-        | Dba.IkSJump (JInner off, _)
-        | Dba.IkAssign (_, _, off)
-        | Dba.IkAssert (_, off)
-        | Dba.IkAssume (_, off)
-        | Dba.IkNondetAssume (_, _, off)
-        | Dba.IkNondet (_, _, off)
-        | Dba.IkUndef (_, off)
-        | Dba.IkMalloc (_, _, off)
-        | Dba.IkFree (_, off)
-        | Dba.IkPrint (_, off) -> get_successors (Caddress.reid addr off )
+        | Dba.Instr.DJump (_, _) -> item.succs
+        | Dba.Instr.Stop _ -> Dba_types.Caddress.Set.empty
+        | Dba.Instr.SJump (JInner off, _)
+        | Dba.Instr.Assign (_, _, off)
+        | Dba.Instr.Assert (_, off)
+        | Dba.Instr.Assume (_, off)
+        | Dba.Instr.NondetAssume (_, _, off)
+        | Dba.Instr.Nondet (_, _, off)
+        | Dba.Instr.Undef (_, off)
+        | Dba.Instr.Malloc (_, _, off)
+        | Dba.Instr.Free (_, off)
+        | Dba.Instr.Print (_, off) -> get_successors (Caddress.reid addr off )
     with Not_found -> Dba_types.Caddress.Set.empty
   in
 
@@ -222,7 +225,7 @@ let build_sequences_map ast l0 dba_display =
 
 let pp_opt_opcode ppf = function
   | None -> Format.fprintf ppf ""
-  | Some binstr -> Disasm_types.GenericInstruction.pp_opcode ppf binstr
+  | Some binstr -> Instruction.Generic.pp_opcode ppf binstr
 
 let cfg_of_sequences_map sequences_map active_addresses conditions dba_display =
   let sequence_label =

@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,31 +19,31 @@
 (*                                                                        *)
 (**************************************************************************)
 
+
 open Generic_decoder_sig;;
 
 module Decode_Expr(I:Expr_Input) = struct
 
   open Dba
-
+  open Binary_op
   open I
 
   let (>>=) = M.bind
-  
-  let rec expr:Dba.expr -> I.binary M.m = function
-    | ExprCst(`Constant,bv) ->
+
+  let rec expr:Dba.Expr.t -> I.binary M.m = function
+    | Expr.Cst(`Constant,bv) ->
       let size = Bitvector.size_of bv in
       I.Binary.biconst ~size (Bitvector.value_of bv)
-    | ExprCst(_,_) -> assert false
-    | ExprBinary(bop,e1,e2) ->
-      let size = Dba_types.Expr.size_of e1 in
+    | Expr.Cst(_,_) -> assert false
+    | Expr.Binary(bop,e1,e2) ->
+      let size = Dba.Expr.size_of e1 in
       expr e1 >>= fun v1 ->
       expr e2 >>= fun v2 ->
       (match bop with
        (* Binary operations. *)
        | Plus -> I.Binary.biadd ~size v1 v2
        | Minus -> I.Binary.bisub ~size v1 v2
-       | MultU -> I.Binary.bimul ~size v1 v2
-       | MultS -> I.Binary.bimul ~size v1 v2
+       | Mult -> I.Binary.bimul ~size v1 v2
        | DivU -> I.Binary.biudiv ~size v1 v2
        | DivS -> I.Binary.bisdiv ~size v1 v2
        | ModU -> I.Binary.biumod ~size v1 v2
@@ -52,8 +52,8 @@ module Decode_Expr(I:Expr_Input) = struct
        | And -> I.Binary.band ~size v1 v2
        | Xor -> I.Binary.bxor ~size v1 v2
        | Concat -> I.Binary.bconcat
-                     ~size1:(Dba_types.Expr.size_of e1) v1
-                     ~size2:(Dba_types.Expr.size_of e2) v2
+                     ~size1:(Dba.Expr.size_of e1) v1
+                     ~size2:(Dba.Expr.size_of e2) v2
        | LShift -> I.Binary.bshl ~size v1 v2
        | RShiftU -> I.Binary.blshr ~size v1 v2
        | RShiftS -> I.Binary.bashr ~size v1 v2
@@ -67,64 +67,63 @@ module Decode_Expr(I:Expr_Input) = struct
          I.Boolean.not bool >>= fun nbool ->
          I.bin_of_bool nbool
        | LeqU -> I.Binary.biule ~size v1 v2 >>= fun bool -> I.bin_of_bool bool
-       | GeqU -> I.Binary.biule ~size v2 v1 >>= fun bool -> I.bin_of_bool bool           
+       | GeqU -> I.Binary.biule ~size v2 v1 >>= fun bool -> I.bin_of_bool bool
        | LeqS -> I.Binary.bisle ~size v1 v2 >>= fun bool -> I.bin_of_bool bool
-       | GeqS -> I.Binary.bisle ~size v2 v1 >>= fun bool -> I.bin_of_bool bool           
+       | GeqS -> I.Binary.bisle ~size v2 v1 >>= fun bool -> I.bin_of_bool bool
        | LtU -> I.Binary.biult  ~size v1 v2 >>= fun bool -> I.bin_of_bool bool
-       | GtU -> I.Binary.biult  ~size v2 v1 >>= fun bool -> I.bin_of_bool bool           
+       | GtU -> I.Binary.biult  ~size v2 v1 >>= fun bool -> I.bin_of_bool bool
        | LtS -> I.Binary.bislt  ~size v1 v2 >>= fun bool -> I.bin_of_bool bool
        | GtS -> I.Binary.bislt  ~size v2 v1 >>= fun bool -> I.bin_of_bool bool)
-    | ExprUnary(op,e1) as e ->
-      let size = Dba_types.Expr.size_of e in
+    | Expr.Unary(op,e1) as e ->
+      let size = Dba.Expr.size_of e in
       expr e1 >>= fun v1 ->
       (match op with
-       | UMinus ->
+       | Unary_op.UMinus ->
          I.Binary.biconst ~size Bigint.zero_big_int >>= fun vz ->
          I.Binary.bisub ~size vz v1
-       | Not ->
+       | Unary_op.Not ->
          I.Binary.biconst ~size Bigint.(minus_big_int unit_big_int) >>= fun ffff ->
          I.Binary.bxor ~size ffff v1
+       | Unary_op.Uext n -> I.Binary.buext ~size:n v1
+       | Unary_op.Sext n -> I.Binary.bsext ~size:n v1
+       | Unary_op.Restrict {Interval.lo; Interval.hi;} ->
+         I.Binary.bextract ~size:(1 + hi - lo) ~oldsize:size ~index:lo v1
       )
-    | ExprRestrict(e,lo,hi) ->
-      let oldsize = Dba_types.Expr.size_of e in
-      expr e >>= fun v ->
-      I.Binary.bextract ~size:(1 + hi - lo) ~oldsize ~index:lo v
-    | ExprExtU(e,newsize) ->
-      expr e >>= fun v -> I.Binary.buext ~size:newsize v
-    | ExprExtS(e,newsize) ->
-      expr e >>= fun v -> I.Binary.bsext ~size:newsize v      
-    | ExprVar(var,size,_) -> I.get_var ~size var
-    | ExprLoad(size,endianness,e) ->
+    | Expr.Var(var,size,_) -> I.get_var ~size var
+    | Expr.Load(size,endianness,e) ->
       expr e >>= fun address ->
       I.load ~size:(size * 8) endianness address
-    | ExprIte(c,e1,e2) ->
-      cond c >>= fun vc ->
+    | Expr.Ite(c,e1,e2) ->
+      expr c >>= fun vc ->
       expr e1 >>= fun v1 ->
       expr e2 >>= fun v2 ->
       I.select vc v1 v2
-    | ExprAlternative _ -> (* TODO: Convert the value of boolean registers into booleans. *)
-      assert false
+
+  and cond:Dba.Expr.t -> I.boolean M.m = fun e ->
+    assert(Dba.Expr.size_of e == 1);
+    let open Dba.Expr in
+    match e with
+    | Cst(_,x) when Bitvector.is_one x -> I.Boolean.true_
+    | Cst(_,x) when Bitvector.is_zero x -> I.Boolean.false_
+    | Cst(_,_) -> assert false
+    | Unary(Unary_op.Not,x) -> cond x >>= fun v -> I.Boolean.not v
+    | Unary(Unary_op.UMinus,x) -> cond x
+    | Binary(And,a,b) ->
+      cond a >>= fun va ->
+      cond b >>= fun vb ->
+      I.Boolean.(&&) va vb
+    | Binary(Or,a,b) ->
+      cond a >>= fun va ->
+      cond b >>= fun vb ->
+      I.Boolean.(||) va vb
+    | e -> expr e >>= fun v -> I.bool_of_bin v
 
 
-  and cond:Dba.cond -> I.boolean M.m = function
-    | CondReif(e) -> expr e >>= fun v -> I.bool_of_bin v
-    | CondNot c -> cond c >>= fun v -> I.Boolean.not v
-    | CondAnd(c1,c2) ->
-      cond c1 >>= fun v1 ->
-      cond c2 >>= fun v2 ->
-      I.Boolean.(&&) v1 v2
-    | CondOr(c1,c2) ->
-      cond c1 >>= fun v1 ->
-      cond c2 >>= fun v2 ->
-      I.Boolean.(||) v1 v2
-    | True -> I.Boolean.true_
-    | False -> I.Boolean.false_                
-  
 
 end
 
 module Decode_Instr(S:Instr_Input):sig
-  val instruction: S.State.t -> Dba.instruction -> (S.boolean,S.binary) Generic_decoder_sig.jump_kind * S.State.t
+  val instruction: S.State.t -> Dba.Instr.t -> (S.boolean,S.binary) Generic_decoder_sig.jump_kind * S.State.t
 end
 
 = struct
@@ -137,12 +136,12 @@ end
   open Dba
 
   let write_lhs state value = function
-    | LhsVar(name,size,_) -> S.set_var ~size name value state
-    | LhsVarRestrict(name,size,lo,hi) ->
+    | LValue.Var(name,size,_) -> S.set_var ~size name value state
+    | LValue.Restrict(name,size, {Interval.lo; Interval.hi}) ->
       let value_size = size in
       let (old,state) = S.get_var ~size name state in
       let written_size = 1 + hi - lo in
-      let (v,state) = 
+      let (v,state) =
         if lo == 0 then (value,state)
         else let _pold, state = S.Binary.bextract ~oldsize:value_size ~index:0 ~size:lo old state in
           S.Binary.bconcat ~size1:written_size ~size2:lo value old state in
@@ -152,35 +151,42 @@ end
                S.Binary.bextract ~oldsize:value_size ~index:hi ~size:(1 + size - hi) old state in
           S.Binary.bconcat ~size1:(size -  hi) ~size2:hi pold v state in
       S.set_var ~size name v state
-    | LhsStore(size,endianness,address) ->
+    | LValue.Store(size,endianness,address) ->
       let (vaddress,state) = EDecode.expr address state in
       S.store ~size:(size * 8) endianness vaddress value state
 
 
-  
-  let instruction state = let open Generic_decoder_sig in function
-    | IkAssign(lhs,expr,id) ->
+
+  let instruction state =
+    let open! Generic_decoder_sig in
+    let open Instr in
+    function
+    | Assign(lhs,expr,id) ->
       let (v,state) = EDecode.expr expr state in
       let state = write_lhs state v lhs in
       (JKJump (Static (JInner id)),state)
-    | IkSJump (target,_) ->
+    | SJump (target,_) ->
       (JKJump (Static target), state)
-    | IkDJump(target,_) ->
+    | DJump(target,_) ->
       let (v,state) = EDecode.expr target state in
       (JKJump (Dynamic v), state)
-    | IkIf(cond,target,id) ->
+    | If(Dba.Expr.Cst(_,bv),target,id) ->
+      if Bitvector.is_one bv
+      then (JKJump (Static( target))),state
+      else (JKJump (Static( JInner id))), state
+    | If(cond,target,id) ->
       let (v,state) = EDecode.cond cond state in
       (JKIf(v,Static target,Static (JInner id))),state
-    | IkStop _ -> JKStop, state
-    | IkAssume(cond,id) | IkAssert(cond,id) ->
+    | Stop _ -> JKStop, state
+    | Assume(cond,id) | Assert(cond,id) ->
       let (v,state) = EDecode.cond cond state in
       JKAssume(v,Static (JInner id)),state
-    | IkNondet(lhs,_,id) ->
+    | Nondet(lhs,_,id) ->
       let size = assert false in
       let (v,state) = S.unknown ~size state in
       let state = write_lhs state v lhs in
       (JKJump (Static (JInner id))),state
-    | IkNondetAssume(l,cond,id) ->
+    | NondetAssume(l,cond,id) ->
       let size = assert false in
       let (acc,state) = List.fold_left (fun (acc,state) _lhs ->
           let (v,state) = S.unknown ~size state in
@@ -189,13 +195,13 @@ end
       let state = List.fold_left2 write_lhs state values l in
       let (cond,state) = EDecode.cond cond state in
       JKAssume (cond, Static (JInner id)),state
-    | IkUndef(lhs,id) ->
+    | Undef(lhs,id) ->
       let size = assert false in
       let (v,state) = S.undef ~size state in
       let state = write_lhs state v lhs in
       (JKJump (Static (JInner id)),state)
-    | IkMalloc _ -> assert false
-    | IkFree _ -> assert false
-    | IkPrint _ -> assert false
+    | Malloc _ -> assert false
+    | Free _ -> assert false
+    | Print _ -> assert false
 
 end

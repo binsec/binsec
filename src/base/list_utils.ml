@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -64,3 +64,14 @@ let flat_map f l = List.rev_map f l |> rev_flatten
 let hd_hd = function
   | hd1 :: hd2 :: _ -> hd1, hd2
   | [] | [_] -> failwith "hd_hd: empty or singleton list"
+
+
+let filter_map p f l =
+  List.fold_left
+    (fun acc e ->
+       let e' = f e in
+       if p e' then e' :: acc else acc) [] l |> List.rev
+
+let map_if p f l =
+  List.fold_left
+    (fun acc e -> if p e then f e :: acc else acc) [] l |> List.rev
