@@ -23,6 +23,8 @@
 
 open Sigs
 
+module Logger : Logger.S
+
 type instruction_sequence = (Dba.address *  Dba.Instr.t) list
 
 module Call_stack : COMPARABLE with type t = (Dba.address * Dba.address) list

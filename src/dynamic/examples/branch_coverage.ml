@@ -19,6 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Dse_options
 open Path_predicate
 open Config_piqi
 open Trace_type

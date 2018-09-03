@@ -18,6 +18,7 @@
 (**************************************************************************)
 
 (* For now, only handle list of read / mmap *)
+open Dse_options
 
 (* **)
 type read_map = (int,string) Hashtbl.t * int

@@ -22,6 +22,7 @@
 open Basic_types
 open Region_bitvector
 open High_level_predicate
+open Ai_options
 
 module Malloc_status = Dba_types.Region.Map
 

@@ -159,7 +159,7 @@ let value_of_constant cst =
   | CstString _
   | CstBool _
   | CstDecimal _ ->
-    Logger.error
+    Kernel_options.Logger.error
       "Model construction: unexpected constant %a as bitvector value"
       Smtlib_pp.pp_spec_constant cst;
     exit 2
@@ -167,7 +167,7 @@ let value_of_constant cst =
 
 let value_of_index converter = function
   | IdxNum num ->
-    Logger.debug ~level:5 "idx: %s" num;
+    Kernel_options.Logger.debug ~level:5 "idx: %s" num;
     Some (converter num)
   | IdxSymbol _ -> None
 
@@ -223,7 +223,7 @@ let get_bitvector cmd =
 let add_variable smt_model cmd =
   let symbol, value = get_bitvector cmd in
   let name = get_symbol_name symbol in
-  Logger.debug ~level:2 "Add register %s as bv %a" name Bitvector.pp_hex value;
+  Kernel_options.Logger.debug ~level:2 "Add register %s as bv %a" name Bitvector.pp_hex value;
   add_var smt_model name value
 
 let is_bitvector sort = get_bitvector_size sort <> None
@@ -443,14 +443,14 @@ let get_indirection_name term =
 *)
 let find_and_add_memory smt_model functions =
   match List.filter is_memory functions with
-  | [] -> Logger.warning ~level:2 "No memory found in SMT model"
+  | [] -> Kernel_options.Logger.warning ~level:2 "No memory found in SMT model"
   | [f] ->
     (* Case of Boolector and CVC4 *)
     let body = get_function_body f in
     if is_ite_memory body then memory_from_ite smt_model body
     else if is_store_memory body then memory_from_store smt_model body
     else
-      Logger.warning ~level:2 "No extractor for this memory representation"
+      Kernel_options.Logger.warning ~level:2 "No extractor for this memory representation"
   | f :: tail ->
     let fbody = get_function_body f in
     if is_ite_memory fbody then memory_from_ite smt_model fbody
@@ -468,16 +468,16 @@ let find_and_add_memory smt_model functions =
       let gbody = get_function_body g in
       if is_ite_memory gbody then memory_from_ite smt_model gbody
       else
-        Logger.warning "Unexpected memory encoding from SMT model"
+        Kernel_options.Logger.warning "Unexpected memory encoding from SMT model"
 
 let extract model_ast =
   let smt_model = create () in
   let variables, functions =
     List.partition is_bv_variable model_ast.model_commands in
-  Logger.debug ~level:2 "Found : %d variables, %d functions"
+  Kernel_options.Logger.debug ~level:2 "Found : %d variables, %d functions"
     (List.length variables) (List.length functions);
   List.iter (add_variable smt_model) variables;
-  Logger.debug ~level:2 "%d functions are potential memories"
+  Kernel_options.Logger.debug ~level:2 "%d functions are potential memories"
     (List.length (List.filter is_memory functions));
   find_and_add_memory smt_model functions;
   smt_model
@@ -507,7 +507,8 @@ let yices_extract (raw:string) =
       add_var smt_model varname (read_bv value);
       memory_name
     | _ ->
-      Logger.debug ~level:4 "while reading model, ignoring@ «%s»" raw_line;
+      Kernel_options.Logger.debug ~level:4 "while reading model, ignoring@ «%s»"
+        raw_line;
       memory_name
   in
   let lines = Str.split (Str.regexp "\n") raw in

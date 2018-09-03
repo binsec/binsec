@@ -26,6 +26,7 @@ open Formula_pp
 open Path_predicate_env
 open Path_predicate_formula
 open Decode_utils
+open Dse_options
 
 module Pp = Dba_printer.EICUnicode
 

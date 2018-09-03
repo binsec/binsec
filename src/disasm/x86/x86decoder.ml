@@ -992,9 +992,7 @@ let read_2bytes_opcode mode address_mode rep lr =
   | 0xfe -> unsupported_modrm "paddd" address_mode lr
 
   | _byte -> abort ()
-
-(* End of read_2bytes_opcode *)
-
+;;
 
 
 let read lr =

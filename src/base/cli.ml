@@ -19,6 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module L = Logger.Make(struct let name = "cli" end)
 
 (* Possible actions for a command line argument.contents.
    Either you parse one argument or you do not.
@@ -402,7 +403,11 @@ module Make(D: DECL) = struct
   (* Add the logging channels for this command line node
      Use shortname as prefix to logging messages.
    *)
-  module Logger = Logger.Make(struct include D let name = shortname end)
+  module Logger =
+    Logger.Make(struct
+        include D
+        let name = if is_kernel then "kernel" else shortname
+      end)
 
   module Debug_level = struct
     type t = int
@@ -764,7 +769,9 @@ module Make(D: DECL) = struct
       let default = None
       let value = ref default
 
-      let set v = value := Some v
+      let set v =
+        value := Some v
+
       let is_set () = !value <> default
       let is_default () = !value = default
 
@@ -959,14 +966,14 @@ module Boot = struct
       failwith msg
     else
       begin
-        Logger.debug ~level:5 "Enlisting %s ..." name;
+        L.debug ~level:5 "Enlisting %s ..." name;
         H.add h name f
       end
 
   let launch _name f = f ()
 
   let run () =
-    Logger.debug ~level:5 "Boot has %d enlisted closures" (H.length h);
+    L.debug ~level:5 "Boot has %d enlisted closures" (H.length h);
     let i = ref 0 in
     H.iter (fun name f -> incr i;  launch name f) h
 
@@ -975,7 +982,7 @@ module Boot = struct
     match H.find cli name with
     | Leaf _ -> ()
     | Node n ->
-       (* Logger.info "Found node %s" name; *)
+       (* L.info "Found node %s" name; *)
        begin
          match H.find n.Cli_node.cmds "" with
          | Leaf { Argv.spec = Unit f; _ } -> f ()
@@ -1002,7 +1009,11 @@ end
 module Parse = struct
   (* The argument parser *)
 
-  (* Logger.set_debug_level 3 *)
+  module L = Logger.Make(struct let name = "cli_parser" end)
+
+  (* let _ = L.set_debug_level 3;; *)
+
+  let level = 3
 
   let fail_on switch =
     Format.eprintf
@@ -1014,9 +1025,19 @@ module Parse = struct
     Cli.pp ();
     exit 2
 
-  let run_on cli_options =
+  type origin =
+    | Command_line
+    | Config_file
+  ;;
+
+  let run_on ?(origin=Command_line) cli_options =
+    L.debug ~level "Parsing command line: @[<h>%a@]@."
+    (fun ppf a ->
+      Array.iter (fun s ->
+          Format.pp_print_space ppf ();
+          Format.pp_print_string ppf s; ) a) cli_options;
     let len = Array.length cli_options in
-    Logger.debug "Got %d args -- parsing now ...@." len;
+    L.debug ~level "Got %d args -- parsing now ...@." len;
     let stack = Stack.create () in
     let args = Cli.args () in
     let rec arg_loop i =
@@ -1026,34 +1047,38 @@ module Parse = struct
         try
           match H.find args switch with
           | {spec = Unit f; _} ->
-             Logger.debug "Setting %s" switch;
+             L.debug ~level "Setting %s" switch;
              f (); arg_loop (i + 1)
           | {spec = Scan f; doc; _} ->
              let j = i + 1 in
                let arg = cli_options.(j) in
              (try
+               L.debug ~level "Setting %s with %s@." switch arg;
                f arg;
-               Logger.debug "Setting %s with %s" switch arg;
              with
              | e ->
-               Logger.fatal "@[<v 5>[cli] Error parsing %s %s@ %s@]"
+               L.fatal "@[<v 5>Error parsing %s %s@ %s@]"
                  switch arg doc;
                raise e
              );
-
              arg_loop (j + 1)
           | exception Not_found ->
              if switch.[0] = '-' then fail_on switch
              else begin
-                 Logger.debug "Queuing %s" switch;
+                 L.debug ~level "Queuing %s" switch;
                  Stack.push switch stack;
                  arg_loop (i + 1)
                end
         with
-        | e -> Logger.fatal "[cli] Error parsing %s" switch; raise e
+        | e -> L.fatal "[cli] Error parsing %s" switch; raise e
 
-    in arg_loop 1;
-       Stack.fold (fun acc s -> s :: acc) [] stack
+    in
+    let start_index =
+      match origin with
+      | Command_line -> 1 (* 0 is the executable's name in this case *)
+      | Config_file -> 0  (* we need start right away *) in
+    arg_loop start_index;
+    Stack.fold (fun acc s -> s :: acc) [] stack
 
 
   let arg_sep = '='
@@ -1062,7 +1087,7 @@ module Parse = struct
     assert (line.[0] = '[');
     let pos = String.rindex line ']' in
     let section_name = String.sub line 1 (pos - 1) in
-    Logger.debug "Reading section name %s" section_name;
+    L.debug ~level "Reading section name %s" section_name;
     match section_name with
     | "" | "kernel" -> ""
     | s -> s
@@ -1080,7 +1105,7 @@ module Parse = struct
     let name, arg_value = split_on_sep line in
     match name with
     | "enabled" ->
-       Logger.debug "enabled : <%s>" arg_value;
+       L.debug ~level "enabled : <%s>" arg_value;
        assert (bool_of_string arg_value);
        prefix section, None
     | name -> prefix section ^ prefix name, Some arg_value
@@ -1097,7 +1122,7 @@ module Parse = struct
 
 
   let of_filename ~filename =
-    Logger.debug "Reading configuration file %s" filename;
+    L.debug ~level "Reading configuration file %s" filename;
     let ic = open_in_bin filename in
     let stack = Stack.create () in
     (* We can write things on several lines using \ at the end of lines. *)
@@ -1110,7 +1135,7 @@ module Parse = struct
         (* Substitute the '\' with a space and continue  reading. *)
         | '\\' -> multi_line_read (acc ^ (String.sub line 0 @@ length - 1) ^ " ")
         | _ -> acc ^ line
-      in 
+      in
       match multi_line_read "" with
       | exception End_of_file -> ()
       | "" -> read_loop (line_num + 1) current_section
@@ -1124,7 +1149,7 @@ module Parse = struct
               | section_name ->
                  read_loop (line_num + 1) section_name
               | exception Not_found ->
-                 Logger.error
+                 L.error
                    "Error reading section line %d in %s" line_num filename;
                  exit 1
             end
@@ -1132,23 +1157,23 @@ module Parse = struct
             begin
               match arg_read current_section line with
               | arg_name, None ->
-                 Logger.debug "Activating %s" arg_name;
+                 L.debug ~level "Activating %s" arg_name;
                  Stack.push arg_name stack;
                  read_loop (line_num + 1) current_section
               | arg_name, Some arg_value ->
-                 Logger.debug "Reading %s <- %s" arg_name arg_value;
+                 L.debug ~level "Reading %s <- %s@." arg_name arg_value;
                  Stack.push arg_name stack;
                  Stack.push arg_value stack;
                  read_loop (line_num + 1) current_section
               | exception Not_found ->
-                 Logger.error
+                 L.error
                    "Error reading arg line %d in %s" line_num filename;
                  exit 1
             end
     in
     read_loop 0 "";
     close_in ic;
-    run_on (unstack stack)
+    run_on ~origin:Config_file (unstack stack)
 
 
   let run () = run_on Sys.argv

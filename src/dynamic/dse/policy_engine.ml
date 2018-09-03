@@ -21,6 +21,7 @@
 
 open Bigint
 open Policy_type
+open Dse_options
 
 exception Rule_match
 exception PlaceHolderNotFound of string

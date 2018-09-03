@@ -139,7 +139,7 @@ let set_if_not err_p err_msg do_action parameters =
   else do_action parameters
 
 let set_entry_points addrs parameters =
-  Logger.debug "@[Setting %d entry points...@]"
+  Kernel_options.Logger.debug "@[Setting %d entry points...@]"
     (Virtual_address.Set.cardinal addrs);
   set_if_not has_entry_points
     "Entry points already set"

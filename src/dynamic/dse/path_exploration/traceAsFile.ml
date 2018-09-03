@@ -24,6 +24,7 @@ open Libcall_piqi
 open Libcall_t
 open Strcmp_t
 open TracesToTree
+open Dse_options
 
 module TraceAsFile : TypeTraceDSE =
 struct

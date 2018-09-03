@@ -24,3 +24,4 @@ include Big_int_Z
 type t = big_int
 
 let of_bits = Z.of_bits
+let num_bits = Z.numbits

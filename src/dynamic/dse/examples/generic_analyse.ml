@@ -32,6 +32,8 @@ open Generic_analysis
 
 module Pp = Dba_printer.Unicode
 
+open Dse_options
+
 let the = Utils.unsafe_get_opt
 
 class generic_analyzer (input_config:Trace_config.t) =

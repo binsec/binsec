@@ -76,3 +76,4 @@ val shift_right_towards_zero_big_int : t -> int -> t
 val extract_big_int : t -> int -> int -> t
 
 val of_bits : string -> t
+val num_bits : t -> int

@@ -57,7 +57,7 @@ let set_command_line extra =
        if Sys.file_exists arg then
          if Kernel_options.ExecFile.is_set () then
            let filename = Kernel_options.ExecFile.get () in
-           Logger.fatal
+           Kernel_options.Logger.fatal
              "File %s was previously set. Cannot set to %s"
              filename arg;
            exit 1

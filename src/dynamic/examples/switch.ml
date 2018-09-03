@@ -19,6 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Dse_options
 open Trace_type
 open Path_predicate_formula
 open Solver
@@ -58,7 +59,10 @@ class switch_analysis (input_config:Trace_config.t) =
         let pred = self#build_multiple_condition_predicate preds in
         let _ = build_formula_file f pred smt_file in
         (* let _ = pp_stat_formula new_f in *)
-        match solve_model smt_file config.Config_piqi.Configuration.solver with
+        let solver =
+          Formula_options.Solver.of_piqi config.Config_piqi.Configuration.solver
+        in
+        match solve_model smt_file solver with
         | SAT, model ->
           begin
             try
@@ -76,10 +80,14 @@ class switch_analysis (input_config:Trace_config.t) =
 
     method private compute_possible_values_interactively e (env:Path_predicate_env.t): unit =
       self#add_witness_variable "totem0" e env;
-      let solver = start_interactive ~file:smt_file config.Config_piqi.Configuration.solver in
-      build_formula_incremental env.formula mk_bl_true ~push:false solver |> ignore;
+      let solver =
+        Formula_options.Solver.of_piqi
+          config.Config_piqi.Configuration.solver in
+      let session = start_interactive ~file:smt_file solver in
+      ignore @@
+      build_formula_incremental env.formula mk_bl_true ~push:false session;
       let rec check_possible_jumps k prev =
-        let res, model = solve_incremental_model solver ~term:(Some prev) in
+        let res, model = solve_incremental_model session ~term:prev in
         match res with
         | SAT ->
           let value = Smt_model.find_register model "totem0" in
@@ -96,7 +104,7 @@ class switch_analysis (input_config:Trace_config.t) =
         | UNKNOWN -> Logger.warning "UNKNOWN"
       in
       check_possible_jumps 10 mk_bl_true;
-      stop_interactive solver
+      stop_interactive session
 
     method! private post_execution _ =
       if List.length targets > 1 then 0 else 100

@@ -38,7 +38,9 @@ main:
 | args=delimited(LPAREN, args, RPAREN);  m=main;
   { None, args @ (snd m)}
 | EOF   { (None, []) }
-| error { Logger.error "SMTParserWp: Unexpected token in main"; None, [] }
+| error {
+      Kernel_options.Logger.error "SMTParserWp: Unexpected token in main";
+      None, [] }
 ;
 
 args :

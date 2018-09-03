@@ -144,7 +144,7 @@ end
 
 module Make(G: ChannelGroup): S
 
-include S
+(* include S *)
 
 
 (* {2 Generic utilites} *)

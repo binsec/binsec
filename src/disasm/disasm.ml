@@ -461,16 +461,14 @@ module Extended_linear = struct
   *)
 
   let aux_reclinear addr iend program jumps wl visited stops =
-    let open Dba_types in
     let initial_address = Virtual_address.to_bigint addr in
     let bigend = Virtual_address.to_bigint iend in
     let rec loop (addr:Virtual_address.t) program =
-      if addr > iend then begin
-        program
-      end
+      if addr > iend then program
       else
         try
           Logger.debug ~level:4 "Disassembling %a" Virtual_address.pp addr;
+          let open Dba_types in
           let instr, nextaddr = get_instruction addr stops in
           match nextaddr with
           | None -> program

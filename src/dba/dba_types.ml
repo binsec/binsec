@@ -21,6 +21,8 @@
 
 open Dba
 
+module Logger = Logger.Make(struct let name = "dba" end)
+
 type instruction_sequence = (Dba.address *  Dba.Instr.t) list
 
 let malloc_id = ref 0

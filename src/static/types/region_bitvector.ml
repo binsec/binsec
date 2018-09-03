@@ -23,6 +23,7 @@ open Errors
 open Smt_bitvectors
 open Format
 open Formula
+open Static_options
 
 let r_res_compare r1 r2 =
   match r1, r2 with

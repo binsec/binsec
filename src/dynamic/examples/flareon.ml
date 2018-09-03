@@ -27,7 +27,7 @@ open Path_predicate_formula
 open Solver
 open Formula
 open Common_piqi
-
+open Dse_options
 
 class flare_one (input_config:Trace_config.t) =
   object(self) inherit dse_analysis input_config as super
@@ -61,7 +61,8 @@ class flare_one (input_config:Trace_config.t) =
                 let next_addr = get_next_address inst.concrete_infos in
                 let pred = mk_bl_not (self#build_cond_predicate cond env) in
                 build_formula_file env.formula pred smt_file |> ignore;
-                let solver = config.Configuration.solver in
+                let solver = Formula_options.Solver.of_piqi
+                               config.Configuration.solver in
                 let timeout = Int32.to_int config.Configuration.timeout in
                 let res, model = solve_model ~timeout smt_file solver in
                 begin

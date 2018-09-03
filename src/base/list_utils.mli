@@ -54,6 +54,17 @@ val hd_hd : 'a list -> 'a * 'a
     @raise Failure "hd_hd" if [l] is empty or the singleton list
 *)
 
+val pop : 'a list -> 'a * 'a list
+(** [pop l] returns the head and tail of the list.contents
+    @raise Failure "pop" if [l] is empty
+*)
+
+
+val make : int -> 'a -> 'a list
+(** [make n x] returns a list of x of length n.
+    @assumes n >= 0
+*)
+
 
 val map_if: ('a -> bool) -> ('a -> 'b) -> 'a list -> 'b list
 (** [map_if p f l] behaves like [map f l] but applied only on elements of

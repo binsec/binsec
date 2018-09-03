@@ -148,29 +148,3 @@ module Ternary = struct
     | _, True -> True
     | _, _ -> Unknown
 end
-
-module List = struct
-  include List
-
-  let pop = function
-    | [] -> failwith "pop"
-    | hd::tl -> hd, tl
-
-  let make n x =
-    let rec aux n acc =
-      if n > 0 then aux (n-1) (x::acc)
-      else acc
-    in aux n []
-end
-
-module Array = struct
-  include Array
-
-  exception Found of int
-
-  let find p array =
-    try
-      Array.iteri (fun i x -> if p x then raise (Found i)) array;
-      raise Not_found
-    with Found i -> array.(i)
-end

@@ -158,7 +158,7 @@ let with_solver k =
   let timeout = Formula_options.Solver.Timeout.get () in
   Sse_options.SmtDir.set ".";
   let file = Sse_utils.temp_file () in
-  let solver = Formula_options.Solver.(get () |> to_piqi) in
+  let solver = Formula_options.Solver.get () in
   let session = Solver.Session.create ~file ~timeout solver in
   let res = k session in
   Solver.Session.destroy session;

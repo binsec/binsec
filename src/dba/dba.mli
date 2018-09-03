@@ -20,7 +20,6 @@
 (**************************************************************************)
 
 (** Definition of DBA type *)
-
 type endianness =
   | LittleEndian
   | BigEndian

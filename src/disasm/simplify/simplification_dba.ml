@@ -29,7 +29,7 @@ let simplify_dba inst_map =
         Simplification_dba_block.block_simplifications |>
         Simplification_dba_prog.remove_goto
       in
-      Logger.debug "Starting DBA simplification ...";
+      Disasm_options.Logger.debug "Starting DBA simplification ...";
       let initsize, _initgoto, itemps, iflags =
         Simplification_dba_utils.statistics inst_map in
       Ai_options.initsize := !Ai_options.initsize + initsize;
@@ -38,7 +38,7 @@ let simplify_dba inst_map =
       let t, res = Utils.time simplify in
       if Simplification_options.Display_statistics.get () &&
          not (Dba_types.Caddress.Map.is_empty res) then
-        Logger.info "%a"
+        Disasm_options.Logger.info "%a"
           (Simplification_dba_utils.display_results res) t;
       res
     end

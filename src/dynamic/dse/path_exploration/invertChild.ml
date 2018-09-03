@@ -28,7 +28,7 @@ open Libcall_t
 open Input_t
 open Memory_t
 open Exploration_type
-
+open Dse_options
 
 exception SHOULD_INIT
 exception TIMEOUT_SOLVER
@@ -358,10 +358,10 @@ class invert_child (trace_config:Trace_config.t) =
               Int32.to_int trace_config.configuration.Configuration.timeout in
             let result, model =
               try
-                Solver.solve_model
-                  ~timeout:timeout
-                  formula_file
-                  trace_config.configuration.Configuration.solver
+                let solver =
+                  Formula_options.Solver.of_piqi
+                    trace_config.configuration.Configuration.solver in
+                Solver.solve_model ~timeout formula_file solver
               with Failure _ -> UNKNOWN, Smt_model.empty
             in
             Logger.debug "Path_predicate_formula solved";

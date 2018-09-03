@@ -29,6 +29,7 @@ open Path_predicate_utils
 open Path_predicate_env
 open Common_piqi
 open Libcall_piqi
+open Dse_options
 
 open Formula
 open Path_predicate_formula

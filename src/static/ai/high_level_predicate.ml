@@ -19,6 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Ai_options
+
 exception Not_constant_condition
 
 type t = (Dba.Expr.t * Dba.VarTag.t option) Basic_types.String.Map.t option

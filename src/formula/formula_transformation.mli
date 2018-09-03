@@ -35,7 +35,7 @@ val replace_ax_term : def -> ax_term -> ax_term
 
 val constant_propagation : ?keep:VarSet.t -> formula -> formula
 val prune_and_inline     : ?keep:VarSet.t -> formula -> formula
-val read_over_write : ?lst:int -> ?rbs:bool -> ?itv:bool -> ?keep:VarSet.t -> formula -> formula
+val read_over_write : ?lst:int -> ?rbs:bool -> ?itv:bool -> formula -> formula
 val static_single_assignment : formula -> formula
 
 val optimize : ?keep:VarSet.t ->

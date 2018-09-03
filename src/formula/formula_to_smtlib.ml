@@ -461,8 +461,6 @@ and visit_entry_desc env = function
     let bl = visit_bl_term env bl in
     mk_command (Smtlib.CmdAssert bl)
   | Comment c -> mk_command (Smtlib.CmdComment c)
-  | Echo c -> mk_command (Smtlib.CmdEcho c)
-  | Check_sat -> mk_command (Smtlib.CmdCheckSat)                                   
 
 
 and visit_entry env { entry_desc; _ } =

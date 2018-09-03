@@ -24,6 +24,7 @@ open Path_predicate_formula
 open SymbolicInput
 open Config_piqi
 open Configuration
+open Dse_options
 
 let get_addr_size e = e.Path_predicate_env.formula.addr_size
 
@@ -77,18 +78,24 @@ class eip_rewrite (trace_config:Trace_config.t) =
            let formula_file = "formula-eip"^(name_trace)^".smt2" in
            let static_predicate = self#build_cond_predicate Dba.Expr.one env in
            let predicate = self#add_eip_check static_predicate env in
-           ignore @@ Path_predicate_formula.build_formula_file env.formula predicate formula_file;
-           let result, model = Solver.solve_model formula_file trace_config.configuration.solver in
+           ignore @@ Path_predicate_formula.build_formula_file env.formula
+                       predicate formula_file;
+           let solver =
+             Formula_options.Solver.of_piqi trace_config.configuration.solver in
+           let result, model = Solver.solve_model formula_file solver in
            match result with
            | SAT ->
              eip_is_rewrite <- true;
              Logger.debug "SAT!";
              let new_inputs = SymbolicInput.update input_entries model in
              let config = trace_config.configuration in
-             let new_inputs_export = SymbolicInput.export_inputs `patch new_inputs in
-             let inputs = self#update_inputs config.Configuration.inputs new_inputs_export in
+             let new_inputs_export =
+               SymbolicInput.export_inputs `patch new_inputs in
+             let inputs =
+               self#update_inputs config.Configuration.inputs new_inputs_export in
              config.Configuration.inputs <- inputs;
-             let new_file = "config-EIP-"^(name_trace(*Printf.sprintf "%04d" key*))^".json" in
+             let new_file =
+               "config-EIP-"^(name_trace(*Printf.sprintf "%04d" key*))^".json" in
              let oc = open_out new_file in
              (*  let opts = Piqirun_ext.make_options ~json_omit_missing_fields:true () in*)
              let data = Config_piqi_ext.gen_configuration config `json_pretty in

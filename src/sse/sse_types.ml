@@ -24,6 +24,7 @@ open Sse_options
 
 module LocalAnalysis = struct
   open Dba_types
+  module Logger = Sse_options.Logger
   type t = {
     cfg : Sse_graph.G.t;
     (* packing *)
@@ -428,12 +429,6 @@ module G(W:WORKLIST) = struct
       add_action
         (fun vaddr -> incr todo; Action.reach vaddr) (GoalAddresses.get ());
       add_action Action.cut (AvoidAddresses.get ());
-      if Goal_file.is_set () then begin
-        let filename = Goal_file.get ()
-        and parser = Parser.actions
-        and lexer = Lexer.token in
-        Parse_utils.read_file ~parser ~lexer ~filename |> add_actions
-        end;
       { todo = !todo; actions = h }
 
     module Enumeration = struct

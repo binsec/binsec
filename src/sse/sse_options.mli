@@ -25,8 +25,6 @@ include Cli.S
 
 module MaxDepth : Cli.INTEGER
 
-module MaxPackDepth : Cli.INTEGER
-
 module JumpEnumDepth : Cli.INTEGER
 
 module Randomize : Cli.BOOLEAN
@@ -79,5 +77,3 @@ module Seed : Cli.INTEGER_OPT
 
 
 module Goals : Cli.GENERIC with type t = Action.t list
-
-module Goal_file : Cli.STRING_OPT

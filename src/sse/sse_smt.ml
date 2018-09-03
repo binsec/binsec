@@ -19,6 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Sse_options
+
 module Query_stats = struct
   type t = {
     unsat : int;
@@ -78,11 +80,12 @@ module Solver = struct
   let with_solver path_state f =
     let timeout = Formula_options.Solver.Timeout.get () in
     let file =
-      if Sse_options.SmtDir.is_set() then Sse_utils.temp_file () else "" in
-    let solver = Formula_options.Solver.(get () |> to_piqi) in
-    let session = Solver.Session.create ~file ~timeout solver in
-    Logger.debug ~level:5 "Running %a %@ %a"
-      Solver.pp_solver solver Path_state.pp_loc path_state;
+      if Sse_options.SmtDir.is_set() then Some (Sse_utils.temp_file ())
+      else None in
+    let solver = Formula_options.Solver.get () in
+    let session = Solver.Session.create ?file ~timeout solver in
+    Logger.debug ~level:5 "Running %s %@ %a"
+      (Prover.name_of solver) Path_state.pp_loc path_state;
     try
       Path_state.prepare_solver_in_state path_state session;
       let v = Utils.time (fun () -> f session) in
@@ -96,10 +99,10 @@ module Solver = struct
       then begin
         Logger.error
           "@[<v 0>\
-           @[SMT solver failed in %s@ with message:@].@ \
+           @[SMT solver failed in %a@ with message:@].@ \
            @[%s@]@ \
            @[Aborting. Use -keep-going to ignore@]@]"
-          file msg;
+          (Print_utils.pp_opt Format.pp_print_string) file msg;
         failwith msg
       end;
       None
@@ -110,7 +113,6 @@ module Solver = struct
   let no_address = Basic_types.Int64.Set.empty
 
   let get_addresses_to_load session path_state =
-    let open Sse_options in
     if not (LoadSections.is_set () || LoadROSections.get())
     then no_address
     else

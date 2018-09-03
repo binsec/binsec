@@ -21,6 +21,7 @@
 
 open Format
 open Dba_printer.Ascii
+open Ai_options
 
 let pp_opcode ppf = function
   | Some s ->

@@ -19,6 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Trace_options
 open Trace_type
 open Common_piqi
 open Decode_utils

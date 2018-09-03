@@ -66,4 +66,4 @@ depends: [
   "llvm"
 ]
 
-available: [ ocaml-version >= "4.04.2" ]
+available: [ ocaml-version >= "4.04.2" & ocaml_version < "4.06.0"]

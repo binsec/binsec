@@ -58,7 +58,7 @@ let run_check config =
   analyzer#init_entries ();
   let ret = analyzer#compute in
   let new_conf_files = analyzer#get_new_conf_files () in
-  List.iter (fun x -> Logger.info "New JSON file %s" x) new_conf_files;
+  List.iter (fun x -> Dse_options.Logger.info "New JSON file %s" x) new_conf_files;
   ret
 
 let run_eip config =
@@ -161,11 +161,9 @@ let run () =
   try
     (*************** DSE analysis *****************)
     let config = Trace_config.default in
-    let configuration = config.configuration in
     init config;
     begin
       Format.set_margin 120;
-      Logger.set_verbosity (Int32.to_int configuration.verbosity);
       match config.trace_input with
       | Chunked(_,rall) ->
         let name = config.trace_file in
@@ -204,7 +202,7 @@ let run () =
       | "uaf" -> run_uaf
       | "" -> run_default
       | s ->
-        Logger.fatal "Unknown analysis name %s" s;
+        Dse_options.Logger.fatal "Unknown analysis name %s" s;
         exit 2
     in let res = f config in
     let exit_value =
@@ -215,7 +213,7 @@ let run () =
         res
     in exit exit_value
   with Failure s ->
-    Logger.error "Error: %s" s
+    Dse_options.Logger.error "Error: %s" s
 
 let default_run () =
   if Trace_options.is_enabled () then run ()

@@ -20,7 +20,7 @@
 (**************************************************************************)
 
 open Bigint
-
+open Disasm_options
 
 let decode_opcode ?(addr=Int64.zero) opcode =
   try

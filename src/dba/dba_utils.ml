@@ -80,7 +80,7 @@ let eval_alternatives eval_expr eq alternatives =
     if List.map eval_expr es |> List.for_all (eq v) then v
     else raise Errors.Alternative_conflict_values
 
-
+module Logger = Dba_types.Logger
 (* *****  check size (basic typing) in DBAs   *)
 let rec computesize_dbaexpr e: int =  (* size: bits *)
   let open! Dba in

@@ -21,6 +21,7 @@
 
 open Formula
 open Formula_pp
+open Ai_options
 
 module ThingSet = Set.Make (
   struct

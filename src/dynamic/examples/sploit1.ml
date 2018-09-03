@@ -26,7 +26,7 @@ open Trace_type
 open Solver
 open Path_predicate_formula
 open Formula
-
+open Dse_options
 
 (* Policy in the separate file:
  * :: *           :: esp          :: *                                             => Pc
@@ -79,8 +79,11 @@ class sploit1 conf =
       (* Logic formula *)
       let f_cond = self#build_cond_predicate cond env in
       build_formula_file env.formula f_cond "sploit.smt2" |> ignore;
+      let solver =
+        Formula_options.Solver.of_piqi
+          config.Config_piqi.Configuration.solver in
       let res, model =
-        solve_model "sploit.smt2" config.Config_piqi.Configuration.solver in
+        solve_model "sploit.smt2" solver in
       if res = SAT then self#generate_new_file model;
       Logger.result "%a" Formula_pp.pp_status res;
       status_to_exit_code res

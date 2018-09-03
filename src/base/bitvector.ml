@@ -248,6 +248,8 @@ let extend_unsafe bv i = resize bv i
 let bit_mask i = Bigint.shift_left_big_int Bigint.unit_big_int i
 let bit_mask_not i = Bigint.xor_big_int minus_unit_big_int (bit_mask i)
 
+let num_bits bv = Bigint.num_bits (value_of bv)
+
 let get_bit bv i =
   Bigint.gt_big_int
     (Bigint.and_big_int (bit_mask i) (value_of bv))
@@ -459,6 +461,7 @@ sig
   val extend_signed : t -> int -> t
   val extend_unsafe : t -> int -> t
 
+  val num_bits  : t -> int
   val get_bit   : t -> int -> bool
   val set_bit   : t -> int -> t
   val clear_bit : t -> int -> t

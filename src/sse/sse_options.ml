@@ -34,13 +34,6 @@ module MaxDepth = Builder.Integer(
   end
   )
 
-module MaxPackDepth = Builder.Integer(
-  struct
-    let name = "pack-depth"
-    let default = 50
-    let doc = "maximal depth of merge patterns"
-  end
-  )
 
 module JumpEnumDepth = Builder.Integer(
   struct
@@ -201,7 +194,7 @@ module Seed =
   Builder.Integer_option(
       struct
         let name = "seed"
-        let doc = "Give a specific seed for random number gqenerators"
+        let doc = "Give a specific seed for random number generators"
       end
 )
 
@@ -219,12 +212,3 @@ module Goals =
        Parser.actions Lexer.token lexbuf
    end
   )
-
-
-module Goal_file =
-  Builder.String_option(
-   struct
-     let name = "goal-file"
-     let doc  = "Use file to set sse goals"
-   end
-    )

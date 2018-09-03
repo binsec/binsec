@@ -25,7 +25,7 @@ open Concrete_state
 open Concrete_eval
 open Format
 open Ast_builder
-open Simulate_options
+open! Simulate_options
 
 let mallocs =
   ref (Dba_types.Region.Map.empty : Dba.malloc_status Dba_types.Region.Map.t)

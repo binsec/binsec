@@ -19,6 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Ai_options
+
 let nb_locs = ref 0
 let set_location_count n = nb_locs := n
 

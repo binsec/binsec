@@ -44,7 +44,7 @@ end
 
 (** channels when interacting with solvers *)
 type solver_session = private {
-  solver: Common_piqi.solver_t;
+  solver: Prover.t;
   stdin: out_channel;
   stdout: in_channel;
   stderr: in_channel;
@@ -59,18 +59,13 @@ type solver_session = private {
 (** default session constructor *)
 val default_session : ?file:string -> unit -> solver_session
 
-(** check that the given solver is boolector *)
-val is_boolector : [> `boolector ] -> bool
-
-(** print solver name **)
-val pp_solver : Format.formatter -> [< `boolector | `cvc4 | `yices | `z3 ] -> unit
 
 (** [start_interactive ~file ~timeout solver] starts an interactive session
     with the solver [solver] and the given [~timeout] (default is none).
     [~file] provides a debug output file where every command sent to the solver
     are also copied. *)
 val start_interactive :
-  ?file:string -> ?timeout:int -> Common_piqi.solver_t -> solver_session
+  ?file:string -> ?timeout:int -> Prover.t -> solver_session
 
 (** stop the interactive session by closing the process *)
 val stop_interactive : solver_session -> unit
@@ -80,37 +75,37 @@ val stop_interactive : solver_session -> unit
     the SMT status is returned *)
 val solve:
   ?timeout:int ->
-  string -> Common_piqi.solver_t -> Formula.status
+  string -> Prover.t -> Formula.status
 
 (** [solve_incremental ~expr ~debug session solver] solve
     the current formula fed to the solver. An optional
     smt_expr [~expr] can be provided which would be added
     first. *)
 val solve_incremental :
-  ?term:Formula.bl_term option ->
+  ?term:Formula.bl_term ->
   solver_session -> Formula.status
 
 (** same as [solve] but also returns the model generated *)
 val solve_model :
   ?timeout:int ->
-  string -> Common_piqi.solver_t -> Formula.status * Smt_model.t
+  string -> Prover.t -> Formula.status * Smt_model.t
 
 (** same as [solve_model] but also returns the computation time *)
 val solve_model_time :
   ?timeout:int ->
   ?get_model:bool ->
-  string -> Common_piqi.solver_t -> Formula.status * Smt_model.t * float
+  file:string -> Prover.t -> Formula.status * Smt_model.t * float
 
 (** same as [solve_incremental_model] but also returns the model generated *)
 val solve_incremental_model :
-  ?term:Formula.bl_term option ->
+  ?term:Formula.bl_term ->
   solver_session ->
   Formula.status * Smt_model.t
 
 (** same as [solve_incremental_model] but also returns the
     computation time *)
 val solve_incremental_model_time :
-  ?term:Formula.bl_term option ->
+  ?term:Formula.bl_term ->
   ?get_model:bool ->
   solver_session ->
   Formula.status * Smt_model.t * float
@@ -118,7 +113,7 @@ val solve_incremental_model_time :
 (** same as [solve_incremental_model] but uses the smtlib2
     [get-value] rather than [get-model] *)
 val solve_incremental_value :
-  ?term:Formula.bl_term option ->
+  ?term:Formula.bl_term ->
   Formula.bv_term ->
   solver_session ->
   Formula.status * Bitvector.t option
@@ -143,7 +138,7 @@ module Session : sig
     | Sat of Formula.status
     | Value of Bitvector.t
 
-  val create : ?file:string -> ?timeout:int -> Common_piqi.solver_t -> t
+  val create : ?file:string -> ?timeout:int -> Prover.t -> t
   val destroy : t -> unit
 
   val run : t -> Command.command -> output

@@ -100,6 +100,7 @@ sig
   val extend_signed : t -> int -> t
   val extend_unsafe : t -> int -> t
 
+  val num_bits  : t -> int
   val get_bit   : t -> int -> bool
   val set_bit   : t -> int -> t
   val clear_bit : t -> int -> t

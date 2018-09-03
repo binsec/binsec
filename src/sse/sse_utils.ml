@@ -19,6 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Sse_options
 let sse_dirname = "binsec_sse"
 
 let temp_file =

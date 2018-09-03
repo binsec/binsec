@@ -24,6 +24,7 @@ open Dba_io
 open Message_piqi
 open Config_piqi
 open Configuration
+open Server_options
 
 exception Stop
 

@@ -33,6 +33,7 @@ open Specific_parameters_t
 open Callret_analysis_results
 open Standard_analysis
 
+open Dse_options
 
 let compare_st e1 e2 = if e1 = e2 then 0 else -1
 

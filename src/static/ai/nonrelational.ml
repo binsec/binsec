@@ -24,6 +24,7 @@ open Basic_types
 open High_level_predicate
 open Format
 open Static_types (* Env *)
+open Ai_options
 
 exception RecursiveCall of Dba.address
 

@@ -194,8 +194,6 @@ type entry_desc =
   | Define  of def
   | Assert  of bl_term
   | Comment of string
-  | Echo of string
-  | Check_sat
 
 type entry = {
   entry_hash : int;
@@ -439,6 +437,20 @@ let rec bl_term bl_term_desc =
                 match is_bv_cst bv2 with
                 | Some bv2 -> mk_bv_equal bv1 (mk_bv_cst (Bitvector.add bv bv2))
                 | None -> { bl_term_hash; bl_term_desc })
+           | BvBnop (BvAnd,bv1',bv2') ->
+             if Bitvector.is_fill bv
+             then mk_bl_and (mk_bv_equal bv1' bv2) (mk_bv_equal bv2' bv2)
+             else { bl_term_hash; bl_term_desc }
+           | BvBnop (BvOr,bv1',bv2') ->
+             if Bitvector.is_zeros bv
+             then mk_bl_and (mk_bv_equal bv1' bv2) (mk_bv_equal bv2' bv2)
+             else { bl_term_hash; bl_term_desc }
+           |BvBnop (BvConcat,bv1',bv2') ->
+             let sz1 = bv1'.bv_term_size in
+             let sz2 = bv2'.bv_term_size in
+             mk_bl_and
+               (mk_bv_equal bv1' (mk_bv_cst (Bitvector.extract bv Interval.{lo=sz2; hi=sz1+sz2-1})))
+               (mk_bv_equal bv2' (mk_bv_cst (Bitvector.extract bv Interval.{lo=0; hi=sz2-1})))
            | BvIte (bl,bv1,bv2) ->
              (match is_bv_cst bv1, is_bv_cst bv2 with
               | None, None | None, Some _ | Some _, None -> { bl_term_hash; bl_term_desc }
@@ -508,6 +520,8 @@ and mk_bl_not bl = bl_term (BlUnop (BlNot, bl))
 and mk_bv_equal bv1 bv2 = bl_term (BvComp (BvEqual, bv1, bv2))
 
 and mk_bv_distinct bv1 bv2 = bl_term (BvComp (BvDistinct, bv1, bv2))
+
+and mk_bl_and bv1 bv2 = bl_term (BlBnop (BlAnd, bv1, bv2))
 
 let mk_bl_fun fn lst     = bl_term (BlFun (fn,lst))
 let mk_bl_let bn bl      = bl_term (BlLet (bn, bl))
@@ -682,7 +696,7 @@ let rec bv_term bv_term_desc =
          (match u with
           | BvNot -> lognot bv
           | BvNeg -> neg bv
-          | BvRepeat i -> concat (Basic_types.List.make i bv)
+          | BvRepeat i -> concat (List_utils.make i bv)
           | BvZeroExtend i -> extend bv (size_of bv + i)
           | BvSignExtend i -> extend_signed bv (size_of bv + i)
           | BvRotateLeft i -> rotate_left bv i
@@ -827,6 +841,8 @@ let rec bv_term bv_term_desc =
 
         | BvConcat ->
           (match bv1.bv_term_desc, bv2.bv_term_desc with
+           | BvBnop (BvConcat, bv11, bv12), _ ->
+             mk_bv_bnop BvConcat bv11 (mk_bv_bnop BvConcat bv12 bv2)
            | BvUnop (BvExtract i, b1), BvUnop (BvExtract j, b2) ->
              if i.Interval.lo = j.Interval.hi + 1
              then
@@ -853,7 +869,17 @@ let rec bv_term bv_term_desc =
         | BvAnd ->
           if Bitvector.is_zeros bv then bv2
           else if Bitvector.is_fill bv then bv1
-          else { bv_term_hash; bv_term_desc; bv_term_size }
+          else
+            (match bv1.bv_term_desc with
+             | BvBnop (BvConcat, bv1, bv2) ->
+               let b1 = Bitvector.extract bv Interval.{lo=bv2.bv_term_size; hi=bv_term_size-1} in
+               let b2 = Bitvector.extract bv Interval.{lo=0; hi=bv2.bv_term_size-1} in
+               if Bitvector.(is_zeros b1 && is_fill b2)
+               then mk_bv_bnop BvConcat (mk_bv_zeros (Bitvector.size_of b1)) bv2
+               else if Bitvector.(is_fill b1 && is_zeros b2)
+               then mk_bv_bnop BvConcat bv1 (mk_bv_zeros (Bitvector.size_of b2))
+               else { bv_term_hash; bv_term_desc; bv_term_size }
+             | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
         | BvNand ->
           if Bitvector.is_zeros bv then mk_bv_fill bv_term_size
           else if Bitvector.is_fill bv then bv_term (BvUnop (BvNot, bv1))
@@ -861,7 +887,17 @@ let rec bv_term bv_term_desc =
         | BvOr ->
           if Bitvector.is_fill bv then bv2
           else if Bitvector.is_zeros bv then bv1
-          else { bv_term_hash; bv_term_desc; bv_term_size }
+          else
+            (match bv1.bv_term_desc with
+             | BvBnop (BvConcat, bv1, bv2) ->
+               let b1 = Bitvector.extract bv Interval.{lo=bv2.bv_term_size; hi=bv_term_size-1} in
+               let b2 = Bitvector.extract bv Interval.{lo=0; hi=bv2.bv_term_size-1} in
+               if Bitvector.(is_fill b1 && is_zeros b2)
+               then mk_bv_bnop BvConcat (mk_bv_fill (Bitvector.size_of b1)) bv2
+               else if Bitvector.(is_zeros b1 && is_fill b2)
+               then mk_bv_bnop BvConcat bv1 (mk_bv_fill (Bitvector.size_of b2))
+               else { bv_term_hash; bv_term_desc; bv_term_size }
+             | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
         | BvNor ->
           if Bitvector.is_fill bv then mk_bv_zeros bv_term_size
           else if Bitvector.is_zeros bv then bv_term (BvUnop (BvNot, bv1))
@@ -877,7 +913,7 @@ let rec bv_term bv_term_desc =
 
         | BvAdd ->
           if Bitvector.is_zeros bv then bv1
-          else if Bitvector.is_neg bv then
+          else if Bitvector.is_neg bv && not Bitvector.(equal bv (neg bv)) then
             mk_bv_sub bv1 (mk_bv_cst (Bitvector.neg bv))
           else
             (match bv1.bv_term_desc with
@@ -896,7 +932,7 @@ let rec bv_term bv_term_desc =
 
         | BvSub ->
           if Bitvector.is_zeros bv then bv1
-          else if Bitvector.is_neg bv then
+          else if Bitvector.is_neg bv && not Bitvector.(equal bv (neg bv)) then
             mk_bv_add bv1 (mk_bv_cst (Bitvector.neg bv))
           else
             (match bv1.bv_term_desc with
@@ -906,7 +942,11 @@ let rec bv_term bv_term_desc =
                 | Some bv1, None -> mk_bv_add bv2 (mk_bv_cst (Bitvector.sub bv1 bv))
                 | None, Some bv2 -> mk_bv_add bv1 (mk_bv_cst (Bitvector.sub bv2 bv))
                 | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
-             | BvBnop (BvSub, bv1, bv2) -> mk_bv_sub bv1 (mk_bv_add bv2 (mk_bv_cst bv))
+             | BvBnop (BvSub, bv1, bv2) ->
+               (match is_bv_cst bv1, is_bv_cst bv2 with
+                | Some bv1, None -> mk_bv_sub (mk_bv_cst (Bitvector.sub bv1 bv)) bv2
+                | None, Some bv2 -> mk_bv_sub bv1 (mk_bv_cst (Bitvector.add bv2 bv))
+                | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
              | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
 
         | BvMul ->
@@ -948,7 +988,13 @@ let rec bv_term bv_term_desc =
         | BvUdiv | BvSdiv ->
           if Bitvector.is_zeros bv then mk_bv_zeros bv_term_size
           else { bv_term_hash; bv_term_desc; bv_term_size }
-        | BvConcat
+        | BvConcat ->
+          (match bv2.bv_term_desc with
+           | BvBnop (BvConcat, bv21, bv22) ->
+             (match is_bv_cst bv21 with
+              | None -> { bv_term_hash; bv_term_desc; bv_term_size }
+              | Some bv' -> mk_bv_bnop BvConcat (mk_bv_cst (Bitvector.append bv bv')) bv22)
+           | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
         | BvUrem | BvSrem | BvSmod
         | BvShl  | BvAshr | BvLshr -> { bv_term_hash; bv_term_desc; bv_term_size })
 
@@ -1014,10 +1060,12 @@ and mk_bv_add bv1 bv2 = bv_term (BvBnop (BvAdd, bv1, bv2))
 
 and mk_bv_sub bv1 bv2 = bv_term (BvBnop (BvSub, bv1, bv2))
 
+and mk_bv_unop u bv      = bv_term (BvUnop (u,bv))
+
+and mk_bv_bnop b bv1 bv2 = bv_term (BvBnop (b,bv1,bv2))
+
 let mk_bv_fun fn lst     = bv_term (BvFun (fn,lst))
 let mk_bv_let bn bv      = bv_term (BvLet (bn, bv))
-let mk_bv_unop u bv      = bv_term (BvUnop (u,bv))
-let mk_bv_bnop b bv1 bv2 = bv_term (BvBnop (b,bv1,bv2))
 let mk_bv_ite bl bv1 bv2 = bv_term (BvIte (bl,bv1,bv2))
 let mk_select n ax bv    = bv_term (Select (n,ax,bv))
 
@@ -1107,8 +1155,6 @@ let entry_desc_hash = function
   | Define  df -> Hashtbl.hash df.def_hash
   | Assert  bl -> Hashtbl.hash bl.bl_term_hash
   | Comment s  -> Hashtbl.hash s
-  | Echo s  -> Hashtbl.hash s
-  | Check_sat  -> 0
 
 let entry entry_desc =
   let entry_hash = entry_desc_hash entry_desc in
@@ -1118,8 +1164,6 @@ let mk_declare dc = entry (Declare dc)
 let mk_define  df = entry (Define df)
 let mk_assert  bl = entry (Assert bl)
 let mk_comment s  = entry (Comment s)
-let mk_echo s  = entry (Echo s)
-let mk_check_sat  = entry (Check_sat)        
 
 (* Some helpers *)
 
@@ -1190,27 +1234,45 @@ let mk_bv_sub_int bv i =
 
 (* Sequence reification *)
 
+let split_assert bl =
+  let rec split_assert_aux bl acc seq =
+    match bl.bl_term_desc with
+    | BlBnop (BlAnd, bl1, bl2) -> split_assert_aux bl1 (bl2 :: acc) seq
+    | _ ->
+      let seq = Sequence.push_front (mk_assert bl) seq in
+      match acc with
+      | [] -> seq
+      | bl :: acc -> split_assert_aux bl acc seq
+  in
+  split_assert_aux bl [] Sequence.empty
+
 let empty = { entries = Sequence.empty }
 let length fm = Sequence.length fm.entries
 let append fm1 fm2 = { entries = Sequence.append fm1.entries fm2.entries }
 
-let push_front en fm = { entries = Sequence.push_front en fm.entries }
-let push_back  en fm = { entries = Sequence.push_back  en fm.entries }
+let push_front en fm =
+  match en.entry_desc with
+  | Assert bl ->
+    let seq = split_assert bl in
+    { entries = Sequence.append seq fm.entries }
+  | _ -> { entries = Sequence.push_front en fm.entries }
+
+let push_back  en fm =
+  match en.entry_desc with
+  | Assert bl ->
+    let seq = split_assert bl in
+    { entries = Sequence.append fm.entries seq }
+  | _ -> { entries = Sequence.push_back en fm.entries }
 
 let push_front_declare dc fm = push_front (mk_declare dc) fm
 let push_front_define  df fm = push_front (mk_define  df) fm
 let push_front_assert  bl fm = push_front (mk_assert  bl) fm
 let push_front_comment s  fm = push_front (mk_comment s)  fm
-let push_front_echo s  fm = push_front (mk_echo s)  fm
-let push_front_check_sat fm = push_front (mk_check_sat)  fm        
 
 let push_back_declare dc fm = push_back (mk_declare dc) fm
 let push_back_define  df fm = push_back (mk_define  df) fm
 let push_back_assert  bl fm = push_back (mk_assert  bl) fm
 let push_back_comment s  fm = push_back (mk_comment s)  fm
-let push_back_echo s  fm = push_back (mk_echo s)  fm
-let push_back_check_sat fm = push_back (mk_check_sat)  fm        
-    
 
 let peek_front fm = Sequence.peek_front fm.entries
 let peek_back  fm = Sequence.peek_back  fm.entries
