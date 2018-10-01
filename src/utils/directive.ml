@@ -19,9 +19,34 @@
 (*                                                                        *)
 (**************************************************************************)
 
-type side =
-  | Consequent
-  | Alternative
+
+module Choice = struct
+  type side =
+    | Consequent
+    | Alternative
+
+  type t = {
+      alternate : bool; (* Alternate side *)
+      mutable side : side;
+    }
+
+  let invert = function
+    | Consequent -> Alternative
+    | Alternative -> Consequent
+  ;;
+
+  let create ?(alternate=false) side =
+    { alternate; side }
+
+  let do_alternate t =
+    if t.alternate then t.side <- invert t.side
+  ;;
+
+
+  let is_alternative t = t.side = Alternative
+  let is_consequent t = t.side = Consequent
+
+end
 
 module Count = struct
   type t =
@@ -45,16 +70,16 @@ module Count = struct
     | Count _ | Unlimited -> false
 end
 
-type goal =
+type d =
   | Reach of Count.t
   | Enumerate of Count.t * Dba.Expr.t
   | Cut
-  | Restrict of Dba.Expr.t * Dba.Expr.t
-  | Choice of side
+  | Assume of Dba.Expr.t
+  | Choice of Choice.t
 
 type t = {
-    address : Virtual_address.t;
-    goal : goal;
+    loc : Binary_loc.t;
+    goal : d;
   }
 
 open Format
@@ -64,50 +89,48 @@ let pp_goal ppf = function
   | Enumerate (c, _e) ->
      fprintf ppf "enum %a" Count.pp c
   | Cut -> pp_print_string ppf "cut"
-  | Restrict _ -> pp_print_string ppf "restrict"
+  | Assume  _ -> pp_print_string ppf "assume"
   | Choice _ -> pp_print_string ppf "choice"
 ;;
 
 let pp ppf t =
-  fprintf ppf "0x%a %a"
-  Virtual_address.pp t.address
-  pp_goal t.goal
+  fprintf ppf "0x%a %a" Binary_loc.pp t.loc pp_goal t.goal
 ;;
 
-let reach ?(n=1) address =
+let reach ?(n=1) loc =
   assert (n >= 0);
-  { address; goal = Reach (Count.count n); }
+  { loc; goal = Reach (Count.count n); }
 
-let reach_all address = { address; goal = Reach Count.unlimited; }
+let reach_all loc = { loc; goal = Reach Count.unlimited; }
 
-let enumerate ?(n=1) e address =
+let enumerate ?(n=1) e loc =
   assert (n >= 0);
-  { address; goal = Enumerate (Count.count n, e); }
+  { loc; goal = Enumerate (Count.count n, e); }
 
-let enumerate_all e address =
-  { address; goal = Enumerate (Count.unlimited, e)}
+let enumerate_all e loc =
+  { loc; goal = Enumerate (Count.unlimited, e)}
 
-let cut address = { address; goal = Cut; }
+let cut loc = { loc; goal = Cut; }
 
-let restrict e v address =
-  { address; goal = Restrict(e, v); }
+let assume e loc =
+  { loc; goal = Assume e; }
 
-let goal g = g.goal
+let directive g = g.goal
 
-let address g = g.address
+let loc g = g.loc
 
-let choose ~side = Choice side
+let choose ~alternate ~side = Choice (Choice.create ~alternate side)
 
-let choose_alternative address =
-  { address; goal = choose ~side:Alternative; }
+let choose_alternative ?(alternate=true) loc =
+  { loc; goal = choose ~alternate ~side:Choice.Alternative; }
 
-let choose_consequent address =
-  { address; goal = choose ~side:Consequent; }
+let choose_consequent  ?(alternate=true) loc =
+  { loc; goal = choose ~alternate ~side:Choice.Consequent; }
 
 let check_and_decr g =
   match g.goal with
   | Choice _
-  | Restrict _
+  | Assume _
   | Cut
   | Reach (Count.Unlimited | Count.Count 0)
   | Enumerate ((Count.Unlimited | Count.Count 0), _) -> None
@@ -117,3 +140,8 @@ let check_and_decr g =
   | Enumerate (Count.Count n as c, e) ->
      assert (n >= 1);
      Some { g with goal = Enumerate (Count.decr c, e); }
+
+
+let is_choice = function
+  | { goal = Choice _; _} -> true
+  | _ -> false

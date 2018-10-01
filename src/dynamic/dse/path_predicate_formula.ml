@@ -25,6 +25,7 @@ open Formula_utils
 open Path_predicate_env
 open Path_predicate_optim
 open Basic_types
+open Dse_options
 
 exception Exit_path_predicate
 
@@ -367,11 +368,11 @@ let prune_useless_path_entries  _ ?(pruning=true) path pred =
              if VarSet.mem var all || not pruning then
                Formula.push_back item pth, VarSet.union all vars, String.Set.add name kpt
              else acc
-           | Assert bl ->
+           | Assert bl | Assume bl ->
              Formula.push_back item pth,
              VarSet.union all (bl_term_variables bl),
              kpt
-           | Echo _ | Check_sat | Comment _ -> Formula.push_back item pth,all,kpt)
+           | Comment _ -> Formula.push_back item pth,all,kpt)
         path (Formula.empty, bl_term_variables pred, String.Set.empty)
     in
     let all_vars = to_stringmap all_vars in
@@ -418,10 +419,10 @@ let prune_useless_path_entries_prek inputs (ksteps:int) ?(pruning=true) path
                 (pth := Formula.push_back item !pth;
                  all := VarSet.union !all vars;
                  kpt := String.Set.add name !kpt)
-            | Assert bl ->
+            | Assert bl | Assume bl ->
               pth := Formula.push_back item !pth;
               all  := VarSet.union !all (bl_term_variables bl)
-            | Echo _ | Check_sat | Comment _ -> pth := Formula.push_back item !pth)
+            | Comment _ -> pth := Formula.push_back item !pth)
          path
      with Exit_path_predicate -> ());
     !pth, !all, !kpt
@@ -580,9 +581,9 @@ let build_formula f predicate
       (fun i (num,numc,vars) ->
          match i.Formula.entry_desc with
          | Formula.Declare _
-         | Formula.Comment _ | Formula.Echo _ | Formula.Check_sat ->
+         | Formula.Comment _ ->
            num, numc, vars
-         | Formula.Assert _  -> num, numc+1, vars
+         | Formula.Assert _ | Formula.Assume _ -> num, numc+1, vars
          | Formula.Define df ->
            let name = Formula_utils.def_name df in
            1 + num, numc, String.Set.add name vars)
@@ -628,17 +629,13 @@ let build_formula f predicate
             | AxDef (v,_,ax) ->
               Printf.sprintf "(define-fun %s () (Array (_ BitVec %d) (_ BitVec %d)) %s)"
                 v.ax_name v.idx_size v.elt_size (print_ax_term  ax))
-       | Assert bl ->
+       | Assert bl | Assume bl ->
          write_com_if_exist ();
          write_string (Printf.sprintf "(assert %s)" (print_bl_term bl))
-       | Echo _ -> ()
-       | Check_sat ->
-         write_com_if_exist ();
-         write_string "(check_sat)"
-       | Comment s -> 
+       | Comment s ->
          write_com_if_exist ();
          onetime_comment := s
-       )
+    )
     filtered_path;
   if push then write_string "\n(push 1)\n";
   write_string (Printf.sprintf "(assert %s)\n" (print_bl_term predicate));
@@ -646,7 +643,7 @@ let build_formula f predicate
     Formula.fold_forward
       (fun entry (uop,bop,ld,st as acc) ->
          match entry.entry_desc with
-         | Declare _ | Comment _ | Check_sat | Echo _ -> acc
+         | Declare _ | Comment _ -> acc
          | Define df ->
            let stats =
              match df.def_desc with
@@ -655,7 +652,7 @@ let build_formula f predicate
              | AxDef (_,_,ax) -> ax_term_stats ax
            in
            uop+stats.unop,bop+stats.bnop,ld+stats.select,st+stats.store
-         | Assert bl ->
+         | Assert bl | Assume bl ->
            let stats = bl_term_stats bl in
            uop+stats.unop,bop+stats.bnop,ld+stats.select,st+stats.store)
       filtered_path (0,0,0,0)

@@ -69,4 +69,5 @@ let run () =
     Instr_cfg.output_graph channel cfg ~entry callees;
     close_out channel
   with
-    Unix.Unix_error (e,_,_) -> Logger.error "%s" (Unix.error_message e)
+  | Unix.Unix_error (e,_,_) ->
+    Disasm_options.Logger.error "%s" (Unix.error_message e)

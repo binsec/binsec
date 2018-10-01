@@ -236,22 +236,9 @@ sig
 end
 
 module Make
-    (A: sig
-       type t
-       val compare : t -> t -> int
-       val hash : t -> int
-       val equal : t -> t -> bool
-     end)
-    (I: sig
-       type t
-       val hash : t -> int
-       val equal : t -> t -> bool
-     end)
-    (S: sig
-       type t
-       val hash : t -> int
-       val equal : t -> t -> bool
-     end) :
+    (A: Sigs.HASHABLE)
+    (I: Hashtbl.HashedType)
+    (S: Hashtbl.HashedType) :
   S with type addr = A.t
      and type inst = I.t
      and type symb = S.t

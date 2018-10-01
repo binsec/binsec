@@ -111,32 +111,6 @@ let make inst_map djumps_map =
   in Caddress.Map.fold build_aux inst_map Caddress.Map.empty
 
 
-(* FIXME : unused *)
-let _display_ast ast =
-  let pp_set fmt addrset =
-    Dba_types.Caddress.Set.iter
-      (fun caddress ->
-         Format.fprintf fmt "%a,@ " Dba_printer.Ascii.pp_code_address caddress)
-      addrset
-  in
-  let f addr stmt =
-    Logger.info
-      "@[<v 2>%a %a:@ \
-       preds: @[<hov 0>%a@]@ \
-       succs: @[<hov 0>%a@]@ \
-       closed: %s@ \
-       binstr: TODO@ \
-       @]"
-      Dba_printer.Ascii.pp_code_address addr
-      Dba_printer.Ascii.pp_instruction stmt.instr
-      pp_set stmt.preds
-      pp_set stmt.succs
-      (string_of_bool stmt.closed_succs)
-    ;
-  in Dba_types.Caddress.Map.iter f ast
-
-
-
 let build_sequences_map ast l0 dba_display =
   let ast = ref ast in
 

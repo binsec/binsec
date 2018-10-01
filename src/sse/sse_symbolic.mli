@@ -19,44 +19,41 @@
 (*                                                                        *)
 (**************************************************************************)
 
-val memory_name : string
-val memory_type : Formula.sort
-val path_constraint_name : string
+(** Symbolic state *)
 
-(* the part of the symbolic store which is shared among every branch
- * inside mutability *)
-module Store : sig
-  module M = Basic_types.String.Map
-  type infos = int * Formula.sort (* index, type *)
+module State : sig
   type t
 
-  val create : unit -> t
-  val add_entry : t -> Formula.entry -> unit
-end
+  val initializations : t -> int Bitvector.Collection.Map.t
 
-(* the part of the symbolic store which is not shared *)
-module State : sig
-  module M = Basic_types.String.Map
-  module S = Basic_types.Int64.Map
-  type t = private {
-    store : Store.t;
-    initialisation : int S.t;
-    var_index : int M.t;
-  }
-  val create : Store.t -> t
-  val assign : t -> Store.M.key -> Formula.sort -> Formula.term -> t
-  val declare : t -> M.key -> Formula.sort -> t
+  val create : unit -> t
+
+  val assign :  ?wild:bool -> string -> Formula.sort -> Formula.term -> t -> t
+  val declare : ?wild:bool -> string -> Formula.sort -> t -> t
+
+  val constrain : Formula.bl_term -> t -> t
+  (** [constrain c s] adds constraint [c] to state [s] *)
+
+  val comment : string -> t -> t
+  (** [comment cmt s] *)
+
+  val formula : t -> Formula.formula
+
+  val memory_term : Formula.ax_term -> string * Formula.sort * Formula.term
 
   val get_memory : t -> Formula.ax_term
-  val get_path_constraint : t -> Formula.bl_term
-  val get_bv : t -> M.key -> Size.Bit.t -> Formula.bv_term
-  val merge : t -> t -> t
-  val init_mem_at : addr:int64 -> size:int -> t -> t
-  val get_entries : t -> Formula.formula
-  val get_path_variables : t -> Formula.VarSet.t
 
-  val has_empty_vinfos : t -> bool
-  val copy_store :  t -> t
+  val get_bv : string -> Size.Bit.t -> t -> Formula.bv_term
+
+  val init_mem_at : addr:Bitvector.t -> size:int -> t -> t
+
+  val uncontrolled : t -> Formula.VarSet.t
 
   val pp : Format.formatter -> t -> unit
+
+  (* Do not use *)
+  val add_entry : Formula.entry -> t -> unit
+
+  (* Do not use *)
+  val sync : t -> t
 end

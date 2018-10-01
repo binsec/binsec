@@ -34,13 +34,6 @@ module MaxDepth = Builder.Integer(
   end
   )
 
-module MaxPackDepth = Builder.Integer(
-  struct
-    let name = "pack-depth"
-    let default = 50
-    let doc = "maximal depth of merge patterns"
-  end
-  )
 
 module JumpEnumDepth = Builder.Integer(
   struct
@@ -119,10 +112,11 @@ module MemoryFile = Builder.String(
   end
   )
 
-module NoComment = Builder.False(
+module Comment = Builder.False(
   struct
-    let name = "no-comment"
-    let doc = "Disable comments in generated formulas"
+    let name = "comment"
+    let doc =
+      "Add comments indicating the origin of the formulas in generated scripts"
   end
   )
 
@@ -201,30 +195,30 @@ module Seed =
   Builder.Integer_option(
       struct
         let name = "seed"
-        let doc = "Give a specific seed for random number gqenerators"
+        let doc = "Give a specific seed for random number generators"
       end
 )
 
-module Goals =
+module Directives =
   Builder.Any(
    struct
-     type t = Action.t list
-     let name = "goals"
-     let doc = "Set SSE goals"
+     type t = Directive.t list
+     let name = "directives"
+     let doc = "Set SSE directive"
      let default = []
-     let to_string _ = "no action"
+     let to_string _ = "no directives"
 
      let of_string s =
        let lexbuf = Lexing.from_string s in
-       Parser.actions Lexer.token lexbuf
+       Parser.directives Lexer.token lexbuf
    end
   )
 
 
-module Goal_file =
+module Dot_filename_out =
   Builder.String_option(
-   struct
-     let name = "goal-file"
-     let doc  = "Use file to set sse goals"
-   end
+      struct
+        let name = "cfg-o"
+        let doc  = "Output CFG in this file"
+      end
     )

@@ -395,14 +395,13 @@ struct
   let update entries model =
     List.map (
       fun x ->
-        try
-          let new_val =
-            Bigint.int64_of_big_int (
-              Bitvector.value_of (
-                Smt_model.find_register model
-                  (get_input_entry_name x)))
-          in modify_input_entry_value x new_val
-        with Not_found -> x
+      let name = get_input_entry_name x in
+      match Smt_model.find_variable model name with
+      | Some bv ->
+         Bitvector.value_of bv
+         |> Bigint.int64_of_big_int
+         |> modify_input_entry_value x
+      | None -> x
     ) entries
 
 

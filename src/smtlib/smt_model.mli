@@ -25,7 +25,7 @@
 
 type t
 
-type address = int64
+type address = Bitvector.t
 
 type identifier = string
 
@@ -59,34 +59,28 @@ val yices_extract : string -> t
     filename
 *)
 
-(** {2 Pretty-printer } *)
+(** {2 Pretty-printer} *)
 
 val pp : Format.formatter -> t -> unit
 
+(** {2 Accessors} *)
 
-(** {2 Accessors } *)
-
-val find_register : t -> identifier -> Bitvector.t
+val find_variable : t -> identifier -> Bitvector.t option
 (** [find_register model name] finds the bitvector value of register [name] in
     the model
-
-    @raise Not_found if the register [name] is not part of the model
 *)
 
-val find_address_contents : t -> address -> int
+val find_address_contents : t -> address -> Bitvector.t option
 (** [find_address_contents model addr] find the (byte-sized) value of address
     [addr] from the model.
-
-    @raise Not_found if [address] is not part of the model.
 *)
 
 val find_address_content :
-  t -> address -> Size.Byte.t -> Dba.endianness -> Bitvector.t
+  t -> address -> Size.Byte.t -> Dba.endianness -> Bitvector.t option
 (** Not yet implemented *)
 
-val registers : t -> identifier list
+val variables : t -> identifier list
 (** [get_register model] gets the list of registers of this model *)
-
 
 val memory_addresses : t -> address list
 (** [get_register model] gets the list of addresses with specific values of this
@@ -96,3 +90,14 @@ val is_memory_set : t -> address -> bool
 (** [is_memory_set model address] checks if the given address is present in the
     memory of this model
 *)
+
+val filter:
+  ?keep_default:bool ->
+  addr_p:(Bitvector.t -> bool) -> var_p:(string -> bool) -> t -> t
+(** [filter ?keep_default ~addr_p ~var_p model] creates a new model [m] with the
+    following properties:
+    - [m] has the same default value for memory adresses than [model] if
+    [keep_default] is [true] (default is [false])
+    - [m] keeps from [model] all addresses verifying the predicate [addr_p] and
+    all the variable names verifying [var_p]
+ *)

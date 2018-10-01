@@ -20,6 +20,7 @@
 (**************************************************************************)
 
 open Trace_type
+open Trace_options
 
 (*
 TODO:
@@ -68,7 +69,7 @@ let patch_jump_condition _ (opc:string) (cmp:cmp_type) =
       | "jae" | "jnb" | "jnc" -> Dba.Expr.uge
       | "jb" | "jnae" | "jc" -> Dba.Expr.ult
       | "jbe" | "jna" -> Dba.Expr.ule
-      | "je" | "jz" -> Dba.Expr.eq
+      | "je" | "jz" -> Dba.Expr.equal
       | "jne" | "jnz" -> Dba.Expr.diff
       | "jg" | "jnle" -> Dba.Expr.sgt
       | "jge" | "jnl" -> Dba.Expr.sge
@@ -84,7 +85,7 @@ let patch_jump_condition _ (opc:string) (cmp:cmp_type) =
         Dba.Expr.diff x' zero
       | "jae" | "jnb" | "jnc" | "jbe" | "jna" | "jge" | "jnl" | "jle" | "jng" ->
         Dba.Expr.one
-      | "je" | "jz" -> Dba.Expr.eq x' zero
+      | "je" | "jz" -> Dba.Expr.equal x' zero
       | "jg" | "jnle" -> Dba.Expr.sgt x' zero
       | "jl" | "jnge" -> Dba.Expr.slt x' zero
       | _ -> raise Not_cmp_instruction
@@ -93,8 +94,8 @@ let patch_jump_condition _ (opc:string) (cmp:cmp_type) =
     let size = Dba_utils.computesize_dbaexpr x in
     let zero = Dba.Expr.zeros size in
     let xAndy = Dba.Expr.logand x y in
-    let eq_zero  = Expr.eq   xAndy zero in
-    let neq_zero = Expr.diff xAndy zero in
+    let eq_zero  = Expr.equal xAndy zero in
+    let neq_zero = Expr.diff  xAndy zero in
     let xAndyLt0 =
       Expr.logand (Expr.slt x zero) (Expr.slt y zero) in
     begin match mnemonic with

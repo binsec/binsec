@@ -72,6 +72,7 @@ sig
 
   (* Comparison *)
   include Sigs.Comparisons with type t := t
+                            and type boolean = bool
 
   (* Arithmetic *)
   include Sigs.Arithmetic with type t := t
@@ -100,6 +101,7 @@ sig
   val extend_signed : t -> int -> t
   val extend_unsafe : t -> int -> t
 
+  val num_bits  : t -> int
   val get_bit   : t -> int -> bool
   val set_bit   : t -> int -> t
   val clear_bit : t -> int -> t
@@ -112,7 +114,7 @@ end
 
 type t
 
-include Common with type t := t
+include Common with type t := t and type boolean = bool
 
 (* Conversion *)
 
@@ -173,3 +175,6 @@ val print : t -> string
 (** [print bv] behaves like
     [pp Format.str_formatter bv; Format.flush_str_formatter ()]
 *)
+
+
+module Collection : Sigs.Collection with type t := t

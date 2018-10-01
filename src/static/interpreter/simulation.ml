@@ -37,9 +37,9 @@ module InitFile = Builder.String_option
       let doc = "set dba file containing arbitrary initialisation instructions"
     end)
 
-module Goals = Builder.Any
+module Directives = Builder.Any
     (struct
-      type t = Action.t list
+      type t = Directive.t list
       let name = "goals"
       let doc = "Set simulation goals"
       let default = []
@@ -47,5 +47,5 @@ module Goals = Builder.Any
 
       let of_string s =
         let lexbuf = Lexing.from_string s in
-        Parser.actions Lexer.token lexbuf
+        Parser.directives Lexer.token lexbuf
     end)

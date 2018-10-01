@@ -34,6 +34,7 @@ val address : Virtual_address.t -> t
 
 val offset : int -> t -> t
 
+val pp: Format.formatter -> t -> unit
 
 (** {6 Accessors} *)
 

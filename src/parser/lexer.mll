@@ -23,6 +23,7 @@
 open Parser
 
 let keywords = [
+  "as"            , AS;
   "begin"         , BEGIN;
   "end"           , END;
   "modu"          , MODU;
@@ -57,6 +58,8 @@ let keywords = [
   "free"          , FREE ;
   "var"           , VAR;
   "print"         , PRINT;
+  "from"          , FROM;
+  "file"          , FILE;
   "from_file"     , FROMFILE;
   "big"           , BIG ;
   "little"        , LITTLE;
@@ -67,14 +70,14 @@ let keywords = [
   "entry_point"   , ENTRYPOINT;
   "word_size"     , WORDSIZE ;
   "endianness"    , ENDIANNESS;
-
   "cut"           , CUT;
   "enum"          , ENUMERATE;
   "enumerate"     , ENUMERATE;
   "reach"         , REACH;
-  "restrict"      , RESTRICT;
   "alternative"   , ALTERNATIVE;
   "consequent"    , CONSEQUENT;
+  "alternate"     , ALTERNATE;
+  "uncontrolled"  , UNCONTROLLED;
 ]
 
 let keyword_tbl =
@@ -91,8 +94,8 @@ let kwd_or_ident name =
 
 let space = ' ' | '\t' | '\r'
 let digit = ['0'-'9']
-let hex = '0' ['x']['0'-'9''A'-'F''a'-'f']*
-let bin = '0' ['b']['0''1']*
+let hex = '0' ['x']['0'-'9''A'-'F''a'-'f']+
+let bin = '0' ['b']['0''1']+
 let alpha = ['a'-'z''A'-'Z']
 let alpha_num = (alpha | digit)
 let ident = alpha (alpha_num | '_')*
@@ -106,7 +109,6 @@ rule token = parse
   | "*s"            { STAR_S }
   | "/u?"           { SLASH_U }
   | "/s"            { SLASH_S }
-  | "!"             { NOT }
   | ">>"
   | ">>u"           { RSHIFTU }
   | ">>s"           { RSHIFTS }
@@ -140,6 +142,13 @@ rule token = parse
   | "<"             { INFER }
   | ">"             { SUPER }
   | "//"            { ANNOT }
+  | "||"
+  | "|"             { OR }
+  | "&&"
+  | "&"             { AND }
+  | "^"             { XOR }
+  | "@"             { CONCAT }
+  | "!"             { NOT }
   | "<TEMP>"        { TEMPTAG }
   | "<FLAG>"        { FLAGTAG }
   | "\\addr"        { WORDSIZE }

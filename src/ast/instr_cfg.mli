@@ -19,14 +19,27 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Cfg.S with type addr = Virtual_address.t
-               and type inst = Instruction.t
-               and type symb = string
 
-val ordered_iter_vertex:
-  compare:(vertex -> vertex -> int) -> (vertex -> unit) -> t -> unit
 
-val iter_vertex_by_address : (vertex -> unit) -> t -> unit
+module type S = sig
+  include Cfg.S
 
-val output_graph : Pervasives.out_channel ->
-  t -> entry:vertex -> Virtual_address.t list -> unit
+  val ordered_iter_vertex:
+    compare:(vertex -> vertex -> int) -> (vertex -> unit) -> t -> unit
+
+  val iter_vertex_by_address : (vertex -> unit) -> t -> unit
+
+  val output_graph : Pervasives.out_channel ->
+                     t -> entry:vertex -> Virtual_address.t list -> unit
+
+  val dump : filename:string -> t -> unit
+end
+
+
+module Make(H:Hashtbl.HashedType): S with type addr = Virtual_address.t
+                                      and type inst = Instruction.t
+                                      and type symb = H.t
+
+include S with type addr = Virtual_address.t
+           and type inst = Instruction.t
+           and type symb = string

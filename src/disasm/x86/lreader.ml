@@ -19,6 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Disasm_options
+
 module type Accessor = sig
   type t
   val u8  : t -> int

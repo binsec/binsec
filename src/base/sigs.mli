@@ -82,23 +82,27 @@ module type Collection = sig
   end
   module Hamt : Hashamt.S with type key = t
 
-  module Htbl : Hashtbl.S with type key = t
+  module Htbl : sig
+    include Hashtbl.S with type key = t
+    val filter : (key -> 'a -> bool) -> 'a t -> 'a t
+  end
 end
 
 module type Comparisons = sig
   type t
-  val equal : t -> t -> bool
-  val diff  : t -> t -> bool
+  type boolean
+  val equal : t -> t -> boolean
+  val diff  : t -> t -> boolean
 
-  val ule : t -> t -> bool
-  val uge : t -> t -> bool
-  val ult : t -> t -> bool
-  val ugt : t -> t -> bool
+  val ule : t -> t -> boolean
+  val uge : t -> t -> boolean
+  val ult : t -> t -> boolean
+  val ugt : t -> t -> boolean
 
-  val sle : t -> t -> bool
-  val sge : t -> t -> bool
-  val slt : t -> t -> bool
-  val sgt : t -> t -> bool
+  val sle : t -> t -> boolean
+  val sge : t -> t -> boolean
+  val slt : t -> t -> boolean
+  val sgt : t -> t -> boolean
 end
 
 

@@ -241,7 +241,7 @@ let fix_map disasm imap address =
 *)
 let redisassemble disasm widen imap address =
   let inst_map = fix_map disasm imap address in
-  Logger.debug "Setting widening points ...";
+  Static_options.Logger.debug "Setting widening points ...";
   let w_pts, unrolled_loops = widen inst_map in
   Dba_types.Caddress.Map.find address inst_map,
   inst_map, w_pts, unrolled_loops
@@ -259,6 +259,7 @@ let update_instr_map
           Disasm.Recursive.disassemble ~visited ~worklist ~stops p in
       redisassemble disasm widen inst_map address
     else begin
-      Logger.fatal "No instruction can be retrieved from executable.";
+      Static_options.Logger.fatal
+        "No instruction can be retrieved from executable.";
       exit 3
     end

@@ -32,6 +32,8 @@ open Generic_analysis
 
 module Pp = Dba_printer.Unicode
 
+open Dse_options
+
 let the = Utils.unsafe_get_opt
 
 class generic_analyzer (input_config:Trace_config.t) =
@@ -107,19 +109,26 @@ class generic_analyzer (input_config:Trace_config.t) =
       self#add_constraint_witness (Some BvUge) size parameters.restrict_values_from env;
       self#add_constraint_witness (Some BvUle) size parameters.restrict_values_to env;
       let rec check_possible_values k _ targets =
-        (match targets with [] -> () | t:: _ -> self#add_constraint_witness None ~negate:true size (Some t) env);
-        let res, model, _ = self#solve_predicate mk_bl_true ~push:true ~pop:true env in
+        (match targets with
+         | [] -> ()
+         | t:: _ ->
+            self#add_constraint_witness None ~negate:true size (Some t) env);
+        let res, model, _ =
+          self#solve_predicate mk_bl_true ~push:true ~pop:true env in
         if k = limit then first_res <- res;
         match res with
         | SAT ->
-          begin try
-              let value = Smt_model.find_register model witness_var in
-              if k - 1 <> 0 then check_possible_values (k-1) env.formula
-                  ((Bigint.int64_of_big_int (Bitvector.value_of value))::targets) else targets
-            with
-            | Failure s ->
+          begin
+            match Smt_model.find_variable model witness_var with
+            | Some value ->
+               let k' = k - 1 in
+               if k' <> 0 then
+                 let v = Bigint.int64_of_big_int (Bitvector.value_of value) in
+                 check_possible_values k' env.formula (v :: targets)
+               else targets
+            | None ->
               Logger.error
-                "Error while processing model (stop recursion):%s\n" s;
+                "Error while processing model (stop recursion)";
               targets
           end
         | UNSAT | TIMEOUT | UNKNOWN -> targets

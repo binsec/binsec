@@ -20,6 +20,7 @@
 (**************************************************************************)
 
 open Server_callback
+open Server_options
 
 let get_time_string () =
   let open Unix in
@@ -27,9 +28,6 @@ let get_time_string () =
   Format.asprintf "%d:%02d:%02d" (date.tm_hour+1) date.tm_min date.tm_sec
 
 let single_thread_server_loop () =
-  let open Trace_config in
-  let open Config_piqi.Configuration in
-  Logger.set_verbosity (Int32.to_int default.configuration.verbosity);
   Network_io.bind @@ Server_options.Server_port.get ();
   let items = Zmq.Poll.mask_of [| (!Network_io.frontend_socket, Zmq.Poll.In) |] in
   try

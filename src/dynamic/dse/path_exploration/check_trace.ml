@@ -16,7 +16,7 @@
 (*  See the GNU Lesser General Public License version 2.1                 *)
 (*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
 (**************************************************************************)
-
+open Dse_options
 open Trace_type
 open Config_piqi
 open Configuration
@@ -48,7 +48,9 @@ class check_trace (trace_config:Trace_config.t) =
             try
               let result, _ =
                 let open Trace_config in
-                Solver.solve_model formula_file trace_config.configuration.solver in
+                let solver = Formula_options.Solver.of_piqi
+                               trace_config.configuration.solver in
+                Solver.solve_model formula_file solver in
               match result with
               | Formula.SAT -> Logger.debug "SAT!"
               | Formula.UNSAT

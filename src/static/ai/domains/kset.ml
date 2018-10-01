@@ -20,6 +20,7 @@
 (**************************************************************************)
 
 open Errors
+open Ai_options
 
 exception Elements_of_top
 

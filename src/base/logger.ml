@@ -210,6 +210,8 @@ module type S = sig
   val get_info_level : unit -> int
 
   val debug: ?level:int -> ('a, Format.formatter, unit) format -> 'a
+  val fdebug: ?level:int -> (unit -> (unit, Format.formatter, unit) format) -> unit
+
   val set_debug_level : int -> unit
   val get_debug_level : unit -> int
 
@@ -224,6 +226,8 @@ module type S = sig
 
   val set_color : bool -> unit
   val get_color : unit -> bool
+
+  val set_zmq_logging_only : send:(string -> unit) -> bool -> unit
 end
 
 module type ChannelGroup = sig
@@ -334,11 +338,10 @@ module Make(G : ChannelGroup) = struct
     in { mark_open_tag; mark_close_tag; print_open_tag; print_close_tag; }
 
 
-
-  let log (channel: channel) txt  =
+  let log channel txt  =
     let ppfs = channel.ppfs in
     let pp fmt txt =
-      if (ChannelKind.loglevel channel.kind) >= (get_log_level ())
+      if ChannelKind.loglevel channel.kind >= get_log_level ()
       then
         Format.kfprintf
           (fun fmt ->
@@ -415,6 +418,12 @@ module Make(G : ChannelGroup) = struct
   let debug ?(level=0) txt =
     leveled_channel debug_channel debug_pass ~level txt
 
+  let fdebug ?(level=0) f =
+    if debug_pass level
+    then log debug_channel (f ())
+    else Format.ifprintf Format.std_formatter ""
+  ;;
+
   let info ?(level=0) txt =
     leveled_channel info_channel info_pass ~level txt
 
@@ -461,11 +470,6 @@ module Make(G : ChannelGroup) = struct
        List.iter (channel_set_color b) channels),
     (fun () -> !v)
 
-end
-
-
-(* default printers *)
-include Make(struct let name = "" end)
 
 
 let set_zmq_logging_only ~send = function
@@ -484,7 +488,7 @@ let set_zmq_logging_only ~send = function
     let zeromq_fmt = Format.make_formatter out_string flush in
     List.iter (set_formatters [zeromq_fmt]) channels
 
-let set_verbosity n =
-  set_debug_level n;
-  set_info_level n;
-  set_warning_level n
+end
+
+
+(* default printers *)

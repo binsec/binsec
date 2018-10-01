@@ -38,8 +38,11 @@ module StringHashtbl = Hashtbl.Make(struct
   )
 type llvm_registers = L.llvalue StringHashtbl.t
 type other = {
-  llregs: llvm_registers
+  llregs: llvm_registers;
+  entry_block: L.llbasicblock;
 }
+
+type state = other llvm_state
 
 module Boolean = struct
   let ar2 f = fun  a b (llst:other llvm_state) -> (f a b "" llst.llbuilder, llst)
@@ -67,16 +70,18 @@ module Binary = struct
   let blshr  = ar2 L.build_lshr
   let bashr  = ar2 L.build_ashr
   let bshl = ar2 L.build_shl
-  let biumod = ar2 L.build_urem
+  let biurem = ar2 L.build_urem
   let biudiv = ar2 L.build_udiv
-  let bismod = ar2 L.build_srem
+  let bisrem = ar2 L.build_srem
   let bisdiv = ar2 L.build_sdiv
 
-  let buext ~size a llst =
+  let buext ~size ~oldsize a llst =
+    let _ = oldsize in
     let newtype = L.integer_type  llst.llcontext size in
     L.build_zext a newtype "" llst.llbuilder, llst
 
-  let bsext ~size a llst =
+  let bsext ~size ~oldsize a llst =
+    let _ = oldsize in
     let newtype = L.integer_type  llst.llcontext size in
     L.build_sext a newtype "" llst.llbuilder, llst
 
@@ -85,7 +90,9 @@ module Binary = struct
   let bor = ar2 L.build_or
   let band = ar2 L.build_and
 
-  let bextract ~size ~index ~oldsize a llst =
+  let bextract ~lo ~hi ~oldsize a llst =
+    let index = lo in
+    let size = (hi - lo) + 1 in
     assert(size > 0);
     let value =
       if index == 0 then a
@@ -121,77 +128,105 @@ module Binary = struct
   let bimul = ar2 L.build_mul
   let bisub = ar2 L.build_sub
   let biadd = ar2 L.build_add
+  let bv_right_rotate ~size _ =
+    let _ = size in
+    assert false
+  let bv_left_rotate ~size _ =
+    let _ = size in
+    assert false
 
 end
 
 
 (* Note: the `state' type can be completed with additional information
    (e.g. from a trace), notably to really resolve dynamic jumps. *)
-module LLVM_Decoder = struct
+module Instr_to_LLVM = struct
 
-  module Arg = struct
+  module Boolean = Boolean
+  module Binary = Binary
 
-    module Boolean = Boolean
-    module Binary = Binary
+  module State = struct type t = other llvm_state end
+  module M = Generic_decoder_sig.State_Monad(State)
 
-    module State = struct type t = other llvm_state end
-    module M = Generic_decoder_sig.State_Monad(State)
+  (* TODO: Make sure that endianness matches the one of LLVM. *)
+  let load ~size _endianness address llst =
+    let to_type = L.pointer_type @@ L.integer_type llst.llcontext size in
+    let address = L.build_inttoptr address to_type "" llst.llbuilder in
+    L.build_load address "" llst.llbuilder, llst
+  ;;
 
-    (* TODO: Make sure that endianness matches the one of LLVM. *)
-    let load ~size _endianness address llst =
-      let to_type = L.pointer_type @@ L.integer_type llst.llcontext size in
-      let address = L.build_pointercast address to_type "" llst.llbuilder in
-      L.build_load address "" llst.llbuilder, llst
-    ;;
+  let store ~size _endianness address value llst =
+    let to_type = L.pointer_type @@ L.integer_type llst.llcontext size in
+    let address = L.build_inttoptr address to_type "" llst.llbuilder in
+    ignore @@ L.build_store value address llst.llbuilder;
+    llst
+  ;;
 
-    let store ~size _endianness address value llst =
-      let to_type = L.pointer_type @@ L.integer_type llst.llcontext size in
-      let address = L.build_pointercast address to_type "" llst.llbuilder in
-      ignore @@ L.build_store address value llst.llbuilder;
-      llst
-    ;;
+  (* We store the contents of registers in global variables. *)
+  let var_to_address size name llst =
+    let llregs = llst.other.llregs in
+    try StringHashtbl.find llregs name
+    with Not_found ->
+      let lltype = (L.integer_type llst.llcontext size) in
+      let value = L.declare_global lltype name llst.llmodule in
+      StringHashtbl.replace llregs name value;
+      value
+  ;;
 
-    let var_to_address size name llst =
-      let llregs = llst.other.llregs in
-      try StringHashtbl.find llregs name
-      with Not_found ->
-        let lltype = (L.integer_type llst.llcontext size) in
-        let value = L.declare_global lltype name llst.llmodule in
-        StringHashtbl.replace llregs name value;
-        value
-    ;;
+  let get_var ~size name llst =
+    let address = var_to_address size name llst in
+    (L.build_load address name llst.llbuilder,llst)
+  ;;
 
-    let get_var ~size name llst =
-      let address = var_to_address size name llst in
-      let to_type = L.pointer_type @@ L.integer_type llst.llcontext size in
-      let address = L.build_pointercast address to_type (name ^ "ptr") llst.llbuilder in
-      (* assert(size < 64); *)
-      (L.build_load address name llst.llbuilder,llst)
-    ;;
+  let set_var ~size name llvalue llst =
+    let address = var_to_address size name llst in
+    let _ = L.build_store llvalue address llst.llbuilder in
+    llst
+  ;;
 
-    let set_var ~size name llvalue llst =
-      let address = var_to_address size name llst in
-      let to_type = L.pointer_type @@ L.integer_type llst.llcontext size in
-      let address = L.build_pointercast address to_type (name ^ "ptr") llst.llbuilder in
-      (* assert(size < 64); *)
-      let _ = L.build_store llvalue address llst.llbuilder in
-      llst
-    ;;
+  let ite cond a b llst = L.build_select cond a b "" llst.llbuilder, llst
+  let bool_of_bin x = M.return x
+  let bin_of_bool x = M.return x
+  type binary = L.llvalue
+  type boolean = L.llvalue
 
-    let select cond a b llst = L.build_select cond a b "" llst.llbuilder, llst
-    let bool_of_bin x = M.return x
-    let bin_of_bool x = M.return x
-    type binary = L.llvalue
-    type boolean = L.llvalue
+  let unknown ~size llst = L.undef (L.integer_type llst.llcontext size), llst
+  let undef = unknown
 
-    let unknown ~size llst = L.undef (L.integer_type llst.llcontext size), llst
-    let undef = unknown
+  let assume bool llst =
+    let assume_type =
+      L.function_type (L.void_type llst.llcontext)
+        [|L.i1_type llst.llcontext |]
+    in
+    let assumef = L.declare_function "llvm.assume" assume_type llst.llmodule in
+    (* It is important not to give any name here. *)
+    let _ = L.build_call assumef [| bool |] "" llst.llbuilder in
+    (),llst
 
-  end
-
-  module Decode_Instr = Generic_decoder.Decode_Instr(Arg)
+  let add_comment _string llst =
+    (* In theory, we could add string metadata nodes to the
+       following LLVM instructions. But the support in the LLVM
+       OCaml bindings is lacking. *)
+    llst
+  ;;
 
 end
+
+module Decode_Instr = Generic_decoder.Decode_Instr(Instr_to_LLVM)
+
+
+let initial_state ~modname ~funname = 
+  let llcontext = L.global_context() in
+  let llmodule = L.create_module ctx modname in
+  
+  let fty = L.function_type (L.void_type ctx) [| |] in
+  let f = L.define_function funname fty llmodule in
+  let entry_block = L.entry_block f in
+  let llbuilder = L.builder_at_end ctx entry_block in
+
+  let llregs = StringHashtbl.create 17 in
+  let other = {llregs;entry_block} in
+  {llcontext;llmodule;llbuilder;other}
 
 
 (**************** Application: LLVM pretty-printing of DBA blocks. ****************)
@@ -239,23 +274,13 @@ let get_jump_target jump_target_hash llst entry_block target =
 ;;
 
 let decode_dba block =
-  let llcontext = L.global_context() in
-  let llmodule = L.create_module ctx "mymodule" in
-
-  (* Create a dummy function. *)
-  let fty = L.function_type (L.void_type ctx) [| |] in
-  let f = L.define_function "instr_decode" fty llmodule in
-  let llbuilder = L.builder_at_end ctx (L.entry_block f) in
-
-  let llregs = StringHashtbl.create 17 in
-  let other = {llregs} in
-  let llst = {llcontext;llmodule;llbuilder;other} in
+  let llst = initial_state ~modname:"mymodule" ~funname:"instr_decode" in
 
   let jump_target_hash = Jump_Target_Hash.create 3 in
-  let get_jump_target = get_jump_target jump_target_hash llst (L.entry_block f) in
+  let get_jump_target = get_jump_target jump_target_hash llst llst.other.entry_block in
 
   let unreachable = lazy (
-    let block = L.insert_block llcontext "unreachable" (L.entry_block f) in
+    let block = L.insert_block llst.llcontext "unreachable" llst.other.entry_block in
     let builder = L.builder_at_end ctx block in
     let _ = L.build_unreachable builder in
     block
@@ -264,7 +289,7 @@ let decode_dba block =
   (* Entry jumps to label 0 *)
   begin
     let llblock = get_jump_target (Static(JInner 0)) in
-    let llbuilder = L.builder_at_end llst.llcontext (L.entry_block f) in
+    let llbuilder = L.builder_at_end llst.llcontext llst.other.entry_block in
     let _ = L.build_br llblock llbuilder in
     ()
   end;
@@ -273,7 +298,7 @@ let decode_dba block =
       let llblock = get_jump_target (Static(JInner id)) in
       let llbuilder = L.builder_at_end llst.llcontext llblock in
       let llst = { llst with llbuilder } in
-      let succ,_llst = LLVM_Decoder.Decode_Instr.instruction llst inst in
+      let succ,_llst = Decode_Instr.instruction llst inst in
       match succ with
       | JKJump target ->
         let llblock = get_jump_target target in
@@ -298,3 +323,11 @@ let pretty fmt block =
   let output = L.string_of_llmodule env.llmodule in
   Format.fprintf fmt "LLVM: %s\n" output
 ;;
+
+let generate_in_function ~modname ~funname f =
+  let state = initial_state ~modname ~funname in
+  let return_state = f state in
+  let _ = L.build_ret_void return_state.llbuilder in
+  return_state.llmodule
+;;
+  

@@ -116,7 +116,7 @@ let find key kvs =
   try List.assoc key kvs
   with
   | Not_found ->
-    Logger.fatal "Decoder message has no %s field. Aborting." key;
+    Disasm_options.Logger.fatal "Decoder message has no %s field. Aborting." key;
     exit 1
 
 
@@ -195,7 +195,7 @@ let dummy_parse ?(etype=EParser) s =
   | exception Failure _ -> Error (EMnemonic, empty_instruction)
 
 let parse_result s =
-  Logger.debug ~level:1 "@[<v 0>Parsing %s@]" s;
+  Disasm_options.Logger.debug ~level:1 "@[<v 0>Parsing %s@]" s;
   let open Lexing in
   let lexbuf = from_string s in
   try
@@ -208,7 +208,7 @@ let parse_result s =
     dummy_parse s
   | Parser.Error  ->
     let pos = lexeme_start_p lexbuf in
-    Logger.fatal
+    Disasm_options.Logger.fatal
       "@[<v 0>Probable parse error at line %d, column %d@ \
        Lexeme was: %s@ \
        Entry was: %s@ \
@@ -258,5 +258,5 @@ let decode_from_reader addr reader =
 
 let decode reader (addr:Virtual_address.t) =
   let res = decode_from_reader (addr:>int) reader in
-  Logger.debug ~level:3 "@[%a@]" show_stats ();
+  Disasm_options.Logger.debug ~level:3 "@[%a@]" show_stats ();
   res

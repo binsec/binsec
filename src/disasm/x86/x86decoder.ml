@@ -132,8 +132,7 @@ let bytes_to_opcode_string bytes =
   in loop bytes
 
 
-let shift_or_rotate_from_spare
-    ~shift ~rotate spare =
+let shift_or_rotate_from_spare ~shift ~rotate spare =
   match spare with
   | 0 -> rotate Rol
   | 1 -> rotate Ror
@@ -181,16 +180,16 @@ let unsupported_m16 unsupported mode =
 
 let read_0f_38 mode address_mode lr =
   let b3 = Lreader.Read.u8 lr in
-  let un_ssse3 = unsupported_modrm "op from ssse3" address_mode lr in
+  let un_ssse3 () = unsupported_modrm "op from ssse3" address_mode lr in
   let un_m16 descr = unsupported_m16 (unsupported_modrm descr address_mode lr) mode in
   let sse41 = "op from sse41" in
   begin match b3 with
-    | n when 0x00 <= n && n <= 0x0b -> un_ssse3
+    | n when 0x00 <= n && n <= 0x0b -> un_ssse3 ()
     | 0x10 | 0x14 | 0x15 -> un_m16 sse41
     | 0x17 ->
       let src, spare = read_modrm_xmm address_mode lr in
       Ptest (XMM, S128, Reg (int_to_xmm_reg spare), src)
-    | 0x1c | 0x1d | 0x1e -> un_ssse3
+    | 0x1c | 0x1d | 0x1e -> un_ssse3 ()
     | n when 0x20 <= n && n <= 0x3d -> un_m16 sse41
     | 0x3e ->
       begin match mode with
@@ -992,9 +991,7 @@ let read_2bytes_opcode mode address_mode rep lr =
   | 0xfe -> unsupported_modrm "paddd" address_mode lr
 
   | _byte -> abort ()
-
-(* End of read_2bytes_opcode *)
-
+;;
 
 
 let read lr =

@@ -55,14 +55,17 @@ module Env = struct
     if s = 1 then Addr.Map.add i v t
     else split succ (succ i) (Bv.extract v It.{lo=8; hi=8*s-1}) (s - 1)
       @@ Addr.Map.add i (Bv.extract v It.l8) t
+
   let write e m i v s = match m with
     | Dba.BigEndian ->
       {e with main = split Addr.pred (i |> Addr.add_int @@ s - 1) v s e.main}
     | Dba.LittleEndian ->
       {e with main = split Addr.succ i v s e.main}
+
   let rec join succ i l s t =
     if s = 1 then Addr.Map.find i t :: l
     else join succ (succ i) (Addr.Map.find i t :: l) (s - 1) t
+
   let read e m i s = try match m with
     | Dba.BigEndian ->
       join Addr.pred (Addr.add_int s i) [] s e.main |> Bv.concat
@@ -175,23 +178,29 @@ module Env = struct
              in aux map 0)
           map e.main }
 
-  let init e = function
-    | Parse_helpers.Initialization.Assignment (lval, rval) ->
-      eval e rval |> assign e lval
-    | Parse_helpers.Initialization.MemLoad (addr, size) ->
+  let init e init_directive =
+    let module I = Parse_helpers.Initialization in
+    match init_directive.I.operation with
+    | I.Universal _ -> e
+    | I.Assignment (lval, I.Singleton rval, _) ->
+       eval e rval |> assign e lval
+    | I.Assignment (lval, _, _) ->
+       raise @@ Ox8BADF00D (Dba.LValue.to_expr lval)
+    | I.Mem_load (addr, size) ->
       let img = Kernel_functions.get_img () in
-      let addr = Virtual_address.of_int64 addr in
+      let wsize = Machine.Word_size.get () in
       let rec loop e s =
         if s = 0 then e
         else
-          let addr = Virtual_address.add_int s addr in
-          let byte = Virtual_address.to_bigint addr
-                  |> Loader_utils.get_byte_at img |> Bv.of_int ~size:8 in
-          let e = write e Dba.LittleEndian addr byte 1 in
+          let bv_off = Bitvector.of_int ~size:wsize s in
+          let addr = Bitvector.add bv_off addr in
+          let byte = Loader_utils.get_byte_at img addr |> Bv.of_int ~size:8 in
+          let e =
+            let addr = Virtual_address.of_bitvector addr in
+            write e Dba.LittleEndian addr byte 1 in
           loop e @@ s - 1 in
       loop e size
-    | Parse_helpers.Initialization.NondeterministicAssignment(lval, _) ->
-      raise @@ Ox8BADF00D (Dba.LValue.to_expr lval)
+
 
   let load_init_file e filename =
     let parser = Parser.initialization and lexer = Lexer.token in
@@ -270,16 +279,24 @@ module Instr_list = struct
 end
 
 module Goal = struct
+  let address d =
+    let img = Kernel_functions.get_img () in
+    match Binary_loc.to_virtual_address ~img (Directive.loc d) with
+    | Some a -> a
+    | None -> raise Not_found
+
+
   let step t a =
     let a = Caddr.to_virtual_address a in
     List.fold_left
       (fun (cut, print) act ->
-         if act.Action.address = a then
-           match act.Action.goal with
-           | Action.Cut -> true, print
-           | Action.Enumerate (_, ex) -> cut, ex :: print
-           | _ -> cut, print
-         else cut, print)
+        let addr = address act in
+        if addr = a then
+          match Directive.directive act with
+          | Directive.Cut -> true, print
+          | Directive.Enumerate (_, ex) -> cut, ex :: print
+          | _ -> cut, print
+        else cut, print)
       (false, []) t
 end
 
@@ -311,7 +328,7 @@ let run () = if Simulation.is_enabled () then try
         | None -> env
         | Some f -> Env.load_init_file env f in
       let ep = Bv.of_string @@ Kernel_options.Entry_point.get () in
-      let goals = Simulation.Goals.get () in
+      let goals = Simulation.Directives.get () in
       ignore @@ Img.run env goals @@ Caddr.block_start ep
     with
     | Env.Ox8BADF00D ex ->

@@ -65,6 +65,18 @@ let hd_hd = function
   | hd1 :: hd2 :: _ -> hd1, hd2
   | [] | [_] -> failwith "hd_hd: empty or singleton list"
 
+let pop = function
+  | [] -> failwith "pop"
+  | hd::tl -> hd, tl
+
+
+let make n x =
+  assert (n >= 0);
+  let rec aux n acc =
+    if n > 0 then aux (n-1) (x::acc)
+    else acc
+  in aux n []
+
 
 let filter_map p f l =
   List.fold_left

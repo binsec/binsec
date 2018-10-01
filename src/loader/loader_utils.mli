@@ -46,7 +46,6 @@ val address_of_symbol : name:string -> Loader.Img.t -> int option
 (** [address_of_symbol ~name img] finds [Some address] where the symbole is
  ** defined. Otherwise returns [None]. *)
 
-val get_byte_at : Loader.Img.t -> Bigint.t -> int
-
+val get_byte_at : Loader.Img.t -> Bitvector.t -> int
 
 val entry_point : Loader.Img.t -> Virtual_address.t

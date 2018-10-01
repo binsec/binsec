@@ -151,7 +151,7 @@ sig
 
   val var : string -> int -> VarTag.t option -> t
 
-  val equal : t -> t -> bool
+  val is_equal : t -> t -> bool
   val size_of : t -> int
 (*
  *   val var : Size.Bit.t -> string -> Tag.t option -> t
@@ -178,16 +178,8 @@ sig
   val udiv               : t -> t -> t
   val sdiv               : t -> t -> t
   val append             : t -> t -> t
-  val eq                 : t -> t -> t
-  val diff               : t -> t -> t
-  val ule                : t -> t -> t
-  val sle                : t -> t -> t
-  val ult                : t -> t -> t
-  val slt                : t -> t -> t
-  val uge                : t -> t -> t
-  val sge                : t -> t -> t
-  val ugt                : t -> t -> t
-  val sgt                : t -> t -> t
+
+  include Sigs.Comparisons with type t := t and type boolean = t
 
   val unary              : Unary_op.t -> t -> t
   val uminus             : t -> t
@@ -224,6 +216,8 @@ end
     | Binary of Binary_op.t * t * t
     | Ite of t *  t *  t (* sugar operator *)
 
+  type boolean = t
+
   let rec size_of = function
     | Cst(_, b) -> Bitvector.size_of b
     | Var(_, size, _) -> size
@@ -243,22 +237,22 @@ end
           -> size_of e1
       end
 
-  let rec equal e1 e2 =
+  let rec is_equal e1 e2 =
     match e1, e2 with
     | Var (n1, sz1, t1),
       Var (n2, sz2, t2) -> n1 = n2 && sz1 = sz2 && t1 = t2
     | Load (sz1, en1, e1),
-      Load (sz2, en2, e2) -> sz1 = sz2 && en1 = en2 && equal e1 e2
+      Load (sz2, en2, e2) -> sz1 = sz2 && en1 = en2 && is_equal e1 e2
     | Cst (r1, bv1), Cst (r2, bv2) ->
       ComparableRegion.compare r1 r2 = 0 && Bitvector.equal bv1 bv2
     | Unary (unop1, e1), Unary (unop2, e2) ->
-      unop1 = unop2 && equal e1 e2
+      unop1 = unop2 && is_equal e1 e2
     | Binary (binop1, lexpr1, rexpr1),
       Binary (binop2, lexpr2, rexpr2) ->
-      binop1 = binop2 && equal lexpr1 lexpr2 && equal rexpr1 rexpr2
+      binop1 = binop2 && is_equal lexpr1 lexpr2 && is_equal rexpr1 rexpr2
     | Ite (c1, e11, e12),
       Ite (c2, e21, e22) ->
-      equal c1 c2 && equal e11 e21 && equal e12 e22
+      is_equal c1 c2 && is_equal e11 e21 && is_equal e12 e22
     | _, _ -> false
 
 
@@ -324,7 +318,7 @@ end
     let logor  = symmetric_binary Or
     let logxor = symmetric_binary Xor
     let logand = symmetric_binary And
-    let eq     = symmetric_binary Eq
+    let equal  = symmetric_binary Eq
     let diff   = symmetric_binary Diff
     let ule    = symmetric_binary LeqU
     let sle    = symmetric_binary LeqS
@@ -352,7 +346,6 @@ end
       unary (Unary_op.Restrict {Interval.lo; Interval.hi})
 
   end
-
 
   (* All the following construction functions are defined w.r.t to the
    * "straight" ones. Hence no "rec" keyword after the let is usually *not* an
@@ -427,8 +420,8 @@ end
       add (Bitvector.sub b1 b2 |> constant ~region:`Constant) e3
     | Cst (`Constant, b1), _ when Bitvector.is_zeros b1 -> e2
     | _, Cst (`Constant, _) -> add e2 e1
-    | _, Binary (Binary_op.Minus, e3, e4) when equal e1 e4 -> e3
-    | Binary (Binary_op.Minus, e3, e4), _ when equal e4 e2 -> e3
+    | _, Binary (Binary_op.Minus, e3, e4) when is_equal e1 e4 -> e3
+    | Binary (Binary_op.Minus, e3, e4), _ when is_equal e4 e2 -> e3
     | _, _ -> Straight.add e1 e2
 
   and sub e1 e2 = match e1, e2 with
@@ -442,13 +435,13 @@ end
       sub (Bitvector.add b1 b2 |> constant ~region:`Constant) e3
     | Cst (`Constant, b1), _ when Bitvector.is_zeros b1 -> uminus e2
     | _, Cst (`Constant, b2) when Bitvector.is_zeros b2 -> e1
-    | _, _ when equal e1 e2 -> size_of e1 |> zeros
-    | _, Binary (Binary_op.Plus, e3, e4) when equal e1 e3 -> uminus e4
-    | _, Binary (Binary_op.Plus, e3, e4) when equal e1 e4 -> uminus e3
-    | Binary (Binary_op.Plus, e3, e4), _ when equal e2 e3 -> e4
-    | Binary (Binary_op.Plus, e3, e4), _ when equal e2 e4 -> e3
-    | _, Binary (Binary_op.Minus, e3, e4) when equal e1 e3 -> e4
-    | Binary (Binary_op.Minus, e3, e4), _ when equal e2 e3 -> uminus e4
+    | _, _ when is_equal e1 e2 -> size_of e1 |> zeros
+    | _, Binary (Binary_op.Plus, e3, e4) when is_equal e1 e3 -> uminus e4
+    | _, Binary (Binary_op.Plus, e3, e4) when is_equal e1 e4 -> uminus e3
+    | Binary (Binary_op.Plus, e3, e4), _ when is_equal e2 e3 -> e4
+    | Binary (Binary_op.Plus, e3, e4), _ when is_equal e2 e4 -> e3
+    | _, Binary (Binary_op.Minus, e3, e4) when is_equal e1 e3 -> e4
+    | Binary (Binary_op.Minus, e3, e4), _ when is_equal e2 e3 -> uminus e4
     | _, _ -> Straight.sub e1 e2
 
   and mul e1 e2 = match e1, e2 with
@@ -491,7 +484,7 @@ end
     | Cst (`Constant, b1), _ when Bitvector.is_zeros b1 -> e2
     | Cst (`Constant, b1), _ when Bitvector.is_fill b1 -> lognot e2
     | _, Cst (`Constant, _) -> logxor e2 e1
-    | _, _ when equal e1 e2 -> size_of e1 |> zeros
+    | _, _ when is_equal e1 e2 -> size_of e1 |> zeros
     | _, _ -> Straight.logxor e1 e2
 
   and logor e1 e2 = match e1, e2 with
@@ -517,71 +510,71 @@ end
       e2 |> uext @@ size_of e1 + size_of e2
     | Unary (Unary_op.Restrict {Interval.lo; Interval.hi}, e1),
       Unary (Unary_op.Restrict {Interval.lo=lo'; Interval.hi=hi'}, e2)
-      when hi + 1 = lo' && equal e1 e2 ->
+      when hi + 1 = lo' && is_equal e1 e2 ->
       restrict lo hi' e1
     | Binary ((Binary_op.And | Binary_op.Or | Binary_op.Xor) as op, e1, e2),
       Binary (op', e1', e2') when op = op' ->
       append e2 e2' |> binary op @@ append e1 e1'
     | _, _ -> Straight.append e1 e2
 
-  and eq e1 e2 = match e1, e2 with
+  and equal e1 e2 = match e1, e2 with
     | Cst (`Constant, b1), Cst (`Constant, b2) ->
       Bitvector.equal b1 b2 |> Bitvector.of_bool |> constant ~region:`Constant
-    | _, _ when equal e1 e2 -> one
-    | _, _ -> Straight.eq e1 e2
+    | _, _ when is_equal e1 e2 -> one
+    | _, _ -> Straight.equal e1 e2
 
   and diff e1 e2 = match e1, e2 with
     | Cst (`Constant, b1), Cst (`Constant, b2) ->
       Bitvector.diff b1 b2 |> Bitvector.of_bool |> constant ~region:`Constant
-    | _, _ when equal e1 e2 -> zero
+    | _, _ when is_equal e1 e2 -> zero
     | _, _ -> Straight.diff e1 e2
 
   and ult e1 e2 = match e1, e2 with
     | Cst (`Constant, b1), Cst (`Constant, b2) ->
       Bitvector.ult b1 b2 |> Bitvector.of_bool |> constant ~region:`Constant
-    | _, _ when equal e1 e2 -> zero
+    | _, _ when is_equal e1 e2 -> zero
     | _, _ -> Straight.ult e1 e2
 
   and ule e1 e2 = match e1, e2 with
     | Cst (`Constant, b1), Cst (`Constant, b2) ->
       Bitvector.ule b1 b2 |> Bitvector.of_bool |> constant ~region:`Constant
-    | _, _ when equal e1 e2 -> one
+    | _, _ when is_equal e1 e2 -> one
     | _, _ -> Straight.ule e1 e2
 
   and ugt e1 e2 = match e1, e2 with
     | Cst (`Constant, b1), Cst (`Constant, b2) ->
       Bitvector.ugt b1 b2 |> Bitvector.of_bool |> constant ~region:`Constant
-    | _, _ when equal e1 e2 -> zero
+    | _, _ when is_equal e1 e2 -> zero
     | _, _ -> Straight.ugt e1 e2
 
   and uge e1 e2 = match e1, e2 with
     | Cst (`Constant, b1), Cst (`Constant, b2) ->
       Bitvector.uge b1 b2 |> Bitvector.of_bool |> constant ~region:`Constant
-    | _, _ when equal e1 e2 -> one
+    | _, _ when is_equal e1 e2 -> one
     | _, _ -> Straight.uge e1 e2
 
   and slt e1 e2 = match e1, e2 with
     | Cst (`Constant, b1), Cst (`Constant, b2) ->
       Bitvector.slt b1 b2 |> Bitvector.of_bool |> constant ~region:`Constant
-    | _, _ when equal e1 e2 -> zero
+    | _, _ when is_equal e1 e2 -> zero
     | _, _ -> Straight.slt e1 e2
 
   and sle e1 e2 = match e1, e2 with
     | Cst (`Constant, b1), Cst (`Constant, b2) ->
       Bitvector.sle b1 b2 |> Bitvector.of_bool |> constant ~region:`Constant
-    | _, _ when equal e1 e2 -> one
+    | _, _ when is_equal e1 e2 -> one
     | _, _ -> Straight.sle e1 e2
 
   and sgt e1 e2 = match e1, e2 with
     | Cst (`Constant, b1), Cst (`Constant, b2) ->
       Bitvector.sgt b1 b2 |> Bitvector.of_bool |> constant ~region:`Constant
-    | _, _ when equal e1 e2 -> zero
+    | _, _ when is_equal e1 e2 -> zero
     | _, _ -> Straight.sgt e1 e2
 
   and sge e1 e2 = match e1, e2 with
     | Cst (`Constant, b1), Cst (`Constant, b2) ->
       Bitvector.sge b1 b2 |> Bitvector.of_bool |> constant ~region:`Constant
-    | _, _ when equal e1 e2 -> one
+    | _, _ when is_equal e1 e2 -> one
     | _, _ -> Straight.sge e1 e2
 
   and rotate_left e1 e2 = match e1, e2 with
@@ -636,7 +629,7 @@ end
     | RShiftS     -> shift_right_signed
     | LeftRotate  -> rotate_left
     | RightRotate -> rotate_right
-    | Eq          -> eq
+    | Eq          -> equal
     | Diff        -> diff
     | LeqU        -> ule
     | LtU         -> ult
@@ -737,7 +730,7 @@ module LValue = struct
       Restrict (x2, sz2, {Interval.lo=o21; Interval.hi=o22}) ->
       x1 = x2 && sz1 = sz2 && o11 = o21 && o12 = o22
     | Store (sz1, en1, e1), Store (sz2, en2, e2) ->
-      sz1 = sz2 && en1 = en2 && Expr.equal e1 e2
+      sz1 = sz2 && en1 = en2 && Expr.is_equal e1 e2
     | _, _ -> false
 
   let size_of = function
@@ -870,7 +863,7 @@ module Instr = struct
 
   let undefined lv nid = Undef (lv, nid)
 
-  let non_deterministic lv r nid = Nondet (lv, r, nid)
+  let non_deterministic ?(region=`Constant) lv nid = Nondet (lv, region, nid)
 
   let malloc lv e nid = Malloc (lv, e, nid)
 

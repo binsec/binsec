@@ -19,6 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Logger = Base_logger
+
 type t = int Sequence.t
 (* The list is stored in reversed order *)
 

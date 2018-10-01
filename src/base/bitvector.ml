@@ -22,6 +22,7 @@
 exception Bad_bound of string
 exception Operands_size_conflict of string
 
+
 module Internal :
 sig
   type internal = private
@@ -50,6 +51,7 @@ end
 
 open Internal
 type t = internal
+type boolean = bool
 
 let compare t1 t2 =
   let cmp = compare t1.size t2.size in
@@ -248,6 +250,8 @@ let extend_unsafe bv i = resize bv i
 let bit_mask i = Bigint.shift_left_big_int Bigint.unit_big_int i
 let bit_mask_not i = Bigint.xor_big_int minus_unit_big_int (bit_mask i)
 
+let num_bits bv = Bigint.num_bits (value_of bv)
+
 let get_bit bv i =
   Bigint.gt_big_int
     (Bigint.and_big_int (bit_mask i) (value_of bv))
@@ -310,7 +314,7 @@ let to_bitstring bv : string =
     | 0 -> '0'
     | 1 -> 'b'
     | n ->
-      let offset = (size - n - 1) in
+      let offset = size - n - 1 in
       let digit = Bigint.extract_big_int bv.value offset 1
                   |> Bigint.int_of_big_int in
       digit + 0x30 |> char_of_int
@@ -322,7 +326,6 @@ let to_string bv =
   then to_hexstring bv
   else to_bitstring bv
 ;;
-  
 
 
 let of_string str =
@@ -390,6 +393,7 @@ let rand = Random.rand
 module type Common =
 sig
   type t
+  type boolean = bool
 
   val create: Bigint.t -> int -> t
   val create_from_tuple: Bigint.t * int -> t
@@ -425,18 +429,18 @@ sig
   val is_max_sbv : t -> bool
   val is_min_sbv : t -> bool
 
-  val equal : t -> t -> bool
-  val diff  : t -> t -> bool
+  val equal : t -> t -> boolean
+  val diff  : t -> t -> boolean
 
-  val ule : t -> t -> bool
-  val uge : t -> t -> bool
-  val ult : t -> t -> bool
-  val ugt : t -> t -> bool
+  val ule : t -> t -> boolean
+  val uge : t -> t -> boolean
+  val ult : t -> t -> boolean
+  val ugt : t -> t -> boolean
 
-  val sle : t -> t -> bool
-  val sge : t -> t -> bool
-  val slt : t -> t -> bool
-  val sgt : t -> t -> bool
+  val sle : t -> t -> boolean
+  val sge : t -> t -> boolean
+  val slt : t -> t -> boolean
+  val sgt : t -> t -> boolean
 
   include Sigs.Arithmetic with type t := t
 
@@ -459,6 +463,7 @@ sig
   val extend_signed : t -> int -> t
   val extend_unsafe : t -> int -> t
 
+  val num_bits  : t -> int
   val get_bit   : t -> int -> bool
   val set_bit   : t -> int -> t
   val clear_bit : t -> int -> t
@@ -468,3 +473,11 @@ sig
   val concat  : t list -> t
   val extract : t -> int Basic_types.interval -> t
 end
+
+
+module Collection =
+  Basic_types.Collection_make.Default(
+     struct
+       type t = internal
+       let compare = compare
+     end)

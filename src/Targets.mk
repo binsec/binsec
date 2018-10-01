@@ -51,9 +51,9 @@ BINSEC_LICENSE_CEA += $(DBA_FILES)
 
 UTILS_DIR = utils
 UTILS_SRC_FILES = \
-	action \
 	colors \
 	binary_loc \
+	directive \
 	cfg \
 	dhunk \
 	instruction \
@@ -67,8 +67,10 @@ UTILS_MLI_FILES = \
 
 BASE_DIR = base
 BASE_SRC_FILES = \
+	logger \
+	base_logger \
 	bigint string_utils \
-	logger fstack \
+	fstack \
 	natural \
 	hashamt \
 	basic_types \
@@ -80,7 +82,7 @@ BASE_SRC_FILES = \
 	mnemonic \
 	virtual_address \
 	cli \
-	list_utils print_utils file_utils \
+	list_utils print_utils file_utils array_utils \
 	machine \
 	worklist \
 	utils
@@ -237,6 +239,7 @@ FORMULA_SRC_FILES = \
 	formula_to_smtlib \
 	smtlib_to_formula \
 	formula_pp \
+	prover \
 	formula_transformation solver \
 	formula_main
 FORMULA_INT_FILES = $(FORMULA_SRC_FILES)
@@ -298,7 +301,7 @@ BINSEC_LICENSE_CEA += $(SMT_FILES)
 
 KERNEL_DIR = kernel
 # KERNEL_OPTIONS = kernel_options
-KERNEL_SRC_FILES = kernel_options kernel_functions kernel_core 
+KERNEL_SRC_FILES = kernel_options kernel_functions kernel_core
 KERNEL_ML_FILES = $(KERNEL_SRC_FILES:%=$(KERNEL_DIR)/%.ml)
 KERNEL_MLI_FILES = \
 	$(KERNEL_ML_FILES:%.ml=%.mli) \
@@ -469,8 +472,8 @@ EXAMPLE_ML_FILES = $(EXAMPLE_SRC_FILES:%=$(EXAMPLE_DIR)/%.ml)
 EXAMPLE_MLI_FILES = $(EXAMPLE_INT_FILES:%=$(EXAMPLE_DIR)/%.mli)
 EXAMPLE_FILES = $(EXAMPLE_ML_FILES) $(EXAMPLE_MLI_FILES)
 
-# Not added to BINSEC_DISTRIB_FILES: they are added 
-# through DYNAMIC_ML_FILES and DYNAMIC_MLI_FILES 
+# Not added to BINSEC_DISTRIB_FILES: they are added
+# through DYNAMIC_ML_FILES and DYNAMIC_MLI_FILES
 BINSEC_LICENSE_CEA += $(EXAMPLE_FILES)
 
 
@@ -559,7 +562,7 @@ DPATH_SRC_FILES = \
 	dse
 DPATH_INT_FILES = \
 	typeCriteriaDSE typeGuideDSE typeHistoryDSE typeTraceDSE \
-	guideAsPriority guideAsShortestPath 
+	guideAsPriority guideAsShortestPath
 DPATH_ML_FILES = $(DPATH_SRC_FILES:%=$(DPATH_DIR)/%.ml)
 DPATH_MLI_FILES = \
 	$(DPATH_INT_FILES:%=$(DPATH_DIR)/%.mli) \
@@ -682,7 +685,24 @@ BW_FILES = \
 BINSEC_DISTRIB_FILES += $(BW_FILES)
 BINSEC_LICENSE_CEA += $(BW_FILES)
 
+###
+# Xtrasec
+##
 
+XTRASEC_DIR = xtrasec
+OPTION_FILES +=  $(XTRASEC_DIR)/xtrasec_options
+XTRASEC_SRC_FILES = \
+	parsepin formula_decoder xtrasec
+XTRASEC_INT_FILES =  $(XTRASEC_SRC_FILES)
+XTRASEC_ML_FILES  = $(XTRASEC_SRC_FILES:%=$(XTRASEC_DIR)/%.ml)
+XTRASEC_MLI_FILES = $(XTRASEC_INT_FILES:%=$(XTRASEC_DIR)/%.mli)
+
+XTRASEC_FILES = \
+	$(XTRASEC_ML_FILES) \
+	$(XTRASEC_MLI_FILES)
+
+BINSEC_DISTRIB_FILES += $(XTRASEC_FILES)
+BINSEC_LICENSE_CEA += $(XTRASEC_FILES)
 
 # Server
 SERVER_DIR = server
@@ -826,6 +846,7 @@ LIB_ML_FILES = \
 	$(DYNAMIC_ML_FILES) \
 	$(SERVER_ML_FILES) \
 	$(SSE_ML_FILES) \
+	$(XTRASEC_ML_FILES) \
 	$(BW_ML_FILES) \
 	$(BINPATCHER_ML_FILES)
 
@@ -852,6 +873,7 @@ LIB_MLI_FILES = \
 	$(LLVM_MLI_FILES) \
 	$(SERVER_MLI_FILES) \
 	$(SSE_MLI_FILES) \
+	$(XTRASEC_MLI_FILES) \
 	$(BW_MLI_FILES) \
 	$(BINPATCHER_MLI_FILES) \
 	$(ROOT_MLI_FILES) \
@@ -902,6 +924,7 @@ DIRS = \
 	$(BINPATCHER_DIR) \
 	$(SSE_DIR) \
 	$(BW_DIR) \
+	$(XTRASEC_DIR) \
 	$(KERNEL_DIR)
 
 CAMLINCLUDES = $(DIRS:%=-I %) -I .

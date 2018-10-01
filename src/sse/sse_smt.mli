@@ -25,6 +25,7 @@ end
 
 module Solver : sig
   val with_solver :
+    ?keep:Formula.VarSet.t ->
     Sse_types.Path_state.t -> (Solver.Session.t -> 'a) -> (float * 'a) option
 
   val check_satistifiability :
@@ -40,16 +41,19 @@ end
 module Translate : sig
   val expr : Sse_symbolic.State.t -> Dba.Expr.t -> Formula.bv_term
 
+  val assign :
+    ?wild:bool ->
+    Dba.LValue.t -> Dba.Expr.t -> Sse_symbolic.State.t -> Sse_symbolic.State.t
+
   val assignment :
+    ?wild:bool ->
     Dba.LValue.t -> Dba.Expr.t -> Sse_types.Path_state.t -> Sse_types.Path_state.t
 
   val nondet:
+    ?naming_hint:string ->
+    ?wild:bool ->
     Dba.LValue.t -> Sse_types.Path_state.t -> Sse_types.Path_state.t
 
   val assume:
     Dba.Expr.t -> Sse_types.Path_state.t -> Sse_types.Path_state.t
-
-
-  val assign :
-    Dba.LValue.t -> Dba.Expr.t -> Sse_symbolic.State.t -> Sse_symbolic.State.t
 end

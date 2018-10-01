@@ -1,4 +1,4 @@
-opam-version: "1.2"
+opam-version: "2.0"
 name: "binsec"
 version: "0.2"
 maintainer: "richard.bonichon@cea.fr"
@@ -57,6 +57,7 @@ remove: [
 ]
 
 depends: [
+  "ocaml" { >= "4.04.2" & < "4.06.0" }
   "ocamlgraph" { >= "1.8.5" & < "1.9~" }
   "ocamlfind"
   "piqi"
@@ -66,4 +67,3 @@ depends: [
   "llvm"
 ]
 
-available: [ ocaml-version >= "4.04.2" ]

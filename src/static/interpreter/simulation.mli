@@ -26,4 +26,4 @@ module MemoryFile : Cli.STRING_OPT
 
 module InitFile : Cli.STRING_OPT
 
-module Goals : Cli.GENERIC with type t = Action.t list
+module Directives : Cli.GENERIC with type t = Directive.t list

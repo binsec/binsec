@@ -35,4 +35,4 @@ val receive: bool -> string list
 
 val receive_with_identity: bool -> string list
 
-val log_to_zmq : bool -> string -> unit
+val log_to_zmq : (module Logger.S) -> bool -> string -> unit

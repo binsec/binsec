@@ -19,6 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Ai_options
+
 let trans_closure p a b c d =  p (p a b) (p c d)
 
 let int_of_bv bv = Bigint.int_of_big_int (Bitvector.value_of bv)

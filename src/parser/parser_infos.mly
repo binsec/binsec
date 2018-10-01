@@ -110,7 +110,7 @@
         | Assert (a, b) -> Instr._assert a b
         | Assume (a, b) -> Instr.assume a b
         | NondetAssume (a, b, c) -> Instr.non_deterministic_assume a b c
-        | Nondet (a, b, c) -> Instr.non_deterministic a b c
+        | Nondet (a, region, c) -> Instr.non_deterministic a ~region c
         | Print (a, b) -> Instr.print a b
       in let c = try (Dba_utils.checksize_instruction h)
         with
@@ -167,8 +167,8 @@
         | Dba.Instr.NondetAssume (a, b, _) ->
            l @ [addr, Instr.non_deterministic_assume a b (addr.id + 1);
                 incindex addr 1, last_instr]
-        | Dba.Instr.Nondet (a, b, _) ->
-           l @ [addr, Instr.non_deterministic a b (addr.id + 1);
+        | Dba.Instr.Nondet (a, region, _) ->
+           l @ [addr, Instr.non_deterministic a ~region (addr.id + 1);
                 incindex addr 1, last_instr]
         | Dba.Instr.Print (a, _) ->
            l @ [addr, Instr.print a (addr.id + 1);

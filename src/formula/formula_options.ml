@@ -134,6 +134,13 @@ struct
   let default = 5
 end
 )
+
+
+ module Options = Builder.String_option(
+  struct
+     let name = "solver-options"
+     let doc = "Use these options to launch the solver (ignore default options)"
+  end)
 end
 
 

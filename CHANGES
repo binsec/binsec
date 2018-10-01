@@ -1,14 +1,17 @@
-* 0.2 [2018-07-23 Mon]
+* 0.2 [2018-10-01 Mon]
 
   - New symbolic execution engine
   - New interpreter for binary code
   - Improved logical representation for formulas
   - New internal control-flow-graph representation
-  - Action language for symbolic execution goals
+  - Directive language for symbolic execution control
+  - Support for new PIN tool xtrasec
   - Improved x86 decoder
     - Fixed bugs reported by KAIST
   - Docker support
-    - includes Unisim-vp ARM v7 decoder 
+    - includes Unisim-vp ARM v7 decoder
+    - includes new PIN tool xtrasec
+
 
 
 * 0.1 [2017-03-01 Wed]

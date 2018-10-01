@@ -22,6 +22,7 @@
 open Basic_types
 open Region_bitvector
 open High_level_predicate
+open Ai_options
 
 module Malloc_status = Dba_types.Region.Map
 
@@ -598,16 +599,16 @@ struct
                let k c = guard c s assumes global_regions in
                begin
                  match bop with
-                 | Dba.Binary_op.Eq   -> Dba.Expr.diff e1 e2 |> k
-                 | Dba.Binary_op.Diff -> Dba.Expr.eq e1 e2   |> k
-                 | Dba.Binary_op.LeqU -> Dba.Expr.ugt e1 e2  |> k
-                 | Dba.Binary_op.LtU  -> Dba.Expr.uge e1 e2  |> k
-                 | Dba.Binary_op.GeqU -> Dba.Expr.ult e1 e2  |> k
-                 | Dba.Binary_op.GtU  -> Dba.Expr.ule e1 e2  |> k
-                 | Dba.Binary_op.LeqS -> Dba.Expr.sgt e1 e2  |> k
-                 | Dba.Binary_op.LtS  -> Dba.Expr.sge e1 e2  |> k
-                 | Dba.Binary_op.GeqS -> Dba.Expr.slt e1 e2  |> k
-                 | Dba.Binary_op.GtS  -> Dba.Expr.sle e1 e2  |> k
+                 | Dba.Binary_op.Eq   -> Dba.Expr.diff e1 e2  |> k
+                 | Dba.Binary_op.Diff -> Dba.Expr.equal e1 e2 |> k
+                 | Dba.Binary_op.LeqU -> Dba.Expr.ugt e1 e2   |> k
+                 | Dba.Binary_op.LtU  -> Dba.Expr.uge e1 e2   |> k
+                 | Dba.Binary_op.GeqU -> Dba.Expr.ult e1 e2   |> k
+                 | Dba.Binary_op.GtU  -> Dba.Expr.ule e1 e2   |> k
+                 | Dba.Binary_op.LeqS -> Dba.Expr.sgt e1 e2   |> k
+                 | Dba.Binary_op.LtS  -> Dba.Expr.sge e1 e2   |> k
+                 | Dba.Binary_op.GeqS -> Dba.Expr.slt e1 e2   |> k
+                 | Dba.Binary_op.GtS  -> Dba.Expr.sle e1 e2   |> k
                  | Dba.Binary_op.Or   ->
                    Dba.Expr.logand (Dba.Expr.lognot e1) (Dba.Expr.lognot e2) |> k
                  | Dba.Binary_op.And  ->

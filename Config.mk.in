@@ -26,7 +26,11 @@ CAMLLEXOPTS	?=
 CAMLYAC		?=@MENHIR@
 CAMLYACOPTS	?=
 CAMLDEP		?=@OCAMLDEP@
-CAMLWARNINGS	?=-w +a-4-3-18
+# Rationale for warning exclusions:
+# - 42 is only valid in OCaml < 4.00
+# - 4 fragile pattern matching is authorized (can be hard to remove on big ASTs)
+# - 3 deprecated feature are ok (sometimes you have a newer compiler than older supported version)
+CAMLWARNINGS	?=-w +a-4-3-42
 CAMLFLAGS	?=-g -bin-annot
 CAMLDOC		?=@OCAMLDOC@
 CAMLFIND	?=@OCAMLFIND@

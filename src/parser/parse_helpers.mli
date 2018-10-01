@@ -27,19 +27,32 @@ val patch_expr_size : Dba.Expr.t -> int -> Dba.Expr.t
 val expr_of_name : string -> Dba.Expr.t
 
 module Initialization : sig
-  type interval_or_set =
-    | SignedInterval of Dba.Expr.t * Dba.Expr.t
-    | UnsignedInterval of Dba.Expr.t * Dba.Expr.t
+  type rvalue =
+    | Signed_interval   of Dba.Expr.t * Dba.Expr.t
+    | Unsigned_interval of Dba.Expr.t * Dba.Expr.t
     | Set of Dba.Expr.t list
+    | Singleton of Dba.Expr.t
 
-  type t =
-    | Assignment of Dba.LValue.t * Dba.Expr.t
-    | MemLoad of Int64.t * int
-    | NondeterministicAssignment of Dba.LValue.t * interval_or_set
+  type identifier = string
 
+  type operation =
+    | Assignment of Dba.LValue.t * rvalue * identifier option
+    | Mem_load   of Bitvector.t * int
+    | Universal  of Dba.LValue.t
 
-  val from_store: Dba.LValue.t -> t
-  val from_assignment: Dba.Instr.t -> t
+  type t = {
+      controlled: bool;
+      operation : operation
+    }
+
+  val assign : ?identifier:string -> ?controlled:bool -> Dba.LValue.t -> rvalue
+               -> t
+  val universal : Dba.LValue.t -> t
+  (** Mark l-value as universally quantified *)
+  val from_store: ?controlled:bool -> Dba.LValue.t -> t
+  val from_assignment: ?controlled:bool -> Dba.Instr.t -> t
+
+  val set_control : bool -> t -> t
 end
 
 module Message : sig

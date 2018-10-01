@@ -75,6 +75,3 @@ module Dot = struct
     close_out oc
 
 end
-
-
-

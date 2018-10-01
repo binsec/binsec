@@ -5,6 +5,7 @@ not <piqi/**>                         : warn(A-4-48)
 <ast/**>                              : include
 <base/**>                             : include
 <binpatcher/**>                       : include
+<backwards/**>                        : include
 <dba/**>                              : include
 <disasm/**>                           : include, inline(10000)
 <dynamic/**>                          : include, package(piqilib,piqirun.ext)
@@ -15,6 +16,7 @@ not <piqi/**>                         : warn(A-4-48)
 <parser/**>                           : include
 <piqi/**>                             : include, package(piqilib,piqirun.ext), warn(A-27)
 <server/**>                           : include, package(piqilib,piqirun.ext)
+<pintrace/**>                         : include
 <smtlib/**>                           : include
 <sse/**>                              : include
 <static/**>                           : include

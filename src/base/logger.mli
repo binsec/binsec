@@ -34,8 +34,8 @@ module type S = sig
   val warning_channel : channel
   val info_channel    : channel
   val debug_channel   : channel
-  (** These predefined channels are flushed after each call and a newline character is
-      inserted. *)
+  (** These predefined channels are flushed after each call and a newline
+      character is inserted. *)
 
 
   val fatal: ('a, Format.formatter, unit) format -> 'a
@@ -64,6 +64,13 @@ module type S = sig
   val debug: ?level:int -> ('a, Format.formatter, unit) format -> 'a
   (** [debug ~level:n msg] will be displayed if at least level n + 1 debug is
       activated *)
+
+  val fdebug: ?level:int ->
+              (unit -> (unit, Format.formatter, unit) format) -> unit
+  (** [fdebug ~level f] acts like like [debug ~level msg] where [msg = f ()] but
+      lazily evaluates its argument. Use [fdebug] instead of [debug] if you need
+      to print values that might be hard to compute (and that you therefore
+      compute inside the closure). *)
 
   val set_debug_level : int -> unit
   val get_debug_level : unit -> int
@@ -134,6 +141,15 @@ module type S = sig
 
   val get_color : unit -> bool
 
+  val set_zmq_logging_only : send:(string -> unit) -> bool -> unit
+  (** [set_zmq_logging_only ~send b identity] diverts all formatting operations
+      to an identity if [b] is [true].
+
+      Warning: all other formatters are erased.
+
+      If [b] is false, formatters are reset to default initial values.
+   *)
+
 end
 
 (* {2 Functors} *)
@@ -144,16 +160,9 @@ end
 
 module Make(G: ChannelGroup): S
 
-include S
-
 
 (* {2 Generic utilites} *)
 
-val set_zmq_logging_only : send:(string -> unit) -> bool -> unit
-(** [set_zmq_logging_only ~send b identity] diverts all formatting to an identity if
-    [b] is [true]. Be careful in this case: all other formatters are erased.
-    If [b] is false, formatters are reset to default initial values.
-*)
 
 
 val with_tags_on : Format.formatter -> ('a, Format.formatter, unit) format -> 'a
@@ -164,7 +173,3 @@ val with_tags_on : Format.formatter -> ('a, Format.formatter, unit) format -> 'a
     This allows delimits an environment where tags simply need to be interpreted
     or might have specific semantics.
 *)
-
-
-val set_verbosity : int -> unit
-(** [set_verbosity level] sets debug, warning and info levels to [level] *)

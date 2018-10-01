@@ -292,29 +292,51 @@ end
 module Initialization = struct
   open Dba
 
-  type interval_or_set =
-    | SignedInterval of Dba.Expr.t * Dba.Expr.t
-    | UnsignedInterval of Dba.Expr.t * Dba.Expr.t
+  type rvalue =
+    | Signed_interval   of Dba.Expr.t * Dba.Expr.t
+    | Unsigned_interval of Dba.Expr.t * Dba.Expr.t
     | Set of Dba.Expr.t list
+    | Singleton of Dba.Expr.t
 
-  type t =
-    | Assignment of Dba.LValue.t * Dba.Expr.t
-    | MemLoad of Int64.t * int
-    | NondeterministicAssignment of Dba.LValue.t * interval_or_set
+  type identifier = string
+  type operation =
+    | Assignment of Dba.LValue.t * rvalue * identifier option
+    | Mem_load   of Bitvector.t * int
+    | Universal  of Dba.LValue.t
 
-  let from_assignment = function
-    | Dba.Instr.Assign(lval, rval, _) -> Assignment (lval,rval)
+  type t = {
+      controlled: bool;
+      operation : operation
+    }
+
+  let create ~controlled ~operation = { controlled; operation; }
+
+  let assign ?identifier ?(controlled=true) lval rval =
+    let operation = Assignment (lval, rval, identifier) in
+    create ~controlled ~operation
+
+  let universal lval =
+    create ~controlled:false ~operation:(Universal lval)
+
+  let from_assignment ?(controlled=true) = function
+    | Dba.Instr.Assign(lval, rval, _) -> assign ~controlled lval (Singleton rval)
     | _ -> failwith "initialization with non assignment"
 
-  let from_store lv =
+  let from_store ?(controlled=true) lv =
     Logger.debug "Init from store %a" Dba_printer.Ascii.pp_lhs lv;
     match lv with
     | LValue.Store(size, _, Dba.Expr.Cst(_, bv)) ->
       begin
         assert (Bitvector.size_of bv = Machine.Word_size.get ());
-        MemLoad (Bitvector.value_of bv |> Bigint.int64_of_big_int, size)
+        let operation = Mem_load (bv, size) in
+        create ~controlled ~operation
       end
     | _ -> failwith "initialization from file with non store"
+
+  let set_control controlled t =
+    match t.operation with
+    | Universal _ -> t
+    | _ -> { t with controlled }
 end
 
 let mk_patches l =

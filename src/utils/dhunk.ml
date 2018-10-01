@@ -238,12 +238,12 @@ let _pp ppf t =
 
 let pp ppf t =
   let open Format in
-  fprintf ppf "@[<v 0>";  
+  fprintf ppf "@[<v 0>";
   flatten t |> List.iter (fun (addr,instr) ->
       fprintf ppf "@[<h>%2d: %a@]@ "
         addr (Dba_printer.Ascii.pp_instruction_maybe_goto ~current_id:addr) instr);
   fprintf ppf "@]"
-    
+
 ;;
 
 let to_stmts t (address:Virtual_address.t) =
@@ -294,6 +294,7 @@ let callees =
     ) Virtual_address.Set.empty
 
 
+module Logger = Logger.Make (struct let name = "hunk" end)
 (* TODO: take possible failures into account *)
 let export_to_file g =
   let filename = Filename.temp_file "dba" ".dot" in

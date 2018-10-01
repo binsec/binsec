@@ -20,6 +20,7 @@
 (**************************************************************************)
 
 open Common_piqi
+open Dse_options
 
 let check_consistency_memory_t (addr:action) (value:action) (prefix:string) (default:action): bool =
   let pol_addr = match addr with | `default -> default | _ -> addr in

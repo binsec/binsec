@@ -19,6 +19,13 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Extra : sig type t end
+
+module C : Instr_cfg.S with type addr = Virtual_address.t
+                        and type inst = Instruction.t
+                        and type symb = Extra.t
+
+
 module Path_state : sig
   type t
 
@@ -26,6 +33,7 @@ module Path_state : sig
     ?depth:int ->
     ?address_counters:
       Sse_options.Address_counter.t Virtual_address.Map.t ->
+    ?cfg:C.t ->
     ?block_index:int ->
     Sse_symbolic.State.t -> Instruction.t ->
     t
@@ -43,36 +51,43 @@ module Path_state : sig
   val id : t -> int
   val solver_calls : t -> int
   val paths_created : unit -> int
-  val leads_to_goal : t -> bool
-
+  val may_lead_to_goal : t -> bool
+  val cfg : t -> C.t
+  val entrypoint : t -> Virtual_address.t
+  val inst : t -> Instruction.t
 
   val counter : Virtual_address.t -> t -> Sse_options.Address_counter.t option
-  val set_counter :
-    Virtual_address.t  -> Sse_options.Address_counter.t -> t -> t
 
   (** {2 Modifiers} *)
 
+  val set_counter :
+    Virtual_address.t  -> Sse_options.Address_counter.t -> t -> t
+
   val set_block_index : int -> t -> t
   val set_symbolic_state : Sse_symbolic.State.t -> t -> t
+
   val incr_solver_calls : t -> t
   val reset_solver_calls : t -> t
 
   val set_address_counters :
     Sse_options.Address_counter.t Virtual_address.Map.t -> t -> t
+
   val goto_vaddr : Virtual_address.t -> t -> t
   val goto : Dba_types.Caddress.t -> t -> t
 
   val add_assertion : Formula.bl_term -> t -> t
 
-  val update_symbolic_state : string -> Formula.sort -> Formula.term -> t -> t
-  val with_init_mem_at: addr:int64 -> size:int -> t -> t
-  val address_belongs_to_init: addr:int64 -> t -> bool
-  val prepare_solver_in_state : t -> Solver.Session.t -> unit
+  val with_init_mem_at: addr:Bitvector.t -> size:int -> t -> t
+  val address_belongs_to_init: addr:Bitvector.t -> t -> bool
+  val prepare_solver_in_state :
+    ?keep:Formula.VarSet.t -> t -> Solver.Session.t -> unit
 
   (** {2 Printers} *)
 
   val pp_loc : Format.formatter -> t -> unit
   val pp_path : t -> unit
+
+  val dump_cfg : filename:string -> t -> unit
 end
 
 module type GLOBAL_ENV = sig
@@ -85,25 +100,25 @@ module type GLOBAL_ENV = sig
       for environment [e].
    *)
 
-  module Goals : sig
-    val at : Virtual_address.t -> t -> Action.t option
-    (** [at va e] returns the user-defined goals for this address [Some
-        goals] otherwise [None].
+  module Directives : sig
+    val at : Virtual_address.t -> t -> Directive.t Queue.t option
+    (** [at va e] returns the user-defined goals for this address.
+        When no goals are defined [] is returned.
    *)
 
     val has : t -> bool
     (** [has e] is [true] if there are still some goals to deal with. *)
 
-    val update : Virtual_address.t -> Action.t -> t -> unit
+    val update : Virtual_address.t -> Directive.t Queue.t -> t -> unit
     (** [update va a e] replaces the action linked to [va] in [e] by [a].
      *)
 
     val remove : Virtual_address.t -> t -> unit
 
     module Enumeration : sig
-      val record: Virtual_address.t -> Bitvector.t list -> t -> unit
-      val count : Virtual_address.t -> t -> int
-      val get   : Virtual_address.t -> t -> Bitvector.t list
+      val record: Virtual_address.t -> Dba.Expr.t -> Bitvector.t list -> t -> unit
+      val count : Virtual_address.t -> Dba.Expr.t -> t -> int
+      val get   : Virtual_address.t -> Dba.Expr.t -> t -> Bitvector.t list
     end
   end
 

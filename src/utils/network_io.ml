@@ -47,7 +47,6 @@ let receive blocking =
 let receive_with_identity blocking =
   Zmq.Socket.recv_all ~block:blocking !frontend_socket
 
-let log_to_zmq flag identity =
+let log_to_zmq (module L: Logger.S) flag identity =
   let send = send_client_message identity ~block:false "LOG" in
-  Logger.set_zmq_logging_only ~send flag
-
+  L.set_zmq_logging_only ~send flag

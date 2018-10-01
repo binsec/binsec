@@ -72,21 +72,26 @@ module type Binary_Backward = sig
 
   (* First argument become most significant. *)
   val bconcat: size1:int -> size2:int -> (binary,binary,binary) Arity.ar2
-  val bextract: size:int -> index:int -> oldsize:int -> (binary,binary) Arity.ar1
+  (* lo and high are included. *)
+  val bextract: lo:int -> hi:int -> oldsize:int -> (binary,binary) Arity.ar1
   val band: size:int -> (binary,binary,binary) Arity.ar2
   val bor: size:int -> (binary,binary,binary) Arity.ar2
   val bxor: size:int -> (binary,binary,binary) Arity.ar2
 
-  val buext: size:int -> (binary,binary) Arity.ar1
-  val bsext: size:int -> (binary,binary) Arity.ar1
+  val buext: size:int -> oldsize:int -> (binary,binary) Arity.ar1
+  val bsext: size:int -> oldsize:int -> (binary,binary) Arity.ar1
+
+  (* Correspond to truncated division, used in C99 and processors. *)
   val bisdiv: size:int -> (binary,binary,binary) Arity.ar2
-  val bismod: size:int -> (binary,binary,binary) Arity.ar2
+  val bisrem: size:int -> (binary,binary,binary) Arity.ar2
   val biudiv: size:int -> (binary,binary,binary) Arity.ar2
-  val biumod: size:int -> (binary,binary,binary) Arity.ar2
+  val biurem: size:int -> (binary,binary,binary) Arity.ar2
 
   val bshl: size:int -> (binary,binary,binary) Arity.ar2
   val bashr: size:int -> (binary,binary,binary) Arity.ar2
   val blshr: size:int -> (binary,binary,binary) Arity.ar2
+  val bv_left_rotate: size:int -> (binary,binary,binary) Arity.ar2
+  val bv_right_rotate: size:int -> (binary,binary,binary) Arity.ar2      
 end
 
 module type Binary_Forward = sig

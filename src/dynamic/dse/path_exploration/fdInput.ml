@@ -16,6 +16,7 @@
 (*  See the GNU Lesser General Public License version 2.1                 *)
 (*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
 (**************************************************************************)
+open Ai_options
 
 type file_descr = int64
 type file_name = string
@@ -41,4 +42,3 @@ let get_name fd =
     Some (Hashtbl.find tbl fd)
   with
   | Not_found -> None
-

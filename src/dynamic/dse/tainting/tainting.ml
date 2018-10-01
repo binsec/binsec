@@ -19,7 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-
+open Trace_options
 open Trace_type
 open Taint_types
 
