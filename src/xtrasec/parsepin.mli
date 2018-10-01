@@ -19,55 +19,44 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Actions are general located goals that one would like to achieve during an
- *  analysis
- *)
+type 'a number =
+  | Zero
+  | One of 'a
+  | Several
 
-type side = private
-  | Consequent
-  | Alternative
 
-module Count : sig
-  type t = private
-    | Unlimited
-    | Count of int
+(* Instruction in a trace, with all the memory operands that it did,
+   and the values that were written to the registers. *)
+type ins = private
+  {
+    (* Number of instruction in the sequence. *)
+    count:int;
 
-  val pp : Format.formatter -> t -> unit
-  val count : int -> t
-  val unlimited : t
-  val decr : t -> t
-  val is_zero : t -> bool
-end
+    (* Program counter when the instruction was executed. *)
+    address: Virtual_address.t;
 
-type goal = private
-  | Reach of Count.t
-  | Enumerate of Count.t * Dba.Expr.t
-  | Cut
-  | Restrict of Dba.Expr.t * Dba.Expr.t
-  | Choice of side
+    (* Opcode of the instruction, as an hex string. *)
+    code:string;
 
-type t = {
-    address : Virtual_address.t;
-    goal : goal;
-  }
+    (* Association list with the name of the registers written by the
+       instruction, and their value after the instruction. *)
+    reg_values:(String.t * Virtual_address.t) list;
 
-val check_and_decr : t -> t option
-val goal : t -> goal
-val address : t -> Virtual_address.t
+    (* Address of the memory load and store operations that the
+       instruction made (not counting things like instruction fetch). *)
+    mem_read: Virtual_address.t number;
+    mem_written: Virtual_address.t number;
+}
 
-val pp : Format.formatter -> t -> unit
+(* A sequence (stream) of instructions. *)
+type trace
 
-(** {2 Constructors} *)
+(* Create a sequence of instruction from a file: points to the first
+   instruction in the file. *)
+val from: string -> trace
 
-val reach : ?n:int -> Virtual_address.t -> t
-val reach_all : Virtual_address.t -> t
+(* Get the first instruction in a trace; return the instruction and a
+   trace that points to the next instruction. Returns None if this was the
+   last instruction in the trace. *)
+val pop_ins: trace -> (ins * trace) option
 
-val enumerate : ?n:int -> Dba.Expr.t -> Virtual_address.t -> t
-val enumerate_all : Dba.Expr.t -> Virtual_address.t -> t
-
-val cut : Virtual_address.t -> t
-
-val restrict : Dba.Expr.t -> Dba.Expr.t -> Virtual_address.t -> t
-
-val choose_alternative: Virtual_address.t -> t
-val choose_consequent: Virtual_address.t -> t

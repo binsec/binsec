@@ -26,7 +26,7 @@ open Trace_type
 open Solver
 open Path_predicate_formula
 open Formula
-
+open Dse_options
 
 (* Policy in the separate file:
  * :: *           :: esp          :: *                                             => Pc
@@ -74,13 +74,16 @@ class sploit1 conf =
         Bitvector.create (Bigint.big_int_of_int 0x61626364) 32 in
       let cond =
         (* F_eax(eip) == addr shellcode *)
-        Dba.Expr.eq eax (Dba.Expr.constant shellcode_addr) in
+        Dba.Expr.equal eax (Dba.Expr.constant shellcode_addr) in
       Logger.result "Let's build the predicate ...";
       (* Logic formula *)
       let f_cond = self#build_cond_predicate cond env in
       build_formula_file env.formula f_cond "sploit.smt2" |> ignore;
+      let solver =
+        Formula_options.Solver.of_piqi
+          config.Config_piqi.Configuration.solver in
       let res, model =
-        solve_model "sploit.smt2" config.Config_piqi.Configuration.solver in
+        solve_model "sploit.smt2" solver in
       if res = SAT then self#generate_new_file model;
       Logger.result "%a" Formula_pp.pp_status res;
       status_to_exit_code res
@@ -89,11 +92,15 @@ class sploit1 conf =
       let fd = open_out "exploit.txt" in
       let rec iter_buff addr i k =
         if k >= 0 then
-          let address = Int64.add addr (Int64.of_int i) in
+          let address =
+            let v =
+              Int64.(add addr (of_int i))
+              |> Bigint.big_int_of_int64 in
+            Bitvector.create v (Machine.Word_size.get ()) in
           match Smt_model.find_address_contents model address with
-          | value ->
-            Printf.fprintf fd "%c" (char_of_int value)
-          | exception Not_found ->
+          | Some value ->
+            Printf.fprintf fd "%c" (char_of_int @@ Bitvector.to_int value)
+          | None ->
             Printf.fprintf fd "%c" data.[k];
             iter_buff addr (i+1) (k-1)
       in

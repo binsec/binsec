@@ -245,7 +245,7 @@ let replace lhs_red lhs_temp insts block =
         non_deterministic_assume lhslist cond id
       | Dba.Instr.Nondet (lhs, region, id) ->
         let lhs = replace_lhs_in_lhs lhs_temp lhs_red lhs in
-        non_deterministic lhs region id
+        non_deterministic lhs ~region id
       | Dba.Instr.Undef (lhs, id) ->
         let lhs = replace_lhs_in_lhs lhs_temp lhs_red lhs in
         undefined lhs id

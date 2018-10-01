@@ -16,7 +16,7 @@
 (*  See the GNU Lesser General Public License version 2.1                 *)
 (*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
 (**************************************************************************)
-
+open Dse_options
 
 let parse_call_stack s =
   let cs = Str.split (Str.regexp "-") s in

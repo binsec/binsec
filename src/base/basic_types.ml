@@ -37,7 +37,7 @@ module MapSetMaker(C:Sigs.COMPARABLE) = struct
       elt, remove k m
 
     let keys m =
-      fold (fun k _ acc -> k :: acc) m [] |> List.rev
+     fold (fun k _ acc -> k :: acc) m [] |> List.rev
 
     let values m =
       fold (fun _ v acc -> v :: acc) m [] |> List.rev
@@ -64,7 +64,13 @@ module Collection_make = struct
     end
     include MapSetMaker(C)
     module Hamt = Hashamt.Make(H)
-    module Htbl = Hashtbl.Make(H)
+    module Htbl = struct
+      include Hashtbl.Make(H)
+      let filter p h =
+        let h' = create (length h) in
+        iter (fun k v -> if p k v then add h' k v) h;
+        h'
+    end
   end
 
   module Hashed(C:Sigs.HASHABLE) = struct
@@ -74,7 +80,14 @@ module Collection_make = struct
     end
     include MapSetMaker(C)
     module Hamt = Hashamt.Make(H)
-    module Htbl = Hashtbl.Make(H)
+    module Htbl = struct
+      include Hashtbl.Make(H)
+
+      let filter p h =
+        let h' = create (length h) in
+        iter (fun k v -> if p k v then add h' k v) h;
+        h'
+    end
   end
 end
 
@@ -147,30 +160,4 @@ module Ternary = struct
     | True, _
     | _, True -> True
     | _, _ -> Unknown
-end
-
-module List = struct
-  include List
-
-  let pop = function
-    | [] -> failwith "pop"
-    | hd::tl -> hd, tl
-
-  let make n x =
-    let rec aux n acc =
-      if n > 0 then aux (n-1) (x::acc)
-      else acc
-    in aux n []
-end
-
-module Array = struct
-  include Array
-
-  exception Found of int
-
-  let find p array =
-    try
-      Array.iteri (fun i x -> if p x then raise (Found i)) array;
-      raise Not_found
-    with Found i -> array.(i)
 end

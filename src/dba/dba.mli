@@ -20,7 +20,6 @@
 (**************************************************************************)
 
 (** Definition of DBA type *)
-
 type endianness =
   | LittleEndian
   | BigEndian
@@ -71,10 +70,10 @@ module Binary_op : sig
     | Plus
     | Minus
     | Mult
-    | DivU
-    | DivS
-    | ModU
-    | ModS
+    | DivU                      (* Corresponds to *)
+    | DivS                      (* the truncated division *)
+    | ModU                      (* of C99 and most *)
+    | ModS                      (* processors *)
     | Or
     | And
     | Xor
@@ -121,7 +120,7 @@ module rec Expr : sig
     | Ite of t *  t *  t (* sugar operator *)
 
   val size_of : t -> int
-  val equal : t -> t -> bool
+  val is_equal : t -> t -> bool
 
   val is_constant : t -> bool
 
@@ -154,21 +153,13 @@ module rec Expr : sig
   val udiv               : t -> t -> t
   val sdiv               : t -> t -> t
   val append             : t -> t -> t
-  val eq                 : t -> t -> t
-  val diff               : t -> t -> t
-  val ule                : t -> t -> t
-  val sle                : t -> t -> t
-  val ult                : t -> t -> t
-  val slt                : t -> t -> t
-  val uge                : t -> t -> t
-  val sge                : t -> t -> t
-  val ugt                : t -> t -> t
-  val sgt                : t -> t -> t
+
+  include Sigs.Comparisons with type t := t and type boolean = t
 
   val unary              : Unary_op.t -> t -> t
   val uminus             : t -> t
 
-  include Sigs.Logical with type t := t
+  include Sigs.EXTENDED_LOGICAL with type t := t
 
   val sext : int -> t -> t
   (** [sext sz e] performs a signed extension of expression [e] to size [sz] *)
@@ -176,7 +167,6 @@ module rec Expr : sig
   val uext : int -> t -> t
   (** [uext sz e] performs an unsigned extension expression [e] to size [sz] *)
 
-  val logxor : t -> t -> t
 
   val shift_left  : t -> t -> t
   val shift_right : t -> t -> t
@@ -312,7 +302,7 @@ end
 
 module Instr : sig
   type t = private
-    | Assign of LValue.t *  Expr.t *  id
+    | Assign of LValue.t * Expr.t *  id
     | SJump of id jump_target * tag option
     | DJump of Expr.t * tag option
     | If of Expr.t * id jump_target * id
@@ -327,10 +317,14 @@ module Instr : sig
     | Print of printable list * id
 
   (** {7 Constructors} *)
+
   val assign : LValue.t -> Expr.t -> int -> t
+  (** [assign lv e successor_id] creates the assignment of expression [e] to
+      l-value [lv], going to DBA instruction successor [id] *)
+
   val ite : Expr.t -> id Jump_target.t -> int -> t
   val undefined : LValue.t -> int -> t
-  val non_deterministic : LValue.t -> region -> int -> t
+  val non_deterministic : ?region:region -> LValue.t -> int -> t
   val static_jump : ?tag:Tag.t option -> id Jump_target.t -> t
   val static_inner_jump : ?tag:Tag.t option -> int -> t
   val call : return_address:address -> id Jump_target.t -> t
@@ -345,6 +339,5 @@ module Instr : sig
   val stop : state option -> t
 
   val print : printable list -> int -> t
-
 
 end

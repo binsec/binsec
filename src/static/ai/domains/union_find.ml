@@ -19,6 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Ai_options
+
 module LhsMap2 = Map.Make (
   struct
     type t = Dba.LValue.t * Dba.LValue.t

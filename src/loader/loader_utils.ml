@@ -21,14 +21,16 @@
 
 
 let get_byte_at img addr =
-  Loader.read_address img (Bigint.int_of_big_int addr)
+  Bitvector.value_of addr
+  |> Bigint.int_of_big_int
+  |> Loader.read_address img
 
 
 let address_of_symbol ~name img =
   let symbols = Loader.Img.symbols img in
   try
     Some (Loader.Symbol.value
-            (Basic_types.Array.find
+            (Array_utils.find
                (fun sy -> String.compare (Loader.Symbol.name sy) name = 0)
                symbols))
   with Not_found -> None
@@ -95,7 +97,7 @@ let section_slice_by_address ~address img =
 let find_symbol ~symbol img =
   let symbols = Loader.Img.symbols img in
   match
-    Basic_types.Array.find (fun sy -> Loader.Symbol.name sy = symbol) symbols
+    Array_utils.find (fun sy -> Loader.Symbol.name sy = symbol) symbols
   with
   | v -> Some (Loader.Symbol.value v)
   | exception Not_found -> None

@@ -138,16 +138,9 @@ let assert_constraint st e =
   mk_assert @@ mk_bv_comp BvEqual bv_term bv_true
 ;;
 
-let restate st =
-  let open Sse_symbolic.State in
-  if has_empty_vinfos st then copy_store st else st
-;;
-
 
 let add_assert_constraint st e =
-  let open Sse_symbolic in
-  assert_constraint st e
-  |> Store.add_entry st.State.store
+  Sse_symbolic.State.add_entry (assert_constraint st e) st
 ;;
 
 let add_deny_constraint st e = add_assert_constraint st (Dba.Expr.lognot e)
@@ -158,7 +151,7 @@ let with_solver k =
   let timeout = Formula_options.Solver.Timeout.get () in
   Sse_options.SmtDir.set ".";
   let file = Sse_utils.temp_file () in
-  let solver = Formula_options.Solver.(get () |> to_piqi) in
+  let solver = Formula_options.Solver.get () in
   let session = Solver.Session.create ~file ~timeout solver in
   let res = k session in
   Solver.Session.destroy session;
@@ -174,8 +167,7 @@ module Translator = struct
 
   let create ?f tr =
     let open Sse_symbolic in
-    let store = Store.create () in
-    let state = State.create store in
+    let state = State.create () in
     let state =
       match f with
       | None -> state
@@ -189,9 +181,7 @@ module Translator = struct
       let cmt_str =
         Formula_pp.pp_as_comment pp Format.str_formatter v;
         Format.flush_str_formatter ()
-      in
-      let cmt = Formula.mk_comment cmt_str in
-      Sse_symbolic.Store.add_entry t.state.Sse_symbolic.State.store cmt
+      in Sse_symbolic.State.comment cmt_str t.state
 
   let add_mnemonic inst t =
     add_comment Mnemonic.pp inst.Instruction.mnemonic t
@@ -200,11 +190,7 @@ module Translator = struct
     | Script of Formula.bv_term option * Formula.formula
     | Continue of t
 
-  let genr_formula t =
-    let open Sse_symbolic in
-    let st = t.state in
-    Formula.push_front_assert
-      (State.get_path_constraint st) (State.get_entries st)
+  let genr_formula t = Sse_symbolic.State.formula t.state
 
   let independant_formula t =
       Script (None, genr_formula t)
@@ -215,8 +201,8 @@ module Translator = struct
       let inst, next = Trace.pop t.next in
       Logger.debug ~level:2 "Continueing %@ %a" Instruction.pp inst;
       let hidx = Instruction.start inst in
-      add_mnemonic inst t;
-      Continue {t with hidx; next; inst; }
+      let state = add_mnemonic inst t in
+      Continue { hidx; next; inst; state; }
       end
 
   let get_succs t =
@@ -294,7 +280,7 @@ module Translator = struct
          begin
            let open Formula in
            let sort = bv_sort bitsize in
-           let state = Sse_symbolic.State.declare t.state name sort in
+           let state = Sse_symbolic.State.declare name sort t.state in
            let nodes = get_succs t in
            match nodes with
            | [hidx] -> Continue { t with hidx; state; }
@@ -333,7 +319,8 @@ module Translator = struct
       with e -> (* t, None *) raise e
 
     and do_dba t dba =
-      add_comment Dba_printer.Ascii.pp_instruction dba t;
+      let t =
+        { t with state = add_comment Dba_printer.Ascii.pp_instruction dba t } in
       match dba with
       | Assign (lval, rval, _) -> Eval.assign lval rval t |> loop
       | SJump (jt, _) -> Eval.sjump jt t |> loop
@@ -372,15 +359,19 @@ let init_mem ~filename symb_st =
       let parser = Parser.initialization
       and lexer = Lexer.token in
       Parse_utils.read_file ~parser ~lexer ~filename in
-    let f syst =
-      let open Parse_helpers in
-      function
-      | Initialization.Assignment(lval, rval) ->
+    let f syst init =
+      let open Parse_helpers.Initialization in
+      match init.operation with
+      | Universal _ -> syst
+      | Assignment(lval, Singleton rval, _) ->
         Sse_smt.Translate.assign lval rval syst
-      | Initialization.MemLoad(addr, size) ->
+      | Assignment (lval, _, _) ->
+         let msg =
+           Format.asprintf "Unhandle deterministc assigment for %a"
+             Dba_printer.EICAscii.pp_lhs lval in
+         failwith msg
+      | Mem_load(addr, size) ->
         Sse_symbolic.State.init_mem_at syst ~addr ~size
-      | Initialization.NondeterministicAssignment _ ->
-         failwith "unhandled non deterministic assignment"
     in List.fold_left f symb_st initials
 ;;
 
@@ -400,8 +391,8 @@ let solve ~title f e t =
          My guess is that it's due to merging/path packing ....
          FIXME FIXME
        *)
-      let state = restate t.Translator.state in
-      Logger.debug ~level:3 "@[<hov 0>Generating final ssertion in state@ %a@]"
+      let state = Sse_symbolic.State.sync t.Translator.state in
+      Logger.debug ~level:3 "@[<hov 0>Generating final assertion in state@ %a@]"
         Sse_symbolic.State.pp state;
       let assertion = f state e in
 
@@ -423,7 +414,7 @@ let check_trace c tr =
   | t, Some _ ->
      let e = c.Dhunk.condition in
      let c_sat = solve ~title:"consequent"  assert_constraint e t
-     and a_sat = solve ~title:"alternative" deny_constraint   e t in
+     and a_sat = solve ~title:"alternative"  deny_constraint   e t in
      let open Opacity_status in
      let a_op = Opacity.of_sat a_sat
      and c_op = Opacity.of_sat c_sat in

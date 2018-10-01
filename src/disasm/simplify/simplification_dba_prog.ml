@@ -20,7 +20,7 @@
 (**************************************************************************)
 
 open Simplification_dba_utils
-
+open Disasm_options
 
 let remove_goto m =
   Logger.debug ~level:3 "Removing gotos ...";

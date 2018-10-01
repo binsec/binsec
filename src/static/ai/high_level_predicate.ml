@@ -19,6 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Ai_options
+
 exception Not_constant_condition
 
 type t = (Dba.Expr.t * Dba.VarTag.t option) Basic_types.String.Map.t option
@@ -480,7 +482,7 @@ and apply_cmp_pattern operands c cond =
     | Expr.Unary (Unary_op.Not, Expr.Var("CF", 1, _)) ->
       Expr.uge op1 op2
 
-    | Expr.Var("ZF", 1, _) -> Expr.eq op1 op2
+    | Expr.Var("ZF", 1, _) -> Expr.equal op1 op2
     | Expr.Unary (Unary_op.Not, Expr.Var("ZF", 1, _)) ->
       Expr.diff op1 op2
     | Expr.Binary(And,

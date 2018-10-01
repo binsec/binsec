@@ -19,6 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Binpatcher_options
+
 module PatchMap = struct
 
   type t = Loader_types.u8 Virtual_address.Map.t

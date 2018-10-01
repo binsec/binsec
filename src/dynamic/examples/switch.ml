@@ -19,6 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Dse_options
 open Trace_type
 open Path_predicate_formula
 open Solver
@@ -58,16 +59,21 @@ class switch_analysis (input_config:Trace_config.t) =
         let pred = self#build_multiple_condition_predicate preds in
         let _ = build_formula_file f pred smt_file in
         (* let _ = pp_stat_formula new_f in *)
-        match solve_model smt_file config.Config_piqi.Configuration.solver with
+        let solver =
+          Formula_options.Solver.of_piqi config.Config_piqi.Configuration.solver
+        in
+        match solve_model smt_file solver with
         | SAT, model ->
           begin
-            try
-              let value = Smt_model.find_register model "totem0" in
-              Logger.info "New value: %s" (Bitvector.to_hexstring value);
-              targets <- value :: targets;
-              if (k-1) != 0 then check_possible_jumps (k-1) env.formula
-            with
-            | Failure s -> Printf.printf "Error while processing model (stop recursion):%s\n" s
+            match Smt_model.find_variable model "totem0" with
+             | Some value ->
+                Logger.info "New value: %a" Bitvector.pp_hex value;
+                targets <- value :: targets;
+                let k' = k - 1 in
+                if k' <> 0 then check_possible_jumps k' env.formula
+             | None ->
+               Logger.error "Error while processing model (stop recursion)";
+               exit 0
           end
         | (UNSAT | TIMEOUT | UNKNOWN), _ -> Logger.warning "UNSAT"
       in
@@ -76,27 +82,39 @@ class switch_analysis (input_config:Trace_config.t) =
 
     method private compute_possible_values_interactively e (env:Path_predicate_env.t): unit =
       self#add_witness_variable "totem0" e env;
-      let solver = start_interactive ~file:smt_file config.Config_piqi.Configuration.solver in
-      build_formula_incremental env.formula mk_bl_true ~push:false solver |> ignore;
+      let solver =
+        Formula_options.Solver.of_piqi
+          config.Config_piqi.Configuration.solver in
+      let session = start_interactive ~file:smt_file solver in
+      ignore @@
+      build_formula_incremental env.formula mk_bl_true ~push:false session;
       let rec check_possible_jumps k prev =
-        let res, model = solve_incremental_model solver ~term:(Some prev) in
+        let res, model = solve_incremental_model session ~term:prev in
         match res with
         | SAT ->
-          let value = Smt_model.find_register model "totem0" in
-          Logger.info "New value: %s" (Bitvector.to_hexstring value);
-          flush stdout;
-          targets <- value :: targets;
-          let new_pred =
-            mk_bl_not
-              (self#build_witness_bitvector_comparison_predicate
-                 "totem0" env.formula.addr_size value) in
-          if (k-1) != 0 then check_possible_jumps (k-1) new_pred
+           let vname = "totem0" in
+           begin match Smt_model.find_variable model vname with
+           | Some value ->
+              Logger.info "New value: %a" Bitvector.pp_hex value;
+              flush stdout;
+              targets <- value :: targets;
+              let new_pred =
+                mk_bl_not
+                  (self#build_witness_bitvector_comparison_predicate
+                     vname env.formula.addr_size value) in
+              let k' = k - 1 in
+              if k' <> 0 then check_possible_jumps k' new_pred
+           | None ->
+              Logger.error
+                "Error while processing model (stop recursion)";
+              exit 1;
+           end
         | UNSAT   -> Logger.error "UNSAT"
         | TIMEOUT -> Logger.warning "TIMEOUT"
         | UNKNOWN -> Logger.warning "UNKNOWN"
       in
       check_possible_jumps 10 mk_bl_true;
-      stop_interactive solver
+      stop_interactive session
 
     method! private post_execution _ =
       if List.length targets > 1 then 0 else 100

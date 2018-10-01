@@ -28,6 +28,7 @@ open Formula
 open Analysis_config
 open Standard_analysis
 open Specific_parameters_t
+open Dse_options
 
 let is_flag (s:string): bool =
   List.mem s ["OF";"SF";"ZF";"AF";"PF";"CF"]

@@ -384,3 +384,120 @@ let def_desc_name = function
 let def_name df =
   def_desc_name df.def_desc
 
+
+module BindEnv =
+struct
+
+  type ('var,'term) status =
+    | Free
+    | Declared of ('var * sort list)
+    | Defined  of ('var * decl list * 'term)
+
+  type t = {
+    bl_bind : (bl_var, bl_term) status BlVarHashtbl.t;
+    bv_bind : (bv_var, bv_term) status BvVarHashtbl.t;
+    ax_bind : (ax_var, ax_term) status AxVarHashtbl.t;
+  }
+
+  let create n = {
+    bl_bind = BlVarHashtbl.create n;
+    bv_bind = BvVarHashtbl.create n;
+    ax_bind = AxVarHashtbl.create n;
+  }
+
+  let bl_lookup t v = try BlVarHashtbl.find t.bl_bind v with Not_found -> Free
+  let bv_lookup t v = try BvVarHashtbl.find t.bv_bind v with Not_found -> Free
+  let ax_lookup t v = try AxVarHashtbl.find t.ax_bind v with Not_found -> Free
+
+  let bl_decl t v ls = BlVarHashtbl.add t.bl_bind v (Declared (v,ls))
+  let bv_decl t v ls = BvVarHashtbl.add t.bv_bind v (Declared (v,ls))
+  let ax_decl t v ls = AxVarHashtbl.add t.ax_bind v (Declared (v,ls))
+
+  let decl t dc =
+    match dc.decl_desc with
+    | BlDecl (v,ls) -> bl_decl t v ls
+    | BvDecl (v,ls) -> bv_decl t v ls
+    | AxDecl (v,ls) -> ax_decl t v ls
+
+  let bl_def t v ls bl = BlVarHashtbl.add t.bl_bind v (Defined (v,ls,bl))
+  let bv_def t v ls bv = BvVarHashtbl.add t.bv_bind v (Defined (v,ls,bv))
+  let ax_def t v ls ax = AxVarHashtbl.add t.ax_bind v (Defined (v,ls,ax))
+
+  let rec def is_var add find v ls tm =
+    match is_var tm with
+    | None -> add v ls tm
+    | Some v' ->
+      if v <> v' then
+        match find v' with
+        | Defined (_,[],tm) -> def is_var add find v ls tm
+        | _ -> add v ls tm
+
+  let def t df =
+    match df.def_desc with
+    | BlDef (v,ls,bl) -> def is_bl_var (bl_def t) (bl_lookup t) v ls bl
+    | BvDef (v,ls,bv) -> def is_bv_var (bv_def t) (bv_lookup t) v ls bv
+    | AxDef (v,ls,ax) -> def is_ax_var (ax_def t) (ax_lookup t) v ls ax
+
+  let undecl t dc =
+    match dc.decl_desc with
+    | BlDecl (v,_) -> BlVarHashtbl.remove t.bl_bind v
+    | BvDecl (v,_) -> BvVarHashtbl.remove t.bv_bind v
+    | AxDecl (v,_) -> AxVarHashtbl.remove t.ax_bind v
+
+  let undef t df =
+    match df.def_desc with
+    | BlDef (v,_,_) -> BlVarHashtbl.remove t.bl_bind v
+    | BvDef (v,_,_) -> BvVarHashtbl.remove t.bv_bind v
+    | AxDef (v,_,_) -> AxVarHashtbl.remove t.ax_bind v
+
+  let is_bl_cst t bl =
+    match is_bl_cst bl with
+    | Some _ as opt -> opt
+    | None ->
+      match is_bl_var bl with
+      | None -> None
+      | Some v ->
+        match bl_lookup t v with
+        | Defined (_,[],bl) -> is_bl_cst bl
+        | _ -> None
+
+  let is_bv_cst t bv =
+    match is_bv_cst bv with
+    | Some _ as opt -> opt
+    | None ->
+      match is_bv_var bv with
+      | None -> None
+      | Some v ->
+        match bv_lookup t v with
+        | Defined (_,[],bv) -> is_bv_cst bv
+        | _ -> None
+
+  let is_bl_var t bl =
+    match is_bl_var bl with
+    | None -> None
+    | Some v ->
+      match bl_lookup t v with
+      | Declared (_,[]) -> Some v
+      | Defined (_,[],bl) -> is_bl_var bl
+      | _ -> None
+
+  let is_bv_var t bv =
+    match is_bv_var bv with
+    | None -> None
+    | Some v ->
+      match bv_lookup t v with
+      | Declared (_,[]) -> Some v
+      | Defined (_,[],bv) -> is_bv_var bv
+      | _ -> None
+
+  let is_ax_var t ax =
+    match is_ax_var ax with
+    | None -> None
+    | Some v ->
+      match ax_lookup t v with
+      | Declared (_,[]) -> Some v
+      | Defined (_,[],ax) -> is_ax_var ax
+      | _ -> None
+
+end
+

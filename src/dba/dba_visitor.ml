@@ -19,8 +19,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Basic_types
-
 class type inplace_visitor_t = object
   method visit_assert : Dba.Expr.t -> unit
   method visit_assign : Dba.LValue.t -> Dba.Expr.t -> unit

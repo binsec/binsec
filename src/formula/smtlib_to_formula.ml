@@ -461,7 +461,8 @@ module TypEnv = struct
   let add_var env v s = { env with variables = StringMap.add v s env.variables }
 
   let find_var env v =
-    StringMap.find v env.variables
+    try StringMap.find v env.variables
+    with _ -> failwith "Unbound variable"
 
   let load_vars vars env =
     List.fold_left (fun env (v, ftyp) -> add_var env v ftyp) env vars
@@ -470,7 +471,8 @@ module TypEnv = struct
     { env with functions = StringMap.add v ftyp env.functions }
 
   let find_fun env v =
-    StringMap.find v env.functions
+    try StringMap.find v env.functions
+    with _ -> failwith "Unbound variable"
 
   let load_funs funs env =
     List.fold_left (fun env (v, ftyp) -> add_fun env v ftyp) env funs

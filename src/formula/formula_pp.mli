@@ -57,6 +57,8 @@ val print_bl_term: bl_term -> string
     a new line *)
 val print_varset: VarSet.t -> string
 
+val pp_varset : Format.formatter -> VarSet.t -> unit
+
 (** @return the preformatted header *)
 val print_header: unit -> string
 

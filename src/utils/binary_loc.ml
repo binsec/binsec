@@ -27,8 +27,20 @@ type t =
 
 let name s = Name s
 let address a = Address a
-let offset n t = Offset(t, n)
+let offset n t =
+  if n = 0 then t
+  else match t  with
+       | Name _ as t -> Offset (t, n)
+       | Offset(t, m) -> Offset(t, m + n)
+       | Address a -> Address (Virtual_address.add_int n a)
 
+
+let rec pp ppf = function
+  | Name s -> Format.pp_print_string ppf s
+  | Offset (t, n) ->
+     Format.fprintf ppf "<%a %c %d>"
+       pp t (if n < 0 then '-' else '+') n
+  | Address a -> Virtual_address.pp ppf a
 
 let rec of_string s =
   match s.[0] with

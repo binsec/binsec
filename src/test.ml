@@ -19,6 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Dse_options
+
 let test_policy pol =
   Logger.set_tagged_entry false;
   let p = Policy_engine.parse_policy_from_string_list pol in
@@ -53,8 +55,6 @@ let run () =
   let open Trace_config in
   let open Config_piqi in
   let config = Trace_config.default in
-  let v = Int32.to_int config.configuration.Configuration.verbosity in
-  Logger.set_verbosity v;
   let p = config.configuration.Configuration.policy in
   match p with
   | _ :: _ -> test_policy p

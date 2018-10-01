@@ -384,9 +384,9 @@ let cond_of_cc cc =
   | true,  P  -> pf_flag
   | false, P  -> lognot pf_flag
   | true,  L  -> Expr.diff sf_flag of_flag
-  | false, L  -> Expr.eq sf_flag of_flag
+  | false, L  -> Expr.equal sf_flag of_flag
   | true,  LE -> logor zf_flag (Expr.diff sf_flag of_flag)
-  | false, LE -> logand (lognot zf_flag) (Expr.eq sf_flag of_flag)
+  | false, LE -> logand (lognot zf_flag) (Expr.equal sf_flag of_flag)
 
 
 let retrieve_sreg a =
@@ -643,7 +643,7 @@ let update_OF op1 op2 res size op flag_cmp =
   match op with
   | Add | Adc -> (* ADC & ADD behaves the same for the OF flag *)
     (* ov=1 <->  A[n]=B[n] /\ A[n] \= (A+B)[n] *)
-    assign_flag OF Dba.Expr.(logand (eq signbit1 signbit2) (diff signbit1 rres))
+    assign_flag OF Dba.Expr.(logand (equal signbit1 signbit2) (diff signbit1 rres))
   | Sub ->
     (* ov=1 <->  A[n]\= B[n] /\ A[n] \= (A-B)[n] *)
     assign_flag OF ~flag_cmp
@@ -661,7 +661,7 @@ let update_OF op1 op2 res size op flag_cmp =
 
 let update_ZF res size flag_cmp =
   let open Dba in
-  assign_flag ZF ~flag_cmp (Expr.eq res (Expr.zeros size))
+  assign_flag ZF ~flag_cmp (Expr.equal res (Expr.zeros size))
 
 
 let update_SF res size flag_cmp =
@@ -917,7 +917,7 @@ let affect_flags_div = undef_flags [OF; SF; ZF; CF;]
 let affect_flags_neg op res' size =
   let open Dba.Expr in
   let res = getopt_or_fail ~in_function:"affect_flags_neg" res' in
-  [ assign_flag OF (eq op (maxi_bv size));
+  [ assign_flag OF (equal op (maxi_bv size));
     update_SF res size Dba.Flag.unspecified;
     update_ZF res size Dba.Flag.unspecified;
     assign_flag CF (diff op (zeros size)); ]
@@ -929,8 +929,8 @@ let affect_flags_ptest xmm size op1 op2 sreg =
   let e2 = disas_expr_xmm op2 xmm size sreg in
   let v = constant (Bitvector.zeros 128) in
   let and_e1 = logand e1 in
-  let c1 = eq (and_e1 e2) v in
-  let c2 = eq (and_e1 (lognot e2)) v in
+  let c1 = equal(and_e1 e2) v in
+  let c2 = equal(and_e1 (lognot e2)) v in
   [ clear_flag OF Dba.Flag.unspecified;
     clear_flag SF Dba.Flag.unspecified;
     assign_flag ZF c1;
@@ -978,7 +978,7 @@ let pcmpeq gop1 gop2 xmm mm size sreg =
         Dba.Expr.restrict i j (disas_expr_xmm gop xmm mm sreg) in
       let l1 n =
         [ Predba.conditional_jump
-            (Dba.Expr.eq (restrict_genop gop1) (restrict_genop gop2))
+            (Dba.Expr.equal(restrict_genop gop1) (restrict_genop gop2))
             (Dba.JInner (base_idx + n))
         ]
       in
@@ -1036,7 +1036,7 @@ let repeat_instrs l rep =
     let ecx = expr_of_reg32 ECX in
     let pre_l =
       Predba.conditional_jump
-        Dba.(Expr.eq ecx (Dba.Expr.zeros 32))
+        Dba.(Expr.equal ecx (Dba.Expr.zeros 32))
         (Dba.JInner size) in
     let post_l = [
       Predba.assign (lhs_of_reg32 ECX) (Dba.Expr.sub ecx (cst_of_int 1 32));
@@ -1275,7 +1275,7 @@ let lift_shiftd mode shift_op dst src gop8 sreg =
   let tmp = dba_op2 esrc (Expr.sub (cst_of_int size size) count) in
   let jump10 = Dba.JInner 10 in
   affect_flags_shiftd @
-  [ Predba.conditional_jump (Expr.eq count (Expr.zeros size)) jump10;
+  [ Predba.conditional_jump (Expr.equal count (Expr.zeros size)) jump10;
     Predba.conditional_jump
       (Expr.ule count (cst_of_int size size)) (Dba.JInner 8);
     Predba.undefined ldst;
@@ -1323,7 +1323,7 @@ let lift_cmpXchg mode gop1 gop2 sreg =
   Predba.assign (res_lhs mode) (Expr.sub eax_expr e1) ::
   affect_flags_cmp (disas_expr gop1 mode sreg)
     (expr_of_reg mode EAX) res (size_mode mode) @
-  [ Predba.conditional_jump (Expr.eq eax_expr e1) (Dba.JInner 10);
+  [ Predba.conditional_jump (Expr.equal eax_expr e1) (Dba.JInner 10);
     Predba.assign (lhs_of_reg EAX mode) e1;
     Predba.static_jump (Dba.JInner 11);
     Predba.assign (disas_lval gop1 mode sreg) (disas_expr gop2 mode sreg)
@@ -1666,7 +1666,7 @@ let lift_div mode gop sreg =
   [ Predba.assign (double_temp_lhs mode) (Expr.append (ereg EDX) (ereg EAX));
     Predba.assign (double_res_lhs mode) (Expr.udiv dtexpr ue);
     Predba.conditional_jump
-      (Expr.(eq (restrict size (double_size - 1) drexpr) (zeros size)))
+      (Expr.(equal(restrict size (double_size - 1) drexpr) (zeros size)))
       (Dba.JInner 4);
     Predba.stop Dba.KO;
     Predba.assign (lhs_of_reg EAX mode) re;
@@ -1691,7 +1691,7 @@ let lift_idiv mode gop sreg =
   Predba.assign (temp_lhs mode)
     (Expr.restrict size (double_size - 1) drem)
   ::
-  Predba.conditional_jump (Expr.eq (temp_expr mode) (Expr.zeros size))
+  Predba.conditional_jump (Expr.equal(temp_expr mode) (Expr.zeros size))
     (Dba.JInner 5) ::
   Predba.stop Dba.KO ::
   Predba.assign (lhs_of_reg EAX mode)
@@ -1751,7 +1751,7 @@ let lift_bsr mode dst src sreg =
     Predba.assign temp_lhs src_exp;
     Predba.assign cpt_lhs (cst_of_int size (size + 1));
     Predba.conditional_jump
-      Expr.(eq (bit_restrict size temp_exp) bool_true)
+      Expr.(equal(bit_restrict size temp_exp) bool_true)
       (Dba.JInner 11);
     Predba.assign temp_lhs (shift_left temp_exp extone);
     Predba.assign cpt_lhs (sub cpt_exp extone);
@@ -1789,7 +1789,7 @@ let lift_bsf mode dst src sreg =
     Predba.assign temp_lhs (src_exp);
     Predba.assign cpt_lhs zeros;
     Predba.conditional_jump
-      Expr.(eq (bit_restrict 0 temp_exp) Dba_types.Expr.bool_true)
+      Expr.(equal(bit_restrict 0 temp_exp) Dba_types.Expr.bool_true)
       (Dba.JInner 11);
     Predba.assign temp_lhs (Expr.shift_right temp_exp (cst_of_int 1 sz));
     Predba.assign cpt_lhs (Expr.add  cpt_exp (cst_of_int 1 sz));
@@ -1835,7 +1835,7 @@ let lift_xadd mode gop1 gop2 sreg =
 let lift_jcxz mode src =
   let size = size_mode mode in
   [ Predba.conditional_jump
-      (Dba.Expr.(eq (expr_of_reg mode ECX) (zeros size)))
+      (Dba.Expr.(equal(expr_of_reg mode ECX) (zeros size)))
       (strange_addr_of_int64 src);
   ]
 
@@ -2267,7 +2267,7 @@ let lift_btr mode base offset sreg =
     let mask = Expr.constant (Bitvector.create mask size) in
     let op = Expr.logand base_expr mask in
     let max = cst_of_int (size - 1) size in
-    let c = Expr.eq offset max in
+    let c = Expr.equal offset max in
     let tmp = temp_size size in
     let last = size - 1 in
     [
@@ -2361,7 +2361,7 @@ let lift_cmpXchg8b reg_t size_t gop sreg =
     let edx_lhs = lhs_of_reg32 EDX in
     let op  = Expr.append edx_expr eax_expr in
     let op2 = Expr.append ecx_expr ebx_expr in
-    let c = Expr.eq op dst_exp in
+    let c = Expr.equal op dst_exp in
     [
       Predba.conditional_jump c (Dba.JInner 5);
       Predba.assign (lhs_of_flag ZF Dba.Flag.unspecified) Dba.Expr.zero;
@@ -2435,7 +2435,7 @@ let lift_aas () =
   and last_instruction = [ Predba.assign al_lval check ]
   and cond =
     let loper = Expr.ugt check (byte_constant 9)in
-    let roper = Expr.eq af_flag Expr.one in
+    let roper = Expr.equal af_flag Expr.one in
     Expr.logor loper roper
   in
   Predba.conditional_jump cond (Jump_target.inner 4) ::

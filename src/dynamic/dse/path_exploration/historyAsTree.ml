@@ -19,6 +19,7 @@
 
 open TypeTraceDSE
 open TracesToTree
+open Dse_options
 
 module HistoryAsTree (TraceDSE_v:TypeTraceDSE) =
 struct

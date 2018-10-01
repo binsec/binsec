@@ -23,6 +23,7 @@ open Errors
 open Smt_bitvectors
 open Format
 open Formula
+open Static_options
 
 let r_res_compare r1 r2 =
   match r1, r2 with
@@ -1613,6 +1614,7 @@ let get_byte_region_at addr =
   let open Bigint in
   try
     let img = Kernel_functions.get_img () in
+    let addr = Bitvector.create addr (Machine.Word_size.get ()) in
     let byte = Loader_utils.get_byte_at img addr in
     let bitsize = Basic_types.Constants.bytesize in
     create_constant (big_int_of_int byte) (bitsize:>int)

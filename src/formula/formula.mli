@@ -191,9 +191,8 @@ type entry_desc =
   | Declare of decl
   | Define  of def
   | Assert  of bl_term
+  | Assume  of bl_term
   | Comment of string
-  | Echo of string
-  | Check_sat
 
 type entry = private {
   entry_hash : int;
@@ -229,17 +228,14 @@ val fold_backward : (entry -> 'a -> 'a) -> formula -> 'a -> 'a
 val push_front_declare : decl    -> formula -> formula
 val push_front_define  : def     -> formula -> formula
 val push_front_assert  : bl_term -> formula -> formula
+val push_front_assume  : bl_term -> formula -> formula
 val push_front_comment : string  -> formula -> formula
-val push_front_echo : string  -> formula -> formula
-val push_front_check_sat : formula -> formula
 
 val push_back_declare  : decl    -> formula -> formula
 val push_back_define   : def     -> formula -> formula
 val push_back_assert   : bl_term -> formula -> formula
+val push_back_assume   : bl_term -> formula -> formula
 val push_back_comment  : string  -> formula -> formula
-val push_back_echo : string  -> formula -> formula
-val push_back_check_sat : formula -> formula
-
 
 val equal_bl_term : bl_term -> bl_term -> bool
 val equal_bv_term : bv_term -> bv_term -> bool
@@ -307,9 +303,8 @@ val mk_ax_decl : ax_var -> sort list -> decl
 val mk_declare : decl -> entry
 val mk_define  : def -> entry
 val mk_assert  : bl_term -> entry
+val mk_assume  : bl_term -> entry
 val mk_comment : string -> entry
-val mk_echo    : string -> entry
-val mk_check_sat: entry
 
 val mk_bl_not : bl_term -> bl_term
 

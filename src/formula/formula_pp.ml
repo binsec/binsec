@@ -136,14 +136,20 @@ let bv_to_string name size =
 let ax_to_string name size1 size2 =
   Printf.sprintf "(declare-fun %s () (Array (_ BitVec %i) (_ BitVec %i)))" name size1 size2
 
+
+let pp_varset ppf set =
+  VarSet.iter
+  (function
+   | BlVar bl ->
+      Format.fprintf ppf "%s;@ " (bl_to_string bl.bl_name)
+   | BvVar bv ->
+      Format.fprintf ppf "%s;@ " (bv_to_string bv.bv_name bv.bv_size)
+   | AxVar ax ->
+      Format.fprintf ppf "%s;@ " (ax_to_string ax.ax_name ax.idx_size ax.elt_size)
+  ) set
+
 let print_varset set =
-  VarSet.fold
-    (fun var s ->
-       match var with
-       | BlVar bl -> Printf.sprintf "%s%s\n" s (bl_to_string bl.bl_name)
-       | BvVar bv -> Printf.sprintf "%s%s\n" s (bv_to_string bv.bv_name bv.bv_size)
-       | AxVar ax -> Printf.sprintf "%s%s\n" s (ax_to_string ax.ax_name ax.idx_size ax.elt_size))
-    set ""
+  Format.asprintf "@[<v 0>%a@]" pp_varset set
 
 let pp_header ppf () =
   let theory =

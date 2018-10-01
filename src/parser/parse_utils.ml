@@ -77,7 +77,8 @@ let read_optional_config_file filename_opt =
     let conf = read_config_file filename in
     let ep = mk_eps address in
     if Infos.has_entry_points conf then
-      Logger.warning "Entry points in file %s overriden by command line"
+      Kernel_options.Logger.warning
+        "Entry points in file %s overriden by command line"
         filename;
     Infos.set_entry_points ep conf
 

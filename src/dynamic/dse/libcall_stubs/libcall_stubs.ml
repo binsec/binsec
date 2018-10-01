@@ -25,6 +25,7 @@ open Libcall_piqi
 open Common_piqi
 open Libc_stubs
 open Windows_stubs
+open Dse_options
 
 let the = Utils.unsafe_get_opt
 

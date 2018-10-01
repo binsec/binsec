@@ -32,10 +32,15 @@
      Declarations.add name size tags;
      let bitsize = Size.Bit.create size in
      Dba.LValue.var name ~bitsize tags
+
+
+  let _dummy_addr =
+    Dba_types.Caddress.create Bitvector.zero 0
+
 %}
 
 %token PLUS MINUS STAR STAR_U STAR_S SLASH_U SLASH_S
-%token MODU MODS UNDEF SOK SKO PRINT ASSERT FROMFILE
+%token MODU MODS UNDEF SOK SKO PRINT ASSERT FROMFILE FROM FILE
 %token ASSUME NONDET NONDETASSUME AT
 %token CONSTANT STACK MALLOC FREE NREAD READ NWRITE WRITE
 %token NEXEC EXEC ENTRYPOINT ENDIANNESS BIG LITTLE
@@ -48,11 +53,11 @@
 %token LBRACE RBRACE LPAR RPAR LBRACKET RBRACKET RBRACKETS RBRACKETU
 %token ARROW ARROWINV STOP
 %token ASSIGN TRUE FALSE IF THEN ELSE GOTO
-%token ANNOT CALLFLAG
+%token ANNOT CALLFLAG AS
 %token WORDSIZE
 %token RETURNFLAG BEGIN END PERMISSIONS
 %token FLAG TEMPORARY REGISTER VAR TEMPTAG FLAGTAG
-%token ENUMERATE REACH RESTRICT CUT CONSEQUENT ALTERNATIVE
+%token ENUMERATE REACH CUT CONSEQUENT ALTERNATIVE ALTERNATE UNCONTROLLED
 %token EOF
 
 %token <string> INT
@@ -105,8 +110,8 @@
 %start initialization
 %type <Parse_helpers.Initialization.t list> initialization
 
-%start actions
-%type <Action.t list> actions
+%start directives
+%type <Directive.t list> directives
 
 %%
 
@@ -261,6 +266,8 @@ constant_expr:
  | MALLOC         { Dba_types.Region.malloc (Machine.Word_size.get ())}
 ;
 
+
+
 localized_instruction:
 | addr=address; instr=instruction;
   { Mk.checked_localized_instruction addr instr }
@@ -271,7 +278,8 @@ localized_instruction:
 ;
 
 jump_annotation:
-| ANNOT CALLFLAG addr=address; { Dba.Call addr }
+| ANNOT CALLFLAG addr=address;
+  { Dba.Call addr }
 | ANNOT RETURNFLAG             { Dba.Return }
 ;
 
@@ -283,7 +291,7 @@ static_target:
 
 
 static_jump:
-| t=static_target; tag=option(jump_annotation);
+| t=static_target; tag=ioption(jump_annotation);
   { Dba.Instr.static_jump t ~tag  }
 ;
 
@@ -309,14 +317,15 @@ rvalue:
 | UNDEF   { Dba.Instr.undefined }
 | MALLOC e=delimited(LPAR, expr, RPAR);
   { fun lv -> Dba.Instr.malloc lv e  }
-| NONDET region=delimited(LPAR,regionnondet, RPAR);
-  { fun lv -> Dba.Instr.non_deterministic lv region }
+| NONDET region=ioption(delimited(LPAR,regionnondet, RPAR));
+  { fun lv -> Dba.Instr.non_deterministic lv ?region }
+| UNCONTROLLED
+  { fun lv -> Dba.Instr.non_deterministic lv }
 ;
 
-
 assignment:
-| lvalue=lvalue; ASSIGN frv=rvalue;
-  { frv lvalue unknown_successor}
+| lvalue=lvalue; ASSIGN f_rv=rvalue;
+  { f_rv lvalue unknown_successor}
 ;
 
 either(X,Y):
@@ -326,22 +335,37 @@ either(X,Y):
 
 interval_or_set:
 | LBRACKET e1=expr; either(DOTDOT,COMMA); e2=expr; RBRACKETS
-  { Initialization.SignedInterval(e1,e2) }
+  { Initialization.Signed_interval(e1,e2) }
 | LBRACKET e1=expr; either(DOTDOT,COMMA); e2=expr; RBRACKETU
-  { Initialization.UnsignedInterval(e1,e2) }
+  { Initialization.Unsigned_interval(e1,e2) }
 | LBRACE args=separated_nonempty_list(COMMA,expr) RBRACE
   { Initialization.Set args }
 ;
 
+%inline fromfile:
+| FROMFILE {}
+| FROM FILE {}
+;
+
+as_annotation:
+| AS id=IDENT; { id }
+;
+
 initialization_assignment:
-| a=assignment;               { Initialization.from_assignment a }
-| v=address_lvalue; FROMFILE; { Initialization.from_store v }
-| lvalue=lvalue; ASSIGN; is=interval_or_set
-  { Initialization.NondeterministicAssignment(lvalue,is)}
+| a=assignment;              { Initialization.from_assignment a }
+| v=address_lvalue; fromfile { Initialization.from_store v }
+| lvalue=lvalue; ASSIGN; is=interval_or_set; idopt=ioption(as_annotation);
+  { Initialization.assign ?identifier:idopt lvalue is }
+| lv=lvalue;  { Initialization.universal lv }
+;
+
+initialization_directive:
+| uncontrolled=boption(UNCONTROLLED); init=initialization_assignment;
+  { Initialization.set_control (not uncontrolled) init }
 ;
 
 initialization:
-| v=list(terminated(initialization_assignment, SEMICOLON)); EOF { v }
+| v=list(terminated(initialization_directive, SEMICOLON)); EOF { v }
 ;
 
 annotable_instruction:
@@ -383,13 +407,16 @@ labelled_instruction:
 
 dhunk:
 | l=list(labelled_instruction); {Dhunk.of_labelled_list l}
+;
 
 dhunk_eof:
-| l=dhunk; EOF { l}
+| l=dhunk; EOF { l }
+;
 
 dhunk_substitution:
 | addr=HEXA; ARROW; dh=dhunk
-    {(Virtual_address.of_bitvector @@ Bitvector.of_string addr,dh)}
+  { (Virtual_address.of_bitvector @@ Bitvector.of_string addr, dh)}
+;
 
 dhunk_substitutions_eof:
 | l=list(dhunk_substitution); EOF {l}
@@ -407,6 +434,7 @@ printarg:
 %inline store_annotation:
 | ARROW    { BigEndian }
 | ARROWINV { LittleEndian }
+;
 
 address_lvalue:
 | AT LBRACKET
@@ -555,33 +583,56 @@ patchmap:
  | patches=list(patch); EOF { mk_patches patches }
 ;
 
-/* Goals/actions for analyses: SE, interpretation  */
-goal:
- | REACH nopt=ioption(integer);
-   { let n = Utils.get_opt_or_default 1 nopt in Action.reach ~n }
- | REACH STAR
-   { Action.reach_all }
- | ENUMERATE  nopt=ioption(delimited(LPAR,integer,RPAR)); COLON e=expr;
-   { let n = Utils.get_opt_or_default 1 nopt in Action.enumerate ~n e }
- | RESTRICT e=expr; COLON v=constant_expr;
-   { Action.restrict e v }
- | CUT
-   { Action.cut }
+
+%inline integer_argument:
+ | times=ioption(delimited(LPAR,integer,RPAR)); { times }
+;
+
+%inline consequent:
  | PLUS
  | CONSEQUENT
- | THEN
-   { Action.choose_consequent }
+ | THEN {}
+;
+%inline alternative:
  | MINUS
  | ALTERNATIVE
- | ELSE
-   { Action.choose_alternative }
+ | ELSE {}
 ;
 
-located_action:
- | address=integer; g=goal;
-   { g (Virtual_address.create address) }
+/* Directives for analyses: SE, interpretation  */
+directive:
+ | REACH times=integer_argument;
+   { let n = Utils.get_opt_or_default 1 times in Directive.reach ~n }
+ | REACH STAR
+   { Directive.reach_all }
+ | ENUMERATE   e=expr; times=integer_argument;
+   { let n = Utils.get_opt_or_default 1 times in Directive.enumerate ~n e }
+ | ASSUME e=expr;
+   { Directive.assume e }
+ | CUT
+   { Directive.cut }
+ | consequent alternate=boption(ALTERNATE);
+   { Directive.choose_consequent ~alternate }
+ | alternative alternate=boption(ALTERNATE);
+   { Directive.choose_alternative ~alternate }
 ;
 
-actions:
- | l=separated_nonempty_list(SEMICOLON, located_action); EOF { l }
+bin_loc_with_id:
+ | id=IDENT; { Binary_loc.name id }
+ | bloc=bin_loc_with_id; PLUS n=integer;  { Binary_loc.offset n bloc }
+ | bloc=bin_loc_with_id; MINUS n=integer; { Binary_loc.offset (-n) bloc }
+;
+
+binary_loc:
+ | address=integer { Binary_loc.address @@ Virtual_address.create address }
+ | loc=delimited(INFER, bin_loc_with_id, SUPER); { loc }
+;
+
+located_directive:
+ | loc=binary_loc; g=directive;
+   { g loc }
+;
+
+directives:
+ | l=separated_nonempty_list(SEMICOLON, located_directive); EOF { l }
 ;

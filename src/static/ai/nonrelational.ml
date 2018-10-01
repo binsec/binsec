@@ -24,6 +24,7 @@ open Basic_types
 open High_level_predicate
 open Format
 open Static_types (* Env *)
+open Ai_options
 
 exception RecursiveCall of Dba.address
 
@@ -1279,7 +1280,7 @@ struct
                begin
                  match bop with
                  | Dba.Binary_op.Eq   -> Dba.Expr.diff e1 e2 |> k
-                 | Dba.Binary_op.Diff -> Dba.Expr.eq e1 e2   |> k
+                 | Dba.Binary_op.Diff -> Dba.Expr.equal e1 e2   |> k
                  | Dba.Binary_op.LeqU -> Dba.Expr.ugt e1 e2  |> k
                  | Dba.Binary_op.LtU  -> Dba.Expr.uge e1 e2  |> k
                  | Dba.Binary_op.GeqU -> Dba.Expr.ult e1 e2  |> k

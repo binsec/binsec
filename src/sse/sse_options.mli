@@ -25,8 +25,6 @@ include Cli.S
 
 module MaxDepth : Cli.INTEGER
 
-module MaxPackDepth : Cli.INTEGER
-
 module JumpEnumDepth : Cli.INTEGER
 
 module Randomize : Cli.BOOLEAN
@@ -47,7 +45,7 @@ module LoadROSections : Cli.BOOLEAN
 
 module MemoryFile : Cli.STRING
 
-module NoComment : Cli.BOOLEAN
+module Comment : Cli.BOOLEAN
 
 module Timeout : Cli.FLOAT
 
@@ -78,6 +76,6 @@ module Seed : Cli.INTEGER_OPT
 (** Seed for the random number generator *)
 
 
-module Goals : Cli.GENERIC with type t = Action.t list
+module Directives : Cli.GENERIC with type t = Directive.t list
 
-module Goal_file : Cli.STRING_OPT
+module Dot_filename_out : Cli.STRING_OPT

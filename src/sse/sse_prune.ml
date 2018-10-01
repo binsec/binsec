@@ -23,9 +23,9 @@ open Sse_graph
 
 let is_djump v =
   match G.V.inst v with
-  | None -> false
   | Some (Dba.Instr.DJump _) -> true
-  | _ -> false
+  | None
+  | Some _ -> false
 
 let v_to_intvaddr v =
   (G.V.addr v).Dba.base |> Bitvector.value_of |> Bigint.int_of_big_int

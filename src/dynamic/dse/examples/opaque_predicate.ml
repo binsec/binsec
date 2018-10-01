@@ -31,6 +31,8 @@ open Specific_parameters_t
 open Po_analysis_results
 open Standard_analysis
 
+open Dse_options
+
 let smt_to_status res1 =
   match res1 with
   | SAT -> `unknown

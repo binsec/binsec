@@ -32,7 +32,7 @@ open Decode_utils
 open Dba_utils
 open Common_piqi
 open Memory_t
-
+open Dse_options
 
 module Pp = Dba_printer.EICUnicode
 let tmp_vars =
@@ -851,11 +851,15 @@ class dse_analysis (input_config:Trace_config.t) =
       else
         let env = self#create_env () in
         self#add_initial_state env;
-        if solve_incrementally then
+        if solve_incrementally then begin
+          let solver =
+            Formula_options.Solver.of_piqi
+              input_config.configuration.Configuration.solver in
           solver_session <-
             start_interactive
               ~file:default_formula_file
-              ~timeout input_config.configuration.Configuration.solver;
+              ~timeout solver
+          end;
         if policy = [] then Logger.warning "No policy provided (use default)";
         self#pre_execution env;
         let rec process_trace key =
@@ -936,7 +940,9 @@ class dse_analysis (input_config:Trace_config.t) =
          | Some UNSAT ->
            Logger.debug "use Qed status";
            UNSAT, Smt_model.empty, 0.0
-         | _ -> solve_model_time ~timeout:timeout ~get_model name solver)
+         | _ ->
+            let solver = Formula_options.Solver.of_piqi solver in
+            solve_model_time ~timeout:timeout ~get_model ~file:name solver)
 
 
     method private visit_instr_before _ _ _ = DoExec

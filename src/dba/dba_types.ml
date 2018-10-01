@@ -21,6 +21,8 @@
 
 open Dba
 
+module Logger = Logger.Make(struct let name = "dba" end)
+
 type instruction_sequence = (Dba.address *  Dba.Instr.t) list
 
 let malloc_id = ref 0
@@ -389,7 +391,7 @@ module Instruction = struct
     | Assert (c, _) -> _assert c id
     | Assume (c, _) -> assume c id
     | NondetAssume (lvs, c, _) -> non_deterministic_assume lvs c id
-    | Nondet (lv, r, _) -> non_deterministic lv r id
+    | Nondet (lv, region, _) -> non_deterministic lv ~region id
     | Undef (lv, _) -> undefined lv id
     | Malloc (lv, e, _) -> malloc lv e id
     | Free (e, _) -> free e id
@@ -412,7 +414,7 @@ module Instruction = struct
     | Assert (c, id) -> _assert c (new_id id)
     | Assume (c, id) -> assume c (new_id id)
     | NondetAssume (lvs, c, id) -> non_deterministic_assume lvs c (new_id id)
-    | Nondet (lv, r, id) -> non_deterministic lv r (new_id id)
+    | Nondet (lv, region, id) -> non_deterministic lv ~region (new_id id)
     | Undef (lv, id) -> undefined lv (new_id id)
     | Malloc (lv, e, id) -> malloc lv e (new_id id)
     | Free (e, id) -> free e (new_id id)

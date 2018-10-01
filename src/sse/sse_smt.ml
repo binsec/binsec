@@ -19,6 +19,10 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Sse_options
+
+module S = Bitvector.Collection.Set
+
 module Query_stats = struct
   type t = {
     unsat : int;
@@ -38,11 +42,14 @@ module Query_stats = struct
     { q with enums = q.enums + 1 }
 
   let add q time res =
-    let q = {q with time = q.time +. time } in
+    let q = { q with time = q.time +. time } in
     match res with
     | Formula.UNSAT -> { q with unsat = q.unsat + 1 }
     | Formula.SAT -> { q with sat = q.sat + 1 }
-    | _ ->  { q with err = q.err + 1 }
+    | Formula.TIMEOUT
+    | Formula.UNKNOWN -> { q with err = q.err + 1 }
+
+  let add_unknown q = add q 0. Formula.UNKNOWN ;;
 
   let pp ppf q =
     let open Format in
@@ -65,6 +72,7 @@ module Query_stats = struct
 
     let _reset () = value := empty
     let add time res = value := add !value time res
+    let add_unknown () = value := add_unknown !value
     let add_enumeration () = value := add_enumeration !value
     let pp ppf () = pp ppf !value
   end
@@ -75,16 +83,22 @@ end
 module Solver = struct
   open Sse_types
 
-  let with_solver path_state f =
+  let with_solver ?keep path_state f =
     let timeout = Formula_options.Solver.Timeout.get () in
     let file =
-      if Sse_options.SmtDir.is_set() then Sse_utils.temp_file () else "" in
-    let solver = Formula_options.Solver.(get () |> to_piqi) in
-    let session = Solver.Session.create ~file ~timeout solver in
-    Logger.debug ~level:5 "Running %a %@ %a"
-      Solver.pp_solver solver Path_state.pp_loc path_state;
+      if Sse_options.SmtDir.is_set() then
+        let filename = Sse_utils.temp_file () in
+        let vaddr = Path_state.virtual_address path_state in
+        Logger.debug ~level:3 "@[<h>Using SMT script file %s %@ %a@]"
+          filename Virtual_address.pp vaddr ;
+        Some filename
+      else None in
+    let solver = Formula_options.Solver.get () in
+    let session = Solver.Session.create ?file ~timeout solver in
+    Logger.debug ~level:5 "Running %s %@ %a"
+      (Prover.name_of solver) Path_state.pp_loc path_state;
     try
-      Path_state.prepare_solver_in_state path_state session;
+      Path_state.prepare_solver_in_state ?keep path_state session;
       let v = Utils.time (fun () -> f session) in
       Solver.Session.destroy session;
       Some v
@@ -92,38 +106,40 @@ module Solver = struct
     | Failure msg ->
       Logger.warning "SMT solver failed on %s" msg;
       Solver.Session.destroy session;
-      if not (Sse_options.KeepGoing.get())
+      if not (Sse_options.KeepGoing.get ())
       then begin
         Logger.error
           "@[<v 0>\
-           @[SMT solver failed in %s@ with message:@].@ \
+           @[SMT solver failed in %a@ with message:@].@ \
            @[%s@]@ \
            @[Aborting. Use -keep-going to ignore@]@]"
-          file msg;
+          (Print_utils.pp_opt Format.pp_print_string) file msg;
         failwith msg
       end;
       None
     | e ->
       Solver.Session.destroy session;
+      Logger.warning "Destroyed session (current SMT file %a)"
+        (Print_utils.pp_opt Format.pp_print_string) file ;
       raise e
 
-  let no_address = Basic_types.Int64.Set.empty
+
+  let no_address = S.empty
 
   let get_addresses_to_load session path_state =
-    let open Sse_options in
     if not (LoadSections.is_set () || LoadROSections.get())
     then no_address
     else
       let model = Solver.Session.get_model session in
       let addresses = Smt_model.memory_addresses model in
       let loader = Kernel_functions.get_img () in
-      let keep_addr addr =
+      let keep_addr (addr:Bitvector.t) =
         (* load addr iff
           *  (we don't have loaded it yet)
           *  && (it is in a (read-only || specified in cmdline) section)
         *)
         not (Path_state.address_belongs_to_init ~addr path_state) &&
-          let address = Int64.to_int addr in
+          let address = Bitvector.value_of addr |> Bigint.int_of_big_int in
           match Loader_utils.find_section_by_address ~address loader with
           | None -> false
           | Some section ->
@@ -133,23 +149,21 @@ module Solver = struct
                  Loader.Section.(has_flag Loader_types.Read section &&
                                    not (has_flag Loader_types.Write section))
       in
-      let to_load = List.filter keep_addr addresses in
-      Basic_types.Int64.Set.(List.fold_left (fun set x-> add x set) empty to_load)
+      List.fold_left
+        (fun set bv -> if keep_addr bv then S.add bv set else set)
+        S.empty addresses
 
   let maybe_load_and_recurse f result path_state to_load =
-    if to_load = no_address then result, path_state else begin
+    if S.is_empty to_load then result, path_state else begin
       Logger.debug ~level:1 "at %a:@ loading addresses @ %a"
         Path_state.pp_loc path_state
-        (fun fmt ->
-           Basic_types.Int64.Set.iter
-             (fun x -> Format.fprintf fmt "0x%Lx@ " x)
-        )
+        (fun ppf ->
+          S.iter (fun x -> Format.fprintf ppf "%a@ " Bitvector.pp_hex x))
         to_load;
       let path_state =
-        Basic_types.Int64.Set.fold
-          (fun addr ps ->
-             Path_state.with_init_mem_at ps ~addr ~size:1
-          ) to_load path_state
+        S.fold
+          (fun addr ps -> Path_state.with_init_mem_at ps ~addr ~size:1)
+          to_load path_state
       in
       f path_state
     end
@@ -164,7 +178,9 @@ module Solver = struct
           | _ -> no_address)
       |> function
          | Some (time, r) -> Query_stats.add time (fst r); r
-         | None -> Formula.UNKNOWN, no_address
+         | None ->
+            Query_stats.add_unknown ();
+            Formula.UNKNOWN, no_address
     in
     let log = match result with
       | Formula.SAT
@@ -177,22 +193,21 @@ module Solver = struct
     let f session =
       match Solver.Session.check_sat session with
       | Formula.SAT -> Solver.Session.get_model session
-      | _ -> failwith "we ask the solver a model when formula is unsat"
+      | status ->
+         Logger.error "Asking for a model on a %a formula"
+           Formula_pp.pp_status status;
+         exit 1
     in
     match with_solver path_state f with
     | None -> None
     | Some (_, r) -> Some r
 
 
-
   let rec enumerate_values n expr path_state =
     Query_stats.add_enumeration ();
     let rec loop acc to_load n solver =
       match n with
-      | 0 ->
-        begin
-          acc, to_load
-        end
+      | 0 -> acc, to_load
       | _ ->
         begin
           begin match acc with
@@ -211,7 +226,7 @@ module Solver = struct
               (n-1);
             let to_load' = get_addresses_to_load solver path_state in
             loop (bv :: acc)
-              (Basic_types.Int64.Set.union to_load to_load') (n - 1) solver
+              (S.union to_load to_load') (n - 1) solver
           | res ->
             begin
               Logger.debug ~level:4 "Solver returned %a"
@@ -220,8 +235,14 @@ module Solver = struct
             end
         end
     in
+    (* We need to avoid removal of the variables that are used in the
+       enumeration. Since the enumerated term does not change --- only the
+       distinct constant values do --- it is enough to compute the set of
+       keep variables before any solver call.
+     *)
+    let keep = Formula_utils.bv_term_variables expr in
     let values, to_load =
-      with_solver path_state (loop [] no_address n)
+      with_solver ~keep path_state (loop [] no_address n)
       |> function
         | None -> [], no_address
         | Some (_, v) -> v
@@ -310,7 +331,7 @@ module Translate = struct
     let open Dba.Expr in
     match e with
     | Var (name, bitsize, _) ->
-      Sse_symbolic.State.get_bv symbolic_state name (Size.Bit.create bitsize)
+      Sse_symbolic.State.get_bv name (Size.Bit.create bitsize) symbolic_state
     | Cst (_, bv) -> Formula.mk_bv_cst bv
     | Load (bytes, _endianness, e) ->
       let smt_e = expr symbolic_state e in
@@ -318,7 +339,8 @@ module Translate = struct
       Formula.mk_select bytes mem smt_e
     | Binary (bop, lop, rop) as e ->
       Logger.debug ~level:6 "Translating binary %a" Dba_printer.Ascii.pp_bl_term e;
-      let l_smt_e = expr symbolic_state lop and r_smt_e = expr symbolic_state rop in
+      let l_smt_e = expr symbolic_state lop
+      and r_smt_e = expr symbolic_state rop in
       smt_binary bop l_smt_e r_smt_e
     | Unary (uop, e) ->
       (expr symbolic_state e) |> smt_unary e uop
@@ -329,13 +351,14 @@ module Translate = struct
                  (expr symbolic_state else_e))
 
   open Sse_symbolic
+
   let lvalue_with_rval_update symbolic_state logical_rval = function
     | LValue.Var (name, bitsize, _) ->
       name, Formula.bv_sort bitsize, Formula.mk_bv_term logical_rval
     | LValue.Restrict (name, bitsize, {Interval.lo; Interval.hi}) ->
       let size = Size.Bit.create bitsize in
       let t = Formula.bv_sort bitsize in
-      let svar = State.get_bv symbolic_state name size in
+      let svar = State.get_bv name size symbolic_state in
       let concat_lo = lo - 1 and concat_hi = hi + 1 in
       let max_bit = bitsize - 1 in
       let rval =
@@ -360,34 +383,44 @@ module Translate = struct
       let mem = State.get_memory symbolic_state in
       let value = logical_rval in
       let index = expr symbolic_state e in
-      memory_name, memory_type, Formula.(mk_ax_term (mk_store sz mem index value))
+      State.memory_term (Formula.mk_store sz mem index value)
 
-  let assignment lvalue rvalue path_state =
-    let symstate = Path_state.symbolic_state path_state in
-    let logical_rval_base = expr symstate rvalue in
-    let name, var_type, logical_rval =
-      lvalue_with_rval_update symstate logical_rval_base lvalue in
-    Path_state.update_symbolic_state name var_type logical_rval path_state
 
-  let assign lval rval symstate =
+  [@@@warning "-27"]
+  let assign ?(wild=false) lval rval symstate =
     let logical_rval_base = expr symstate rval in
     let name, var_type, logical_rval =
       lvalue_with_rval_update symstate logical_rval_base lval in
-    Sse_symbolic.State.assign symstate name var_type logical_rval
+    Sse_symbolic.State.assign ~wild name var_type logical_rval symstate
 
-  let nondet_count = ref 0
+  [@@@warning "-27"]
+  let assignment ?(wild=false) lvalue rvalue path_state =
+    let symstate = Path_state.symbolic_state path_state in
+    let symbolic_state = assign ~wild lvalue rvalue symstate in
+    Path_state.set_symbolic_state symbolic_state path_state
 
-  let nondet lvalue path_state =
+  let gen_unknown =
+    let count = ref 0 in
+    (fun ?naming_hint () ->
+      match naming_hint with
+      | None -> incr count; "bs_unknown" ^ string_of_int !count
+      | Some name -> name
+    )
+
+  [@@@warning "-27"]
+  let nondet ?naming_hint ?(wild=false) lvalue path_state =
     let symstate = Path_state.symbolic_state path_state in
     let size = LValue.size_of lvalue in
-    incr nondet_count;
-    let var = Formula.bv_var ("unknown" ^ string_of_int !nondet_count) size in
-    Sse_symbolic.Store.add_entry symstate.Sse_symbolic.State.store
-    @@ Formula.entry @@ Formula.Declare(Formula.mk_bv_decl var []);
-    let logical_rval_base = Formula.mk_bv_var var in
+    let name = gen_unknown ?naming_hint () in
+    let symstate =
+      Sse_symbolic.State.declare ~wild name (Formula.BvSort size) symstate in
+    let logical_rval_base =
+      Sse_symbolic.State.get_bv name (Size.Bit.create size) symstate in
     let name, var_type, logical_rval =
       lvalue_with_rval_update symstate logical_rval_base lvalue in
-    Path_state.update_symbolic_state name var_type logical_rval path_state
+    let symbolic_state =
+      Sse_symbolic.State.assign name var_type logical_rval symstate in
+    Path_state.set_symbolic_state symbolic_state path_state
 
   let assume cond state =
     assert(Expr.size_of cond = 1);

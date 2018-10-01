@@ -80,7 +80,7 @@ let to_dba_instruction next_id = function
   | If (cond, thn) -> Dba.Instr.ite cond thn next_id
   | Assign (lhs, expr) -> Dba.Instr.assign lhs expr next_id
   | Undef lhs -> Dba.Instr.undefined lhs next_id
-  | Nondet (lhs, region) -> Dba.Instr.non_deterministic lhs region next_id
+  | Nondet (lhs, region) -> Dba.Instr.non_deterministic lhs ~region next_id
   | SJump (dst, tag) -> Dba.Instr.static_jump dst ~tag
   | DJump (dst, tag) -> Dba.Instr.dynamic_jump dst ~tag
   | Stop st -> Dba.Instr.stop (Some st)

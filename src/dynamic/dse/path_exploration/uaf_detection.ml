@@ -25,6 +25,7 @@ open Config_piqi
 open Configuration
 open Libcall_piqi
 open Libcall_t
+open Dse_options
 
 (* ALLOC (id,size,addr), FREE (id,addr) *)
 type heap_event_t =  ALLOC of (int * int64 * int64) | ALLOC_UAF of (int * int64 * int64) | FREE of (int*int64) | DFREE of (int*int64)
@@ -185,6 +186,8 @@ class uaf_detection (trace_config:Trace_config.t) =
       let open Trace_type in
       let open Trace_config in
       let addr = inst.location in
+      let solver = Formula_options.Solver.of_piqi
+                     trace_config.configuration.solver in
       if List.exists (fun x -> Int64.compare addr x = 0) !free_addr
       || key = !free_nth then
         begin
@@ -192,8 +195,9 @@ class uaf_detection (trace_config:Trace_config.t) =
           let static_predicate = self#build_cond_predicate Dba.Expr._true env in
           let predicate = self#add_free_check static_predicate env in
           ignore @@
-          Path_predicate_formula.build_formula_file env.formula predicate formula_file;
-          let result, _model = Solver.solve_model formula_file trace_config.configuration.solver in
+          Path_predicate_formula.build_formula_file env.formula predicate
+            formula_file;
+          let result, _model = Solver.solve_model formula_file solver in
           begin
             let open Formula in
             match result with
@@ -212,7 +216,7 @@ class uaf_detection (trace_config:Trace_config.t) =
             self#build_cond_predicate Dba.Expr._true env in
           let predicate = self#add_uaf_check static_predicate (name,size) env in
           ignore (Path_predicate_formula.build_formula_file env.formula predicate formula_file);
-          let result, _model = Solver.solve_model formula_file trace_config.configuration.solver in
+          let result, _model = Solver.solve_model formula_file solver in
           begin
             let open Formula in
             match result with

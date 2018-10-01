@@ -30,4 +30,5 @@ let dispatch_instruction (_:instr_pol list) instr _ =
   match opcode_to_mnemonic instr.mnemonic with
   | `cpuid -> ()
   | `invalid_inst ->
-    Logger.warning ~level:2 "Undecoded instr ignored (no policy for it)"
+    Dse_options.Logger.warning ~level:2
+      "Undecoded instr ignored (no policy for it)"

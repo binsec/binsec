@@ -65,7 +65,7 @@ struct
       config.configuration <- config_to_uaf config.configuration;
       let analyzer = new Uaf_detection.uaf_detection config in
       let addr = fst alloc in
-      Logger.info "Start uaf detection %Lx %s"
+      Dse_options.Logger.info "Start uaf detection %Lx %s"
         addr
         (List.fold_left (fun x y -> Printf.sprintf "%s,%Lx" x (fst y)) "" use);
       analyzer#init_entries ();

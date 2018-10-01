@@ -42,7 +42,7 @@ struct
   module HistoryDSE   = HistoryDSE_v (TraceDSE)
   module CriteriaDSE  = CriteriaDSE_v (TraceDSE) (HistoryDSE_v)
   module GuideDSE     = GuideDSE_v (TraceDSE) (HistoryDSE_v)
-
+  open Dse_options
   exception STOP_VERDICT
   exception STOP_CRITERIA
   exception STOP_TIME
@@ -199,7 +199,7 @@ module UAFDSE = DSE (TraceAsFile) (HistoryAsTree) (CriteriaAsUAF) (GuideAsUAF)
 module GuideAsStrcmpUAF = GuideAsStrcmp (GuideAsUAF)
 module UafStrcmpDSE = DSE (TraceAsFile) (HistoryAsTree) (CriteriaAsUAF) (GuideAsStrcmpUAF)
 
-
+open Dse_options
 
 let has_pin_pinsec () =
   try
@@ -219,7 +219,6 @@ let has_pin_pinsec () =
 let run () =
   if has_pin_pinsec () then
     begin
-      let open Dse_options in
       match Strategy.get () with
       | Dot ->
         let dir = "./" in

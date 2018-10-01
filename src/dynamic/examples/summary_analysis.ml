@@ -21,7 +21,7 @@
 
 open Path_predicate
 open Trace_type
-
+open Dse_options
 
 type if_status = {
   left: int64 option;

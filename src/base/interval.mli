@@ -36,16 +36,26 @@ sig
   val remove : interval -> t -> t
 
   val is_empty : t -> bool
+  val cardinal : t -> int
   val mem : interval -> t -> bool
+
+  val min : t -> point option
+  val max : t -> point option
+
+  val is_point    : t -> point option
+  val is_interval : t -> interval option
 
   val belongs    : point    -> t -> interval list
   val intersects : interval -> t -> interval list
 
+  val map  : (interval -> interval) -> t -> t
   val iter : (interval -> unit) -> t -> unit
   val fold : (interval -> 'a -> 'a) -> t -> 'a -> 'a
 
   val union : t -> t -> t
   val inter : t -> t -> t
+
+  val print : (point -> string) -> t -> string
 end
 
 (* Set of intervals. [add] and [remove] have the same semantic than in
@@ -115,4 +125,14 @@ sig
   val sge : Bitvector.t -> t
   val slt : Bitvector.t -> t
   val sgt : Bitvector.t -> t
+
+  val zero_extend : int -> t -> t
+  val sign_extend : int -> t -> t
+  val extract : int Basic_types.interval -> t -> t
+
+  val concat : t -> t -> t
+  val bvand  : t -> t -> t
+  val bvor   : t -> t -> t
+  val bvadd  : t -> t -> t
+  val bvsub  : t -> t -> t
 end

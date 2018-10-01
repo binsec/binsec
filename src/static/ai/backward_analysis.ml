@@ -22,6 +22,7 @@
 open Formula
 open Dba
 open Normalize_instructions
+open Ai_options
 
 let update instr cur_addr pre_addr _ varIndexes vars lets inputs env =
 

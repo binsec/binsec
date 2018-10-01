@@ -94,3 +94,34 @@ val def_desc_name  : def_desc  -> string
 
 val decl_name : decl -> string
 val def_name  : def  -> string
+
+module BindEnv :
+sig
+
+  type t
+
+  type ('var, 'term) status =
+    | Free
+    | Declared of ('var * sort list)
+    | Defined  of ('var * decl list * 'term)
+
+  val create : int -> t
+
+  val decl : t -> decl -> unit
+  val def  : t -> def  -> unit
+
+  val undecl : t -> decl -> unit
+  val undef  : t -> def  -> unit
+
+  val bl_lookup : t -> bl_var -> (bl_var, bl_term) status
+  val bv_lookup : t -> bv_var -> (bv_var, bv_term) status
+  val ax_lookup : t -> ax_var -> (ax_var, ax_term) status
+
+  val is_bl_cst : t -> bl_term -> bool option
+  val is_bv_cst : t -> bv_term -> Bitvector.t option
+
+  val is_bl_var : t -> bl_term -> bl_var option
+  val is_bv_var : t -> bv_term -> bv_var option
+  val is_ax_var : t -> ax_term -> ax_var option
+end
+

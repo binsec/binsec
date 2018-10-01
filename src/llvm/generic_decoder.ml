@@ -30,7 +30,9 @@ module Decode_Expr(I:Expr_Input) = struct
 
   let (>>=) = M.bind
 
-  let rec expr:Dba.Expr.t -> I.binary M.m = function
+  let rec expr:Dba.Expr.t -> I.binary M.m = fun e ->
+    (* Logger.result "Expressions %a" Dba_printer.Ascii.pp_bl_term e; *)
+    match e with
     | Expr.Cst(`Constant,bv) ->
       let size = Bitvector.size_of bv in
       I.Binary.biconst ~size (Bitvector.value_of bv)
@@ -46,8 +48,8 @@ module Decode_Expr(I:Expr_Input) = struct
        | Mult -> I.Binary.bimul ~size v1 v2
        | DivU -> I.Binary.biudiv ~size v1 v2
        | DivS -> I.Binary.bisdiv ~size v1 v2
-       | ModU -> I.Binary.biumod ~size v1 v2
-       | ModS -> I.Binary.bismod ~size v1 v2
+       | ModU -> I.Binary.biurem ~size v1 v2
+       | ModS -> I.Binary.bisrem ~size v1 v2
        | Or -> I.Binary.bor ~size v1 v2
        | And -> I.Binary.band ~size v1 v2
        | Xor -> I.Binary.bxor ~size v1 v2
@@ -57,8 +59,8 @@ module Decode_Expr(I:Expr_Input) = struct
        | LShift -> I.Binary.bshl ~size v1 v2
        | RShiftU -> I.Binary.blshr ~size v1 v2
        | RShiftS -> I.Binary.bashr ~size v1 v2
-       | LeftRotate -> assert false (* extract + concat?  *)
-       | RightRotate -> assert false (* extract + concat?  *)
+       | LeftRotate -> I.Binary.bv_left_rotate ~size v1 v2
+       | RightRotate -> I.Binary.bv_right_rotate ~size v1 v2
 
        (* Predicates. *)
        | Eq -> I.Binary.beq ~size v1 v2 >>= fun bool -> I.bin_of_bool bool
@@ -84,20 +86,20 @@ module Decode_Expr(I:Expr_Input) = struct
        | Unary_op.Not ->
          I.Binary.biconst ~size Bigint.(minus_big_int unit_big_int) >>= fun ffff ->
          I.Binary.bxor ~size ffff v1
-       | Unary_op.Uext n -> I.Binary.buext ~size:n v1
-       | Unary_op.Sext n -> I.Binary.bsext ~size:n v1
+       | Unary_op.Uext n -> I.Binary.buext ~size:n ~oldsize:(Dba.Expr.size_of e1) v1
+       | Unary_op.Sext n -> I.Binary.bsext ~size:n ~oldsize:(Dba.Expr.size_of e1) v1
        | Unary_op.Restrict {Interval.lo; Interval.hi;} ->
-         I.Binary.bextract ~size:(1 + hi - lo) ~oldsize:size ~index:lo v1
+         I.Binary.bextract ~lo ~hi ~oldsize:(Dba.Expr.size_of e1) v1
       )
     | Expr.Var(var,size,_) -> I.get_var ~size var
     | Expr.Load(size,endianness,e) ->
       expr e >>= fun address ->
       I.load ~size:(size * 8) endianness address
     | Expr.Ite(c,e1,e2) ->
-      expr c >>= fun vc ->
+      cond c >>= fun vc ->
       expr e1 >>= fun v1 ->
       expr e2 >>= fun v2 ->
-      I.select vc v1 v2
+      I.ite vc v1 v2
 
   and cond:Dba.Expr.t -> I.boolean M.m = fun e ->
     assert(Dba.Expr.size_of e == 1);
@@ -143,12 +145,12 @@ end
       let written_size = 1 + hi - lo in
       let (v,state) =
         if lo == 0 then (value,state)
-        else let _pold, state = S.Binary.bextract ~oldsize:value_size ~index:0 ~size:lo old state in
-          S.Binary.bconcat ~size1:written_size ~size2:lo value old state in
+        else let pold, state = S.Binary.bextract ~oldsize:value_size ~lo:0 ~hi:(lo-1) old state in
+          S.Binary.bconcat ~size1:written_size ~size2:lo value pold state in
       let (v,state) =
         if hi == (size - 1) then (v,state)
         else let (pold,state) =
-               S.Binary.bextract ~oldsize:value_size ~index:hi ~size:(1 + size - hi) old state in
+               S.Binary.bextract ~oldsize:value_size ~lo:(hi+1) ~hi:(size-1) old state in
           S.Binary.bconcat ~size1:(size -  hi) ~size2:hi pold v state in
       S.set_var ~size name v state
     | LValue.Store(size,endianness,address) ->
@@ -157,10 +159,11 @@ end
 
 
 
-  let instruction state =
+  let instruction state instr =
     let open! Generic_decoder_sig in
     let open Instr in
-    function
+    (* Logger.result "Instruction %a" Dba_printer.Ascii.pp_instruction instr; *)
+    match instr with
     | Assign(lhs,expr,id) ->
       let (v,state) = EDecode.expr expr state in
       let state = write_lhs state v lhs in
@@ -196,7 +199,7 @@ end
       let (cond,state) = EDecode.cond cond state in
       JKAssume (cond, Static (JInner id)),state
     | Undef(lhs,id) ->
-      let size = assert false in
+      let size = Dba_types.LValue.unsafe_bitsize lhs in
       let (v,state) = S.undef ~size state in
       let state = write_lhs state v lhs in
       (JKJump (Static (JInner id)),state)

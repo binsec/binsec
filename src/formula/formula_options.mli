@@ -61,4 +61,7 @@ module Solver : sig
 
   module Timeout : Cli.INTEGER
   (** Default timeout for solver queries *)
+
+  module Options : Cli.STRING_OPT
+  (** Set solver options -- ignore default ones *)
 end

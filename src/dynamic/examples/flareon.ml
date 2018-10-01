@@ -27,7 +27,7 @@ open Path_predicate_formula
 open Solver
 open Formula
 open Common_piqi
-
+open Dse_options
 
 class flare_one (input_config:Trace_config.t) =
   object(self) inherit dse_analysis input_config as super
@@ -39,7 +39,7 @@ class flare_one (input_config:Trace_config.t) =
     val success_addr = 0x401063L
     val patch_addr = 0x40104dL
     val cmp_addr = 0x401055L
-    val mutable final_key = ""
+    val final_key = Buffer.create 32
     val mutable counter = 0L
     val mutable stop_code = 1 (* so false *)
 
@@ -61,23 +61,28 @@ class flare_one (input_config:Trace_config.t) =
                 let next_addr = get_next_address inst.concrete_infos in
                 let pred = mk_bl_not (self#build_cond_predicate cond env) in
                 build_formula_file env.formula pred smt_file |> ignore;
-                let solver = config.Configuration.solver in
+                let solver = Formula_options.Solver.of_piqi
+                               config.Configuration.solver in
                 let timeout = Int32.to_int config.Configuration.timeout in
                 let res, model = solve_model ~timeout smt_file solver in
                 begin
                   match res with
                   | SAT ->
                     begin
-                      match Smt_model.find_address_contents
-                              model (Int64.add base_input counter) with
-                      | c ->
+                      let addr =
+                        let v =
+                          Int64.add base_input counter
+                          |> Bigint.big_int_of_int64 in
+                        Bitvector.create v (Machine.Word_size.get ()) in
+                      match Smt_model.find_address_contents model addr with
+                      | Some c ->
                         counter <- Int64.succ counter;
-                        let c = Char.chr c in
+                        let c = Char.chr (Bitvector.to_int c) in
                         Logger.info "[%a] -> %c" Formula_pp.pp_status res c;
-                        final_key <- Format.sprintf "%s%c" final_key c;
+                        Buffer.add_char final_key c;
                         if next_addr = fail_addr then
                           self#generate_new_configuration model
-                      | exception Not_found -> ()
+                      | None -> ()
                     end
                   | UNSAT -> Logger.error "[UNSAT]@."
                   | TIMEOUT | UNKNOWN -> Logger.warning "[TIMEOUT]@."
@@ -89,7 +94,7 @@ class flare_one (input_config:Trace_config.t) =
           DoExec
         end
       else if inst.location = success_addr then begin
-        Logger.info "Success target reached ! Key:%s" final_key;
+        Logger.info "Success target reached ! Key:%s" (Buffer.contents final_key);
         stop_code <- 0;
         StopExec
       end
@@ -120,14 +125,20 @@ class flare_one (input_config:Trace_config.t) =
       match input_config.trace_input with
       | Stream _ -> Logger.warning "No need to generate new config file"
       | Chunked _ ->
-        let rec aux acc i =
-          match Smt_model.find_address_contents model i with
-          | value ->
-            let acc' = Format.sprintf "%s%c" acc (Char.chr value) in
-            aux acc' (Int64.succ i)
-          | exception Not_found -> acc
-        in
-        let value = aux "" base_input in
+         let b = Buffer.create 32 in
+         let rec aux bv =
+           match Smt_model.find_address_contents model bv with
+           | Some value ->
+              Buffer.add_char b (Char.chr @@ Bitvector.to_int value);
+              aux (Bitvector.succ bv)
+           | None -> Buffer.contents b
+         in
+
+        let value =
+          let bv =
+            let value = Bigint.big_int_of_int64 base_input in
+            Bitvector.create value (Machine.Word_size.get ()) in
+          aux bv in
         let input  =
           Input_t.({typeid = `mem;
                     address = patch_addr;

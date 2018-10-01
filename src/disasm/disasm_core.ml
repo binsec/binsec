@@ -93,7 +93,7 @@ let decode_at_address decode reader address =
   let instr, next = decode reader address in
   if Instruction.is_decoded instr then instr, next
   else begin
-    Logger.warning "No instruction at %a : STOP"
+    Logger.warning "No instruction at %a ... stopping"
       Virtual_address.pp address;
     let dba_block = Dba.Instr.stop (Some Dba.KO) |> Dhunk.singleton in
     Instruction.set_dba_block instr dba_block,
@@ -122,10 +122,10 @@ let decode (vaddress:Virtual_address.t) =
   try
     let repl = Disasm_options.Decode_replacement.get() in
     let subst = Virtual_address.Map.find vaddress repl in
-    let open Instruction in 
+    let open Instruction in
     Instruction.create instr.address instr.size instr.opcode instr.mnemonic subst,next
   with Not_found -> instr,next
-  
+
 
 
 let decode_from_reader lreader =

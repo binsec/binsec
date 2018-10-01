@@ -50,11 +50,14 @@ module type Expr_Input = sig
 
   val bin_of_bool: boolean -> binary M.m
   val bool_of_bin: binary -> boolean M.m
-  val select: binary -> binary -> binary -> binary M.m
+  (* If(cond) then a else b operation. *)
+  val ite: boolean -> binary -> binary -> binary M.m
 
   val get_var: size:int -> string -> binary M.m
   val load: size:int -> Dba.endianness -> binary -> binary M.m
 
+  val assume: boolean -> unit M.m
+  
 end
 
 module State_Monad(State:sig type t end):Monad with type 'a m = State.t -> ('a * State.t) = struct
@@ -75,6 +78,12 @@ module type Instr_Input = sig
      is more convenient. *)
   val store: size:int -> Dba.endianness -> binary -> binary -> State.t -> State.t
   val set_var: size:int -> string -> binary -> State.t -> State.t
+
+  (* Add a comment "at the current position". In LLVM for instance, it
+     corresponds to a metadata attached to the next instruction which
+     is translated. *)
+  val add_comment: string -> State.t -> State.t
+
 end
 
 type 'bin jump_target =

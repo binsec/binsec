@@ -25,6 +25,8 @@ open Message_piqi
 open Config_piqi
 open Configuration
 
+module L = Server_options.Logger
+
 exception Stop
 
 let request_decode_instr ident (message:message_decode_instr): unit =
@@ -40,7 +42,7 @@ let request_decode_instr ident (message:message_decode_instr): unit =
         List.fold_left
           (fun acc e ->
              let opc, insts = f ~addr:e.base_addr e.instr in
-             Logger.debug  "Decoded:%s" opc;
+             L.debug  "Decoded:%s" opc;
              let insts = Dhunk.to_stmts insts (Virtual_address.of_int64 e.base_addr) in
              (opc, insts) :: acc
           ) [] message.Message_decode_instr.instrs
@@ -84,7 +86,7 @@ let request_start_analysis ident (config:configuration): int =
     let analyer = new Opaque_predicate.static_opaque_analyzer full_config in
     analyer#compute
   | _ ->
-    Logger.error "Unknown analysis %s" config.analysis_name;
+    L.error "Unknown analysis %s" config.analysis_name;
     1
 
 let request_infos ident: unit =
@@ -100,20 +102,21 @@ let request_dispatcher ident (cmd:string) (data:string): unit =
   let buf = Piqirun.init_from_string data in
   match cmd with
   | "DIE" ->
-    Logger.debug ~level:1 "Worker[%s]: stop" ident;
+    L.debug ~level:1 "Worker[%s]: stop" ident;
     raise Stop
   | "DECODE_INSTR" ->
     let message = parse_message_decode_instr buf in
     request_decode_instr ident message;
   | "START_ANALYSIS" ->
-    Logger.result "Worker[%s]: START_ANALYSIS request received" ident;
-    Network_io.log_to_zmq true ident;
+    L.result "Worker[%s]: START_ANALYSIS request received" ident;
+    let logger = (module L:Logger.S) in
+    Network_io.log_to_zmq logger true ident;
     let conf = parse_configuration buf in
     let code = request_start_analysis ident conf in
-    Network_io.log_to_zmq false ident;
-    Logger.info "Worker[%s]: analysis terminated" ident;
+    Network_io.log_to_zmq logger false ident;
+    L.info "Worker[%s]: analysis terminated" ident;
     Network_io.send_client_message ident ~block:true "END" (string_of_int code);
   | "GET_INFOS" ->
     request_infos ident;
   | _ ->
-    Logger.warning "Worker[%s]: unhandled command %s" ident cmd;
+    L.warning "Worker[%s]: unhandled command %s" ident cmd;

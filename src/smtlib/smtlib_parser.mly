@@ -80,6 +80,8 @@
     ;;
 
     let mk_symbol symbol_desc symbol_loc = { symbol_desc; symbol_loc; } ;;
+
+    let mk_loc _ _ = dummy_loc
 %}
 
 /* general */
