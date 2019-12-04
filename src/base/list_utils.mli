@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,6 +27,8 @@ val is_empty : 'a list -> bool
 val take : int -> 'a list -> 'a list
 (** [take n l] returns up to the [n] first elements of list [l] *)
 
+val take_while : (int -> 'a -> bool) -> 'a list -> 'a list
+
 val drop : int -> 'a list -> 'a list
 (** [drop n l] removes the [n] first elements of list [l]
     if n is greater than the length of the list, returns [].
@@ -37,6 +39,9 @@ val last : 'a list -> 'a
 (** [last l] returns the last element of list l.
     Raise [Failure "last"] if the list is empty
 *)
+
+val init : 'a list -> 'a list
+(** [init l] returns [l] without its last element q*)
 
 val rev_flatten : 'a list list -> 'a list
 (** [rev_flatten l] reverses and flatten the list of list [l] at the same time.
@@ -79,3 +84,11 @@ val filter_map: ('b -> bool) -> ('a -> 'b) -> 'a list -> 'b list
 
     Tail recursive.
 *)
+
+val eq_length: 'a list -> 'b list -> bool
+(** [eq_lenght l1 l2] returns [true] if [l1] and [l2] have the same length,
+ ** independently of what their cells contain *)
+
+val compare : ('a -> 'a -> int) -> 'a list -> 'a list -> int
+(** [compare f l1 l2] compares [l1] and [l2] according to lexicographic order
+    using [f] as the order on elements. *)

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -37,8 +37,8 @@ class type inplace_visitor_t = object
   method visit_ite : Dba.Expr.t -> Dba.Expr.t -> Dba.Expr.t -> unit
   method visit_lhs : Dba.LValue.t -> unit
   method visit_lhs_var :
-    string -> Dba.size -> Dba.id -> Dba.id -> Dba.VarTag.t option -> unit
-  method visit_load : Dba.size -> Dba.endianness -> Dba.Expr.t -> unit
+    string -> Dba.size -> Dba.id -> Dba.id -> Dba.VarTag.t -> unit
+  method visit_load : Dba.size -> Machine.endianness -> Dba.Expr.t -> unit
   method visit_local_if : Dba.Expr.t -> Dba.id -> Dba.id -> unit
   method visit_malloc : Dba.LValue.t -> Dba.Expr.t -> unit
   method visit_nondet : Dba.LValue.t -> unit
@@ -47,10 +47,10 @@ class type inplace_visitor_t = object
   method visit_restrict : Dba.Expr.t -> Dba.id -> Dba.id -> unit
   method visit_sjump : Dba.id Dba.jump_target -> Dba.tag option -> unit
   method visit_stop : Dba.state option -> unit
-  method visit_store : Dba.size -> Dba.endianness -> Dba.Expr.t -> unit
+  method visit_store : Dba.size -> Machine.endianness -> Dba.Expr.t -> unit
   method visit_unary : Dba.Unary_op.t -> Dba.Expr.t -> unit
   method visit_undef : Dba.LValue.t -> unit
-  method visit_var : string -> Dba.size -> Dba.VarTag.t option -> unit
+  method visit_var : string -> Dba.size -> Dba.VarTag.t -> unit
 end
 
 class dba_inplace_visitor : inplace_visitor_t = (* Visitor to visit an smt expression without changing anything *)
@@ -59,7 +59,7 @@ class dba_inplace_visitor : inplace_visitor_t = (* Visitor to visit an smt expre
     method visit_expr (expr:Dba.Expr.t): unit =
       match expr with
       | Dba.Expr.Cst(_,bv) -> self#visit_cst bv
-      | Dba.Expr.Var(name, sz, opts) -> self#visit_var name sz opts
+      | Dba.(Expr.Var { name; size = sz; info = opts }) -> self#visit_var name sz opts
       | Dba.Expr.Load (sz,en,expr) -> self#visit_load sz en expr;
         self#visit_expr expr
       | Dba.Expr.Unary(Dba.Unary_op.Uext n, expr) ->
@@ -87,10 +87,10 @@ class dba_inplace_visitor : inplace_visitor_t = (* Visitor to visit an smt expre
 
     method visit_lhs (lhs:Dba.LValue.t): unit =
       match lhs with
-      | Dba.LValue.Var(name, sz, opts) ->
+      | Dba.(LValue.Var { name; size = sz; info = opts }) ->
         self#visit_lhs_var name sz 0 (sz-1) opts
-      | Dba.LValue.Restrict(name, sz, {Interval.lo; Interval.hi}) ->
-        self#visit_lhs_var name sz lo hi None
+      | Dba.LValue.Restrict(v, {Interval.lo; Interval.hi}) ->
+        self#visit_lhs_var v.Dba.name v.Dba.size lo hi Dba.VarTag.empty
       | Dba.LValue.Store(sz, en, e) ->
         self#visit_store sz en e; self#visit_expr e
 
@@ -120,9 +120,9 @@ class dba_inplace_visitor : inplace_visitor_t = (* Visitor to visit an smt expre
 
     method visit_cst (_bv:Bitvector.t) : unit = ()
 
-    method visit_var (_name:string) (_sz:Dba.size) (_opts:Dba.VarTag.t option) : unit = ()
+    method visit_var (_name:string) (_sz:Dba.size) _opts : unit = ()
 
-    method visit_load (_sz:Dba.size) (_en:Dba.endianness) (_expr:Dba.Expr.t) : unit = ()
+    method visit_load (_sz:Dba.size) (_en:Machine.endianness) (_expr:Dba.Expr.t) = ()
 
     method visit_unary (_uop:Dba.Unary_op.t) (_expr:Dba.Expr.t) : unit = ()
 
@@ -136,9 +136,9 @@ class dba_inplace_visitor : inplace_visitor_t = (* Visitor to visit an smt expre
 
     method visit_ite _ _ _ = ()
 
-    method visit_lhs_var (_name:string) (_size:Dba.size) (_low:Dba.id) (_high:Dba.id) (_opts:Dba.VarTag.t option): unit = ()
+    method visit_lhs_var (_name:string) (_size:Dba.size) _low _high _tag = ()
 
-    method visit_store (_size:Dba.size) (_en:Dba.endianness) (_expr:Dba.Expr.t) : unit = ()
+    method visit_store (_size:Dba.size) (_en:Machine.endianness) (_expr:Dba.Expr.t) : unit = ()
 
     method visit_assign (_lhs:Dba.LValue.t) (_expr:Dba.Expr.t) : unit = ()
 

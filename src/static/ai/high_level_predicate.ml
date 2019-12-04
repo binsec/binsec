@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,7 +23,7 @@ open Ai_options
 
 exception Not_constant_condition
 
-type t = (Dba.Expr.t * Dba.VarTag.t option) Basic_types.String.Map.t option
+type t = (Dba.Expr.t * Dba.VarTag.t) Basic_types.String.Map.t option
 
 let empty = Some Basic_types.String.Map.empty
 
@@ -32,8 +32,7 @@ let bottom = None
 (* TODO : it's almost Equal.expr : remove duplicates *)
 let rec is_equal_expr e1 e2 =
   match e1, e2 with
-  | Dba.Expr.Var (name1, s1, tag1), Dba.Expr.Var (name2, s2, tag2) ->
-    name1 = name2 && (s1 = s2) && (is_equal_vartag_option tag1 tag2)
+  | Dba.Expr.Var v1, Dba.Expr.Var v2 -> v1 = v2
   | Dba.Expr.Load (s1, end1, exp1), Dba.Expr.Load (s2, end2, exp2) ->
     (s1 = s2) && (end1 = end2) && (is_equal_expr exp1 exp2)
   | Dba.Expr.Cst (r1, b1), Dba.Expr.Cst (r2, b2) ->
@@ -55,25 +54,6 @@ let rec is_equal_expr e1 e2 =
   | _, _ -> false
 
 
-and is_equal_vartag_option tag1 tag2 =
-  match tag1, tag2 with
-  | None, None -> true
-  | None, Some _
-  | Some _, None -> false
-  | Some t1, Some t2 ->
-    match t1, t2 with
-    | Dba.VarTag.Flag c1, Dba.VarTag.Flag c2 -> is_equal_flag c1 c2
-    | Dba.VarTag.Temp, Dba.VarTag.Temp -> true
-    | _, _ -> false
-
-and is_equal_flag c1 c2 =
-  match c1, c2 with
-  | Dba.Flag.Cmp (e11, e12),  Dba.Flag.Cmp (e21, e22)
-  | Dba.Flag.Sub (e11, e12),  Dba.Flag.Sub (e21, e22)
-  | Dba.Flag.Test (e11, e12), Dba.Flag.Test (e21, e22) ->
-    is_equal_expr e11 e21 && is_equal_expr e12 e22
-  | Dba.Flag.Unspecified, Dba.Flag.Unspecified -> true
-  | _, _ -> false
 
 let update_flags lhs expr flags =
   let flags_set =
@@ -82,17 +62,16 @@ let update_flags lhs expr flags =
     | Some flgs -> flgs
   in
   match lhs with
-  | Dba.LValue.Var (name, _sz, (Some _ as vtag)) ->
-    Some (Basic_types.String.Map.add name (expr, vtag) flags_set)
-  | Dba.LValue.Var _
+  | Dba.(LValue.Var { info = VarTag.Empty; _})
   | Dba.LValue.Restrict _
   | Dba.LValue.Store _ -> flags
-
+  | Dba.(LValue.Var {name; info; _}) ->
+    Some (Basic_types.String.Map.add name (expr, info) flags_set)
 
 let rec substitute_loads_in_expr expr op load_op =
   let open Dba.Expr in
   match expr with
-  | Dba.Expr.Var (_name, _size, _) -> expr
+  | Dba.Expr.Var _ -> expr
   | Dba.Expr.Load (sz, endianness, e) ->
     if is_equal_expr op expr then load_op
     else
@@ -136,7 +115,7 @@ let hide_loads cond op1 op2 =
 let rec recover_loads_in_expr expr load_op1 load_op2 op1 op2 =
   let open Dba.Expr in
   match expr with
-  | Dba.Expr.Var (_name, _size, _) ->
+  | Dba.Expr.Var _ ->
     if is_equal_expr expr load_op1 then op1
     else if is_equal_expr expr load_op2 then op2
     else expr
@@ -160,7 +139,7 @@ let rec recover_loads_in_expr expr load_op1 load_op2 op1 op2 =
 let rec replace_operands_by_csts_in_expr expr op1 op2 v1 v2 =
   let open Dba.Expr in
   match expr with
-  | Dba.Expr.Var (_name, _size, _) ->
+  | Dba.Expr.Var _ ->
     if is_equal_expr expr op1 then v1
     else if is_equal_expr expr op2 then v2
     else expr
@@ -300,8 +279,8 @@ let can_not_be_lower_diff_sign operand op =
 
 let rec eval_expr_csts expr =
   match expr with
-  | Dba.Expr.Var (_name, _size, _) -> raise Not_constant_condition
-  | Dba.Expr.Load (_sz, _endianness, _e) -> raise Not_constant_condition
+  | Dba.Expr.Var _
+  | Dba.Expr.Load _ -> raise Not_constant_condition
   | Dba.Expr.Cst (_, v) -> v
   | Dba.Expr.Unary (uop, e) ->
     let e' = eval_expr_csts e in
@@ -439,7 +418,7 @@ let bootstrap_predicates predicates cond op1 op2 =
 let rec substitute_flags_in_expr expr flags acc =
   let open Dba.Expr in
   match expr with
-  | Dba.Expr.Var (name, _size, _) ->
+  | Dba.(Expr.Var {name; _}) ->
     if Basic_types.String.Map.mem name flags then
       let e, tag = Basic_types.String.Map.find name flags in
       let e, acc = substitute_flags_in_expr e flags acc in
@@ -472,32 +451,33 @@ and apply_cmp_pattern operands c cond =
     incr Ai_options.nb_recovered_nat_predicates;
     match c with
     | Expr.Binary (And,
-                   Expr.Unary (Unary_op.Not, Expr.Var("CF",1, _)),
-                   Expr.Unary (Unary_op.Not, Expr.Var("ZF",1, _))) ->
+                   Expr.Unary (Unary_op.Not, Expr.Var { name = "CF"; size = 1; _}),
+                   Expr.Unary (Unary_op.Not, Expr.Var { name = "ZF"; size = 1; _})) ->
       Expr.ugt op1 op2
-    | Expr.Binary (Or, Expr.Var("CF",1, _), Expr.Var("ZF",1, _)) ->
+    | Expr.Binary (Or, Expr.Var { name = "CF"; size = 1; _},
+                   Expr.Var { name = "ZF"; size = 1;  _}) ->
       Expr.uge op1 op2
 
-    | Expr.Var ("CF", 1, _) -> Expr.ult op1 op2
-    | Expr.Unary (Unary_op.Not, Expr.Var("CF", 1, _)) ->
+    | Expr.Var { name = "CF"; size = 1; _} -> Expr.ult op1 op2
+    | Expr.Unary (Unary_op.Not, Expr.Var{ name = "CF"; size = 1; _ }) ->
       Expr.uge op1 op2
 
-    | Expr.Var("ZF", 1, _) -> Expr.equal op1 op2
-    | Expr.Unary (Unary_op.Not, Expr.Var("ZF", 1, _)) ->
+    | Expr.Var{ name = "ZF"; size = 1; _ } -> Expr.equal op1 op2
+    | Expr.Unary (Unary_op.Not, Expr.Var{ name = "ZF"; size = 1; _ }) ->
       Expr.diff op1 op2
     | Expr.Binary(And,
-                  Expr.Unary(Unary_op.Not, Expr.Var ("ZF", 1, _)),
+                  Expr.Unary(Unary_op.Not, Expr.Var { name = "ZF"; size = 1; _ }),
                   Expr.Binary(Eq,
-                              Expr.Var ("SF", 1, _),
-                              Expr.Var ("OF", 1, _)
+                              Expr.Var { name = "SF"; size = 1; _ },
+                              Expr.Var { name = "OF"; size = 1; _ }
                              )) ->
       Expr.sgt op1 op2
 
     | Expr.Binary(Or,
-                  Expr.Var ("ZF", 1, _),
+                  Expr.Var { name = "ZF"; size = 1; _ },
                   Expr.Binary(Diff,
-                              Expr.Var ("SF", 1, _),
-                              Expr.Var ("OF", 1, _))) ->
+                              Expr.Var { name = "SF"; size = 1; _ },
+                              Expr.Var { name = "OF"; size = 1; _ })) ->
       Expr.sle op1 op2
     | _ ->
       decr Ai_options.nb_recovered_nat_predicates;
@@ -515,11 +495,12 @@ and check_size_operands op1 op2 =
     Dba.Expr.restrict 0 (s2 - 1) op1, op2
 
 
-and retrieve_comparison ~condition flags addr rcd_conds =
+and retrieve_comparison ~condition (flags:t) addr rcd_conds =
   match flags with
   | None ->
     incr Ai_options.nb_failed_nat_predicate_recoveries;
-    let cond, _tags = substitute_flags_in_expr condition Basic_types.String.Map.empty [] in
+    let cond, _tags =
+      substitute_flags_in_expr condition Basic_types.String.Map.empty [] in
     cond, rcd_conds
   | Some flgs ->
     let cond, tags = substitute_flags_in_expr condition flgs [] in
@@ -582,8 +563,8 @@ and retrieve_comparison ~condition flags addr rcd_conds =
 and operands_of_expr expr acc =
   let open Dba in
   match expr with
-  | Expr.Var (_name, _size, None) -> expr :: acc
-  | Expr.Var (_name, _size, _) -> acc
+  | Expr.Var { info = VarTag.Empty; _ } -> expr :: acc
+  | Expr.Var _ -> acc
   | Expr.Load (_size, _endianness, _e) -> expr :: acc
   | Expr.Cst (_region, _bv) -> expr :: acc
   | Expr.Unary (Unary_op.Restrict {Interval.lo; Interval.hi;}, e) ->
@@ -596,8 +577,9 @@ and operands_of_expr expr acc =
 
 
 and operands_of_cmp = function
-  | Some Dba.VarTag.Temp :: l | None :: l -> operands_of_cmp l
-  | Some (Dba.VarTag.Flag (Dba.Flag.Cmp (op1, op2))) :: _ -> Some (op1, op2)
+  | Dba.VarTag.Temp :: l
+  | Dba.VarTag.Empty :: l -> operands_of_cmp l
+  | Dba.VarTag.Flag (Dba.Flag.Cmp (op1, op2)) :: _ -> Some (op1, op2)
   | _ -> None
 
 
@@ -607,13 +589,14 @@ let join flags1 flags2 =
   | None, flg -> flg
   | Some flg1, Some flg2 ->
     let flg =
-      Basic_types.String.Map.merge (fun _ elem1 elem2 ->
+      Basic_types.String.Map.merge
+        (fun _ elem1 elem2 ->
           match elem1, elem2 with
           | None, None
           | None, Some _
           | Some _, None -> None
           | Some (e1, tag1) , Some (e2, tag2) ->
-            if is_equal_vartag_option tag1 tag2 && is_equal_expr e1 e2
+            if tag1 = tag2 && is_equal_expr e1 e2
             then Some (e1, tag1)
             else None
         ) flg1 flg2
@@ -630,6 +613,6 @@ let leq flags1 flags2 =
       try
         let e2, tag2 =
           Basic_types.String.Map.find name flgs2 in
-        is_equal_vartag_option tag1 tag2 && is_equal_expr e1 e2
+        tag1 = tag2 && is_equal_expr e1 e2
       with Not_found -> false
     in Basic_types.String.Map.for_all predicate flgs1

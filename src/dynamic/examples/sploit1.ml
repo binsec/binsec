@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -68,7 +68,7 @@ class sploit1 conf =
     method! private visit_dbainstr_before _ _ _ _ = DoExec
 
     method! private post_execution (env:Path_predicate_env.t): int =
-      let eax = Dba.Expr.var "eax" 32 None in (* Jump on eax *)
+      let eax = Dba.Expr.var "eax" 32 in (* Jump on eax *)
       let shellcode_addr =
         (* Arbitrary address *)
         Bitvector.create (Bigint.big_int_of_int 0x61626364) 32 in
@@ -96,7 +96,7 @@ class sploit1 conf =
             let v =
               Int64.(add addr (of_int i))
               |> Bigint.big_int_of_int64 in
-            Bitvector.create v (Machine.Word_size.get ()) in
+            Bitvector.create v (Kernel_options.Machine.word_size ()) in
           match Smt_model.find_address_contents model address with
           | Some value ->
             Printf.fprintf fd "%c" (char_of_int @@ Bitvector.to_int value)

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -101,11 +101,6 @@ struct
     | PE pe -> Loader_pe.Img.entry pe
     | Dump dump -> Loader_dump.Img.entry dump
 
-  let endian = function
-    | ELF elf -> Loader_elf.Img.endian elf
-    | PE pe -> Loader_pe.Img.endian pe
-    | Dump dump -> Loader_dump.Img.endian dump
-
   let sections = function
     | ELF elf -> Array.map (fun s -> ELF s) (Loader_elf.Img.sections elf)
     | PE pe -> Array.map (fun s -> PE s) (Loader_pe.Img.sections pe)
@@ -121,6 +116,16 @@ struct
     | ELF elf -> ELF_header (Loader_elf.Img.header elf)
     | PE pe -> PE_header (Loader_pe.Img.header pe)
     | Dump dump -> Dump_header (Loader_dump.Img.header dump)
+
+  let cursor ?at = function
+    | ELF elf -> Loader_elf.Img.cursor ?at elf
+    | PE pe -> Loader_pe.Img.cursor ?at pe
+    | Dump dump -> Loader_dump.Img.cursor ?at dump
+
+  let pp ppf = function
+    | ELF elf -> Loader_elf.Img.pp ppf elf
+    | PE pe -> Loader_pe.Img.pp ppf pe
+    | Dump dump -> Loader_dump.Img.pp ppf dump
 
 end
 
@@ -157,12 +162,6 @@ let read_address img addr =
   | PE pe -> Loader_pe.read_address pe addr
   | Dump d -> Loader_dump.read_address d addr
 
-let write_address img addr v =
-  match img with
-  | ELF elf -> Loader_elf.write_address elf addr v
-  | PE pe -> Loader_pe.write_address pe addr v
-  | Dump d -> Loader_dump.write_address d addr v
-
 
 module Offset = Loader_buf.Make
     (struct
@@ -183,4 +182,3 @@ module Address = Loader_buf.Make
         | PE pe -> Loader_pe.Address.dim pe
         | Dump d -> Loader_dump.Offset.dim d
     end)
-

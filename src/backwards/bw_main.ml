@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,16 +23,23 @@ open Bw_options
 
 let run_opaque_predicates () =
   if is_enabled () && Opaque_predicates.get () then
-    Opaque.Check.all ()
+    ignore @@ Opaque.Check.all ()
 ;;
 
 let run_opaque_addresses () =
   if is_enabled () && Opaque_addresses.is_set () then
-    Opaque.Check.subset ()
+    ignore @@ Opaque.Check.subset ()
+;;
+
+let run_opaque_sections () =
+  if is_enabled () && Opaque_sections.is_set () then
+    let sections = Basic_types.String.Set.of_list @@ Opaque_sections.get () in
+    ignore @@ Opaque.Check.sections sections
 ;;
 
 let _ =
   Cli.Boot.enlist ~name:"opaque predicates" ~f:run_opaque_predicates;
   Cli.Boot.enlist ~name:"opaque predicates (specified addresses)"
     ~f:run_opaque_addresses;
+  Cli.Boot.enlist ~name:"opaque predicates (sections)" ~f:run_opaque_sections;
 ;;

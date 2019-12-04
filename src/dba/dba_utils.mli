@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -30,7 +30,8 @@ end
 
 val checksize_address : Dba.address -> bool
 val checksize_dbacond : Dba.Expr.t -> bool
-val checksize_instruction : Dba.Instr.t -> bool (* basic typing *)
+val checksize_instruction : Dba.Instr.t -> bool
+(* basic typing *)
 val computesize_dbalhs : Dba.LValue.t -> int
 val computesize_dbaexpr : Dba.Expr.t -> int
 

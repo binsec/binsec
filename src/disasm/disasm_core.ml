@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -85,7 +85,15 @@ let x86_decode reader (addr:Virtual_address.t) =
 
 
 let arm_decode reader (addr:Virtual_address.t) =
-  generic_decode (ArmToDba.decode reader) (fun x -> x) addr
+  let decoder =
+    if Disasm_options.Cache_decoder.get () then ArmToDba.cached_decode reader
+    else ArmToDba.decode reader in
+  generic_decode decoder (fun x -> x) addr
+;;
+
+let riscv_decode reader vaddr =
+  generic_decode (Riscv_to_dba.decode reader) (fun x -> x) vaddr
+;;
 
 (* End wrappers *)
 
@@ -100,18 +108,17 @@ let decode_at_address decode reader address =
     None
   end
 
-
 let decoder_of_machine () =
-  let open Kernel_options.Machine in
-  match ISA.get () with
-  | Machine.X86 -> x86_decode
-  | Machine.ARMv7 -> arm_decode
+  match Kernel_options.Machine.get () with
+  | Machine.X86 { bits=`x32 } -> x86_decode
+  | Machine.ARM { rev=`v7; _ } -> arm_decode
+  | Machine.RISCV _ -> riscv_decode
   | Machine.Unknown ->
      failwith
        "Machine ISA set to unknown. Aborting. \
         Did you forget to set an -isa switch on the command line ?"
   | isa ->
-    let msg = Format.asprintf "missing ISA %a" ISA.pp isa in
+    let msg = Format.asprintf "missing ISA %a" Machine.pp isa in
     Errors.not_yet_implemented msg
 
 let decode (vaddress:Virtual_address.t) =
@@ -133,8 +140,17 @@ let decode_from_reader lreader =
   let vaddress = Lreader.get_virtual_cursor lreader in
   decode_at_address decoder lreader (Virtual_address.create vaddress)
 
-let decode_binstream bs =
-  Lreader.of_binstream bs |> decode_from_reader
+let decode_binstream ?base bs =
+  try Lreader.of_binstream ?base bs |> decode_from_reader
+  with Not_found ->
+    Logger.error
+      "@[<v 0>Could not decode opcode %a.@,\
+       The provided hexadecimal stream does not contain a recognized opcode.@,\
+       Check that you selected the correct ISA.@,\
+       Or maybe your input is too short or does not use the correct endianness.\
+       @]" Binstream.pp bs;
+    exit 2;
+;;
 
 
 module Successors = struct
@@ -172,9 +188,14 @@ module Make (I : Iterable) = struct
       if W.is_empty worklist then program
       else
         let address, addresses = W.pop worklist in
-        let instr, _ = decode address in (* FIXME *)
-        let succs = I.successors instr in
-        let p, wl = step_fun program addresses instr succs in
+        let p, wl =
+          try
+            let instr, _ = decode address in (* FIXME *)
+            let succs = I.successors instr in
+            step_fun program addresses instr succs
+          with Invalid_argument msg ->
+            Disasm_options.Logger.warning "%s" msg;
+            program, addresses in
         loop p wl
     in loop program worklist
 

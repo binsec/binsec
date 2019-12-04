@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -86,7 +86,7 @@ module Solver = struct
   let with_solver ?keep path_state f =
     let timeout = Formula_options.Solver.Timeout.get () in
     let file =
-      if Sse_options.SmtDir.is_set() then
+      if Sse_options.SMT_dir.is_set() then
         let filename = Sse_utils.temp_file () in
         let vaddr = Path_state.virtual_address path_state in
         Logger.debug ~level:3 "@[<h>Using SMT script file %s %@ %a@]"
@@ -95,8 +95,9 @@ module Solver = struct
       else None in
     let solver = Formula_options.Solver.get () in
     let session = Solver.Session.create ?file ~timeout solver in
-    Logger.debug ~level:5 "Running %s %@ %a"
-      (Prover.name_of solver) Path_state.pp_loc path_state;
+    Logger.debug ~level:5 "Running %s %@ %a (file %a)"
+      (Prover.name_of solver) Path_state.pp_loc path_state
+      (Print_utils.pp_opt Format.pp_print_string) file ;
     try
       Path_state.prepare_solver_in_state ?keep path_state session;
       let v = Utils.time (fun () -> f session) in
@@ -172,6 +173,7 @@ module Solver = struct
     let result, to_load =
       with_solver path_state
         (fun session ->
+          Logger.debug ~level:5 "%a" Solver.Session.pp session;
           let result = Solver.Session.check_sat session in
           result, match result with
           | Formula.SAT -> get_addresses_to_load session path_state
@@ -330,8 +332,8 @@ module Translate = struct
     let smt_unary = unary and smt_binary = binary in
     let open Dba.Expr in
     match e with
-    | Var (name, bitsize, _) ->
-      Sse_symbolic.State.get_bv name (Size.Bit.create bitsize) symbolic_state
+    | Var {name; size; _} ->
+      Sse_symbolic.State.get_bv name (Size.Bit.create size) symbolic_state
     | Cst (_, bv) -> Formula.mk_bv_cst bv
     | Load (bytes, _endianness, e) ->
       let smt_e = expr symbolic_state e in
@@ -353,9 +355,9 @@ module Translate = struct
   open Sse_symbolic
 
   let lvalue_with_rval_update symbolic_state logical_rval = function
-    | LValue.Var (name, bitsize, _) ->
+    | LValue.Var { name; size = bitsize;  _} ->
       name, Formula.bv_sort bitsize, Formula.mk_bv_term logical_rval
-    | LValue.Restrict (name, bitsize, {Interval.lo; Interval.hi}) ->
+    | LValue.Restrict ({name; size = bitsize; _}, {Interval.lo; Interval.hi}) ->
       let size = Size.Bit.create bitsize in
       let t = Formula.bv_sort bitsize in
       let svar = State.get_bv name size symbolic_state in

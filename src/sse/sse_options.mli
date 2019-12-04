@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -31,7 +31,7 @@ module Randomize : Cli.BOOLEAN
 
 module KeepGoing : Cli.BOOLEAN
 
-module SmtDir : Cli.STRING_OPT
+module SMT_dir : Cli.STRING_OPT
 
 module AddressTraceFile : Cli.STRING_OPT
 
@@ -79,3 +79,5 @@ module Seed : Cli.INTEGER_OPT
 module Directives : Cli.GENERIC with type t = Directive.t list
 
 module Dot_filename_out : Cli.STRING_OPT
+
+module SMT_log_directory : Cli.STRING

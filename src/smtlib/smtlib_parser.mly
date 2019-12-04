@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2018                                               */
+/*  Copyright (C) 2016-2019                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -103,7 +103,7 @@
 %token DEFINEFUN
 %token DEFINEFUNREC
 %token PAR
-/* %token LAMBDA */
+%token LAMBDA
 %token PUSH
 %token POP
 %token ASSERT
@@ -335,6 +335,9 @@ term:
 | LPAREN BANG t=term; attrs=attribute+ RPAREN
  { let loc = mk_loc $startpos $endpos in
    mk_term (TermAnnotatedTerm(t, attrs)) loc }
+| LPAREN LAMBDA LPAREN svars=sorted_var+; RPAREN t=term; RPAREN
+ { let loc = mk_loc $startpos $endpos in
+   mk_term (TermLambdaTerm(svars, t)) loc }
 ;
 
 qual_identifier:

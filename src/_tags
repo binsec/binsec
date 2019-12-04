@@ -11,6 +11,7 @@ not <piqi/**>                         : warn(A-4-48)
 <dynamic/**>                          : include, package(piqilib,piqirun.ext)
 <examples/**>                         : include, package(piqilib,piqirun.ext)
 <formula/**>                          : include
+<ida/**>                              : include
 <llvm/**>                             : include
 <loader/**>                           : include
 <parser/**>                           : include

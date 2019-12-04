@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -31,8 +31,8 @@ module PatchMap = struct
       if i < len then
         let byte = Binstream.get_byte_exn bytes i in
         let map' =
-          let open Virtual_address in
-          Map.add (add_int i vbase) byte map in
+          Virtual_address.Map.add
+            (Virtual_address.add_int i vbase) byte map in
         aux map' (succ i)
       else map
     in aux vmap 0
@@ -47,7 +47,7 @@ module PatchMap = struct
       let parser = Parser.patchmap
       and lexer = Lexer.token in
       Parse_utils.read_file ~parser ~lexer ~filename in
-    let open Virtual_address in
+    let open! Virtual_address in
     Map.fold add_bytes map Map.empty
 
   let empty = Virtual_address.Map.empty

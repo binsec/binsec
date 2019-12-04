@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,6 +25,7 @@ type 'a t = private
   | Assign of Dba.LValue.t * Dba.Expr.t
   | SJump of 'a Dba.jump_target * Dba.tag option
   | DJump of Dba.Expr.t * Dba.tag option
+  | Assert of Dba.Expr.t
   | If of Dba.Expr.t * 'a Dba.jump_target
   | Undef of Dba.LValue.t
   | Nondet of Dba.LValue.t * Dba.region
@@ -33,9 +34,11 @@ type 'a t = private
 val assign : Dba.LValue.t -> Dba.Expr.t -> 'a t
 val (<<-) : Dba.LValue.t -> Dba.Expr.t -> 'a t
 
-val static_jump : ?tag:Dba.tag option -> 'a Dba.jump_target -> 'a t
+val static_jump : ?tag:Dba.tag -> 'a Dba.jump_target -> 'a t
 
-val dynamic_jump : ?tag:Dba.tag option -> Dba.Expr.t -> 'a t
+val dynamic_jump : ?tag:Dba.tag -> Dba.Expr.t -> 'a t
+
+val dynamic_assert : Dba.Expr.t -> 'a t
 
 val conditional_jump : Dba.Expr.t -> 'a Dba.jump_target -> 'a t
 

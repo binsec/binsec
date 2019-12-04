@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -41,6 +41,9 @@ let fold f acc s =
   String.iter (fun c -> acc_ref := f !acc_ref c) s;
   !acc_ref
 
+let char_codes s =
+  Array.init (String.length s) (fun i -> Char.code s.[i])
+;;
 
 let remove_char c s =
   filter (fun c' -> c <> c') s
@@ -91,7 +94,7 @@ let size_of_hexstring s =
   nibble_size * (String.length s - 2)
 
 
-let index p s =
+let lfindi s p =
   let len = String.length s in
   let rec loop i =
     if i >= len then None
@@ -120,3 +123,18 @@ let is_hex_char c =
 let is_char_printable c =
   (* Printable ASCII characters are all between 33 [!] & 126 [~] included *)
   c >= '!' && c <= '~'
+
+let to_hex, pp_hex =
+  let lookup = "0123456789abcdef" in
+  (fun s ->
+    Bytes.unsafe_to_string
+      (Bytes.init (2 * String.length s)
+         (fun i ->
+           let j = Char.code (String.get s (i / 2)) in
+           String.get lookup (j lsr (4 * (1 - i mod 2)) land 0xf)))),
+  (fun ppf s ->
+    String.iter
+      (fun c ->
+        let i = Char.code c in
+        Format.pp_print_char ppf (String.get lookup (i lsr 4));
+        Format.pp_print_char ppf (String.get lookup (i land 0xf))) s)

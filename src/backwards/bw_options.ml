@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -30,16 +30,23 @@ module Opaque_predicates =
   Builder.False(
       struct
         let name = "opaque"
-        let doc = "Check all predicates for opacity"
+        let doc = "Check all predicates from entry point section for opacity"
       end
     )
-
 
 module Opaque_addresses =
   Builder.Integer_list(
       struct
         let name = "opaque-at"
         let doc = "Check address list for opaque predicates"
+      end
+    )
+
+module Opaque_sections =
+  Builder.String_list (
+      struct
+        let name = "opaque-sections"
+        let doc  = "Check predicates of section list for opacity"
       end
     )
 

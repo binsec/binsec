@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -73,7 +73,7 @@ end
 
 
 module Declarations : sig
-  val add : string -> Dba.size -> Dba.VarTag.t option -> unit
+  val add : string -> Dba.size -> Dba.VarTag.t -> unit
 end
 
 module Mk : sig

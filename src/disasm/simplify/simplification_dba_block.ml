@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -168,12 +168,12 @@ let nb_used_in_block temp_lhs insts =
 let rec replace_lhs_in_expr tmp_lhs red_lhs expr =
   let open Dba.Expr in
   match expr with
-  | Dba.Expr.Var (name1, size1, _vartaglist) ->
+  | Dba.(Expr.Var { name = name1; size = size1; _}) ->
     begin
       match tmp_lhs with
-      | Dba.LValue.Var (name2, _, _) ->
+      | Dba.(LValue.Var { name = name2; _}) ->
         if name1 = name2 then Dba_types.Expr.of_lvalue red_lhs else expr
-      | Dba.LValue.Restrict (name2, _, {Interval.lo=i; Interval.hi=j}) ->
+      | Dba.LValue.Restrict ({Dba.name = name2; _}, {Interval.lo=i; Interval.hi=j}) ->
         if name1 = name2 && i = 0 && j = size1 - 1
         then Dba_types.Expr.of_lvalue red_lhs else expr
       | Dba.LValue.Store (_size, _endian, expr) -> expr
@@ -226,7 +226,7 @@ let replace lhs_red lhs_temp insts block =
         assign lhs e id
       | Dba.Instr.DJump (e, tag) ->
         let e = replace_lhs_in_expr lhs_temp lhs_red e in
-        dynamic_jump e ~tag
+        dynamic_jump e ?tag
       | Dba.Instr.If (cond, id1, id2) ->
         let cond = replace_lhs_in_expr lhs_temp lhs_red cond in
         ite cond id1 id2
@@ -317,18 +317,20 @@ module Env = struct
 
   include Basic_types.String.Map
 
+  let eq = (=) (* Maybe this is not the right equality for region * Bv.t type *)
+
   (* Test if env1 contains env2 *)
   let contains env1 env2 =
     let mem vname cst =
       match find vname env1 with
-      | v ->  Region_bitvector.equal (`Value v) (`Value cst)
+      | v ->  eq v cst
       | exception Not_found -> false in
     for_all mem env2
 
   let add vname cst env =
     match find vname env with
     | v ->
-      if Region_bitvector.equal (`Value v) (`Value cst) then env
+      if eq v cst then env
       else remove vname env
     | exception Not_found -> add vname cst env
 end
@@ -336,9 +338,9 @@ end
 module Constant_propagation = struct
   open Dba
   let rec eval_expr env = function
-    | Dba.Expr.Var(vname, _, _) as e ->
+    | Dba.Expr.Var v as e ->
       begin
-        match Basic_types.String.Map.find vname env with
+        match Basic_types.String.Map.find v.name env with
         | region, bv -> Expr.constant ~region bv
         | exception Not_found -> e
       end
@@ -358,7 +360,7 @@ module Constant_propagation = struct
     | Dba.Instr.Assign (lv, e, id) ->
       Instr.assign lv (eval_expr penv e) id
     | Dba.Instr.DJump (e, tag) ->
-      Instr.dynamic_jump ~tag (eval_expr penv e)
+      Instr.dynamic_jump ?tag (eval_expr penv e)
     | Dba.Instr.If (c, jt, id) ->
       Instr.ite (eval_expr penv c) jt id
     | Dba.Instr.Assert (c, id) -> Instr._assert (eval_expr penv c) id
@@ -398,12 +400,9 @@ module Constant_propagation = struct
         | None -> env
         | Some i ->
           begin match i with
-            | Dba.Instr.Assign (lv, Dba.Expr.Cst (r, v), idx') ->
-              begin
-                match Dba_types.LValue.name_of lv with
-                | Some vname -> loop (Env.add vname (r,v) env) idx'
-                | None -> loop env idx'
-              end
+            | Dba.Instr.Assign (Dba.LValue.Var {Dba.name; _},
+                                Dba.Expr.Cst (r, v), idx') ->
+              loop (Env.add name (r,v) env) idx'
             | Dba.Instr.If (_, Dba.JInner idx1, idx2) ->
               loop (loop env idx1) idx2
             | Dba.Instr.Nondet (lv, _, id)

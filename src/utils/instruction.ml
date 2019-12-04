@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -71,6 +71,15 @@ let mnemonic t = t.mnemonic
 let create address size opcode mnemonic dba_block =
   { address; size; opcode; mnemonic; dba_block; }
 
+let unsupported address size opcode mnemonic =
+  assert (let open Mnemonic in
+          match mnemonic with
+          | Unknown | Unsupported _ -> true
+          | Supported _ -> false);
+  create address size opcode mnemonic Dhunk.empty
+;;
+
+
 let of_generic_instruction address ginstr dba_block =
   create address
     ginstr.Generic.size
@@ -84,13 +93,8 @@ let of_dba_block address dba_block =
   create address size opcode mnemonic dba_block
 
 let empty address =
-  let addr =
-    Dba_types.Caddress.base_value address
-    |> Bigint.int_of_big_int
-    |> Virtual_address.create
-  in
+  let addr = Dba_types.Caddress.base_value address in
   of_dba_block addr Dhunk.empty
-
 
 let to_generic_instruction e =
   Generic.create
@@ -99,7 +103,7 @@ let to_generic_instruction e =
     e.mnemonic
 
 let set_dba_block t dba_block = { t with dba_block }
-
+let set_mnemonic mnemonic t = { t with mnemonic } ;;
 
 let is_decoded t =
   not (

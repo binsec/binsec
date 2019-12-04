@@ -1,7 +1,7 @@
 ##########################################################################
 #  This file is part of BINSEC.                                          #
 #                                                                        #
-#  Copyright (C) 2016-2018                                               #
+#  Copyright (C) 2016-2019                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -19,7 +19,7 @@
 #                                                                        #
 ##########################################################################
 
-.SUFFIXES: .piqi .proto .pb.cc
+.SUFFIXES: .piqi .proto 
 
 %_piqi.ml %_ext.ml: %.piqi
 	$(PP) 'PIQIML $@'
@@ -29,29 +29,6 @@
 $(PIQI_DIR)/%.piqi: $(PROTO_DIR)/%.proto
 	$(PP) 'PIQI $@'
 	$(PIQI) $(PIQI_FLAGS) -o $@ $<
-
-CPP_PROTOBUF_DIR = $(PINSEC_DIR)/$(PINSEC_TYPES_DIR)/protobuf
-
-.PHONY: pre-protoc
-
-pre-protoc:
-	$(MKDIR_P) $(CPP_PROTOBUF_DIR)
-
-%.pb.cc: src/proto/%.proto
-	$(PP) 'PROTOC $@'
-	$(PROTOC) $(PROTOC_FLAGS) $<
-
-PROTOC_FILES = $(PROTO_SRC_FILES:%=$(CPP_PROTOBUF_DIR)/%.pb.cc)
-
-$(PROTOC_FILES) : pre-protoc
-
-PROTO_LSRC_FILES = $(PROTO_FILES:%=$(BINSEC_DIR)/%)
-
-protoc: pre-protoc $(PROTO_LSRC_FILES)
-	$(PROTOC) $(PROTOC_FLAGS) $(PROTO_LSRC_FILES)
-
-clean::
-	$(RRM) $(CPP_PROTOBUF_DIR)
 
 $(PIQI_ML_FILES): $(PIQI_FILES)
 

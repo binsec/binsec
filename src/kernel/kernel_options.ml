@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,12 +21,13 @@
 
 (** Kernel general command-line options. *)
 
-include Cli.Make(
-struct
-  let shortname = "" (* This is the only one :-) *)
-  let name = "Kernel"
-end
-)
+include Cli.Make
+          (
+            struct
+              let shortname = "" (* This is the only one :-) *)
+              let name = "Kernel"
+            end
+          )
 
 module Config_file = Builder.String_option(
 struct
@@ -131,77 +132,41 @@ module Decoder = Builder.String (
   end
   )
 
+module Version = Builder.False (
+  struct
+    let name = "version"
+    let doc = "Print the version identifier and exit"
+  end)
+
 module Machine = struct
   (** Abstract representation of hardware architecture *)
-
-  module ISA = struct
-    include
+  include
     Builder.Variant_choice_assoc(
-  struct
-    type t = Machine.isa
+        struct
+          type t = Machine.isa
 
-    let name = "isa"
+          let name = "isa"
 
-    let doc = Format.asprintf " Set isa [set by loader]"
+          let doc = Format.asprintf " Set isa [set by loader]"
 
-    let assoc_map = [
-        "x86",     Machine.X86;
-        "arm32",   Machine.ARMv7;
-        "unknown", Machine.Unknown;
-      ]
+          let assoc_map = [
+              "x86",     Machine.x86;
+              "arm32",   Machine.(armv7 LittleEndian);
+              "riscv",   Machine.riscv `x32;
+              "unknown", Machine.unknown;
+            ]
 
-    let default = Machine.Unknown
-  end)
-    let pp = Machine.pp_isa
-  end
+          let default = Machine.unknown
+        end)
+
+    let pp ppf () = Machine.ISA.pp ppf (get ())
+
+    let isa = get
+
+    let endianness () = Machine.ISA.endianness (get ())
+
+    let word_size () =
+      Size.Bit.to_int Machine.(Bitwidth.bitsize (ISA.bits (get ())))
+
+    let bits () = Machine.ISA.bits (get ())
 end
-
-
-(*
-let ep = "-entrypoint", Arg.String Entry_point.of_string, " Set entry point"
- *)
-
-
-(* let common_args =
- *   ep ::
- *   [
- *     "-share", Arg.String ShareDirectory.add, ShareDirectory.doc;
- *     Machdep.cli_option;
- *   ] *)
-
-
-(* let increase_verbosity () =
- *   let open Config_piqi.Configuration in
- *   let open Trace_config in
- *   default.configuration.verbosity <- Int32.succ default.configuration.verbosity *)
-
-
-(* let output_args =
- *   [
- *    "-color", Arg.Unit (fun _ -> Logger.(set_color true; set_tagged_entry false)),
- *     " Enable color tags on outputs (might not work on your terminal)";
- *     "-quiet", Arg.Unit Logger.quiet,
- *     " Do not display anything";
- *     "-v", Arg.Unit increase_verbosity, " Increase verbosity level";
- *   ] *)
-
-
-
-
-
-
-
-
-
-
-(* let parse_command_line  =
- *   let config_parsed = ref false in
- *   fun () ->
- *   Arg.parse_dynamic opts parse_command usage_message;
- *   if !config_parsed then begin
- *     Arg.current := 0;
- *     let open Trace_config in
- *     default.configuration.Config_piqi.Configuration.verbosity <- 0l;
- *     (\* Reparse *\)
- *     Arg.parse_dynamic opts parse_command usage_message
- *   end *)

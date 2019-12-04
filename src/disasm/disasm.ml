@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -225,7 +225,7 @@ let add_block instr p =
 let join_wl wl1 wl2 b1 b2 =
   List.fold_left
     (fun acc a ->
-       let bv = Dba_types.Caddress.base_value a in
+       let bv = Virtual_address.to_bigint (Dba_types.Caddress.base_value a) in
        if Bigint.gt_big_int b1 bv || Bigint.gt_big_int bv b2 then a :: acc
        else acc
     ) wl1 wl2
@@ -368,8 +368,7 @@ module Recursive = struct
               s Virtual_address.pp address;
             loop program visited worklist
           | Invalid_argument s ->
-            Logger.fatal "@[invalid argument (%s)@]" s;
-            exit 3
+            Logger.fatal "@[invalid argument (%s)@]" s
         end
         else loop program visited addresses
     in loop program visited worklist
@@ -427,9 +426,9 @@ let compute_interval_end ~from_address ~img =
   Logger.info "@[<h>Using section until %x@]" section_end;
   Virtual_address.create from_address,
   Virtual_address.create section_end
+;;
 
-
-let compute_linear_disam_intervals img parameters =
+let compute_linear_disasm_intervals img parameters =
   let open Infos in
   if has_entry_points parameters then
     let open Virtual_address.Set in
@@ -510,7 +509,7 @@ module Extended_linear = struct
       let visited = Virtual_address.Set.empty in
       aux_reclinear start end_ program jmps [] visited stops
     in
-    compute_linear_disam_intervals (Kernel_functions.get_img ()) parameters
+    compute_linear_disasm_intervals (Kernel_functions.get_img ()) parameters
     |> List.fold_left f Program.empty
 
 end
@@ -574,8 +573,9 @@ module Linear = struct
     let rec loop increment s =
       if increment = 15 then s
       else
+        let caddr = Dba_types.Caddress.add_int from_caddr increment in
         loop (succ increment)
-          Dba_types.Caddress.(Set.add (add_int from_caddr increment) s)
+          (Dba_types.Caddress.Set.add caddr s)
     in loop 0 stops
 
 
@@ -618,8 +618,7 @@ let disassemble_slice
   | _ -> assert false
 
 
-let disassemble_section ?(program=Program.empty) section_name =
-  let img = Kernel_functions.get_img () in
+let disassemble_section ?(program=Program.empty) img section_name =
   let sec_start, sec_end =
     Loader_utils.section_slice_by_name section_name img in
   Logger.debug "Disassembling section %s : [0x%x -- 0x%x]"
@@ -629,19 +628,27 @@ let disassemble_section ?(program=Program.empty) section_name =
   disassemble_slice ~program ~slice_start ~slice_end
 
 
+
+
+let section = disassemble_section
+
+let sections ?(program=Program.empty) img secs =
+  Basic_types.String.Set.fold
+    (fun section_name program ->
+       try disassemble_section ~program img section_name
+       with Not_found ->
+         Logger.warning "Skipping unknown section %s" section_name;
+         program
+    ) secs program
+;;
+
 let disassemble_sections () =
   assert (Disasm_options.Sections.is_set ());
   (* force linear mode *)
   Disasm_options.Disassembly_mode.set Disasm_options.Linear;
-  let sections = Disasm_options.Sections.get () in
-  Basic_types.String.Set.fold
-    (fun section_name program ->
-       try disassemble_section ~program section_name
-       with Not_found ->
-         Logger.warning "Skipping unknown section %s" section_name;
-         program
-    ) sections Program.empty
-
+  let img = Kernel_functions.get_img () in
+  sections img @@ Disasm_options.Sections.get ()
+;;
 
 module Basics = Basic_types
 
@@ -661,7 +668,7 @@ let disassemble_function g ~funcentry =
        end
     ) wl;
   g
-
+;;
 
 let do_functions g img funcnames =
   let function_addrs =
@@ -710,7 +717,7 @@ let pp_mode ppf = function
     Format.fprintf ppf "linear"
   | Disasm_options.Linear_byte_wise ->
     Format.fprintf ppf "linear byte wise"
-
+;;
 
 (* Get the entry points from the parameters file if they exist,
    Otherwise, just take what the loader says is the one entry point.
@@ -790,8 +797,9 @@ let disassemble parameters =
   end
 
 
-let run ~configuration_file =
-  let parameters = Parse_utils.read_optional_config_file configuration_file in
+let run ?configuration_file () =
+  let parameters =
+    Parse_utils.read_optional_config_file configuration_file in
   Logger.result
     "Entry points: @[%a@]"
     (fun ppf vset ->
@@ -863,11 +871,10 @@ let custom_pp_dbainstrs opc ppf dba_block =
 
 let check_hex_string s =
   let open String_utils in
-  match index (fun c -> not (is_hex_char c)) s with
+  match lfindi s (fun c -> not (is_hex_char c)) with
   | Some i ->
     begin
-      Logger.fatal "Invalid hexadecimal character '%c' in opcode %s" s.[i] s;
-      exit 1
+      Logger.fatal "Invalid hexadecimal character '%c' in opcode %s" s.[i] s
     end
   | None -> ()
 
@@ -879,16 +886,17 @@ let _pp_pretty_utf8  i =
     (custom_pp_dbainstrs i.mnemonic) i.dba_block
 
 
-let inst_of_raw raw =
+let inst_of_raw ?base raw =
   check_hex_string raw;
   Binstream.of_nibbles raw
-  |> Disasm_core.decode_binstream
+  |> Disasm_core.decode_binstream ?base
   |> fst
-
+;;
 
 let decode raw =
   try
-    let i = inst_of_raw raw in
+    let base = Disasm_at.get () in
+    let i = inst_of_raw ~base raw in
     Logger.result "%a" Instruction.pp i;
   with
   | X86toDba.InstructionUnhandled s ->
@@ -913,7 +921,7 @@ let main () =
       else begin
           let configuration_file = Kernel_options.Dba_config.get_opt () in
           Logger.info "Running disassembly";
-          run ~configuration_file
+          run ?configuration_file ()
         end
     end
 
@@ -929,3 +937,4 @@ let _ =
   Cli.Boot.enlist ~name:"disassembly run" ~f:main;
   Cli.Boot.enlist ~name:"decode hex" ~f:run_decode;
   Cli.Boot.enlist ~name:"decode hex as llvm" ~f:run_decode_llvm;
+;;

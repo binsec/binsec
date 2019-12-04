@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -58,6 +58,7 @@ val start : t -> Node.t
 
 val copy : t -> t
 val iter  : f:(Dba.Instr.t -> unit) -> t -> unit
+
 val iteri : f:(int -> Dba.Instr.t -> unit) -> t -> unit
 
 val of_list : Dba.Instr.t list -> t
@@ -141,7 +142,6 @@ val has_indirect_jump : t -> bool
 (** [has_indirect_jump d] returns [true] if the hunk contains an indirect jump
     instruction
 *)
-
 
 type conditional = {
     condition : Dba.Expr.t;

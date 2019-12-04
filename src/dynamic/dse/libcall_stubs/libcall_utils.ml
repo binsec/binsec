@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -42,6 +42,7 @@ let serialize_int64_list (params: int64 list): string =
   List.iter
     (fun i ->
        Buffer.add_string b
-         (Decode_utils.int64_to_littleendian_bin i (Machine.Word_size.get ())))
+         (Decode_utils.int64_to_littleendian_bin i
+            (Kernel_options.Machine.word_size ())))
     params;
   Buffer.contents b

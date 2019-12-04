@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -300,8 +300,8 @@ let print_non_overlap_assertion  =
 let print_distinct_blocks b =
   let f2 (name, _, r) acc =
     match r with
-    | `Malloc ((-1, { Dba.base = bv; id = -1}), _) when Bitvector.size_of bv = 32 ->
-      let s_bv = string_of_bv bv in
+    | `Malloc ((-1, { Dba.base = bv; id = -1}), _) ->
+      let s_bv = Format.asprintf "%a" Virtual_address.pp bv in
       "(assert (= " ^ name ^ " " ^ s_bv ^ "))\n" ^ acc
     | _ -> acc
   in
@@ -321,7 +321,7 @@ let print_is_a_block_in_expr b =
 
 
 let print_constraints expr size =
-  if size = Machine.Word_size.get () then
+  if size = Kernel_options.Machine.word_size () then
     Format.asprintf "(assert (= %s (bvadd r offset)))\n"
       (smtBvExpr_to_string expr)
   else
@@ -353,7 +353,7 @@ let print_local_constaints m =
   LocalConstraintsSet.fold f m ""
 
 let make_smt_program expr v b0 b1 m opt opt2 size assumes =
-  print_word_decl (Machine.Word_size.get ()) ^
+  print_word_decl (Kernel_options.Machine.word_size ()) ^
   print_var_decl v size ^
   print_max_min_decl ^
   print_region_size_function b1 ^
@@ -436,7 +436,7 @@ let get_region_ident_from_value l v =
 
 
 let make_unicity_constraint model _expr size =
-  if size = Machine.Word_size.get () then
+  if size = Kernel_options.Machine.word_size () then
     let res_bval = get_block_value_from_ident "r" model in
     let block_id = get_region_ident_from_value model res_bval in
     let bv = get_block_value_from_ident "offset" model in
@@ -475,19 +475,19 @@ let get_region_from_block_id id b =
 
 let getModel1 expr v b0 b1 c1 size assumes opt =
   let model = getModelPtr expr v b0 b1 c1 size assumes opt in
-  if model = [] && size = Machine.Word_size.get ()
+  if model = [] && size = Kernel_options.Machine.word_size ()
   then getModelCst expr v b0 b1 c1 size assumes opt
   else model
 
 
 let getModel2 size model b0 =
-  if size = Machine.Word_size.get () then
+  if size = Kernel_options.Machine.word_size () then
     let res_bval = get_block_value_from_ident "r" model in
     let block_id = get_region_ident_from_value model res_bval in
     let r = get_region_from_block_id block_id b0 in
     let bv = get_block_value_from_ident "offset" model in
     let bval = big_int_of_smt_num_string bv in
-    (r, (bval, Machine.Word_size.get ())), block_id
+    (r, (bval, Kernel_options.Machine.word_size ())), block_id
   else
     let bv = get_block_value_from_ident "c" model in
     let bv = big_int_of_smt_num_string bv in
@@ -500,7 +500,7 @@ let check_uniqueness size rbv model expr v b0 b1 c1 assumes =
   then Some rbv
   else
     let unicity_constraint = make_unicity_constraint2 model expr in
-    if (size = Machine.Word_size.get ()) &&
+    if (size = Kernel_options.Machine.word_size ()) &&
        getSat expr v b0 b1 c1 unicity_constraint size model assumes
     then Some rbv
     else None
@@ -513,11 +513,11 @@ let get_global_vars_regions global_regions =
   in
   let malloc bv =
     `Malloc (
-      (-1, Dba_types.Caddress.create (Bitvector.create bv 32) (-1)),
+      (-1, Dba_types.Caddress.create (Virtual_address.of_bigint bv) (-1)),
       Bigint.zero_big_int)
   in
   let f addr (v, b, bv_pred, id, sz, start_bv) =
-    let bv = Dba_types.Caddress.base_value addr in
+    let bv = Virtual_address.to_bigint (Dba_types.Caddress.base_value addr) in
     match bv_pred with
     | None ->
       let name = "global0" in
@@ -727,7 +727,7 @@ let bitvector_of param =
   | `Undef _ -> raise (Unknown_value "bitvector_of Undef")
 
 let encode_bitvector region bv =
-  let addrsz = Machine.Word_size.get () in
+  let addrsz = Kernel_options.Machine.word_size () in
   let size = Bitvector.size_of bv in
   let value = Bitvector.value_of bv in
   let region_name = Print_utils.string_from_pp Dba_printer.Ascii.pp_region region in
@@ -1614,7 +1614,7 @@ let get_byte_region_at addr =
   let open Bigint in
   try
     let img = Kernel_functions.get_img () in
-    let addr = Bitvector.create addr (Machine.Word_size.get ()) in
+    let addr = Bitvector.create addr (Kernel_options.Machine.word_size ()) in
     let byte = Loader_utils.get_byte_at img addr in
     let bitsize = Basic_types.Constants.bytesize in
     create_constant (big_int_of_int byte) (bitsize:>int)

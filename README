@@ -7,21 +7,9 @@ The following usual steps should do the trick:
 ```
 % autoconf
 % ./configure
-% make binsec
+% make 
 % make install 
 ```
-
-
-## PINSEC
-
-```
-% ./configure
-% make pinsec
-```
-
-Then, go to the directory pinsec/build, and configure your build.
-
-The build needs `CMake`.
 
 
 # Help

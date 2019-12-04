@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,46 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-
-(* let simplification_levels = ["prog";"fun";"seq";"fun-no-inline";
- *                              "seq-no-inline";"fun-no-sum";
- *                              "seq-no-sum"]
- *
- * let simpl_fun = ref false
- * let simpl_sequence = ref false
- * let simpl_inline_calls = ref true
- * let simpl_no_summaries = ref false
- * let simpl = ref false
- *
- *
- * let simplification_cli_handler =
- *   Arg.Symbol (
- *       simplification_levels,
- *       (fun s ->
- *         match (String.lowercase_ascii s) with
- *         | "prog" -> simpl :=  true
- *         | "fun" -> simpl := true; simpl_fun := true
- *         | "seq" -> simpl := true; simpl_sequence := true
- *         | "fun-no-inline" ->
- *            simpl := true;
- *            simpl_fun := true;
- *            simpl_inline_calls := false
- *         | "seq-no-inline" ->
- *            simpl := true;
- *            simpl_sequence := true;
- *            simpl_inline_calls := false
- *         | "fun-no-sum" ->
- *            simpl := true;
- *            simpl_fun := true;
- *            simpl_no_summaries := true
- *         | "seq-no-sum" ->
- *            simpl := true;
- *            simpl_sequence := true;
- *            simpl_no_summaries := true
- *         | _ ->
- *            assert false)
- *     ) *)
-
+(** Generic options for disassembly *)
 
 include Cli.Make(
 struct
@@ -89,44 +50,12 @@ module Disassembly_mode = struct
 end
 
 
-type specifics =
-  | All
-  | NoInline
-  | NoSummaries
-
-type simplification =
-  | No_simplification
-  | Program
-  | Function of specifics
-  | Sequence of specifics
-
-module Simplification = Builder.Variant_choice_assoc(
-struct
-  type t = simplification
-
-  let assoc_map = [
-      "prog", Program;
-      "fun", Function All;
-      "seq", Sequence All;
-      "fun-no-inline", Function NoInline;
-      "seq-no-inline", Function NoInline;
-      "fun-no-sum", Function NoSummaries;
-      "seq-no-sum", Function NoSummaries;
-      "none", No_simplification;
-    ]
-
-  let default = No_simplification
-  let name = "simplify"
-  let doc = " Activate DBA simplification on given level"
-end
-)
-
 module DbaOutputFile = struct
   include Builder.String(
     struct
       let name = "o-dba"
       let default = "out.dba"
-      let doc = Format.sprintf " Set DBA instructions output file [%s]" default
+      let doc = Format.sprintf " Set DBA instructions output file"
     end)
 end
 
@@ -155,14 +84,6 @@ module IgnoreUnhandledInstructions =
   end
   )
 
-module ProtectedMode = Builder.False (
-  struct
-    let name = "protected-mode"
-    let doc =
-      "Activate protected mode memory addressing (using segment selectors)"
-  end
-  )
-
 module ShowInstructionCount =
   Builder.False (
   struct
@@ -187,14 +108,6 @@ module Functions =
   end
   )
 
-module HandleSegments =
-  Builder.String_set(
-  struct
-    let name = "handle-seg"
-    let doc = "Activate set of segments"
-  end
-  )
-
 module SimplifiedDisassembly =
   Builder.False
     (struct
@@ -202,7 +115,6 @@ module SimplifiedDisassembly =
       let doc  = "Disable DBA hunks simplifications"
     end
     )
-
 
 module Decode_instruction =
   Builder.String_option(struct
@@ -229,7 +141,7 @@ module Decode_replacement =
     let of_string s =
       let l = Parser.dhunk_substitutions_eof Lexer.token @@ Lexing.from_string s in
       let map = List.fold_left (fun acc (addr,dhunk) ->
-          Virtual_address.Map.add addr dhunk acc 
+          Virtual_address.Map.add addr dhunk acc
         ) Virtual_address.Map.empty l
       in
       Logger.debug "parsed replacements\n%s" (to_string map);
@@ -251,3 +163,18 @@ module CFG_graph =
     end
 )
 
+module Disasm_at =
+  Builder.Integer(struct
+      let default = 0
+      let name = "at"
+      let doc = "Use this address as base for opcode decoding"
+    end)
+
+module Cache_decoder =
+  Builder.False(struct
+      let name = "cache-decoder"
+      let doc = "Cache accesses to decoder queries. \
+                 This option is useful for externally provided decoders. \
+                 Warning: this may be RAM-intensive and assumes code under \
+                 disassembly is not dynamically created"
+    end)

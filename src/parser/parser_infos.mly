@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2018                                               */
+/*  Copyright (C) 2016-2019                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -92,17 +92,17 @@
           )
         | SJump(dst, tag) -> (
           match dst with
-          | Address a -> Instr.static_jump a ~tag
+          | Address a -> Instr.static_jump a ?tag
           | Label b -> (
             match Basic_types.String.Map.find b !locallabelMap with
-            | b' -> Instr.static_jump (Jump_target.inner b') ~tag
+            | b' -> Instr.static_jump (Jump_target.inner b') ?tag
             | exception Not_found ->
               let message = "parser_infos.mly: jump to undefined label " ^ b in
               failwith message
           )
         )
         | Assign(lhs, expr, a) -> Instr.assign lhs expr a
-        | DJump(dst, tag) -> Instr.dynamic_jump dst ~tag
+        | DJump(dst, tag) -> Instr.dynamic_jump dst ?tag
         | Stop tag -> Instr.stop tag
         | Undef (lhs, a) -> Instr.undefined lhs a
         | Malloc (a, b, c) -> Instr.malloc a b c
@@ -134,7 +134,7 @@
   let chain_insns addr insns =
     let rec aux addr insns l =
       let last_instr =
-        Instr.dynamic_jump (Expr.var "ret" 32 None) ~tag:(Some Dba.Return) in
+        Instr.dynamic_jump (Expr.var "ret" 32) ~tag:Dba.Return in
       match insns with
       | [] -> [addr, last_instr]
       | i :: [] -> (
@@ -357,7 +357,8 @@ address :
    let s = String.sub s 1 (String.length s - 1) in
    let bigint = Bigint.big_int_of_string s in
    let bv = Bitvector.create bigint size in
-   Dba_types.Caddress.block_start bv
+   let vaddr = Virtual_address.of_bitvector bv in
+   Dba_types.Caddress.block_start vaddr
  }
 
 insts:
@@ -424,7 +425,7 @@ lhslist :
 regionnondet :
  | CONSTANT { `Constant }
  | STACK    { `Stack }
- | MALLOC   { Dba_types.Region.malloc (Machine.Word_size.get ()) }
+ | MALLOC   { Dba_types.Region.malloc (Kernel_options.Machine.word_size ()) }
 ;
 
 printargs :
@@ -437,13 +438,13 @@ printargs :
 lhs :
  | id=IDENT; INFER sz=INT; SUPER
  { let bitsize = Size.Bit.of_string sz in
-   Dba.LValue.var id ~bitsize None
+   Dba.LValue.var id ~bitsize
  }
  | id=IDENT; INFER sz=INT; SUPER LBRACE lo=INT; COMMA hi=INT; RBRACE {
    let off1 = int_of_string lo in
    let off2 = int_of_string hi in
    let size = Size.Bit.of_string sz in
-   Dba.LValue.restrict id size off1 off2
+   Dba.LValue._restrict id size off1 off2
  }
  | STORELOAD LBRACKET e=expr; COMMA
    endianness=ioption(terminated(endianness, COMMA));
@@ -452,14 +453,14 @@ lhs :
    let endia =
      match endianness with
      | Some _endianness -> _endianness
-     | None -> Dba_types.get_endianness () in
+     | None -> Kernel_options.Machine.endianness () in
    Dba.LValue.store size endia e
  }
 ;
 
 endianness:
- | ARROW     { Dba.BigEndian }
- | ARROWINV  { Dba.LittleEndian }
+ | ARROW     { Machine.BigEndian }
+ | ARROWINV  { Machine.LittleEndian }
  ;
 
 expr:
@@ -491,21 +492,19 @@ expr:
    Dba.Expr.constant ~region bv
  }
 
- | IDENT {
-   Dba.Expr.var $1 32 None
- }
+ | IDENT { Dba.Expr.var $1 32 }
 
  | STORELOAD LBRACKET expr COMMA ARROW COMMA INT RBRACKET {
    let size = int_of_string $7 |> Size.Byte.create in
-   Dba.Expr.load size BigEndian $3
+   Dba.Expr.load size Machine.BigEndian $3
  }
  | STORELOAD LBRACKET expr COMMA ARROWINV COMMA INT RBRACKET {
    let size = int_of_string $7 |> Size.Byte.create in
-   Dba.Expr.load size LittleEndian $3
+   Dba.Expr.load size Machine.LittleEndian $3
  }
  | STORELOAD LBRACKET expr COMMA INT RBRACKET {
    let size = int_of_string $5 |> Size.Byte.create in
-   let endia = Dba_types.get_endianness () in
+   let endia = Kernel_options.Machine.endianness () in
    Dba.Expr.load size endia $3
  }
 

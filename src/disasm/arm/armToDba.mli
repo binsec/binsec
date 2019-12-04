@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,3 +21,19 @@
 
 val decode :
   Lreader.t -> Virtual_address.t -> Instruction.Generic.t * Dhunk.t
+(** [decode r addr] decodes what is at address [addr] in reader [r].
+ *)
+
+
+val cached_decode:
+  Lreader.t -> Virtual_address.t -> Instruction.Generic.t * Dhunk.t
+(** Use
+    [let decode = cached_decode reader in
+     decode addr1;
+     ...
+     decode addrn; ]
+
+   if you want to use a cached decoder, adapted for a new reader.
+
+   The cached decoder assumes that the code will not change dynamically.
+*)

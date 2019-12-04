@@ -598,9 +598,7 @@ CVC4
 Z3
 DOT
 HEADACHE
-CMAKE
 OCAMLDOC
-PROTOC
 PIQI2CAML
 PIQI
 MENHIR
@@ -1744,6 +1742,17 @@ fi
 
 has_or_die $MAKE "Could not find GNU make"
 
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking GNU make version" >&5
+$as_echo_n "checking GNU make version... " >&6; }
+GNU_MAKE_LEAST_VERSION=3.82
+GNU_MAKE_VERSION=`$MAKE --version | head -n 1 | cut -d' ' -f 3`
+case $GNU_MAKE_VERSION in
+     3.82*) $as_echo "Good! ($GNU_MAKE_VERSION)";;
+     4.**) $as_echo "Good! ($GNU_MAKE_VERSION)";;
+#     4.2.1.*) AS_ECHO("Good! ($GNU_MAKE_VERSION)");;
+     *) as_fn_error $? "\"Please use a GNU Make version >= $GNU_MAKE_LEAST_VERSION (found $GNU_MAKE_VERSION).\"" "$LINENO" 5;;
+esac
+
 # Extract the first word of "ocamlfind", so it can be a program name with args.
 set dummy ocamlfind; ac_word=$2
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
@@ -1874,12 +1883,15 @@ fi
 $as_echo_n "checking version of OCaml... " >&6; }
 OCAMLCVERSION=`$OCAMLC -version`
 LEAST_VERSION="4.04.2"
-MOST_VERSION="4.05.0"
+MOST_VERSION="4.07.1"
 case $OCAMLCVERSION in
      4.04*) $as_echo "Good! ($OCAMLCVERSION)";;
      4.05*) $as_echo "Good! ($OCAMLCVERSION)";;
-     # no support for 4.06.* && 4.07 due to piqilib dependency on optcomp which depends on ocaml < 4.06.0
-     *) as_fn_error $? "\"Please use an ocaml version >= $LEAST_VERSION and <= $MOST_VERSION (found $OCAMLCVERSION).\"" "$LINENO" 5;;
+     4.06.0) $as_echo "Good! ($OCAMLCVERSION)";;     # tested & included 2019-07-25
+     4.06.1) $as_echo "Good! ($OCAMLCVERSION)";;     # tested & included 2019-07-25
+     4.07.0) $as_echo "Good! ($OCAMLCVERSION)";;     # tested & included 2019-07-25
+     4.07.1) $as_echo "Good! ($OCAMLCVERSION)";;     # tested & included 2019-07-25
+     *) as_fn_error $? "\"Please use an OCaml version >= $LEAST_VERSION and <= $MOST_VERSION (found $OCAMLCVERSION).\"" "$LINENO" 5;;
 esac
 
 
@@ -2284,46 +2296,6 @@ fi
 
 has_or_die $PIQI2CAML "Could not find piqic-ocaml"
 
-# Extract the first word of "protoc", so it can be a program name with args.
-set dummy protoc; ac_word=$2
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
-$as_echo_n "checking for $ac_word... " >&6; }
-if ${ac_cv_prog_PROTOC+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  if test -n "$PROTOC"; then
-  ac_cv_prog_PROTOC="$PROTOC" # Let the user override the test.
-else
-as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
-for as_dir in $PATH
-do
-  IFS=$as_save_IFS
-  test -z "$as_dir" && as_dir=.
-    for ac_exec_ext in '' $ac_executable_extensions; do
-  if as_fn_executable_p "$as_dir/$ac_word$ac_exec_ext"; then
-    ac_cv_prog_PROTOC="protoc"
-    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
-    break 2
-  fi
-done
-  done
-IFS=$as_save_IFS
-
-  test -z "$ac_cv_prog_PROTOC" && ac_cv_prog_PROTOC="no"
-fi
-fi
-PROTOC=$ac_cv_prog_PROTOC
-if test -n "$PROTOC"; then
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $PROTOC" >&5
-$as_echo "$PROTOC" >&6; }
-else
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
-$as_echo "no" >&6; }
-fi
-
-
-has_or_die $PROTOC "Could not find protoc"
-
 
 
 # Optional libraries #
@@ -2373,49 +2345,6 @@ else
     OCAMLDOCVERSION=`ocamldoc -version`
 fi
 
-
-# Extract the first word of "cmake", so it can be a program name with args.
-set dummy cmake; ac_word=$2
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
-$as_echo_n "checking for $ac_word... " >&6; }
-if ${ac_cv_prog_CMAKE+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  if test -n "$CMAKE"; then
-  ac_cv_prog_CMAKE="$CMAKE" # Let the user override the test.
-else
-as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
-for as_dir in $PATH
-do
-  IFS=$as_save_IFS
-  test -z "$as_dir" && as_dir=.
-    for ac_exec_ext in '' $ac_executable_extensions; do
-  if as_fn_executable_p "$as_dir/$ac_word$ac_exec_ext"; then
-    ac_cv_prog_CMAKE="cmake"
-    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
-    break 2
-  fi
-done
-  done
-IFS=$as_save_IFS
-
-  test -z "$ac_cv_prog_CMAKE" && ac_cv_prog_CMAKE="no"
-fi
-fi
-CMAKE=$ac_cv_prog_CMAKE
-if test -n "$CMAKE"; then
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $CMAKE" >&5
-$as_echo "$CMAKE" >&6; }
-else
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
-$as_echo "no" >&6; }
-fi
-
-
-if test x"$CMAKE" = xno; then
-   { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: \"You will not be able to compile PINSEC\"" >&5
-$as_echo "$as_me: WARNING: \"You will not be able to compile PINSEC\"" >&2;}
-fi
 
 ## headache
 # Extract the first word of "headache", so it can be a program name with args.
@@ -2684,6 +2613,10 @@ PIQI_DIR="piqi"
 ac_config_commands="$ac_config_commands piqi_directory"
 
 
+
+ac_config_commands="$ac_config_commands version"
+
+
 # See https://www.gnu.org/software/autoconf/manual/autoconf-2.69/html_node/Particular-Programs.html
 for ac_prog in gawk mawk nawk awk
 do
@@ -2893,7 +2826,6 @@ test -z "$INSTALL_DATA" && INSTALL_DATA='${INSTALL} -m 644'
 
 
 # Substitutions #
-
 
 
 
@@ -3623,6 +3555,7 @@ cat >>$CONFIG_STATUS <<_ACEOF || ac_write_fail=1
 #
 depend_file="src/.depend"
 dir="src/$PIQI_DIR"
+src_dir="src"
 
 _ACEOF
 
@@ -3634,6 +3567,7 @@ do
   case $ac_config_target in
     "depend") CONFIG_COMMANDS="$CONFIG_COMMANDS depend" ;;
     "piqi_directory") CONFIG_COMMANDS="$CONFIG_COMMANDS piqi_directory" ;;
+    "version") CONFIG_COMMANDS="$CONFIG_COMMANDS version" ;;
     "Config.mk") CONFIG_FILES="$CONFIG_FILES Config.mk" ;;
 
   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5;;
@@ -4066,6 +4000,7 @@ $as_echo "$as_me: executing $ac_file commands" >&6;}
   case $ac_file$ac_mode in
     "depend":C) touch ${depend_file} ;;
     "piqi_directory":C) mkdir -p $dir ;;
+    "version":C) cp VERSION $src_dir ;;
     "Config.mk":F) chmod a-w Config.mk ;;
 
   esac

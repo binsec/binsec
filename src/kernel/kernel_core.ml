@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -40,8 +40,18 @@ let read_configuration_file () =
 
 let binary_descr () =
   if Describe_binary.get () && ExecFile.is_set () then
-     Logger.result "%a"
+     Logger.result "@\n%a"
       Kernel_functions.Loader.pp_loader_summary (ExecFile.get ())
 
+let version () =
+  if Version.get () then begin
+      Logger.set_log_level "result";
+      Format.printf "Binsec version %s" Config.version;
+      exit 0
+    end
+;;
 
-let _ = Cli.Boot.enlist ~name:"binary description" ~f:binary_descr
+let _ =
+  Cli.Boot.enlist ~name:"binary description" ~f:binary_descr;
+  Cli.Boot.enlist ~name:"version description" ~f:version;
+;;

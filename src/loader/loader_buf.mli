@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -40,11 +40,11 @@ sig
   (** A mutable cursor, pointing to an arbitrary position of a buffer. *)
   type cursor = private {
     buffer: t;
-    endian: endian;
+    endian: Machine.endianness;
     mutable position: int;
   }
 
-  val cursor  : ?at:int -> endian -> t -> cursor
+  val cursor  : ?at:int -> Machine.endianness -> t -> cursor
   val seek    : cursor -> int -> unit
   val ensure  : cursor -> int -> string -> unit
   val advance : cursor -> int -> unit
@@ -56,7 +56,16 @@ sig
     val u32 : cursor -> u32
     val u64 : cursor -> u64
 
-    (** [fixed_string t len] peeks a string of exactly [len] bytes from [t] *)
+    val s8  : cursor -> s8
+    val s16 : cursor -> s16
+    val s32 : cursor -> s32
+    val s64 : cursor -> s64
+
+    val uleb128 : cursor -> u64
+    val sleb128 : cursor -> s64
+
+
+    (** [fixed_string t len] peeks a string of exactly [len] bytes from [t] *)
     val fixed_string : cursor -> int -> string
 
     (** [zero_string msg t ?maxlen ()] peeks a zero-terminated string from [t],
@@ -71,7 +80,15 @@ sig
     val u32 : cursor -> u32
     val u64 : cursor -> u64
 
-    (** [fixed_string t len] reads a string of exactly [len] bytes from [t] *)
+    val s8  : cursor -> s8
+    val s16 : cursor -> s16
+    val s32 : cursor -> s32
+    val s64 : cursor -> s64
+
+    val uleb128 : cursor -> u64
+    val sleb128 : cursor -> s64
+
+    (** [fixed_string t len] reads a string of exactly [len] bytes from [t] *)
     val fixed_string : cursor -> int -> string
 
     (** [zero_string msg t ?maxlen ()] reads a zero-terminated string from [t],
@@ -91,8 +108,37 @@ end
 
 module Make (B: Bufferable) : S with type t = B.t
 
-include S with type t = (int, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
+module type W =
+sig
+  include S
+
+  module Write : sig
+    val u8  : cursor -> u8 -> unit
+    val u16 : cursor -> u16 -> unit
+    val u32 : cursor -> u32 -> unit
+    val u64 : cursor -> u64 -> unit
+
+    val s8  : cursor -> s8 -> unit
+    val s16 : cursor -> s16 -> unit
+    val s32 : cursor -> s32 -> unit
+    val s64 : cursor -> s64 -> unit
+  end
+end
+
+module type Writable =
+sig
+  include Bufferable
+
+  val set : t -> int -> u8 -> unit
+end
+
+module Wake (W: Writable) : W with type t = W.t
+
+include W with type t = (int, Bigarray.int8_unsigned_elt,
+                         Bigarray.c_layout) Bigarray.Array1.t
 
 (** [sub t len] returns a fresh cursor pointing to the beginning of a sub-buffer
   * of size [len] starting from [t], and advances [t] by [len]. *)
 val sub : cursor -> int -> cursor
+
+val read : ?signed:bool -> [ `x32 | `x64 ] -> (cursor -> int)

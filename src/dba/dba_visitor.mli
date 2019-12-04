@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -37,8 +37,8 @@ class type inplace_visitor_t = object
   method visit_ite : Dba.Expr.t -> Dba.Expr.t -> Dba.Expr.t -> unit
   method visit_lhs : Dba.LValue.t -> unit
   method visit_lhs_var :
-    string -> Dba.size -> Dba.id -> Dba.id -> Dba.VarTag.t option -> unit
-  method visit_load : Dba.size -> Dba.endianness -> Dba.Expr.t -> unit
+    string -> Dba.size -> Dba.id -> Dba.id -> Dba.VarTag.t -> unit
+  method visit_load : Dba.size -> Machine.endianness -> Dba.Expr.t -> unit
   method visit_local_if : Dba.Expr.t -> Dba.id -> Dba.id -> unit
   method visit_malloc : Dba.LValue.t -> Dba.Expr.t -> unit
   method visit_nondet : Dba.LValue.t -> unit
@@ -47,10 +47,10 @@ class type inplace_visitor_t = object
   method visit_restrict : Dba.Expr.t -> Dba.id -> Dba.id -> unit
   method visit_sjump : Dba.id Dba.jump_target -> Dba.tag option -> unit
   method visit_stop : Dba.state option -> unit
-  method visit_store : Dba.size -> Dba.endianness -> Dba.Expr.t -> unit
+  method visit_store : Dba.size -> Machine.endianness -> Dba.Expr.t -> unit
   method visit_unary : Dba.Unary_op.t -> Dba.Expr.t -> unit
   method visit_undef : Dba.LValue.t -> unit
-  method visit_var : string -> Dba.size -> Dba.VarTag.t option -> unit
+  method visit_var : string -> Dba.size -> Dba.VarTag.t -> unit
 end
 
 class dba_inplace_visitor : inplace_visitor_t

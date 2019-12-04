@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -40,7 +40,7 @@ let expression_of_instruction instr =
   | Dba.Instr.Free (expr, _)
   | Dba.Instr.Assign (_, expr, _)
   | Dba.Instr.DJump (expr, _) -> Some expr
-  | Dba.Instr.Stop _ -> Some (Dba.Expr.var "eax" 32 None)
+  | Dba.Instr.Stop _ -> Some (Dba.Expr.var "eax" 32)
   | Dba.Instr.SJump _
   | Dba.Instr.If _
   | Dba.Instr.Assert _

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -87,7 +87,7 @@ let rec eval_expr expr m conds glbs: Region_bitvector.t =
   Logger.debug ~level:3 "Evaluating %a" Dba_printer.Ascii.pp_bl_term expr;
   let rbv =
     match expr with
-    | Dba.Expr.Var (v, size, _) ->
+    | Dba.(Expr.Var {name = v; size; _}) ->
       let big_zero = Bigint.zero_big_int in
       begin
         try read (Static_types.Var (v, size)) big_zero m conds glbs
@@ -100,13 +100,14 @@ let rec eval_expr expr m conds glbs: Region_bitvector.t =
       Logger.debug "Loading ...";
       let append v1 v2 =
         match endianness with
-        | Dba.BigEndian -> append v1 v2
-        | Dba.LittleEndian -> append v2 v1
+        | Machine.BigEndian -> append v1 v2
+        | Machine.LittleEndian -> append v2 v1
       in
       let vexp =
         match eval_expr e m conds glbs with
         | `SymbSmt smb ->
-          Region_bitvector.get_value smb (Machine.Word_size.get ()) conds glbs
+          Region_bitvector.get_value smb
+            (Kernel_options.Machine.word_size ()) conds glbs
         | v -> v
       in
       let region = region_of vexp in
@@ -114,7 +115,9 @@ let rec eval_expr expr m conds glbs: Region_bitvector.t =
       let big_zero = Bigint.zero_big_int in
       let v = `Value (`Constant, bitvector_of vexp) in
       let sub_m = SubEnv.singleton big_zero v in
-      let env = Env.add (Static_types.Var ("\\addr", Machine.Word_size.get ())) sub_m m in
+      let env = Env.add (Static_types.Var
+                           ("\\addr", Kernel_options.Machine.word_size ()))
+                  sub_m m in
       let read_at i env =
         let r = Static_types.Array region in
         try read r i env conds glbs
@@ -131,7 +134,8 @@ let rec eval_expr expr m conds glbs: Region_bitvector.t =
         then
           let bv = `Value (`Constant, Bitvector.succ (bitvector_of vexp)) in
           let sub_m = SubEnv.singleton big_zero bv in
-          let key = Static_types.Var ("\\addr", Machine.Word_size.get ()) in
+          let key = Static_types.Var
+                      ("\\addr", Kernel_options.Machine.word_size ()) in
           let m = Env.add key sub_m m in
           loop (succ_big_int index) vexp (append ret (read_at index m))
         else ret

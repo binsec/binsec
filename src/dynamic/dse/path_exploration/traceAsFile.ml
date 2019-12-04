@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -17,7 +17,6 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
 (**************************************************************************)
 
-open Dba
 open TypeTraceDSE
 open Conf_exploration
 open Libcall_piqi
@@ -333,6 +332,7 @@ struct
       match dbas with
       | [] -> failwith "Try to invert no condition that can be inverted \n"
       | dba::tl ->
+        let open Dba in
         let open Instr in
         match Dba_types.Statement.instruction dba with
         | If(_, JOuter addr,_) -> addr.Dba.base
@@ -341,12 +341,11 @@ struct
            Malloc (_, _, _)|Free (_, _)|Print (_, _)) -> explore tl
     in
     let addr = explore x.inst.Trace_type.dbainstrs in
-    let addr = Bitvector.value_of addr in
     let next_addr = Trace_type.(get_next_address x.inst.concrete_infos) in
-    if(Bigint.compare_big_int addr (Bigint.big_int_of_int64 next_addr)) = 0 then
+    if(Virtual_address.compare addr (Virtual_address.of_int64 next_addr)) = 0 then
       ConJump(Exploration_type.One_loc(Int64.add x.inst.Trace_type.location 2L,x.it))
     else
-      ConJump(Exploration_type.One_loc(Bigint.int64_of_big_int addr,x.it)) (* Todo do something cleaner *)
+      ConJump(Exploration_type.One_loc(Virtual_address.to_int64 addr,x.it)) (* Todo do something cleaner *)
 
   let generate_child_in_loop trace l_loc_size=
     let instr_per_call_site = get_instr_per_call_site trace in

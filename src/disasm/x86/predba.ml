@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,12 +24,13 @@
  * For static jumps. Tags may indicate a probable call / return instruction
 *)
 
-open Disasm_options
+open X86_options
 
 type 'a t =
   | Assign of Dba.LValue.t * Dba.Expr.t
   | SJump of 'a Dba.jump_target * Dba.tag option
   | DJump of Dba.Expr.t * Dba.tag option
+  | Assert of Dba.Expr.t
   | If of Dba.Expr.t * 'a Dba.jump_target
   | Undef of Dba.LValue.t
   | Nondet of Dba.LValue.t * Dba.region
@@ -50,9 +51,11 @@ let assign lval e =
 
 let (<<-) = assign
 
-let static_jump ?(tag=None) jt = SJump (jt, tag)
+let static_jump ?tag jt = SJump (jt, tag)
 
-let dynamic_jump ?(tag=None) e = DJump (e, tag)
+let dynamic_jump ?tag e = DJump (e, tag)
+
+let dynamic_assert e = Assert e
 
 let conditional_jump c jt = If (c, jt)
 
@@ -77,12 +80,13 @@ let needs_termination = function
 
 
 let to_dba_instruction next_id = function
+  | Assert cond -> Dba.Instr._assert cond next_id
   | If (cond, thn) -> Dba.Instr.ite cond thn next_id
   | Assign (lhs, expr) -> Dba.Instr.assign lhs expr next_id
   | Undef lhs -> Dba.Instr.undefined lhs next_id
   | Nondet (lhs, region) -> Dba.Instr.non_deterministic lhs ~region next_id
-  | SJump (dst, tag) -> Dba.Instr.static_jump dst ~tag
-  | DJump (dst, tag) -> Dba.Instr.dynamic_jump dst ~tag
+  | SJump (dst, tag) -> Dba.Instr.static_jump dst ?tag
+  | DJump (dst, tag) -> Dba.Instr.dynamic_jump dst ?tag
   | Stop st -> Dba.Instr.stop (Some st)
 
 (* [block_addr] is the physical address of the current DBA block.

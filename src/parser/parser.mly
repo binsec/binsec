@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2018                                               */
+/*  Copyright (C) 2016-2019                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -24,18 +24,16 @@
   open Parse_helpers
 
   let unknown_successor = -1
-  let unknown_bitsize = Size.Bit.create 1
 
-  let default_endianness = Utils.get_opt_or_default Dba.LittleEndian
+  let default_endianness = Utils.get_opt_or_default Machine.LittleEndian
 
-  let mk_declaration tags name size =
-     Declarations.add name size tags;
+  let mk_declaration (tag:VarTag.t) name size =
+     Declarations.add name size tag;
      let bitsize = Size.Bit.create size in
-     Dba.LValue.var name ~bitsize tags
+     Dba.LValue.var name ~bitsize ~tag
 
 
-  let _dummy_addr =
-    Dba_types.Caddress.create Bitvector.zero 0
+  let _dummy_addr = Virtual_address.create 0
 
 %}
 
@@ -158,31 +156,33 @@ body:
 ;
 
 config:
-| entry=entry; addrsize endianness  { entry }
+| entry=entry; /* addrsize endianness */  { entry }
 ;
 
 entry:
  | ENTRYPOINT COLON addr=address; { addr }
 ;
 
-addrsize:
- | WORDSIZE COLON value=INT;    { Machine.Word_size.set (int_of_string value) }
-;
+/* addrsize: */
+/*  | WORDSIZE COLON value=INT;    { Machine.Word_size.set (int_of_string value) } */
+/* ; */
 
-endianness:
- | ENDIANNESS COLON BIG    { Dba_types.set_endianness BigEndian }
- | ENDIANNESS COLON LITTLE { Dba_types.set_endianness LittleEndian }
-;
+/* endianness: */
+/*  | ENDIANNESS COLON BIG    { Dba_types.set_endianness Machine.BigEndian } */
+/*  | ENDIANNESS COLON LITTLE { Dba_types.set_endianness Machine.LittleEndian } */
+/* ; */
+
+
 
 %inline specific_declaration_kwd:
-| TEMPORARY { mk_declaration (Some VarTag.temp) }
-| FLAG      { mk_declaration (Some (VarTag.flag Flag.unspecified)) }
-| REGISTER  { mk_declaration None }
+| TEMPORARY { mk_declaration VarTag.temp }
+| FLAG      { mk_declaration (VarTag.flag Flag.unspecified) }
+| REGISTER  { mk_declaration VarTag.empty }
 ;
 
 declaration:
 | VAR id=IDENT; COLON size=INT; tags=option(tags);
-  { mk_declaration tags id (int_of_string size) }
+  { mk_declaration (match tags with None -> VarTag.empty | Some t -> t)  id (int_of_string size) }
 | apply=specific_declaration_kwd; id=IDENT; COLON; size=INT;
   { apply id (int_of_string size) }
 ;
@@ -238,7 +238,7 @@ size_annot:
 ;
 
 constant_expr:
- | WORDSIZE; { Dba.Expr.var "\\addr" (Machine.Word_size.get ()) None }
+ | WORDSIZE; { Dba.Expr.var "\\addr" (Kernel_options.Machine.word_size ()) }
  | cst=constant;
    { Dba.Expr.constant cst  }
  | e=constant_expr; offs=offsets;
@@ -263,7 +263,7 @@ constant_expr:
 
 %inline regionnondet:
  | region=region; { region }
- | MALLOC         { Dba_types.Region.malloc (Machine.Word_size.get ())}
+ | MALLOC         { Dba_types.Region.malloc (Kernel_options.Machine.word_size ())}
 ;
 
 
@@ -292,7 +292,7 @@ static_target:
 
 static_jump:
 | t=static_target; tag=ioption(jump_annotation);
-  { Dba.Instr.static_jump t ~tag  }
+  { Dba.Instr.static_jump t ?tag  }
 ;
 
 jump_target:
@@ -301,10 +301,11 @@ jump_target:
 | e=expr; tag=option(jump_annotation);
   { match e with
     | Dba.Expr.Cst (`Constant, bv) ->
-       let caddr = Dba_types.Caddress.block_start bv in
+       let vaddr = Virtual_address.of_bitvector bv in
+       let caddr = Dba_types.Caddress.block_start vaddr in
        let target = Dba.Jump_target.outer caddr in
-       Dba.Instr.static_jump target ~tag
-    | _ ->  Dba.Instr.dynamic_jump e ~tag }
+       Dba.Instr.static_jump target ?tag
+    | _ ->  Dba.Instr.dynamic_jump e ?tag }
 ;
 
 %inline stop_annot:
@@ -432,8 +433,8 @@ printarg:
 ;
 
 %inline store_annotation:
-| ARROW    { BigEndian }
-| ARROWINV { LittleEndian }
+| ARROW    { Machine.BigEndian }
+| ARROWINV { Machine.LittleEndian }
 ;
 
 address_lvalue:
@@ -449,9 +450,10 @@ address_lvalue:
 lvalue:
 | id=IDENT; sz_opt=option(size_annot);
   { let bitsize = Utils.get_opt_or_default 1 sz_opt |> Size.Bit.create in
-    Dba.LValue.var id ~bitsize None }
-| id=IDENT; offs=offsets;
-  { let lo, hi = offs in Dba.LValue.restrict id unknown_bitsize lo hi }
+    Dba.LValue.var id ~bitsize }
+| id=IDENT; sz_opt=option(size_annot); offs=offsets;
+  { let bitsize = Utils.get_opt_or_default 1 sz_opt |> Size.Bit.create in
+    let lo, hi = offs in Dba.LValue._restrict id bitsize lo hi }
 | v=address_lvalue { v };
 ;
 
@@ -479,7 +481,7 @@ expr:
 
 | id=IDENT; sz_opt=ioption(size_annot);
   { let sz = Utils.get_opt_or_default 1 sz_opt in
-    Dba.Expr.var id sz None }
+    Dba.Expr.var id sz }
 
 | cst=constant;
   { Dba.Expr.constant cst }
@@ -558,7 +560,8 @@ address:
  | LPAR bv=constant; nid=preceded(COMMA, INT); RPAR
   {
     let id = int_of_string nid in
-    let addr = Dba_types.Caddress.create bv id in
+    let vaddr = Virtual_address.of_bitvector bv in
+    let addr = Dba_types.Caddress.create vaddr id in
     incr_address addr;
     addr
  }
@@ -618,13 +621,16 @@ directive:
 ;
 
 bin_loc_with_id:
- | id=IDENT; { Binary_loc.name id }
- | bloc=bin_loc_with_id; PLUS n=integer;  { Binary_loc.offset n bloc }
- | bloc=bin_loc_with_id; MINUS n=integer; { Binary_loc.offset (-n) bloc }
+ | id=IDENT; { Loader_utils.Binary_loc.name id }
+ | bloc=bin_loc_with_id; PLUS n=integer;
+    { Loader_utils.Binary_loc.offset n bloc }
+ | bloc=bin_loc_with_id; MINUS n=integer;
+    { Loader_utils.Binary_loc.offset (-n) bloc }
 ;
 
 binary_loc:
- | address=integer { Binary_loc.address @@ Virtual_address.create address }
+ | address=integer
+    { Loader_utils.Binary_loc.address @@ Virtual_address.create address }
  | loc=delimited(INFER, bin_loc_with_id, SUPER); { loc }
 ;
 

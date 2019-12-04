@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -54,13 +54,16 @@ sig
     type t
     type header
 
-    val arch   : t -> arch
+    val arch   : t -> Machine.t
     val entry  : t -> int
-    val endian : t -> endian
     val sections : t -> Section.t array
     val symbols  : t -> Symbol.t  array
 
     val header : t -> header
+
+    val cursor : ?at:int -> t -> Loader_buf.cursor
+
+    include Sigs.PRINTABLE with type t := t
   end
 
   val check_magic : Loader_buf.t -> bool
@@ -69,10 +72,8 @@ sig
   val load_file_descr : Unix.file_descr -> Img.t
   val load_file : string -> Img.t
 
-  val read_offset  : Img.t -> int -> int
-  val read_address : Img.t -> int -> int
-
-  val write_address : Img.t -> int -> int list -> unit
+  val read_offset  : Img.t -> int -> u8
+  val read_address : Img.t -> int -> u8
 
   module Offset  : Loader_buf.S with type t = Img.t
   module Address : Loader_buf.S with type t = Img.t

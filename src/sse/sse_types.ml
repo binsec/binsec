@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -65,7 +65,9 @@ module Path = struct
 end
 
 
-let decode vaddress = Disasm_core.decode vaddress |> fst
+let decode vaddress =
+  Logger.debug ~level:2 "Decoding %@ %a" Virtual_address.pp vaddress;
+  Disasm_core.decode vaddress |> fst
 
 module Path_state = struct
 
@@ -166,7 +168,7 @@ module Path_state = struct
   let with_init_mem_at ~addr ~size path_state =
     let symbolic_state =
       let value = Bitvector.value_of addr in
-      let bvsize = Machine.Word_size.get () in
+      let bvsize = Kernel_options.Machine.word_size () in
       let addr = Bitvector.create value bvsize in
       Sse_symbolic.State.init_mem_at path_state.symbolic_state ~addr ~size in
     { path_state with symbolic_state }
@@ -183,9 +185,9 @@ module Path_state = struct
       Bitvector.Collection.Map.iter
         (fun kaddr vsize ->
            if
-             Bitvector.compare addr kaddr <= 0 &&
+             Bitvector.compare addr kaddr >= 0 &&
              let end_addr = add_int kaddr vsize in
-             Bitvector.compare kaddr end_addr < 0
+             Bitvector.compare addr end_addr < 0
            then raise Found
         ) (initializations path_state.symbolic_state);
       false
@@ -419,7 +421,8 @@ module G(W:WORKLIST) = struct
 
     let address d =
       let img = Kernel_functions.get_img () in
-      match Binary_loc.to_virtual_address ~img (Directive.loc d) with
+      match Loader_utils.Binary_loc.to_virtual_address
+              ~img (Directive.loc d) with
       | Some a -> a
       | None -> assert false
     ;;
@@ -484,9 +487,10 @@ module G(W:WORKLIST) = struct
       add_action
         (fun vaddr ->
           incr todo;
-          let loc = Binary_loc.address vaddr in
+          let loc = Loader_utils.Binary_loc.address vaddr in
           Directive.reach loc) (GoalAddresses.get ());
-      add_action (fun vaddr -> Directive.cut @@ Binary_loc.address vaddr)
+      add_action (fun vaddr -> Directive.cut @@
+                                 Loader_utils.Binary_loc.address vaddr)
         (AvoidAddresses.get ());
       { todo = !todo; store = h }
 
@@ -545,7 +549,6 @@ module G(W:WORKLIST) = struct
     exception Empty_worklist
 
     let choose e =
-      let w = e.worklist in
       let rec pick_one w =
         match W.pop w with
         | path_state, worklist ->
@@ -563,12 +566,14 @@ module G(W:WORKLIST) = struct
         | exception Not_found ->
            Logger.warning "Empty path worklist: halting ...";
            raise Empty_worklist
-      in pick_one w
-
+      in pick_one e.worklist
+    ;;
 
     let add path_state e =
       let worklist = W.push path_state e.worklist in
       { e with worklist }
+    ;;
+
   end
 
   let from_address ~initialize_fun ~entrypoint =

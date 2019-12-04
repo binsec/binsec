@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -55,8 +55,7 @@ class generic_analyzer (input_config:Trace_config.t) =
         match input_config.configuration.additional_parameters with
         | None ->
           Logger.fatal
-            "No additional parameters found. Please provide a configuration file.";
-          exit 3;
+            "No additional parameters found. Please provide a configuration file."
         | Some x -> x
       in
       parameters <- the tmp.generic_params;
@@ -76,7 +75,8 @@ class generic_analyzer (input_config:Trace_config.t) =
             let dba_instr = Parse_utils.instruction_of_string parameters.dba in
             match parameters.kind, dba_instr with
             | (`satisfiability, Dba.Instr.Assert(e,_))
-              when (Dba_utils.computesize_dbaexpr e) <> 1 ->
+              when (Dba_utils.computesize_dbaexpr e) <> 1
+              ->
               Logger.error "Wrong expression size"
             | (`satisfiability, Dba.Instr.Assert(cond,_)) ->
               self#solve_satisfiability cond env

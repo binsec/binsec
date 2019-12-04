@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -54,10 +54,10 @@ module type Expr_Input = sig
   val ite: boolean -> binary -> binary -> binary M.m
 
   val get_var: size:int -> string -> binary M.m
-  val load: size:int -> Dba.endianness -> binary -> binary M.m
+  val load: size:int -> Machine.endianness -> binary -> binary M.m
 
   val assume: boolean -> unit M.m
-  
+
 end
 
 module State_Monad(State:sig type t end):Monad with type 'a m = State.t -> ('a * State.t) = struct
@@ -76,7 +76,7 @@ module type Instr_Input = sig
 
   (* Note: could return a unit State_Monad(State).m instead, but this
      is more convenient. *)
-  val store: size:int -> Dba.endianness -> binary -> binary -> State.t -> State.t
+  val store: size:int -> Machine.endianness -> binary -> binary -> State.t -> State.t
   val set_var: size:int -> string -> binary -> State.t -> State.t
 
   (* Add a comment "at the current position". In LLVM for instance, it

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -47,7 +47,7 @@ let bytesize (env:Path_predicate_env.t) =  env.formula.addr_size / 8
 
 module Cdecl: CallConvention = struct
 
-  let esp = Dba.Expr.var "esp" 32 None
+  let esp = Dba.Expr.var "esp" 32
 
   let get_param (index:int) (env:Path_predicate_env.t): Dba.Expr.t =
     let bytesize = bytesize env in
@@ -56,7 +56,7 @@ module Cdecl: CallConvention = struct
       let bv_offset = Bitvector.create offset env.formula.addr_size in
       Dba.Expr.add esp (Dba.Expr.constant bv_offset) in
     let bysz = Size.Byte.create bytesize in
-    Dba.Expr.load bysz (Dba.LittleEndian) expr_addr
+    Dba.Expr.load bysz (Machine.LittleEndian) expr_addr
 
   let rec set_param index (prefix:string) (value:int64)
       (action:Common_piqi.action) (infos:conc_infos)
@@ -72,10 +72,10 @@ module Cdecl: CallConvention = struct
     | `conc ->
       let encoded = int64_to_littleendian_bin value env.formula.addr_size in
       concretize_memory expr_addr encoded env;
-      Some (Dba.Expr.constant (Bitvector.create (Bigint.big_int_of_int64 value) (Machine.Word_size.get ())))
+      Some (Dba.Expr.constant (Bitvector.create (Bigint.big_int_of_int64 value) (Kernel_options.Machine.word_size ())))
     | `symb ->
       symbolize_memory expr_addr prefix (env.formula.addr_size/8) env;
-      Some (Dba.Expr.var prefix env.formula.addr_size None)
+      Some (Dba.Expr.var prefix env.formula.addr_size)
     | `ignore -> None
     | `logic -> Some expr_addr (* Print a warning ? (logic stuff should be handled in the stub itself) *)
 
@@ -115,11 +115,11 @@ module Cdecl: CallConvention = struct
     | `symb ->
       let name = prefix^"_addr" in
       symbolize_memory expr_addr name (env.formula.addr_size/8) env;
-      Some (Dba.Expr.var name env.formula.addr_size None)
+      Some (Dba.Expr.var name env.formula.addr_size)
     | `logic ->
        let bysz = Size.Byte.unsafe_of_bits env.formula.addr_size in
       let expr_addr_deref =
-        Dba.Expr.load bysz Dba.LittleEndian expr_addr in (* [esp + X] *)
+        Dba.Expr.load bysz Machine.LittleEndian expr_addr in (* [esp + X] *)
       aux_deref expr_addr_deref pol.Memory_pol.value data.Memory_t.value;
       Some expr_addr_deref
     | `ignore -> None
@@ -177,25 +177,15 @@ module Cdecl: CallConvention = struct
       add_constraint env.formula (mk_bv_equal alias_var value);
     alias_var
 
-
-
 end;;
 
 module Stdcall: CallConvention = struct
-  let get_param (index:int) (env:Path_predicate_env.t): Dba.Expr.t =
-    Cdecl.get_param index env
+  include Cdecl
 
-  let set_param (index:int) (prefix:string) (value:int64) (action:Common_piqi.action) (infos:conc_infos) (default:Common_piqi.action) (env:Path_predicate_env.t): Dba.Expr.t option =
-    Cdecl.set_param index prefix value action infos default env
-
-  let set_param_pointer (index:int) (prefix:string) (pol:memory_pol) (data:memory_t) (infos:conc_infos) (default:Common_piqi.action) (env:Path_predicate_env.t): Dba.Expr.t option =
-    Cdecl.set_param_pointer index prefix pol data infos default env
-
-  let set_ret (prefix:string) (value:int64) ?(supp=None) (action:Common_piqi.action) (infos:conc_infos) (default:Common_piqi.action) (env:Path_predicate_env.t): unit =
-    Cdecl.set_ret prefix value ~supp action infos default env
-
-  let set_epilog (nb_param:int) (prefix:string) (infos:conc_infos) (env:Path_predicate_env.t): unit =
-    List.iter (fun i -> symbolize_register i prefix env) ["ecx"; "edx"; "CF"; "DF"; "ZF"; "OF"; "SF"; "AF"; "PF"]; (* eax not here because already threated by set_ret normally *)
+  let set_epilog (nb_param:int) (prefix:string) (infos:conc_infos) env =
+    List.iter (fun i -> symbolize_register i prefix env)
+      ["ecx"; "edx"; "CF"; "DF"; "ZF"; "OF"; "SF"; "AF"; "PF"];
+    (* eax not here because already threated by set_ret normally *)
     let sz = env.formula.addr_size/8 in
     let esp_value = Int64.add (get_reg_value "esp" infos) (Int64.of_int (nb_param*sz)) in
     let f_val = mk_bv_cst (Bitvector.create (Bigint.big_int_of_int64 esp_value) env.formula.addr_size) in
@@ -203,8 +193,4 @@ module Stdcall: CallConvention = struct
 
   let default_stub (prefix:string) (env:Path_predicate_env.t): unit =
     List.iter (fun i -> symbolize_register i prefix env) ["eax";"ecx"; "edx";"esp"; "CF"; "DF"; "ZF"; "OF"; "SF"; "AF"; "PF"]
-
-  let add_alias (index:int) (alias:string)  (infos:conc_infos) (env:Path_predicate_env.t) =
-    Cdecl.add_alias index alias infos env
-
 end;;

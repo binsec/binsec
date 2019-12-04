@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -51,12 +51,14 @@ sig
 
   module E : sig
     type t
-    val compare : t -> t -> int
+    type label
 
+    val compare : t -> t -> int
+    val label : t -> label
     val src : t -> vertex
     val dst : t -> vertex
 
-    val create : vertex -> vertex -> t
+    val create : vertex -> label -> vertex -> t
   end
   type edge = E.t
 
@@ -226,7 +228,7 @@ struct
   module E =
   struct
     include G.E
-    let create v1 v2 = create v1 () v2
+    let create v1 l v2 = create v1 l v2
   end
 
   type edge = E.t
@@ -317,9 +319,12 @@ struct
   let mem_vertex_a t a = mem_vertex t (Elt.of_addr a)
 
   let mem_edge t v1 v2 =
-    if G.mem_edge t.graph v1 v2
-    then Some (E.create (H.find t.htbl v1.Elt.addr) (H.find t.htbl v2.Elt.addr))
-    else None
+    match G.find_edge t.graph v1 v2 with
+    | e ->
+       let label = E.label e in
+       Some (E.create (H.find t.htbl v1.Elt.addr) label
+               (H.find t.htbl v2.Elt.addr))
+    | exception Not_found -> None
 
   let mem_edge_a t a1 a2 = mem_edge t (Elt.of_addr a1) (Elt.of_addr a2)
   let mem_edge_e t e = mem_edge t (E.src e) (E.dst e)

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -55,12 +55,13 @@ sig
   (** Edges *)
   module E : sig
     type t
+    type label
     val compare : t -> t -> int
-
+    val label : t -> label
     val src : t -> vertex
     val dst : t -> vertex
 
-    val create : vertex -> vertex -> t
+    val create : vertex -> label -> vertex -> t
   end
 
   type edge = E.t

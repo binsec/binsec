@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -38,9 +38,9 @@ class switch_analysis (input_config:Trace_config.t) =
       let open Dba in
       let open Dba_types.Statement in
       match dbainst with
-      | { instruction = Instr.Assign(LValue.Var(name1,_,_),
+      | { instruction = Instr.Assign(LValue.Var {Dba.name = "eax"; _},
                                      Expr.Load(_,_,e) , _); _ }
-        when name1 = "eax" && key = 27 ->
+        when key = 27 ->
         Logger.debug ~level:1 "Dynamic assignment found";
         self#compute_possible_values_interactively e env ;
         DoExec

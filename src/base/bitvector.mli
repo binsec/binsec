@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -109,6 +109,7 @@ sig
 
   val append  : t -> t -> t
   val concat  : t list -> t
+    (** concat [bv1, bv2, ..., bvn] is bv1 @ bv2 @ ... @ bvn *)
   val extract : t -> int Basic_types.interval -> t
 end
 

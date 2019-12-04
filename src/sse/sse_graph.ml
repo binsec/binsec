@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -65,7 +65,7 @@ let rec populate_from cfg vaddr depth =
   let open Sse_options in
   Logger.debug ~level:4 "populate %a (%d)" Virtual_address.pp vaddr depth;
   let stop =
-    let open Basic_types.Int in
+    let open! Basic_types.Int in
     let int_addr = Virtual_address.to_int vaddr in
     Set.mem int_addr (GoalAddresses.get ())
     || Set.mem int_addr (AvoidAddresses.get ())

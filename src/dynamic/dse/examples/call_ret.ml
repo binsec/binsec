@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -187,12 +187,12 @@ class callret_analyzer (input_config:Trace_config.t) =
             |> string_to_big_int
             |> Bigint.int64_of_big_int in
           let wit_addr = self#fresh_witness_name () in
-          let addr_e = Dba.Expr.var "esp" 32 None in
+          let addr_e = Dba.Expr.var "esp" 32 in
           self#add_witness_variable wit_addr addr_e env;
           let wit_cnt = self#fresh_witness_name () in
           let cnt_e =
             Dba.Expr.load (Size.Byte.create 4)
-              Dba.LittleEndian addr_e in
+              Machine.LittleEndian addr_e in
           self#add_witness_variable wit_cnt cnt_e env;
           call_stack <- (key, addr, wit_addr, wit_cnt, returnsite) :: call_stack;
           DoExec

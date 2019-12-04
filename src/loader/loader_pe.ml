@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -34,11 +34,11 @@ let read_magic t =
    Read.u8 t = 0x0)
 
 let check_magic buffer =
-  let t = cursor LittleEndian buffer in
+  let t = cursor Machine.LittleEndian buffer in
   read_magic t
 
 let init_cursor buffer =
-  let t = cursor LittleEndian buffer in
+  let t = cursor Machine.LittleEndian buffer in
   if not (read_magic t) then invalid_format "No PE magic number";
   t
 
@@ -54,21 +54,21 @@ type file_header = {
 }
 
 let arch = function
-  | 0x014c -> X86
-  | 0x01c0 -> ARM
-  | 0x01c2 -> ARM
-  | 0x01c4 -> ARM
-  | 0x01f0 -> PPC
-  | 0x01f1 -> PPC
-  | 0x0200 -> IA64
-  | 0x0166 -> MIPS
-  | 0x0169 -> MIPS
-  | 0x0266 -> MIPS
-  | 0x0366 -> MIPS
-  | 0x0466 -> MIPS
-  | 0x8664 -> AMD64
-  | 0xaa64 -> ARM64
-  | _ -> Unknown
+  | 0x014c -> Machine.x86
+  | 0x01c0 -> Machine.armv7 Machine.LittleEndian
+  (* | 0x01c2 -> Machine.armv7 *) (* Thumb *)
+  (* | 0x01c4 -> Machine.armv7 *) (* Thumb-2 *)
+  (* | 0x01f0 -> Machine.PowerPC
+   * | 0x01f1 -> Machine.PowerPC
+   * | 0x0200 -> Machine.IA64
+   * | 0x0166 -> Machine.MIPS
+   * | 0x0169 -> Machine.MIPS
+   * | 0x0266 -> Machine.MIPS
+   * | 0x0366 -> Machine.MIPS
+   * | 0x0466 -> Machine.MIPS *)
+  | 0x8664 -> Machine.amd64
+  (* | 0xaa64 -> Machine.ARM64 *)
+  | _ -> Machine.unknown
 
 let read_file_header t =
   ensure t 20 "File header truncated";
@@ -424,6 +424,55 @@ struct
 
 end
 
+let pp_symbol ppf symbol =
+  Format.fprintf ppf "@[<h>%-8x %s@]"
+    (Symbol.value symbol)
+    (Symbol.name  symbol)
+
+let pp_symbols ppf symbols =
+  let nsymbols = Array.length symbols in
+  if nsymbols <> 0 then
+    Format.fprintf ppf
+      "@[<v 2># Symbols (%d) @ %a@]"
+      nsymbols
+      (fun ppf a -> Array.iter (fun sy -> Format.fprintf ppf "%a@ " pp_symbol sy) a)
+      symbols
+
+
+let pp_section i ppf section =
+  let aux fmt section (f,s) =
+    Format.fprintf fmt "%s" (if Section.has_flag f section then s else "-")
+  in
+  let pp_flags fmt section =
+    List.iter (aux fmt section) Loader_types.([ (Read, "r"); (Write, "w"); (Exec, "x") ])
+  in
+  let pp_imap ppf m =
+    Format.fprintf ppf "@[<h>%8x %8x@]"
+      m.Loader_types.raw m.Loader_types.virt
+  in Format.fprintf ppf "@[<h>%2d %-20s %8x %a %a %a@]"
+       i
+       (Section.name section)
+       (Section.flag section)
+       pp_imap (Section.pos section)
+       pp_imap (Section.size section)
+       pp_flags section
+
+
+let pp_sections ppf sections =
+  let nsections = Array.length sections in
+  if nsections <> 0 then
+    Format.fprintf ppf
+      "@[<v 2># Sections (%d)@ %a@]"
+      nsections
+      (fun ppf a ->
+        Array.iteri (fun i sy -> Format.fprintf ppf "%a@ " (pp_section i) sy) a)
+      sections
+
+let pp_arch ppf arch =
+  Format.fprintf ppf "@[Machine: %a@]" Machine.pp arch
+
+let pp_ep ppf ep = Format.fprintf ppf "@[Entry point address: 0x%x@]" ep
+
 module Img =
 struct
 
@@ -432,11 +481,24 @@ struct
 
   let arch  ((f,_),_,_,_) = arch f.machine
   let entry ((_,o),_,_,_) = rebase o o.standard_fields.address_of_entry_point
-  let endian _ = LittleEndian
   let sections ((_,o),s,_,_) = Array.map (fun s -> o,s) s
   let symbols (_,_,s,_) = Array.copy s
 
   let header (h,_,_,_) = h
+
+  let cursor ?(at=0) (_,_,_,b) = Loader_buf.cursor ~at Machine.LittleEndian b
+
+  let pp_header ppf img =
+    Format.fprintf ppf "@[<v 2># Header@ %a@ %a@]"
+      pp_arch (arch img)
+      pp_ep (entry img)
+
+  let pp ppf img =
+    Format.fprintf ppf
+      "@[<v 0>%a@ %a@ %a@]"
+      pp_header img
+      pp_symbols (symbols img)
+      pp_sections (sections img)
 
 end
 
@@ -478,8 +540,6 @@ let read_address ((_,o),s,_,b) addr =
     if offset >= s.size_of_raw_data then 0
     else b.{offset + s.pointer_to_raw_data}
 
-let write_address _ _ _ = assert false
-
 module Offset = Loader_buf.Make
     (struct
       type t = Img.t
@@ -493,4 +553,5 @@ module Address = Loader_buf.Make
       let get t i = read_address t i
       let dim _ = max_int
     end)
+
 

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -66,8 +66,8 @@ let values_to_assertions addrStack states varIndexes inputs f =
 
 let get_targeted_var instr _varIndexes =
   match instr with
-  | Instr.Assign (LValue.Store (_, _, Expr.Var(name, 32, _)), _, _)
-  | Instr.DJump (Expr.Var (name, 32, _), _) ->
+  | Instr.Assign (LValue.Store (_, _, Expr.Var {name; size = 32; _}), _, _)
+  | Instr.DJump (Expr.Var {name; size = 32; _}, _) ->
     name ^ "0"
   | Instr.DJump (Expr.Load (sz, en,  expr), _) ->
     let inputs = Formula.VarSet.empty in

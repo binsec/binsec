@@ -1,37 +1,23 @@
-(***********************************************************************************)
-(*  Copyright (c) 2005, Regents of the University of California                    *)
-(*  All rights reserved.                                                           *)
-(*                                                                                 *)
-(*  Author: Adam Chlipala                                                          *)
-(*                                                                                 *)
-(*  Redistribution and use in source and binary forms, with or without             *)
-(*  modification, are permitted provided that the following conditions are met:    *)
-(*                                                                                 *)
-(*  - Redistributions of source code must retain the above copyright notice,       *)
-(*    this list of conditions and the following disclaimer.                        *)
-(*  - Redistributions in binary form must reproduce the above copyright notice,    *)
-(*    this list of conditions and the following disclaimer in the documentation    *)
-(*    and/or other materials provided with the distribution.                       *)
-(*  - Neither the name of the University of California, Berkeley nor the names of  *)
-(*    its contributors may be used to endorse or promote products derived from     *)
-(*    this software without specific prior written permission.                     *)
-(*                                                                                 *)
-(*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"    *)
-(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE      *)
-(*  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE     *)
-(*  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE       *)
-(*  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR            *)
-(*  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF           *)
-(*  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS       *)
-(*  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN        *)
-(*  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)        *)
-(*  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE     *)
-(*  POSSIBILITY OF SUCH DAMAGE.                                                    *)
-(*                                                                                 *)
-(*                                                                                 *)
-(*  Modified for BINSEC                                                            *)
-(*                                                                                 *)
-(***********************************************************************************)
+(**************************************************************************)
+(*  This file is part of BINSEC.                                          *)
+(*                                                                        *)
+(*  Copyright (C) 2016-2019                                               *)
+(*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
+(*         alternatives)                                                  *)
+(*                                                                        *)
+(*  you can redistribute it and/or modify it under the terms of the GNU   *)
+(*  Lesser General Public License as published by the Free Software       *)
+(*  Foundation, version 2.1.                                              *)
+(*                                                                        *)
+(*  It is distributed in the hope that it will be useful,                 *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of        *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *)
+(*  GNU Lesser General Public License for more details.                   *)
+(*                                                                        *)
+(*  See the GNU Lesser General Public License version 2.1                 *)
+(*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
+(*                                                                        *)
+(**************************************************************************)
 
 (* The X86 machine language *)
 
@@ -47,7 +33,7 @@ type sizeMode = [ mode | `M8 ]
 
 type address_size_mode = A16 | A32
 
-type rep = NoRep | RepE | RepNE
+type rep = NoRep | Rep | RepE | RepNE
 
 (** {6 Register sets} *)
 
@@ -270,6 +256,12 @@ type rotate_op =
   | Rcl
   | Rcr
 
+type ('a, 'b) ar2 = {
+    mode : sizeMode;
+    dst : 'a;
+    src : 'b;
+}
+
 (** Standard x86 instruction set *)
 type instruction_kind =
   | Arith of sizeMode * arith_op * genop32 * genop32
@@ -303,9 +295,10 @@ type instruction_kind =
   | Lods of sizeMode
   | Stos of sizeMode
   | Scas of sizeMode
-  | Bt of sizeMode * genop32 * genop32
-  | Bts of sizeMode * genop32 * genop32
-  | Btr of sizeMode * genop32 * genop32
+  | Bt  of (genop32, genop32) ar2
+  | Bts of (genop32, genop32) ar2
+  | Btr of (genop32, genop32) ar2
+  | Btc of (genop32, genop32) ar2
   | Nop
   | Not of sizeMode * genop32
   | Neg of sizeMode * genop32
@@ -373,28 +366,33 @@ type instruction_kind =
   | Pcmpgtw of xmm_mm * simd_size * genopxmm * genopxmm
   | Pcmpgtd of xmm_mm * simd_size * genopxmm * genopxmm
   | PmovMSKB of xmm_mm * simd_size * genop32 * genopxmm
-  | Pminub of xmm_mm * simd_size * genopxmm * genopxmm
+  | Pminu of xmm_mm * simd_size * genopxmm * genopxmm * int
+  | Pmins of xmm_mm * simd_size * genopxmm * genopxmm * int
   | Pxor of xmm_mm * simd_size * genopxmm * genopxmm
   | Por of xmm_mm * simd_size * genopxmm * genopxmm
   | Pand of xmm_mm * simd_size * genopxmm * genopxmm
   | Pandn of xmm_mm * simd_size * genopxmm * genopxmm
-  | Pmaxub of xmm_mm * simd_size * genopxmm * genopxmm
-  | Pmaxuw of xmm_mm * simd_size * genopxmm * genopxmm
-  | Pmaxud of xmm_mm * simd_size * genopxmm * genopxmm
-  | Punpcklbw of xmm_mm * simd_size * genopxmm * genopxmm
-  | Punpcklwd of xmm_mm * simd_size * genopxmm * genopxmm
-  | Punpckldq of xmm_mm * simd_size * genopxmm * genopxmm
-  | Psubb of xmm_mm * simd_size * genopxmm * genopxmm
-  | Psrlw of xmm_mm * simd_size * genopxmm * genopxmm
-  | Psrld of xmm_mm * simd_size * genopxmm * genopxmm
-  | Psrlq of xmm_mm * simd_size * genopxmm * genopxmm
-  | Psllw of xmm_mm * simd_size * genopxmm * genopxmm
-  | Pslld of xmm_mm * simd_size * genopxmm * genopxmm
-  | Psllq of xmm_mm * simd_size * genopxmm * genopxmm
-  | Psraw of xmm_mm * simd_size * genopxmm * genopxmm
-  | Psrad of xmm_mm * simd_size * genopxmm * genopxmm
+  | Pmaxu of xmm_mm * simd_size * genopxmm * genopxmm * int
+  | Pmaxs of xmm_mm * simd_size * genopxmm * genopxmm * int
+  | Punpckl of xmm_mm * simd_size * genopxmm * genopxmm * int
+  | Punpckh of xmm_mm * simd_size * genopxmm * genopxmm * int
+  | Packus of xmm_mm * simd_size * genopxmm * genopxmm * int
+  | Packss of xmm_mm * simd_size * genopxmm * genopxmm * int
+  | Pmaddwd of xmm_mm * simd_size * genopxmm * genopxmm
+  | Padd of xmm_mm * simd_size * genopxmm * genopxmm * int
+  | Padds of xmm_mm * simd_size * genopxmm * genopxmm * int
+  | Paddus of xmm_mm * simd_size * genopxmm * genopxmm * int
+  | Psub of xmm_mm * simd_size * genopxmm * genopxmm * int
+  | Psubs of xmm_mm * simd_size * genopxmm * genopxmm * int
+  | Psubus of xmm_mm * simd_size * genopxmm * genopxmm * int
+  | Pmulhw of xmm_mm * simd_size * genopxmm * genopxmm
+  | Pmullw of xmm_mm * simd_size * genopxmm * genopxmm
+  | Psrl of xmm_mm * simd_size * genopxmm * genopxmm * int
+  | Psll of xmm_mm * simd_size * genopxmm * genopxmm * int
+  | Psra of xmm_mm * simd_size * genopxmm * genopxmm * int
   | Psrldq of genopxmm * int
   | Pslldq of genopxmm * int
+  | Pclmulqdq of xmm_mm * simd_size * genopxmm * genopxmm * int
   | Ptest of xmm_mm * simd_size * genopxmm * genopxmm
   | Movups of genopxmm * genopxmm
   | Movupd of genopxmm * genopxmm
@@ -409,4 +407,7 @@ type instruction_kind =
   | Sahf
   | Salc
   | Wait
+  | Emms
   | Popcnt of sizeMode * genop32 * genop32
+  | Lzcnt of sizeMode * genop32 * genop32
+  | Prefetch of string

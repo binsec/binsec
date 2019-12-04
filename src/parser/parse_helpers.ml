@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,7 +33,7 @@ module Declarations = struct
 
   module SH = Basic_types.String.Htbl
 
-  let declarations : (Dba.size * Dba.VarTag.t option) SH.t =
+  let declarations : (Dba.size * Dba.VarTag.t) SH.t =
     SH.create 16
 
   let add name size opttags =
@@ -115,11 +115,10 @@ module Mk = struct
         with  _ -> false
       in
       if not is_ok then begin
-          Logger.fatal
+          Logger.fatal ~e:(WrongInitializationSize (addr, instruction))
             "@[<hov 0>%@ %a:@ bad initialization size for %a@]"
             Dba_printer.Ascii.pp_code_address addr
-            Dba_printer.Ascii.pp_instruction instruction ;
-          raise (WrongInitializationSize (addr, instruction))
+            Dba_printer.Ascii.pp_instruction instruction
         end
 
     let checked_of_list instructions =
@@ -129,26 +128,27 @@ module Mk = struct
   end
 
   let instruction_size_error instruction =
-    Logger.fatal "Bad instruction size: %a"
-      Dba_printer.Ascii.pp_instruction instruction;
-    Errors.mismatched_instruction_size instruction
+    Logger.fatal ~e:(Errors.Mismatched_instruction_size instruction)
+      "Bad instruction size: %a"
+      Dba_printer.Ascii.pp_instruction instruction
 
 
   let address_size_error address =
-    Logger.fatal "Bad address size: %a"
-      Dba_types.Caddress.pp_base address;
-    Errors.mismatched_address_size address
+    Logger.fatal ~e: (Errors.Mismatched_address_size address)
+      "Bad address size: %a"
+      Dba_types.Caddress.pp_base address
 
 
   let checked_localized_instruction address instruction =
     if Dba_utils.checksize_address address then
-      if Dba_utils.checksize_instruction instruction then address, instruction
+      if Dba_utils.checksize_instruction instruction then
+        address, instruction
       else instruction_size_error instruction
     else address_size_error address
 
 
   let extract_declaration_data = function
-    | Dba.LValue.Var (v, sz, tagopt) -> v, sz, tagopt
+    | Dba.LValue.Var {name; size; info} -> name, size, info
     | Dba.LValue.Restrict _
     | Dba.LValue.Store _ -> assert false
 
@@ -165,8 +165,7 @@ module Mk = struct
           match Basic_types.String.Map.find lvname declarations with
           | size, _ -> Size.Bit.create size
           | exception Not_found ->
-            Logger.fatal "Variable %s was not declared" lvname;
-            exit 2
+            Logger.fatal "Variable %s was not declared" lvname
         in
         Dba.Instr.assign (Dba.LValue.resize declared_size lv) rv id
       | _ -> assert false (* initializations should only be assignments *)
@@ -205,10 +204,10 @@ let expr_of_name name =
   let first_char = name.[0] in
   if first_char = '_' || first_char =  '?' ||  first_char  = '!' then
     let name = if first_char = '_' then "*" else name in
-    Dba.Expr.var name 0 None
+    Dba.Expr.var name 0
   else
     let open Dba.Expr in
-    let reg name = var name 32 None in
+    let reg name = var name 32 in
     let eax = reg "eax"
     and ebx = reg "ebx"
     and ecx = reg "ecx"
@@ -238,16 +237,16 @@ let expr_of_name name =
     | "ebp"   -> reg "ebp"
     | "sp"    -> restrict 0 15 (reg "esp")
     | "esp"   -> reg "esp"
-    | "btemp" -> var "btemp" 8 None
-    | "stemp" -> var "stemp" 16 None
-    | "temp"  -> var "temp" 32 None
-    | "dtemp" -> var "dtemp" 64 None
+    | "btemp" -> temporary "btemp" ~size:8
+    | "stemp" -> temporary "stemp" ~size:16
+    | "temp"  -> temporary "temp"  ~size:32
+    | "dtemp" -> temporary "dtemp" ~size:64
     | name    ->
       Logger.error"Unknown variable name: %s" name;
       raise Parsing.Parse_error
 
 let is_wildmetapld_expr = function
-  | Dba.Expr.Var(name, _, _) ->
+  | Dba.(Expr.Var {name; _}) ->
     let c = name.[0] in c = '*' || c = '?' || c = '!'
   | _ -> false
 
@@ -257,9 +256,9 @@ let rec patch_expr_size e sz =
   Logger.debug ~level:2
     "Will patch: %a with %d" Dba_printer.Ascii.pp_bl_term e sz;
   match e with
-  | Dba.Expr.Var(n, _old_sz,l) ->
+  | Dba.(Expr.Var {name; info = tag; _}) ->
     if is_wildmetapld_expr e then e
-    else var n sz l
+    else var name sz ~tag
   | Dba.Expr.Cst(region ,bv) ->
     constant ~region (Bitvector.create (Bitvector.value_of bv) sz)
   | Dba.Expr.Load(_old_sz, en, e) ->
@@ -327,7 +326,7 @@ module Initialization = struct
     match lv with
     | LValue.Store(size, _, Dba.Expr.Cst(_, bv)) ->
       begin
-        assert (Bitvector.size_of bv = Machine.Word_size.get ());
+        assert (Bitvector.size_of bv = Kernel_options.Machine.word_size ());
         let operation = Mem_load (bv, size) in
         create ~controlled ~operation
       end
@@ -340,7 +339,7 @@ module Initialization = struct
 end
 
 let mk_patches l =
-  let open Virtual_address in
   List.fold_left
-    (fun vmap (vaddr, opcode) -> Map.add (create vaddr) opcode vmap)
-    Map.empty l
+    (fun vmap (vaddr, opcode) ->
+      Virtual_address.Map.add (Virtual_address.create vaddr) opcode vmap)
+    Virtual_address.Map.empty l

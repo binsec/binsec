@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -32,6 +32,7 @@
  * However it seems that not one prover follows the standard ...
 *)
 
+open Smtlib_options
 type address = Bitvector.t
 type identifier = string
 
@@ -55,9 +56,9 @@ module Memory = struct
 
   let create ?default length =
     { map = H.create length; default; }
+  ;;
 
-  let empty = create 7
-
+  let empty () = create 7 ;;
 
   let add t address value = H.add t.map address value
 
@@ -69,6 +70,13 @@ module Memory = struct
   let has_value t address = H.mem t.map address
   let addresses t = H.fold (fun k _ l -> k :: l) t.map []
   let is_empty t = H.length t.map = 0 && t.default = None
+
+  let _length t =
+    let len = H.length t.map in
+     match t.default with
+     | None -> len
+     | Some _ -> len + 1
+  ;;
 
   let set_default t d =  t.default <- Some d
 
@@ -105,8 +113,8 @@ module Memory = struct
               fprintf ppf "; section %a@,"
                 (Print_utils.pp_opt pp_print_string) name;
             fprintf ppf "%a : %a %a@,"
-              Bitvector.pp_hex address
-              Bitvector.pp_hex value
+              Bitvector.pp_hex_or_bin address
+              Bitvector.pp_hex_or_bin value
               maybe_pp_char (Bitvector.to_int value);
             last_section_name := name
           ) l;
@@ -115,7 +123,7 @@ module Memory = struct
           (* Manually aligned *)
           let d = Utils.unsafe_get_opt d in
           fprintf ppf "default    : %a %a@,"
-            Bitvector.pp_hex d
+            Bitvector.pp_hex_or_bin d
             maybe_pp_char (Bitvector.to_int d)
         ;
 
@@ -140,7 +148,7 @@ type t = {
 }
 
 let create ?(len=43) () = {
-  memory = Memory.empty;
+  memory = Memory.empty ();
   variables = Basic_types.String.Htbl.create len;
 }
 
@@ -151,9 +159,7 @@ let add_var t name bv =
 
 let add_memcell t = Memory.add t.memory
 
-let add_default t bv =
-  Memory.set_default t.memory bv
-
+let add_default t bv = Memory.set_default t.memory bv
 
 let find_variable t name =
   match Basic_types.String.Htbl.find t.variables name with
@@ -226,7 +232,7 @@ let get_symbol_name symbol =
   match symbol.symbol_desc with
   | SimpleSymbol str
   | QuotedSymbol str -> str
-
+;;
 
 let value_of_constant cst =
   match cst with
@@ -238,7 +244,7 @@ let value_of_constant cst =
   | CstString _
   | CstBool _
   | CstDecimal _ ->
-    Kernel_options.Logger.error
+    Logger.error
       "Model construction: unexpected constant %a as bitvector value"
       Smtlib_pp.pp_spec_constant cst;
     exit 2
@@ -246,7 +252,7 @@ let value_of_constant cst =
 
 let value_of_index converter = function
   | IdxNum num ->
-    Kernel_options.Logger.debug ~level:5 "idx: %s" num;
+    Logger.debug ~level:5 "idx: %s" num;
     Some (converter num)
   | IdxSymbol _ -> None
 
@@ -263,6 +269,7 @@ let extract_bitvector term =
   | TermAnnotatedTerm _
   | TermExistsTerm _
   | TermForallTerm _
+  | TermLambdaTerm _
   | TermLetTerm _
   | TermQualIdentifierTerms _  -> assert false
 
@@ -302,16 +309,20 @@ let get_bitvector cmd =
 let add_variable smt_model cmd =
   let symbol, value = get_bitvector cmd in
   let name = get_symbol_name symbol in
-  Kernel_options.Logger.debug ~level:2 "Add variable %s as bv %a" name Bitvector.pp_hex value;
+  Logger.debug ~level:2
+    "Add variable %s as bv %a" name Bitvector.pp_hex value;
   add_var smt_model name value
 
 let is_bitvector sort = get_bitvector_size sort <> None
-
 
 let sort_of_sorted_var svar =
   match svar.sorted_var_desc with
   | SortedVar (_, sort) -> sort
 
+let name_of_sorted_var svar =
+  match svar.sorted_var_desc with
+  | SortedVar (sy, _) -> get_symbol_name sy
+;;
 
 let is_bv_bv_function args sort =
   match args with
@@ -362,6 +373,18 @@ let is_memory funcmd =
   | _ -> false
 
 
+let name_of_id id =
+  match id.id_desc with
+  | IdSymbol symb
+  | IdUnderscore (symb, _) -> get_symbol_name symb
+;;
+
+let name_of_qid qid =
+  match qid.qual_identifier_desc with
+  | QualIdentifierIdentifier id
+  | QualIdentifierAs (id, _) -> name_of_id id
+;;
+
 let is_as s qid =
   match qid.qual_identifier_desc with
   | QualIdentifierIdentifier _ -> false
@@ -370,6 +393,7 @@ let is_as s qid =
      | IdSymbol symb -> String.compare (get_symbol_name symb) s = 0
      | IdUnderscore _ -> false
 ;;
+
 
 let is_string s qid =
   match qid.qual_identifier_desc with
@@ -404,6 +428,7 @@ let extract_address eqterm =
   | TermLetTerm _
   | TermForallTerm _
   | TermExistsTerm _
+  | TermLambdaTerm _
   | TermAnnotatedTerm _
   | TermQualIdentifier _ -> assert false
 
@@ -416,6 +441,7 @@ let extract_byteval tbyteval =
   | TermForallTerm _
   | TermExistsTerm _
   | TermAnnotatedTerm _
+  | TermLambdaTerm _
   | TermQualIdentifier _ -> assert false
 
 
@@ -442,6 +468,7 @@ let memory_from_ite smt_model term =
     | TermLetTerm _
     | TermForallTerm _
     | TermExistsTerm _
+    | TermLambdaTerm _
     | TermAnnotatedTerm _
     | TermQualIdentifier _ -> assert false
   in extract_from term
@@ -499,13 +526,19 @@ let is_ite_memory term =
   match term.term_desc with
   | TermQualIdentifierTerms (qid, _) -> is_ite qid
   | _ -> false
-
+;;
 
 let is_store_memory term =
   match term.term_desc with
   | TermQualIdentifierTerms (qid, _) -> is_string "store" qid
   | _ -> false
+;;
 
+let is_lambda_memory term =
+  match term.term_desc with
+  | TermLambdaTerm _ -> true
+  | _ -> false
+;;
 
 let get_function_body fcmd =
   match fcmd.command_desc with
@@ -546,10 +579,174 @@ let get_indirection_name term =
         end
     end
   | _ -> assert false
+;;
 
+
+let lambda_ite_memory ~basename model t =
+  let rec loop assocs t =
+    match t.term_desc with
+    | TermLetTerm ([{ var_binding_desc = VarBinding(sy, let_t); _ }], term) ->
+       let a = ite_seq ~basename:(get_symbol_name sy) ~acc:[] assocs let_t in
+       loop a term
+    | TermQualIdentifierTerms (qid, _terms) ->
+       assert (is_ite qid);
+       ite_seq ~basename ~acc:[] assocs t
+    | _ -> assert false
+
+  and ite_seq ~basename ~acc assocs t =
+    match t.term_desc with
+    | TermQualIdentifierTerms (qid, terms) ->
+       assert (is_ite qid);
+       begin match terms with
+       | tcond :: tcsq :: [talt] ->
+          let addr = extract_address tcond in
+          let byteval = extract_byteval tcsq in
+          let acc = (addr, byteval) :: acc in
+          ite_seq ~basename ~acc assocs talt
+       | _ -> assert false
+       end
+    | TermSpecConstant cst ->
+       let bv = value_of_constant cst in
+       add_default model bv;
+       (basename, List.rev acc) :: assocs
+    | TermQualIdentifier _qid ->
+       (basename, List.rev acc) :: assocs
+    | _ -> assert false
+
+  in
+  List.iter
+    (fun (_name, l) ->
+      List.iter (fun (addr, v) ->
+          if not @@ is_memory_set model addr
+          then add_memcell model addr v) l)
+  (loop [] t)
+;;
+
+
+
+(* Example model for Z3 4.8
+(model
+  (define-fun ebx_0 () (_ BitVec 32)
+    #x90909090)
+  (define-fun __memory () (Array (_ BitVec 32) (_ BitVec 8))
+    (lambda ((x!1 (_ BitVec 32)))
+  (let ((a!1 (ite (= x!1 #x00060001)
+                  #x4d
+                  (ite (= x!1 #x00008007)
+                       #x20
+                       (ite (= x!1 #x00060000) #x3d #x01)))))
+    (ite (= x!1 #x00060002) #x41 a!1))))
+  (define-fun bs_unknown1_0 () (_ BitVec 32)
+    #x00008000)
+  (define-fun ebp_0 () (_ BitVec 32)
+    #xf4909010)
+*)
+let memory_from_lambda model term =
+  match term.term_desc with
+  | TermLambdaTerm ([svar], t) ->
+     let basename = name_of_sorted_var svar in
+     lambda_ite_memory ~basename model t
+  | _ -> assert false
+;;
+
+
+(*
+  (define-fun __memory () (Array (_ BitVec 32) (_ BitVec 8))
+    (let ((a!1 (store (store (store ((as const (Array (_ BitVec 32) (_ BitVec 8)))
+     #x3d)
+     #x00060008
+     #x52)
+     #x00060009
+     #x45)
+     #x00060004
+     #x54)))
+     (let ((a!2 (store (store (store
+       (store a!1 #x00060003 #x4e) #x00060006 #x43) #x00060001 #x4d)
+        #x00060002 #x41)))
+       (store (store a!2 #x00060005 #x49) #x00060007 #x4f))))
+*)
+let is_let_store body =
+  match body.term_desc with
+  | TermLetTerm _ -> true
+  | _ -> false
+;;
+
+
+(* Each memory named by a let is bound inside [tbl].
+   Whenever we reach the base case of a store sequence, we lookup the identifier
+   to retrieve its value.
+ *)
+let memory_from_let_store model body =
+  Logger.debug "Looks like let-store memory type (from z3 4.8.5 ?) ...";
+  let module M = Bitvector.Collection.Map in
+  let module Sm = Basic_types.String.Htbl in
+  let tbl = Sm.create 7 in
+  (* Debug map *)
+  let pp_map ppf map =
+    let open Format in
+    fprintf ppf "-- ";
+    M.iter (fun k v ->
+        fprintf ppf "%a - %a; " Bitvector.pp_hex k
+          Bitvector.pp_hex v) map;
+  in
+  let rec store_seq t =
+    match t.term_desc with
+    | TermQualIdentifierTerms (qid, map_t :: key :: [value]) ->
+       assert (is_store qid);
+       let map' =
+         match map_t.term_desc with
+         | TermQualIdentifier qid ->
+            let name = name_of_qid qid in
+            begin match Sm.find tbl name with
+            | map -> map
+            | exception Not_found ->
+               Logger.warning "Could not find memory map for identifier %s" name;
+               M.empty
+            end
+         | _ -> store_seq map_t in
+       Logger.debug "Post %a" pp_map map';
+       let bv_key = extract_bitvector key
+       and bv_val = extract_bitvector value in
+       Logger.debug "Add %a -> %a" Bitvector.pp_hex bv_key Bitvector.pp_hex bv_val;
+       M.add bv_key bv_val map'
+    | TermQualIdentifierTerms (qid, [default_term_value]) ->
+       assert (is_as_const qid);
+       let bv = extract_bitvector default_term_value in
+       Logger.debug "Found default value in let-store model %a" Bitvector.pp bv;
+       add_default model bv;
+       M.empty
+    | _ ->
+       Logger.fatal "Unable to reconstruct expected store sequence %a"
+         Smtlib_pp.pp_term t
+  in
+
+  let do_binding vb =
+    match vb.var_binding_desc with
+    | VarBinding (symb, term) ->
+       let name = get_symbol_name symb in
+       Logger.debug "%s" name;
+       let map = store_seq term in
+       Sm.add tbl name map;
+  in
+
+  let rec loop_let_seq term =
+    match term.term_desc with
+    | TermLetTerm ([var_binding], t) ->
+       do_binding var_binding;
+       loop_let_seq t
+    | TermQualIdentifierTerms (qid, _) when is_store qid ->
+       store_seq term
+    | _ ->
+       Logger.fatal
+         "Do not know what to do with term %a in Z3 4.8.5-style memory"
+         Smtlib_pp.pp_term term
+  in
+  let map = loop_let_seq body in
+  M.iter (add_memcell model) map
+;;
 
 (* Memory is defined as an array of addresses to bytes.
- * In SMT2 parlance this means BitVec 32 -> BitVec 8
+ * In SMT2 parlance this means BitVec 32 -> BitVec 8 for 32 bits architectures
  * The memory function is declared in the initial SMT-LIB Script but
  * it is not always present as such in the result
  *  - CVC4 :: it is.
@@ -558,50 +755,48 @@ let get_indirection_name term =
 *)
 let find_and_add_memory smt_model functions =
   match List.filter is_memory functions with
-  | [] -> Kernel_options.Logger.warning ~level:2 "No memory found in SMT model"
+  | [] -> Logger.warning ~level:2 "No memory found in SMT model"
   | [f] ->
     (* Case of Boolector and CVC4 *)
     let body = get_function_body f in
     if is_ite_memory body then memory_from_ite smt_model body
     else if is_store_memory body then memory_from_store smt_model body
+    else if is_lambda_memory body then memory_from_lambda smt_model body
+    else if is_let_store body then memory_from_let_store smt_model body
     else
-      Kernel_options.Logger.warning ~level:2 "No extractor for this memory representation"
+      Logger.warning "No extractor for this memory representation"
   | f :: tail ->
     let fbody = get_function_body f in
     if is_ite_memory fbody then memory_from_ite smt_model fbody
     else
       let name = get_indirection_name fbody in
-      let filter g =
-        let fname = get_function_name g in
-        fname = name
-      in
+      let filter_f g = get_function_name g = name in
       let g =
-        match List.filter filter tail with
+        match List.filter filter_f tail with
         | [ g ] -> g
         | _ -> assert false
       in
       let gbody = get_function_body g in
       if is_ite_memory gbody then memory_from_ite smt_model gbody
       else
-        Kernel_options.Logger.warning "Unexpected memory encoding from SMT model"
+        Logger.warning "Unexpected memory encoding from SMT model"
 
 let extract model_ast =
   let smt_model = create () in
   let variables, functions =
     List.partition is_bv_variable model_ast.model_commands in
-  Kernel_options.Logger.debug ~level:2 "Found : %d variables, %d functions"
+  Logger.debug ~level:2 "Found : %d variables, %d functions"
     (List.length variables) (List.length functions);
   List.iter (add_variable smt_model) variables;
-  Kernel_options.Logger.debug ~level:2 "%d functions are potential memories"
+  Logger.debug ~level:2 "%d functions are potential memories"
     (List.length (List.filter is_memory functions));
   find_and_add_memory smt_model functions;
   smt_model
+;;
 
 (* like extract but after get-value instead of get-model *)
 (* currently only supports bitvectors *)
-let extract_value ast =
-  let _t, v = ast in
-  value_of_constant v
+let extract_value (_t, v) = value_of_constant v
 
 let yices_extract (raw:string) =
   let read_bv s =
@@ -625,7 +820,7 @@ let yices_extract (raw:string) =
        add_default smt_model (read_bv value);
        smt_model, memory_name
     | _ ->
-      Kernel_options.Logger.debug ~level:4 "while reading model, ignoring@ «%s»"
+      Logger.debug ~level:4 "while reading model, ignoring@ «%s»"
         raw_line;
       smt_model, memory_name
   in

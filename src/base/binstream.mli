@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -59,6 +59,7 @@ val prepend_int64 : int64 -> t -> t
 val append_char : char -> t -> t
 val prepend_char : char -> t -> t
 
+val rev: t -> t
 
 (** {3 Iterators }*)
 
@@ -71,6 +72,8 @@ val fold : (int -> 'a -> 'a) -> t -> 'a -> 'a
 val length : t -> int
 
 val get_byte : t -> int -> int option
+
+val get_byte_exn : t -> int -> int
 (** [get_byte b n] retrieves byte number [n] from [b]
 
     The byte sequence is 0-indexed.
@@ -78,7 +81,6 @@ val get_byte : t -> int -> int option
     @raise Invalid_argument if the index is not between [0] and [length b - 1]
 *)
 
-val get_byte_exn : t -> int -> int
 
 val to_string : t -> string
 

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -73,7 +73,7 @@ class tainting_engine (strat:taint_strategy) =
                 begin
                   let res_expr = self#expr_to_taint e instr.concrete_infos in
                   match lhs with
-                  | Dba.LValue.Var(name, size, _) ->
+                  | Dba.(LValue.Var { name; size; _ }) ->
                     begin
                       match res_expr with
                       | NoTaint -> self#untaint_register name
@@ -85,7 +85,7 @@ class tainting_engine (strat:taint_strategy) =
                             self#fold_taint (self#tI_to_tP res_expr))
                         in self#push_infos info
                     end
-                  | Dba.LValue.Restrict(name, size, {Interval.lo=low; Interval.hi=high}) ->
+                  | Dba.LValue.Restrict({Dba.name; Dba.size; _}, {Interval.lo=low; Interval.hi=high}) ->
                     begin
                       let t =
                         match res_expr with
@@ -245,7 +245,7 @@ class tainting_engine (strat:taint_strategy) =
 
     method expr_to_taint (e:Dba.Expr.t) (infos:trace_concrete_infos list): taint =
       match e with
-      | Dba.Expr.Var(name,size,_) ->
+      | Dba.(Expr.Var {name; size; _}) ->
         let taint = self#get_taint_register name in
         self#push_infos (Variable(name,0,size-1,taint));
         taint
@@ -285,7 +285,7 @@ class tainting_engine (strat:taint_strategy) =
                          {Interval.lo = low; Interval.hi = high;}, e1) ->
         let taint =
           match e1 with
-          | Dba.Expr.Var(name, _,_) -> self#get_taint_register name
+          | Dba.Expr.Var v -> self#get_taint_register v.Dba.name
           | _ -> self#expr_to_taint e1 infos in
         let taint_final =
           match taint with (* In case of TaintMix try to return only exctracted bytes *)
@@ -300,7 +300,8 @@ class tainting_engine (strat:taint_strategy) =
           | _ -> taint
         in begin
           match e1 with
-          | Dba.Expr.Var(name,_,_) -> self#push_infos (Variable(name,low,high,taint)); taint
+          | Dba.Expr.Var v ->
+             self#push_infos (Variable(v.Dba.name,low,high,taint)); taint
           | _ -> taint_final
         end
 

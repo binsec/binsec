@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -113,6 +113,7 @@ module Make (I:Iterable) : sig
 end
 
 val decode_binstream :
+  ?base:int ->
   Binstream.t ->
   Instruction.t * Virtual_address.t option
 (** [decode_binstream b] decodes stream [b] and returns

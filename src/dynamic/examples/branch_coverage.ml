@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -55,7 +55,7 @@ class branch_coverage_analyzer (input_config:Trace_config.t) =
       let _addr = tr_inst.location in
       match dba_inst.Dba_types.Statement.instruction with
       | If (cond, JOuter address, _) ->
-        let address = Bitvector.value_of address.base in
+        let address = Virtual_address.to_bigint address.base in
         let next_l = get_next_address tr_inst.concrete_infos in
         let pred = self#build_cond_predicate cond env in
         let pred = if Bigint.eq_big_int address (Bigint.big_int_of_int64 next_l)

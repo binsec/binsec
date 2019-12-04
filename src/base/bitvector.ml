@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -101,7 +101,7 @@ let fill ?lo ?hi size =
 
 let max_ubv n = fill n
 
-let max_sbv n = fill ~hi:(n - 1) n
+let max_sbv n = fill ~hi:(n - 2) n
 
 let min_sbv n =
   if n <= 0 then invalid_arg "Invalid bitvector size";
@@ -360,10 +360,7 @@ let of_int ~size i = create (Bigint.big_int_of_int i) size
 let to_int bv = Bigint.int_of_big_int (signed_of bv)
 
 let pp_hex ppf bv =
-  Format.fprintf ppf "%s" @@
-  if bv.size mod 4 == 0
-  then to_hexstring bv
-  else to_bitstring bv
+  Format.fprintf ppf "{%s; %i}" (to_hexstring bv) bv.size
 ;;
 
 (* Should this replace pp_hex? *)

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -386,7 +386,7 @@ let run ?(dba_file=None) ~configuration_file  =
   let config = configuration_file |> Parse_utils.read_optional_config_file in
   let program =
     match dba_file with
-    | None -> Parse_utils.load_dba_definition (Kernel_options.Machine.ISA.get ())
+    | None -> Parse_utils.load_dba_definition (Kernel_options.Machine.get ())
     | Some filename -> Parse_utils.read_dba_file filename
   in
   let (module State) =

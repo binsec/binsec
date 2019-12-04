@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -30,8 +30,8 @@ module Expr = struct
   let rec fold_expr e =
     let open Bitvector in
     match e with
-    | Expr.Var(_name,_sz,_) -> raise Fold_const_failed
-    | Expr.Load(_sz,_endian,_e) -> raise Fold_const_failed
+    | Expr.Var _
+    | Expr.Load _ -> raise Fold_const_failed
     | Expr.Cst(`Constant, v) -> v
     | Expr.Unary(uop, e) ->
       let e' = fold_expr e in
@@ -85,15 +85,14 @@ module Logger = Dba_types.Logger
 let rec computesize_dbaexpr e: int =  (* size: bits *)
   let open! Dba in
   match e with
-  | Expr.Var(_, sz, _) ->
-    if sz > 0 then sz else begin
-      Logger.fatal "Negatively sized expression %a" pp_bl_term e;
-      raise Bad_exp_size
-    end
+  | Expr.Var v ->
+    if v.size > 0 then v.size else
+      Logger.fatal ~e:Bad_exp_size
+        "Negatively sized expression %a" pp_bl_term e
   | Expr.Load (size_byte, _, bexpr) as e -> (* read by bytes *)
     let sz = computesize_dbaexpr bexpr in
     if 0 < size_byte then
-      (if sz = Machine.Word_size.get () then size_byte * 8
+      (if sz = Kernel_options.Machine.word_size () then size_byte * 8
        else raise Bad_exp_size)
     else raise (Bad_bound (asprintf "%a" pp_bl_term e))
   | Expr.Cst(_, cval) ->
@@ -122,7 +121,8 @@ let rec computesize_dbaexpr e: int =  (* size: bits *)
       | Plus | Minus | Mult | DivU
       | DivS | ModU | ModS | Or | And | Xor ->
         let (sz1, sz2) =
-          (computesize_dbaexpr bexpr1, computesize_dbaexpr bexpr2) in
+          (computesize_dbaexpr bexpr1,
+           computesize_dbaexpr bexpr2) in
         if sz1 = sz2 then sz1
         else
           raise
@@ -131,7 +131,7 @@ let rec computesize_dbaexpr e: int =  (* size: bits *)
       | RightRotate -> computesize_dbaexpr bexpr1
       | Concat ->
         let sz1 = computesize_dbaexpr bexpr1 in
-        let sz2 = computesize_dbaexpr bexpr2 in
+        let sz2 = computesize_dbaexpr  bexpr2 in
         sz1 + sz2
       | Eq| Diff | LeqU | LtU | GeqU | GtU
       | LeqS | LtS | GeqS | GtS ->
@@ -162,30 +162,27 @@ let checksize_address addr =
   (* Not sure this function is needed anymore. Smart constructors should take
    * care of that *)
   let open Dba_types.Caddress in
-  let sz = Bitvector.size_of addr.base in
-  let cval = base_value addr in
-  sz = Machine.Word_size.get ()
-  && addr.id >= 0
-  && is_positive cval
-  && Bigint.lt_big_int cval (Bigint.power_int_positive_int 2 sz)
+  let cval = Virtual_address.to_bigint (base_value addr) in
+  addr.id >= 0 && is_positive cval
 
 let computesize_dbalhs blhs : int  =
   (* taille en bits *) (* plante si erreur *)
   match  blhs with
-  | LValue.Var(_, size, _) -> size
-  | LValue.Restrict(_name,size, {Interval.lo=i; Interval.hi=j}) ->
-    if ((i<=j) || (0<=i) || (j<size)) then j-i+1
+  | LValue.Var v -> v.size
+  | LValue.Restrict({Dba.size; _}, {Interval.lo=i; Interval.hi=j}) ->
+    if i <= j || 0 <= i || j < size then j - i + 1
     else raise (Bad_bound (Format.asprintf "{%d,%d}" i j))
   | LValue.Store(size_byte,_endian,bexpr) ->
     if (0 < size_byte) then
       let sz = (computesize_dbaexpr bexpr) in
-      if (sz = Machine.Word_size.get ()) then size_byte * 8
+      if (sz = Kernel_options.Machine.word_size ()) then size_byte * 8
       else ((raise Bad_exp_size))
     else
       let msg = Format.asprintf "@[%a, _, %d]" pp_bl_term bexpr size_byte in
       raise (Bad_bound msg)
 
-let valid_condition e = computesize_dbaexpr e = 1 || assert false
+let valid_condition e =
+  computesize_dbaexpr e = 1 || assert false
 
 let checksize_instruction binkd =
   let open Instr in
@@ -198,8 +195,8 @@ let checksize_instruction binkd =
   | SJump(JInner _, _) -> true
 
   | DJump(expr,_) ->
-    let sz = computesize_dbaexpr(expr) in
-    sz = Machine.Word_size.get ()
+    let sz = computesize_dbaexpr (expr) in
+    sz = Kernel_options.Machine.word_size ()
   | If(bcond, JOuter addr1, _id2) ->
     if checksize_address addr1
     then valid_condition bcond
@@ -225,7 +222,7 @@ let checksize_instruction binkd =
     valid_condition bcond
   | Malloc (lhs, _bexpr, _addr) ->
     let sz = computesize_dbalhs lhs in
-    (sz = Machine.Word_size.get ())
+    (sz = Kernel_options.Machine.word_size ())
   | Free (bexpr, _addr) ->
     let _sz = (computesize_dbaexpr bexpr) in true
   | Undef (blhs, _addr) ->

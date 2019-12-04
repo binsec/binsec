@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -138,6 +138,8 @@ module Session : sig
     | Model of Smt_model.t
     | Sat of Formula.status
     | Value of Bitvector.t
+
+  val pp : Format.formatter -> t -> unit
 
   val create : ?file:string -> ?timeout:int -> Prover.t -> t
   val destroy : t -> unit

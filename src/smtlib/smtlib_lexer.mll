@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -55,12 +55,12 @@
       "echo"                  , ECHO;
       "reset"                 , RESET;
       "reset-assertions"      , RESETASSERTIONS;
-      (*      "lambda"                , LAMBDA; *)
+      "lambda"                , LAMBDA;
       "par"                   , PAR;
       "!"                     , BANG;
       "_"                     , UNDERSCORE;
-      "true"                  , BOOL(true);
-      "false"                 , BOOL(false);
+      "true"                  , BOOL true;
+      "false"                 , BOOL false;
       "meta-info"             , METAINFO;
       "model"                 , MODEL;
   ];;

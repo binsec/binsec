@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -34,13 +34,9 @@ let of_program p =
        | None -> pmap
        | Some instr ->
          let hw_address = Cfg.V.addr v in
-         let base =
-           Bitvector.create
-             (Bigint.big_int_of_int (hw_address:>int))
-             (Machine.Word_size.get ()) in
          Dhunk.fold
            (fun (pmap, j) i ->
-              let caddr = Dba_types.Caddress.create base j in
+              let caddr = Dba_types.Caddress.create hw_address j in
               let ginstr =
                 if j = 0 then
                   Some (Instruction.to_generic_instruction instr)

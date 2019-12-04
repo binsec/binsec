@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -138,8 +138,8 @@ let get_result_and session f =
     let first_line = input_line session.stdout in
     Logger.debug ~level:5 "Value read:%s" first_line;
     match first_line with
-    | "sat" -> Formula.SAT, Some(f session)
-    | "unsat" ->   Formula.UNSAT, None
+    | "sat"     -> Formula.SAT    , Some (f session)
+    | "unsat"   -> Formula.UNSAT  , None
     | "timeout" -> Formula.TIMEOUT, None
     | "unknown" -> Formula.UNKNOWN, None
     | s ->
@@ -166,27 +166,34 @@ let get_return_value_ast parser raw_model =
     and hi = min (String.length raw_model) (pos + width) in
     let extract =
       String.sub raw_model lo (hi - lo)
-      |> String.map (fun x -> if x = '\n' then ' ' else x)
+      |> String.map (function '\n' -> ' ' | x -> x)
     in
     let underline = String.make (pos - lo) ' ' in
     Logger.error
       "Parsing of solver output failed approximately here :@ @[<v>%s@,%s^@]"
       extract underline;
     raise e
+;;
 
 let extract_model_from_string s = function
   | Yices -> Smt_model.yices_extract s
   | _ ->
-     get_return_value_ast Smtlib_parser.model s
-     |> Smt_model.extract
+     let m = get_return_value_ast Smtlib_parser.model s in
+     Smt_model.extract m
 ;;
 
 let parse_model session =
   Logger.debug "Parsing model";
   flush session;
   let solver = session.solver in
-  let raw_model = read_raw_model ~model:true solver session.stdout in
-  extract_model_from_string raw_model solver
+  let raw_model =
+    read_raw_model ~model:true solver session.stdout in
+  try extract_model_from_string raw_model solver
+  with e ->
+    Logger.error "@[<v 0>Could not parse %a model %s@]"
+      Prover.pp solver raw_model;
+    raise e
+;;
 
 (* command (get-model) *)
 let read_model session =
@@ -199,6 +206,7 @@ let read_model session =
       pp_print_flush ppf ();
     end;
   parse_model session
+;;
 
 (* Getting the value from the model *)
 let read_value session =
@@ -316,6 +324,12 @@ module Session = struct
     state = None;
     model = None;
   }
+
+  let pp ppf session =
+    Format.fprintf ppf "Session %d with %s"
+      session.process.id
+      (Prover.name_of session.process.solver)
+  ;;
 
   let destroy session = stop_interactive session.process
 

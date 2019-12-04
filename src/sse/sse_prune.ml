@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -28,7 +28,7 @@ let is_djump v =
   | Some _ -> false
 
 let v_to_intvaddr v =
-  (G.V.addr v).Dba.base |> Bitvector.value_of |> Bigint.int_of_big_int
+  (G.V.addr v).Dba.base |> Virtual_address.to_int
 
 module Distance = struct
   type t = Finite of int | Infinite

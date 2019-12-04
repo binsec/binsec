@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -29,7 +29,7 @@ module F = struct
   let memory = "__memory"
 
   let full_mem = full memory
-  let memory_type = Formula.ax_sort (Machine.Word_size.get ()) byte_size
+  let memory_type word_size = Formula.ax_sort word_size byte_size
 
   let pc = "__pc"
   let full_pc = full pc
@@ -126,7 +126,8 @@ module Store = struct
   let create () =
     let open Formula in
     let assignments = Formula.empty
-    and var_infos = M.singleton F.memory (0, F.memory_type) in
+    and var_infos = M.singleton F.memory
+                      (0, F.memory_type (Kernel_options.Machine.word_size ())) in
     let self = { assignments; var_infos } in
     assign self F.pc bl_sort (mk_bl_term mk_bl_true) |> ignore;
     self
@@ -212,8 +213,8 @@ module State = struct
        0
 
   let get_memory state =
-    let word_size = Machine.Word_size.get () in
-    let index = get_last_index state F.memory F.memory_type in
+    let word_size = Kernel_options.Machine.word_size () in
+    let index = get_last_index state F.memory (F.memory_type word_size) in
     let name = F.full_mem index in
     Formula.(mk_ax_var (ax_var name word_size byte_size))
 
@@ -239,8 +240,8 @@ module State = struct
 
   let get_entries state =
     let open Formula in
-    let word_size = Machine.Word_size.get () in
-    let var = F.(var memory memory_type) in
+    let word_size = Kernel_options.Machine.word_size () in
+    let var = F.(var memory (memory_type word_size)) in
     let declaration = F.decl var in
     let symbolic_memory = mk_ax_var (ax_var F.memory word_size byte_size) in
     let read_bitvector addr sz =
@@ -270,7 +271,8 @@ module State = struct
     let initial_memory_value =
       mk_ax_term (B.fold load_at state.initialisation symbolic_memory) in
     let definition =
-      F.var (F.full_mem 0) F.memory_type |> F.def initial_memory_value in
+      F.var (F.full_mem 0) (F.memory_type word_size)
+      |> F.def initial_memory_value in
     state.store.Store.assignments
     |> Formula.push_back_define definition
     |> Formula.push_back_declare declaration
@@ -282,7 +284,8 @@ module State = struct
 
   let uncontrolled st = st.uncontrolled
 
-  let memory_term fml = F.memory, F.memory_type, Formula.mk_ax_term fml
+  let memory_term fml =
+    F.memory, F.memory_type (Kernel_options.Machine.word_size ()), Formula.mk_ax_term fml
 
   (* Proxy function : will be removed soon *)
   let add_entry e t = Store.add_entry t.store e

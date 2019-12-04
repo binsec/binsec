@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,7 +20,7 @@
 (**************************************************************************)
 
 open Dba_utils
-open Basic_types
+open! Basic_types
 open High_level_predicate
 open Format
 open Static_types (* Env *)
@@ -76,14 +76,14 @@ type update_type = Strong | Weak
 module Make(Val: Ai_sigs.Domain) =
 struct
   module Eq = Union_find.Make (Val)
-  type env  = (MemInterval.t * Dba.endianness * Val.t) MemMap.t Env.t
+  type env  = (MemInterval.t * Machine.endianness * Val.t) MemMap.t Env.t
   type t =  env option
   type equalities = Eq.t
   type thresholds = int array * int array * int array * int array
   type elementsRecord = Region_bitvector.t list Dba_types.AddressStack.Map.t
   type naturalPredicatesRecord = (Dba.Expr.t * Dba.Expr.t) Dba_types.Caddress.Map.t
   let default_address =
-    Dba_types.Caddress.block_start @@ Bitvector.zeros 32, [], 0
+    Dba_types.Caddress.block_start @@ Virtual_address.create 0, [], 0
   (* X86 :: Default size to 32 *)
   let current_address = ref default_address
 
@@ -199,7 +199,7 @@ struct
           if MemInterval.equal mloc1 mloc2 && (en1 = en2)
           then MemMap.add mloc1 (mloc1, en1, Val.join v1 v2) acc
           else
-          if MemInterval.same_base mloc1 mloc2 && en1 = en2 && en1 = Dba.LittleEndian
+          if MemInterval.same_base mloc1 mloc2 && en1 = en2 && en1 = Machine.LittleEndian
           then
             if size1 < size2
             then
@@ -218,7 +218,7 @@ struct
               join_values sub_s2 loc (loc, en1, v1'') acc
             )
           else
-          if en1 = en2 && en1 = Dba.LittleEndian
+          if en1 = en2 && en1 = Machine.LittleEndian
           then
             if Bigint.lt_big_int base1 base2
             then
@@ -286,7 +286,7 @@ struct
             let loc = MemInterval.create base1 size1 in
             MemMap.add loc (loc, en1, Val.widen v1 v2 thresholds) acc
           else
-          if (Bigint.eq_big_int base1 base2) && (en1 = en2) && (en1 = Dba.LittleEndian)
+          if (Bigint.eq_big_int base1 base2) && (en1 = en2) && (en1 = Machine.LittleEndian)
           then
             if size1 < size2
             then
@@ -306,7 +306,7 @@ struct
               widen_values sub_s2 loc (loc, en1, v1'') acc
             )
           else
-          if (en1 = en2) && (en1 = Dba.LittleEndian)
+          if (en1 = en2) && (en1 = Machine.LittleEndian)
           then
             if (Bigint.lt_big_int base1 base2)
             then
@@ -384,9 +384,9 @@ struct
     let bv     = Region_bitvector.bitvector_of elem in
     let v      = Val.singleton (`Value (`Constant, bv)) in
     let loc    = MemInterval.create Bigint.zero_big_int 1 in
-    let en     = Dba.LittleEndian in
+    let en     = Machine.LittleEndian in
     let sub_s  = MemMap.add loc (loc, en, v) MemMap.empty in
-    let v_addr = Var ("\\addr", Machine.Word_size.get ()) in
+    let v_addr = Var ("\\addr", Kernel_options.Machine.word_size ()) in
     let s      =
       match s with
       | None -> Some (Env.add v_addr sub_s Env.empty)
@@ -408,15 +408,15 @@ struct
   let rec eval_expr expr s assumes globals elements equalities =
     let eval_without_equalities () =
       match expr with
-      | Dba.Expr.Var (st, size, _) -> (
+      | Dba.Expr.Var { Dba.name = st; Dba.size; _} ->
           let v =
-            let loc = (Bigint.zero_big_int, 1, Dba.LittleEndian) in
+            let loc = (Bigint.zero_big_int, 1, Machine.LittleEndian) in
             try load (Static_types.Var (st, size)) loc s assumes globals elements equalities
             with Not_found | Errors.Empty_env ->
             try load (Static_types.Var (st, size)) loc !s_init assumes globals elements equalities
             with Not_found -> Val.universe
           in v, assumes
-        )
+
       | Dba.Expr.Load (size, en, e) -> (
           try
             let v_exp, assumes = eval_expr e s assumes globals elements equalities in
@@ -543,7 +543,7 @@ struct
 
 
   and get_elem i r m =
-    let en = Dba.LittleEndian in
+    let en = Machine.LittleEndian in
     try MemMap.find (MemInterval.create i 1) (Env.find (Static_types.Array r) m)
     with Not_found ->
     match !s_init with
@@ -570,7 +570,7 @@ struct
     let sz = MemInterval.size_of a in
     let a = MemInterval.base_of a in
     match en with
-    | Dba.LittleEndian ->
+    | Machine.LittleEndian ->
       if Bigint.eq_big_int a i && sz = size
       then value
       else if Bigint.eq_big_int a i
@@ -605,7 +605,7 @@ struct
             let v2 = retrieve_value_little (MemInterval.create i size) r m in
             Val.concat v2 v1
         else failwith "unrelSate.ml: load_little_e"
-    | Dba.BigEndian ->
+    | Machine.BigEndian ->
       let rec invert value off1 off2 acc sz =
         if sz < 1
         then acc
@@ -638,7 +638,7 @@ struct
   and retrieve_value_big i r m =
     let size = MemInterval.size_of i in
     let i = MemInterval.base_of i in
-    let en = Dba.LittleEndian in
+    let en = Machine.LittleEndian in
     let a, _en, value =
       try MemMap.find (MemInterval.create i 1) (Env.find (Static_types.Array r) m)
       with Not_found ->
@@ -706,9 +706,9 @@ struct
         | Ternary.True ->
           begin
             match en with
-            | Dba.LittleEndian ->
+            | Machine.LittleEndian ->
               retrieve_value_little (MemInterval.create i size) r m
-            | Dba.BigEndian ->
+            | Machine.BigEndian ->
               retrieve_value_big (MemInterval.create i size) r m
           end
         | Ternary.False -> raise Errors.Read_permission_denied
@@ -974,7 +974,7 @@ struct
       let old_info = (old_loc, old_size, old_en, old_value) in
       let new_info = (new_loc, new_size, new_en, new_value) in
       match old_en, new_en with
-      | Dba.LittleEndian, Dba.LittleEndian -> (
+      | Machine.LittleEndian, Machine.LittleEndian -> (
           match sw with
           | Strong ->
             if (Bigint.eq_big_int old_loc new_loc) && (new_size = old_size)
@@ -1018,9 +1018,9 @@ struct
                 else update_before_and_beyond addrStack old_info new_info sub_m sw
             )
         )
-      | Dba.BigEndian, Dba.LittleEndian
-      | Dba.LittleEndian, Dba.BigEndian
-      | Dba.BigEndian, Dba.BigEndian -> failwith "split_regions:big_endian"
+      | Machine.BigEndian, Machine.LittleEndian
+      | Machine.LittleEndian, Machine.BigEndian
+      | Machine.BigEndian, Machine.BigEndian -> failwith "split_regions:big_endian"
     with Not_found ->
       if sw = Strong
       then
@@ -1115,22 +1115,22 @@ struct
     in
     env, assumes, Dba_types.AddressStack.Map.add addrStack indexes recordMap
 
-  let store_little_end = store Dba.LittleEndian
-  let store_big_end = store Dba.BigEndian
+  let store_little_end = store Machine.LittleEndian
+  let store_big_end = store Machine.BigEndian
 
   let assign addrStack lhs e s assumes globals recordMap elements equalities =
     current_address := addrStack;
     let v, assumes = eval_expr e s assumes globals elements equalities in
     match lhs with
-    | Dba.LValue.Var (st, size, _) ->
+    | Dba.(LValue.Var { name = st; size; _}) ->
       let v_string = Val.to_string v in
       Display.display (Display.Assign (st, e, v_string));
       let loc = MemInterval.create Bigint.zero_big_int 1 in
-      let sub_s = MemMap.add loc (loc, Dba.LittleEndian, v) MemMap.empty in
+      let sub_s = MemMap.add loc (loc, Machine.LittleEndian, v) MemMap.empty in
       let s = match s with None -> Env.empty | Some s -> s in
       let s = Some (Env.add (Static_types.Var (st, size)) sub_s s) in
       s, assumes, recordMap, v
-    | Dba.LValue.Restrict (st, size, {Interval.lo=of1; Interval.hi=of2}) ->
+    | Dba.LValue.Restrict ({ Dba.name = st; Dba.size; _}, {Interval.lo=of1; Interval.hi=of2}) ->
       let s =
         match s with
           None -> Env.empty
@@ -1140,7 +1140,7 @@ struct
       let en, x =
         try let _, en, av = (MemMap.find loc (Env.find (Var (st, size)) s))
           in en, av
-        with Not_found -> Dba.LittleEndian,Val.universe
+        with Not_found -> Machine.LittleEndian,Val.universe
       in
       let temp1 =
         if (of1 = 0) then v
@@ -1177,20 +1177,20 @@ struct
               Val.guard bop op1 op2 in
             let loc = MemInterval.empty in
             (match exp1, exp2 with
-             | Dba.Expr.Var (v1, size, _), Dba.Expr.Cst _ ->
-               let en = Dba.LittleEndian in
+             | Dba.Expr.Var { Dba.name = v1; Dba.size; _}, Dba.Expr.Cst _ ->
+               let en = Machine.LittleEndian in
                let sub_m = MemMap.add loc (loc, en, v_1) MemMap.empty in
                let s = Some (Env.add (Static_types.Var (v1, size)) sub_m m) in
                let equalities = Eq.refine exp1 v_1 equalities in
                s, assumes, rcd, equalities
              | Dba.Expr.Unary (Dba.Unary_op.Restrict
                                  {Interval.lo = o1; Interval.hi = o2;},
-                               Dba.Expr.Var (v1, size, _)), Dba.Expr.Cst _ ->
+                               Dba.Expr.Var { Dba.name = v1; Dba.size; _}), Dba.Expr.Cst _ ->
                let en, x =
                  try
                    let _, en, av = MemMap.find loc (Env.find (Var (v1, size)) m)
                    in en, av
-                 with Not_found -> Dba.LittleEndian, Val.universe
+                 with Not_found -> Machine.LittleEndian, Val.universe
                in
                let temp1 =
                  if o1 = 0 then v_1
@@ -1201,23 +1201,24 @@ struct
                let s = Some (Env.add (Static_types.Var (v1, size)) sub_m m) in
                let equalities = Eq.refine exp1 v_1 equalities in
                s, assumes, rcd, equalities
-             | Dba.Expr.Load (sz, Dba.LittleEndian, e), Dba.Expr.Cst _ ->
+             | Dba.Expr.Load (sz, Machine.LittleEndian, e), Dba.Expr.Cst _ ->
                let s, assumes, rcd = store_little_end addr sz v_1 e s assumes glbs rcd elements equalities in
                let equalities = Eq.refine exp1 v_1 equalities in
                s, assumes, rcd, equalities
-             | Dba.Expr.Cst _, Dba.Expr.Load (sz, Dba.LittleEndian, e) ->
+             | Dba.Expr.Cst _, Dba.Expr.Load (sz, Machine.LittleEndian, e) ->
                let s, assumes, rcd =
                  store_little_end addr sz v_2 e s assumes glbs rcd  elements equalities in
                let equalities = Eq.refine exp2 v_2 equalities in
                s, assumes, rcd, equalities
-             | Dba.Expr.Cst _, Dba.Expr.Var (v2, size, _) ->
-               let en = Dba.LittleEndian in
+             | Dba.Expr.Cst _, Dba.Expr.Var { Dba.name = v2; Dba.size; _} ->
+               let en = Machine.LittleEndian in
                let sub_m = MemMap.add loc (loc, en, v_2) MemMap.empty in
                let s = Some (Env.add (Static_types.Var (v2, size)) sub_m m) in
                let equalities = Eq.refine exp2 v_2 equalities in
                s, assumes, rcd, equalities
-             | Dba.Expr.Var (v1,_,_), Dba.Expr.Var (v2,size,_) ->
-               let en = Dba.LittleEndian in
+             | Dba.Expr.Var { Dba.name = v1; _},
+               Dba.Expr.Var {Dba.name = v2; Dba.size; _} ->
+               let en = Machine.LittleEndian in
                let sub_m = MemMap.add loc (loc, en, v_1) MemMap.empty in
                let m = Env.add (Static_types.Var (v1, size)) sub_m m in
                let sub_m = MemMap.add loc (loc, en, v_2) MemMap.empty in
@@ -1225,32 +1226,32 @@ struct
                let equalities = Eq.refine exp1 v_1 equalities in
                let equalities = Eq.refine exp2 v_2 equalities in
                s, assumes, rcd, equalities
-             | Dba.Expr.Var (v1, size2, _), Dba.Expr.Load (size, Dba.BigEndian, e) ->
-               let en = Dba.LittleEndian in
+             | Dba.Expr.Var {Dba.name = v1; Dba.size = size2; _}, Dba.Expr.Load (size, Machine.BigEndian, e) ->
+               let en = Machine.LittleEndian in
                let sub_m = MemMap.add loc (loc, en, v_1) MemMap.empty in
                let m = Some (Env.add (Static_types.Var (v1, size2)) sub_m m) in
                let s, assumes, rcd = store_big_end addr size v_2 e m assumes glbs rcd elements equalities in
                let equalities = Eq.refine exp1 v_1 equalities in
                let equalities = Eq.refine exp2 v_2 equalities in
                s, assumes, rcd, equalities
-             | Dba.Expr.Load (size, Dba.BigEndian, e), Dba.Expr.Var (v2, size2, _) ->
-               let en = Dba.LittleEndian in (* FIXME ? *)
+             | Dba.Expr.Load (size, Machine.BigEndian, e), Dba.Expr.Var {Dba.name = v2; Dba.size = size2; _} ->
+               let en = Machine.LittleEndian in (* FIXME ? *)
                let sub_m = MemMap.singleton loc (loc, en, v_2) in
                let m = Some (Env.add (Static_types.Var (v2, size2)) sub_m m) in
                let s, assumes, rcd = store_big_end addr size v_1 e m assumes glbs rcd elements equalities in
                let equalities = Eq.refine exp1 v_1 equalities in
                let equalities = Eq.refine exp2 v_2 equalities in
                s, assumes, rcd, equalities
-             | Dba.Expr.Var (v1, size1, _), Dba.Expr.Load (sz, Dba.LittleEndian, e) ->
-               let en = Dba.LittleEndian in
+             |  Dba.Expr.Var {Dba.name = v1; Dba.size = size1; _}, Dba.Expr.Load (sz, Machine.LittleEndian, e) ->
+               let en = Machine.LittleEndian in
                let sub_m = MemMap.add loc (loc, en, v_1) MemMap.empty in
                let m = Some (Env.add (Static_types.Var (v1, size1)) sub_m m) in
                let s, assumes, rcd = store_little_end addr sz v_2 e m assumes glbs rcd elements equalities in
                let equalities = Eq.refine exp1 v_1 equalities in
                let equalities = Eq.refine exp2 v_2 equalities in
                s, assumes, rcd, equalities
-             | Dba.Expr.Load (sz, Dba.LittleEndian, e), Dba.Expr.Var (v2, size2, _) ->
-               let en = Dba.LittleEndian in
+             | Dba.Expr.Load (sz, Machine.LittleEndian, e),  Dba.Expr.Var {Dba.name = v2; Dba.size = size2; _} ->
+               let en = Machine.LittleEndian in
                let sub_m = MemMap.add loc (loc, en, v_2) MemMap.empty in
                let m = Some (Env.add (Static_types.Var (v2, size2)) sub_m m) in
                let s, assumes, rcd = store_little_end addr sz v_1 e m assumes glbs rcd elements equalities in
@@ -1317,12 +1318,12 @@ struct
 
   let check_exec_permission addr s assumes globals elements equalities =
     let m = match s with None -> Env.empty | Some m -> m in
-    let bv = addr.Dba.base in
+    let bv = Bitvector.create (Virtual_address.to_bigint addr.Dba.base) 32 in
     let v = Val.singleton (`Value (`Constant, bv)) in
     let loc = MemInterval.create Bigint.zero_big_int 1 in
     let sub_m =
-      MemMap.add loc (loc, Dba.LittleEndian, v) MemMap.empty in
-    let s = Some (Env.add (Var ("\\addr", Machine.Word_size.get ())) sub_m m) in
+      MemMap.add loc (loc, Machine.LittleEndian, v) MemMap.empty in
+    let s = Some (Env.add (Var ("\\addr", Kernel_options.Machine.word_size ())) sub_m m) in
     let c =
       try Dba_types.Rights.find_exec_right `Constant !Concrete_eval.permis
       with Not_found -> Dba.Expr.one in
@@ -1388,10 +1389,12 @@ struct
     let locations, djumps_map =
       List.fold_right (fun elem (acc1, acc2) ->
           if Region_bitvector.region_of elem = `Constant then
-            if Region_bitvector.size_of elem = Machine.Word_size.get () then
+            if Region_bitvector.size_of elem =
+                 Kernel_options.Machine.word_size () then
               begin
                 let a =
                   Dba_types.Caddress.block_start @@
+                    Virtual_address.of_bitvector @@
                   Region_bitvector.bitvector_of elem in
 
                 let addrStack =
@@ -1464,16 +1467,16 @@ struct
     let rec update_memory_nondet lhslist s assumes glbs rcd =
       match lhslist with
       | [] -> s, assumes, rcd
-      | (Dba.LValue.Var (st, size, _)) :: tl ->
+      | (Dba.LValue.Var {Dba.name = st; Dba.size; _}) :: tl ->
         let l = MemInterval.create Bigint.zero_big_int 1 in
-        let en = Dba.LittleEndian in
+        let en = Machine.LittleEndian in
         let sub_s = MemMap.add l (l, en, Val.universe) MemMap.empty in
         let s = match s with None -> Env.empty | Some s -> s in
         let m' = Some (Env.add (Static_types.Var (st, size)) sub_s s) in
         update_memory_nondet tl m' assumes glbs rcd
-      | (Dba.LValue.Restrict (_st, _size, _)) :: _tl ->
+      | Dba.LValue.Restrict _ :: _ ->
         failwith "UnrelState.ml: restrict case not handled2"
-      | (Dba.LValue.Store (sz, endianness, e)) :: tl ->
+      | Dba.LValue.Store (sz, endianness, e) :: tl ->
         let m', assumes, rcd = store endianness addr sz Val.universe e s assumes
             glbs rcd elements equalities in
         update_memory_nondet tl m' assumes glbs rcd
@@ -1498,18 +1501,18 @@ struct
   let resolve_nondet addr lhs region s flgs equalities addr_suiv assumes glbs rcd elements =
     let _region = region in
     let m = match lhs with
-        Dba.LValue.Var (st, size, _) ->
+        Dba.LValue.Var { Dba.name = st; Dba.size; _} ->
         let loc = MemInterval.create Bigint.zero_big_int 1 in
-        let en = Dba.LittleEndian in
+        let en = Machine.LittleEndian in
         let sub_s = MemMap.add loc (loc, en, Val.universe) MemMap.empty in
         let s = match s with None -> Env.empty | Some s -> s in
         Some (Env.add (Static_types.Var (st, size)) sub_s s)
-      | Dba.LValue.Restrict (_st, _size, _) ->
+      | Dba.LValue.Restrict _ ->
         failwith "unrelState.ml: restrict case not handled"
-      | Dba.LValue.Store (size, Dba.BigEndian, expr) ->
+      | Dba.LValue.Store (size, Machine.BigEndian, expr) ->
         let op, _assumes, _rcd = store_big_end addr size Val.universe expr s assumes glbs rcd elements equalities in
         op
-      | Dba.LValue.Store (size, Dba.LittleEndian, expr) ->
+      | Dba.LValue.Store (size, Machine.LittleEndian, expr) ->
         let op, _assumes, _rcd = store_little_end addr size Val.universe expr s assumes glbs rcd elements equalities in
         op
     in
@@ -1520,22 +1523,25 @@ struct
     (* TODO : Kset can contain an undef value or
        it is trqnsformed to Top in this case *)
     let m = match lhs with
-        Dba.LValue.Var (st, size, _) ->
+        Dba.LValue.Var { Dba.name = st; Dba.size; _} ->
         let loc = MemInterval.create Bigint.zero_big_int 1 in
-        let v =Val.singleton (`Undef (computesize_dbalhs lhs)) in
-        let en = Dba.LittleEndian in
+        let v =Val.singleton
+                 (`Undef (computesize_dbalhs lhs)) in
+        let en = Machine.LittleEndian in
         let sub_s = MemMap.add loc (loc, en, v) MemMap.empty in
         let s = match s with None -> Env.empty | Some s -> s in
         Some (Env.add (Static_types.Var (st, size)) sub_s s)
-      | Dba.LValue.Restrict (_st, _size, _) ->
+      | Dba.LValue.Restrict _ ->
         failwith "unrelState.ml: restrict case not handled3"
-      | Dba.LValue.Store (size, Dba.BigEndian, expr) ->
-        let v = Val.singleton (`Undef (computesize_dbalhs lhs)) in
+      | Dba.LValue.Store (size, Machine.BigEndian, expr) ->
+        let v = Val.singleton
+                  (`Undef (computesize_dbalhs lhs)) in
         let op, _assumes, _rcd =
           store_big_end addr size v expr s assumes glbs rcd elements equalities in
         op
-      | Dba.LValue.Store (size, Dba.LittleEndian, expr) ->
-        let v = Val.singleton (`Undef (computesize_dbalhs lhs)) in
+      | Dba.LValue.Store (size, Machine.LittleEndian, expr) ->
+        let v = Val.singleton
+                  (`Undef (computesize_dbalhs lhs)) in
         let op, _assumes, _rcd =
           store_little_end addr size v expr s assumes glbs rcd elements equalities in
         op
@@ -1635,7 +1641,7 @@ struct
         | _ -> failwith "unrelstate.ml: malloc size"
       in
       let region = `Malloc ((!Dba_types.malloc_id, addr), size) in
-      let bv = Bitvector.zeros (Machine.Word_size.get ()) in
+      let bv = Bitvector.zeros (Kernel_options.Machine.word_size ()) in
       Simulate.mallocs := Malloc_status.add region Freeable !Simulate.mallocs;
       let v = Dba.Expr.constant ~region bv in
       let op,assumes,rcd,_ = assign addrStack lhs v m assumes glbs rcd elements equalities in
@@ -1782,7 +1788,7 @@ struct
 
 
   let get_initial_state inits =
-    let addr = Dba_types.Caddress.block_start @@ Bitvector.zeros 32 in
+    let addr = Dba_types.Caddress.block_start @@ Virtual_address.create 0 in
     let cstack = [] in
     let loop = 0 in
     let addrStack = (addr, cstack, loop) in

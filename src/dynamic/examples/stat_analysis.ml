@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -93,7 +93,7 @@ class stat_analyzer (input_config:Trace_config.t) =
     method! private visit_dbainstr_before _ _ stmt _ =
       Logger.info ~level:2 "→ %a" Dba_types.Statement.pp stmt ;
       (match Dba_types.Statement.instruction stmt with
-       | Dba.Instr.Assign(Dba.LValue.Var(name,_,_),_,_) ->
+       | Dba.Instr.Assign(Dba.LValue.Var {Dba.name; _},_,_) ->
          if is_flag name then nb_flags <- nb_flags +1
        | Dba.Instr.If(_,_,_) -> nb_if <- nb_if + 1
        | _ -> ()

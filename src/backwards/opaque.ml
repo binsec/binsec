@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,8 +33,8 @@ module Opacity = struct
     | Unknown
 
   let pp ppf = function
-    | Opaque -> fprintf ppf "opaque"
-    | Clear -> fprintf ppf "clear"
+    | Opaque  -> fprintf ppf "opaque"
+    | Clear   -> fprintf ppf "clear"
     | Unknown -> fprintf ppf "unknown"
 
   let of_sat = function
@@ -92,13 +92,9 @@ module Opacity_status = struct
   let (<+>) st1 st2 =
     { c_op = combine st1.c_op st2.c_op;
       a_op = combine st1.a_op st2.a_op; }
+  ;;
 
-
-
-
-
-end
-
+end ;;
 
 module Trace = struct
   type t = Instruction.t list
@@ -127,8 +123,7 @@ module Trace = struct
           Mnemonic.pp i.Instruction.mnemonic;
       ) t;
     pp_close_box ppf ()
-end
-
+end ;;
 
 let assert_constraint st e =
   assert (Dba.Expr.size_of e = 1);
@@ -138,18 +133,17 @@ let assert_constraint st e =
   mk_assert @@ mk_bv_comp BvEqual bv_term bv_true
 ;;
 
-
 let add_assert_constraint st e =
   Sse_symbolic.State.add_entry (assert_constraint st e) st
 ;;
 
-let add_deny_constraint st e = add_assert_constraint st (Dba.Expr.lognot e)
+let add_deny_constraint st e = add_assert_constraint st (Dba.Expr.lognot e) ;;
 
-let deny_constraint st e = assert_constraint st (Dba.Expr.lognot e)
+let deny_constraint st e = assert_constraint st (Dba.Expr.lognot e) ;;
 
 let with_solver k =
   let timeout = Formula_options.Solver.Timeout.get () in
-  Sse_options.SmtDir.set ".";
+  Sse_options.SMT_dir.set ".";
   let file = Sse_utils.temp_file () in
   let solver = Formula_options.Solver.get () in
   let session = Solver.Session.create ~file ~timeout solver in
@@ -213,10 +207,10 @@ module Translator = struct
     | Some dba -> dba
     | None -> (* Not sure this should happen *)
        match get_succs t with
-       | [] -> Logger.fatal "No successors"; assert false
+       | [] -> Logger.fatal "No successors"
        | [hidx] ->
           get_dba {t with hidx;}
-       | _ -> Logger.fatal "Too many successors"; assert false
+       | _ -> Logger.fatal "Too many successors"
 
 
   let pp ppf t =
@@ -276,7 +270,7 @@ module Translator = struct
     let undef lv t =
       let open Dba.LValue in
       match lv with
-      | Var (name, bitsize, _) ->
+      | Var { Dba.name; Dba.size = bitsize; _} ->
          begin
            let open Formula in
            let sort = bv_sort bitsize in
@@ -344,8 +338,7 @@ module Translator = struct
          Script (Some bv_term, genr_formula t) |> loop
 
       | dba ->
-         Logger.fatal "Unhandled DBA %a" Dba_printer.Ascii.pp_instruction dba;
-         assert false
+         Logger.fatal "Unhandled DBA %a" Dba_printer.Ascii.pp_instruction dba
 
     in loop (Continue t)
 end
@@ -448,56 +441,84 @@ let get_traces cfg v =
 
 
 module Check = struct
+  type t = Opacity_status.t Virtual_address.Map.t ;;
 
   let predicate ~cfg c v =
     let traces = get_traces cfg v in
     let rec loop s = function
-      | [] -> s
+      | [] -> Ok s
       | t :: ts ->
-         let s' = Opacity_status.(s <+> check_trace c t) in
-         if Opacity_status.is_clear s' then s' else loop s' ts
+         match check_trace c t with
+         | s2 ->
+            let s' = Opacity_status.(s <+> s2) in
+            if Opacity_status.is_clear s' then Ok s' else loop s' ts
+         | exception Failure _ -> Error v
     in loop Opacity_status.default traces
   ;;
 
   let instruction ~cfg inst v =
     let h = Instruction.hunk inst in
     match Dhunk.conditional h with
-    | None -> None
+    | None -> Ok None
     | Some c ->
-       Some (predicate ~cfg c v)
+       match predicate ~cfg c v with
+       | Ok s -> Ok (Some s)
+       | Error e -> Error e
   ;;
 
   let vertex ~cfg v =
     match IC.V.inst v with
-    | None -> ()
+    | None -> None
     | Some inst ->
        Logger.debug ~level:4 "@[<h>%@%a@ :@ %a@]"
          Virtual_address.pp (Instruction.address inst)
          Mnemonic.pp (Instruction.mnemonic inst);
        match instruction ~cfg inst v with
-       | None -> ()
-       | Some ost ->
+       | Ok None -> None
+       | Ok (Some ost as r) ->
           Logger.result "@[@[<h>Predicate %a@ %@ 0x%a is %a@]@ (%a)@]"
             Mnemonic.pp (Instruction.mnemonic inst)
             Virtual_address.pp (Instruction.address inst)
             Opacity_status.pp_combined ost
-            Opacity_status.pp ost
+            Opacity_status.pp ost;
+          r
+       | Error _ ->
+          Logger.warning "Could not evaluate predicate %a %@ 0x%a"
+            Mnemonic.pp (Instruction.mnemonic inst)
+            Virtual_address.pp (Instruction.address inst);
+          None
   ;;
 
-  let vertices ~cfg vs = List.iter (vertex ~cfg) vs ;;
+  let add_map map addr = function
+    | None -> map
+    | Some ost -> Virtual_address.Map.add addr ost map
+  ;;
+
+  let vertices ~cfg vs =
+    List.fold_left
+      (fun map v -> add_map map (IC.V.addr v) (vertex ~cfg v))
+      Virtual_address.Map.empty
+      vs
+  ;;
 
   let addresses ~cfg vaddrs =
-    List.iter
-    (fun va ->
+    List.fold_left
+    (fun map va ->
       match IC.mem_vertex_a cfg va with
-      | None -> ()
+      | None -> map
       | Some v ->
          Logger.debug "@[<h>Checking opacity %@%a@]"
            Virtual_address.pp va;
-         vertex ~cfg v) vaddrs
+         add_map map (IC.V.addr v) (vertex ~cfg v))
+    Virtual_address.Map.empty
+    vaddrs
   ;;
 
-  let graph ~cfg = IC.iter_vertex (vertex ~cfg) cfg ;;
+  let graph ~cfg =
+    IC.fold_vertex
+      (fun v map -> add_map map (IC.V.addr v) (vertex ~cfg v))
+    cfg Virtual_address.Map.empty
+  ;;
 
   let cfg_of_file ~filename =
     let open Disasm in
@@ -507,19 +528,43 @@ module Check = struct
 
   let vaddrs () = Opaque_addresses.get () |> List.map Virtual_address.create ;;
 
+  let cfg_of_sections sections =
+    let img = Kernel_functions.get_img () in
+    let p = Disasm.sections img sections in
+    p.Disasm.Program.instructions
+  ;;
+
+  let sections_of_addresses img addrs =
+    let section_name_of_addr address =
+      let address = Virtual_address.to_int address in
+      let s = Loader_utils.find_section_by_address_exn ~address img in
+      Loader.Section.name s in
+    List.fold_left
+      (fun s a ->
+        match section_name_of_addr a with
+        | exception Not_found -> s
+        | name -> Basic_types.String.Set.add name s
+      ) Basic_types.String.Set.empty addrs
+  ;;
+
   let subset () =
-    let filename = Kernel_options.ExecFile.get () in
-    let cfg = cfg_of_file ~filename in
-    addresses ~cfg (vaddrs ())
+    let addrs = vaddrs () in
+    let img = Kernel_functions.get_img () in
+    let sections = sections_of_addresses img addrs in
+    let cfg = cfg_of_sections sections in
+    addresses ~cfg addrs
+  ;;
+
+  let sections secs =
+    let cfg = cfg_of_sections secs in
+    graph ~cfg
   ;;
 
   let file ~filename = graph ~cfg:(cfg_of_file ~filename) ;;
 
-
   let all () =
     if not @@ Kernel_options.ExecFile.is_set () then begin
-        Logger.fatal "No file set for opaque predicates";
-        exit 1;
+        Logger.fatal "No file set for opaque predicates"
       end
     else
       let filename = Kernel_options.ExecFile.get () in

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -50,6 +50,8 @@ module MapSetMaker(C:Sigs.COMPARABLE) = struct
       let a = choose set in
       a, remove a set
 
+    let add_list elts set =
+      List.fold_left (fun set e -> add e set) set elts
   end
   include C
 end
@@ -70,6 +72,9 @@ module Collection_make = struct
         let h' = create (length h) in
         iter (fun k v -> if p k v then add h' k v) h;
         h'
+      ;;
+
+      let bindings h = fold (fun k v acc -> (k, v) :: acc) h [] ;;
     end
   end
 
@@ -87,6 +92,8 @@ module Collection_make = struct
         let h' = create (length h) in
         iter (fun k v -> if p k v then add h' k v) h;
         h'
+
+      let bindings h = fold (fun k v acc -> (k, v) :: acc) h [] ;;
     end
   end
 end

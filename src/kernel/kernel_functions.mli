@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -26,8 +26,6 @@ val get_ep : unit -> Virtual_address.t option
 val get_img : unit -> Loader.Img.t
 
 module Loader : sig
-  val isa : Loader.Img.t -> Machine.isa
-
   val set_arch : Loader.Img.t -> unit
   (** [set_arch img] retrieves and sets the machine as determined by the loader **)
 

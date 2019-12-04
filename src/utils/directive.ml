@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -78,7 +78,7 @@ type d =
   | Choice of Choice.t
 
 type t = {
-    loc : Binary_loc.t;
+    loc : Loader_utils.Binary_loc.t;
     goal : d;
   }
 
@@ -94,7 +94,7 @@ let pp_goal ppf = function
 ;;
 
 let pp ppf t =
-  fprintf ppf "0x%a %a" Binary_loc.pp t.loc pp_goal t.goal
+  fprintf ppf "0x%a %a" Loader_utils.Binary_loc.pp t.loc pp_goal t.goal
 ;;
 
 let reach ?(n=1) loc =

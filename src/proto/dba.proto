@@ -1,7 +1,7 @@
 //                                                                         
 //  This file is part of BINSEC.                                           
 //                                                                         
-//  Copyright (C) 2016-2018                                                
+//  Copyright (C) 2016-2019                                                
 //    CEA (Commissariat à l'énergie atomique et aux énergies               
 //         alternatives)                                                   
 //                                                                         
@@ -33,7 +33,7 @@ message bitvector {
 }
 
 message dbacodeaddress {
-  required bitvector bitvector = 1;
+  required uint64 bitvector = 1;
   required uint32 dbaoffset    = 2;
 }
 

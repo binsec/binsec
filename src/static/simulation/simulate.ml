@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -44,13 +44,14 @@ let update_memory lhs rbv m conds glbs:
   Concrete_state.concreteMap * Caddress.Set.t =
   let open Bigint in
   match lhs with
-  | Dba.LValue.Var (s, size, _) ->
+  | Dba.LValue.Var { Dba.name = s; Dba.size; _} ->
     let v = Static_types.Var (s, size) in
     let m = Concrete_eval.write v zero_big_int rbv m conds glbs in
     m, glbs
 
   (* restrict assignment requires to load variable from memory *)
-  | Dba.LValue.Restrict (s, size, {Interval.lo=of1; Interval.hi=of2}) ->
+  | Dba.LValue.Restrict ({Dba.name = s; Dba.size; _},
+                         {Interval.lo=of1; Interval.hi=of2}) ->
     let x =
       try Concrete_eval.read (Static_types.Var (s, size)) zero_big_int m conds glbs
       with Not_found -> Simulate_utils.mk_undef_value size
@@ -65,7 +66,7 @@ let update_memory lhs rbv m conds glbs:
     let m = Concrete_eval.write v zero_big_int tmp m conds glbs in
     m, glbs
 
-  | Dba.LValue.Store (size, Dba.LittleEndian, expr) ->
+  | Dba.LValue.Store (size, Machine.LittleEndian, expr) ->
     (* FIXME: this is the same case as BigEndian modulo *)
     let e, m = Concrete_eval.eval_expr expr m conds glbs, m in
     let region = region_of e in
@@ -81,13 +82,16 @@ let update_memory lhs rbv m conds glbs:
         begin
           match region with
           | `Constant ->
-            let a = Dba_types.Caddress.block_start @@ Bitvector.create !j 32
+            let a = Dba_types.Caddress.block_start @@ Virtual_address.of_bigint !j
             in glbs := Caddress.Set.add a !glbs
           | _ -> ()
         end;
-        let v = `Value (`Constant, Region_bitvector.bitvector_of !v_exp) in
+        let v = `Value (`Constant,
+                        Region_bitvector.bitvector_of !v_exp) in
         let sub_m = SubEnv.singleton zero_big_int v in
-        m := Static_types.Env.add (Static_types.Var ("\\addr", Machine.Word_size.get ())) sub_m !m;
+        m := Static_types.Env.add
+               (Static_types.Var
+                  ("\\addr", Kernel_options.Machine.word_size ())) sub_m !m;
         let of1 = 8 * int_of_big_int (sub_big_int !j i) in
         let of2 = of1 + 7 in
         let array = Static_types.Array region in
@@ -99,7 +103,7 @@ let update_memory lhs rbv m conds glbs:
       !m, !glbs
     else raise (Errors.Bad_bound "store, Little_endian case")
 
-  | Dba.LValue.Store (size, Dba.BigEndian, expr) ->
+  | Dba.LValue.Store (size, Machine.BigEndian, expr) ->
     let e, m = Concrete_eval.eval_expr expr m conds glbs, m in
     let region = region_of e in
     let i = value_of e in
@@ -114,13 +118,17 @@ let update_memory lhs rbv m conds glbs:
         begin
           match region with
           | `Constant ->
-            let a = Dba_types.Caddress.block_start @@ Bitvector.create !j 32
+            let a = Dba_types.Caddress.block_start
+                    @@ Virtual_address.of_bigint !j
             in glbs := Caddress.Set.add a !glbs
           | _ -> ()
         end;
         let v = `Value (`Constant, Region_bitvector.bitvector_of !v_exp) in
         let sub_m = SubEnv.add zero_big_int v SubEnv.empty in
-        m := Static_types.Env.add (Static_types.Var ("\\addr", Machine.Word_size.get ())) sub_m !m;
+        m := Static_types.Env.add
+               (Static_types.Var ("\\addr",
+                                  Kernel_options.Machine.word_size ()))
+               sub_m !m;
         let big_i = Bigint.int_of_big_int (Bigint.sub_big_int !j i) in
         let of1 = 8 * ((size - 1) - big_i) in
         let of2 = of1 + 7 in
@@ -148,9 +156,12 @@ let rec string_of_args args m conds glbs =
 
 
 let check_exec_permission addr m conds glbs =
-  let v = `Value (`Constant, addr.Dba.base) in
+  let v = `Value (`Constant, Bitvector.create
+                               (Virtual_address.to_bigint addr.Dba.base) 32) in
   let sub_m = SubEnv.add Bigint.zero_big_int v SubEnv.empty in
-  let m = Static_types.Env.add (Static_types.Var ("\\addr", Machine.Word_size.get ())) sub_m m in
+  let m = Static_types.Env.add
+            (Static_types.Var ("\\addr", Kernel_options.Machine.word_size ()))
+            sub_m m in
   let c =
     try Dba_types.Rights.find (Dba_types.Rights.X, `Constant) !permis
     with Not_found ->  Dba.Expr.one
@@ -192,8 +203,8 @@ let compute addr instr m conds djmps pp_conds glbs:
     let malloc_key, region, bv  =
       match Semantic_mode.get () with
       | Flat ->
-         let bv = Bitvector.create !new_malloc 32 in
-         let a = Dba_types.Caddress.create bv (-1) in
+         let a = Dba_types.Caddress.create
+                   (Virtual_address.of_bigint !new_malloc) (-1) in
          let malloc = `Malloc ((-1, a), Bigint.zero_big_int) in
          let region = `Constant in
          let bv =
@@ -202,11 +213,11 @@ let compute addr instr m conds djmps pp_conds glbs:
           let big_a = Bigint.big_int_of_int 15 in
           let aligned_size = Bigint.mod_big_int big_size big_a in
           new_malloc := Bigint.add_big_int aligned_size !new_malloc;
-          Bitvector.create res (Machine.Word_size.get ())
+          Bitvector.create res (Kernel_options.Machine.word_size ())
          in malloc, region, bv
       | _ ->
          let malloc = `Malloc ((!Dba_types.malloc_id, addr), size) in
-         let bv = Bitvector.zeros (Machine.Word_size.get ()) in
+         let bv = Bitvector.zeros (Kernel_options.Machine.word_size ()) in
          malloc, malloc, bv
     in
     mallocs := Dba_types.Region.Map.add malloc_key Dba.Freeable !mallocs;
@@ -221,7 +232,7 @@ let compute addr instr m conds djmps pp_conds glbs:
     let rec aux v =
       (match v with
        | `SymbSmt smb ->
-         let sz = Machine.Word_size.get () in
+         let sz = Kernel_options.Machine.word_size () in
          let v = Region_bitvector.get_value smb sz conds glbs in
          aux v
 
@@ -243,7 +254,9 @@ let compute addr instr m conds djmps pp_conds glbs:
          end
        | `Value (`Constant, bv) ->
          let elmt =
-           `Malloc ((-1, Dba_types.Caddress.create bv (-1)), Bigint.zero_big_int) in
+           `Malloc ((-1, Dba_types.Caddress.create
+                           (Virtual_address.of_bitvector bv) (-1)),
+                    Bigint.zero_big_int) in
          let st = Dba_types.Region.Map.find elmt !mallocs in
          begin
            match st with
@@ -275,7 +288,7 @@ let compute addr instr m conds djmps pp_conds glbs:
     let rec aux rbv  =
       match rbv with
       | `SymbSmt smb ->
-        let sz = Machine.Word_size.get () in
+        let sz = Kernel_options.Machine.word_size () in
         let v = Region_bitvector.get_value smb sz conds glbs in
         aux v
       | `Value (_r, b) ->
@@ -283,7 +296,8 @@ let compute addr instr m conds djmps pp_conds glbs:
         let b = Bitvector.value_of b  in
         let v = `Value (`Constant, (Bitvector.create b sz)) in
         let sub_m = SubEnv.add Bigint.zero_big_int v SubEnv.empty in
-        let key = Static_types.Var ("\\addr", Machine.Word_size.get ()) in
+        let key = Static_types.Var
+                    ("\\addr", Kernel_options.Machine.word_size ()) in
         let m = Static_types.Env.add key sub_m m in
         let r = region_of rbv in
         let c =
@@ -292,12 +306,13 @@ let compute addr instr m conds djmps pp_conds glbs:
         in
         if (Concrete_eval.eval_cond c m conds glbs) then (
           if r = `Constant then
-            if size_of rbv = Machine.Word_size.get ()
+            if size_of rbv = Kernel_options.Machine.word_size ()
             then
               begin
                 let target_addr =
                   Dba_types.Caddress.block_start @@
-                  Region_bitvector.bitvector_of rbv in
+                    Virtual_address.of_bitvector @@
+                      Region_bitvector.bitvector_of rbv in
                 let old_set =
                   try Caddress.Map.find addr djmps
                   with Not_found -> Caddress.Set.empty
@@ -394,7 +409,7 @@ let compute addr instr m conds djmps pp_conds glbs:
     )
 
   | Dba.Instr.Assert (cond, id_suiv) ->
-    if (Concrete_eval.eval_cond cond m conds glbs) then
+    if Concrete_eval.eval_cond cond m conds glbs then
       let a = Dba_types.Caddress.reid addr id_suiv in
       let a = check_exec_permission a m conds glbs in
       let next = Some a in
@@ -666,17 +681,14 @@ let run ?(dba_file=None) ~configuration_file =
   let program =
     match dba_file with
     | None ->
-       Parse_utils.load_dba_definition (Kernel_options.Machine.ISA.get ())
+       Parse_utils.load_dba_definition (Kernel_options.Machine.get ())
     | Some filename -> Parse_utils.read_dba_file filename
   in
   let start_address =
     match Kernel_functions.get_ep () with
     | None -> program.start_address
     | Some va ->
-      let bint = Virtual_address.to_bigint va in
-      let bv = Bitvector.create bint (Machine.Word_size.get ()) in
-      Dba_types.Caddress.block_start bv
-  in
+      Dba_types.Caddress.block_start va in
   fuzz_simulate
     start_address program.instructions
     program.permissions program.initializations

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -335,13 +335,11 @@ end
     match pop_enriched_ins lp with
     | exception LastInstruction -> Final_State acc
     | ins',lp -> 
-      if(ins.check_outgoing_edge 
-         && not @@ Bitvector.equal
-           a.Dba.base @@
-         Bitvector.create (Virtual_address.to_bigint ins'.ins.Parsepin.address)
-         @@ Bitvector.size_of a.Dba.base)
+      if ins.check_outgoing_edge 
+         && not (Virtual_address.equal
+           a.Dba.base ins'.ins.Parsepin.address)
       then (Xtrasec_options.Logger.result
-              "Wrong trace a.base %a addr'%x" Bitvector.pp_hex a.Dba.base
+              "Wrong trace a.base %a addr'%x" Virtual_address.pp a.Dba.base
               (Virtual_address.to_int ins'.ins.Parsepin.address);
             Wrong_Trace)
       else do_next acc ins' lp

@@ -1,3 +1,21 @@
+* 0.3
+
+** Features
+
+   - New architecture support : RISC-V 32 bits
+   - Support for DWARF-4 debug instruction format
+   - Support to import IDA control-flow graph
+   - Add documented plugin creation example : mnemonic count [mcount]
+   - New Makefile 'library' to ease plugin creation
+
+** Fixes
+
+   - Fix (vectorized instructions) x86 decoder
+
+** Misc
+
+   - Detach PINSEC to own repository (support to be deprecated in later version)  
+
 * 0.2 [2018-10-01 Mon]
 
   - New symbolic execution engine

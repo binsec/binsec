@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -324,9 +324,10 @@ let is_return g =
     | None -> false
     | Some dinst ->
       DI.is_return dinst
-      || match C.succ g node with
-      | [v] -> aux v
-      | _ -> false
+      ||
+        match C.succ g node with
+        | [v] -> aux v
+        | _ -> false
   in match C.mem_vertex_a g (A.of_int 0) with
   | None -> false
   | Some v -> aux v
@@ -395,8 +396,7 @@ module Check = struct
       | Undeclared_Variable (vname, instr) ->
         Logger.fatal
           "Undeclared variable %s at instruction %a"
-          vname Dba_printer.Ascii.pp_instruction instr;
-        false
+          vname Dba_printer.Ascii.pp_instruction instr
     in for_all no_undeclared_at_instr t
 
 
@@ -421,10 +421,10 @@ module Check = struct
     )
 
   let no_temporary_leak g =
-    let open Basic_types in
+    let module Strg = Basic_types.String in
     let init v =
       match C.V.inst v with
-      | None -> String.Set.empty
+      | None -> Strg.Set.empty
       | Some i -> (DI.temporaries i).Dba_types.defs
     in
     let f = N.analyze init g in
@@ -433,14 +433,13 @@ module Check = struct
       (fun ppf g ->
          C.iter_vertex
            (fun v ->
-              Format.fprintf ppf "%d: %a [%a]@ "
-                (C.V.addr v)
-                (Print_utils.pp_opt Dba_printer.Ascii.pp_instruction) (C.V.inst v)
-                (fun ppf s ->
-                   String.Set.iter
-                     (fun name -> Format.fprintf ppf "%s; " name)
-                     s
-                ) (f v)
+             Format.fprintf ppf "%d: %a [%a]@ "
+               (C.V.addr v)
+               (Print_utils.pp_opt Dba_printer.Ascii.pp_instruction) (C.V.inst v)
+               (fun ppf s ->
+                 Strg.Set.iter
+                   (fun name -> Format.fprintf ppf "%s; " name)
+                   s) (f v)
            ) g
       ) g;
     try
@@ -452,13 +451,14 @@ module Check = struct
              let du = DI.temporaries inst in
              let defined = f v in
              let undefined_temporaries =
-               String.Set.diff du.Dba_types.uses defined in
-             if not (String.Set.is_empty undefined_temporaries) then
+               Strg.Set.diff du.Dba_types.uses defined in
+             if not (Strg.Set.is_empty undefined_temporaries) then
                raise (Temporaries_undefined (undefined_temporaries, inst))
         ) g;
       true
     with
     | Temporaries_undefined (tset, instr) ->
+      export_and_view g;
       Logger.fatal
         "@[<h>Temporaries %a were previously \
          undefined but used at instruction %a@]"
@@ -467,9 +467,7 @@ module Check = struct
              (fun s -> Format.fprintf ppf "%s;@ " s)
              set)
         tset
-        Dba_printer.Ascii.pp_instruction instr;
-      export_and_view g;
-      false
+        Dba_printer.Ascii.pp_instruction instr
 
 
 end

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -49,13 +49,13 @@ module Caddress : sig
   include Sigs.Collection with type t := t
 
   val default_init : t ref
-  val create : Bitvector.t -> int -> t
-  val block_start : Bitvector.t -> t
+  val create : Virtual_address.t -> int -> t
+  val block_start : Virtual_address.t -> t
   (** [block_start bv] i [create bv 0] *)
 
   val block_start_of_int : int -> t
 
-  val rebase : t -> Bitvector.t -> t
+  val rebase : t -> Virtual_address.t -> t
   val reid : t -> int -> t
 
   val equal : t -> t -> bool
@@ -69,7 +69,7 @@ module Caddress : sig
 
   val add_id : t -> int -> t
 
-  val base_value : t -> Bigint.t
+  val base_value : t -> Virtual_address.t
 
   val of_virtual_address : Virtual_address.t -> t
   val to_virtual_address : t -> Virtual_address.t
@@ -100,7 +100,7 @@ module Expr : sig
   include PRINTABLE with type t := t
 
   (** {6 Constructors } *)
-  val var : string -> Size.Bit.t -> Dba.VarTag.t option -> t
+  val var : string -> Size.Bit.t -> Dba.VarTag.t -> t
 
   val flag : ?bits:Size.Bit.t -> string -> t
   (** [flag ~bits flagname] constructs a variable named [flagname] tagged as a
@@ -221,10 +221,10 @@ end
 
 
 module Declarations : sig
-  type t = (Dba.size * Dba.VarTag.t option) Basic_types.String.Map.t
+  type t = (Dba.size * Dba.VarTag.t) Basic_types.String.Map.t
   (** A DBA declaration has a name, a size in bits and some optional tags *)
 
-  val of_list : (string * Dba.size * Dba.VarTag.t option) list -> t
+  val of_list : (string * Dba.size * Dba.VarTag.t) list -> t
 end
 
 
@@ -247,9 +247,6 @@ end
 
 
 val malloc_id : int ref
-
-val get_endianness : unit -> Dba.endianness
-val set_endianness : Dba.endianness -> unit
 
 type 'a dbainstrmap = (Dba.Instr.t * 'a option) Caddress.Map.t
 

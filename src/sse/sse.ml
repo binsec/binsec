@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -106,7 +106,7 @@ struct
 
     let rec pick_path e =
       Stats.add_visited ();
-      let e = of_global e.global in
+      let e = of_global (global e) in
       check_sat_or_choose_another e
 
     and check_sat_or_choose_another e =
@@ -224,16 +224,16 @@ struct
     (* lvalue <- e *)
     let assignment ~lvalue ~rvalue e =
       (* generate the logical constraint, add it to the path predicate,
-         update symbolic_state
-      *)
+       * update symbolic_state.
+       *)
       let open Sse_smt in
       Env.{ e with local = Translate.assignment lvalue rvalue e.local }
 
     let nondet ~lvalue ~region e =
       let _ = region in
       (* generate the logical constraint, add it to the path predicate,
-         update symbolic_state
-      *)
+       * update symbolic_state.
+       *)
       let open Sse_smt in
       Env.{ e with local = Translate.nondet lvalue e.local }
 
@@ -304,7 +304,6 @@ struct
 
        This can be usefule to debug the path predicate translation.  *)
     let maybe_add_comment ps =
-
       if Sse_options.Comment.get () then
         let syst = Path_state.symbolic_state ps in
         let comment =
@@ -352,9 +351,8 @@ struct
         Errors.not_yet_implemented msg
   end
 
-  let is_sat p =
-    let sat_status, _ = Sse_smt.Solver.check_satistifiability p in
-    sat_status = Formula.SAT
+  let sat_status p =
+    fst @@ Sse_smt.Solver.check_satistifiability p
 
   type path_directive =
     | Continue
@@ -364,6 +362,7 @@ struct
     let get_vaddr e = Path_state.virtual_address @@ Env.local e in
     let e = Env.of_global g in
     let last_vaddr = ref (get_vaddr e) in
+
     let rec loop_aux e =
       let vaddr = get_vaddr e in
       if vaddr <> !last_vaddr then begin
@@ -380,16 +379,16 @@ struct
       *)
       else reloop e Continue
 
-
     and reloop e directive =
       if not @@ G.Directives.has (Env.global e) then halt e
       else
-        match directive with
-        | Continue -> loop_aux @@ Eval.go e
-        | Discard ->
-          (match Env.pick_path e with
-           | e -> loop_aux e
-           | exception G.Path.Empty_worklist -> halt e)
+        let e_action =
+          match directive with
+          | Continue -> Eval.go
+          | Discard  -> Env.pick_path in
+        match e_action e with
+        | e -> loop_aux e
+        | exception G.Path.Empty_worklist -> halt e
 
     and do_directives vaddr e =
       let glob = Env.global e in
@@ -411,8 +410,7 @@ struct
             let p = Env.local e in
             match directive g with
             | Choice _ ->
-              (* Branch choice is handled later
-                 on the DBA instruction itself *)
+              (* Branch choice is handled later on the DBA instruction itself *)
               Queue.add g q';
               handle_directives e path_directive
             | Cut ->
@@ -423,38 +421,44 @@ struct
               handle_directives e Discard
             | Reach c ->
               Logger.debug "Reach";
-              if is_sat p then begin
-                let c' = Count.decr c in
-                Logger.result
-                  "@[<h>Directive :: reached address %a (%a to go)@]"
-                  Virtual_address.pp vaddr Count.pp c';
-                (match Sse_smt.Solver.get_model p with
-                 | Some m ->
-                   Logger.result "@[<v 0>Model %@ %a@ %a@]"
-                     Virtual_address.pp vaddr
-                     Smt_model.pp m;
-                 | None ->
-                   Logger.result
-                     "@[<h>No model %@ %a@]" Virtual_address.pp vaddr);
-                (match c' with
-                 (* Do not add it to q', this is done*)
-                 | Count.Count 0 -> ()
-                 | Count.Count n ->
-                   let loc = Binary_loc.address vaddr in
-                   Queue.add (Directive.reach ~n loc) q'
-                 | Count.Unlimited ->
-                   Queue.add g q') ;
-                handle_directives e path_directive
-              end
-              else begin
-                Logger.warning
-                  "@[<h>Directive :: reach \
-                   reached address %a with unsat/unknown \
-                   (still %a to go)@]"
-                  Virtual_address.pp vaddr Count.pp c;
-                Queue.add g q';
-                (* It's not SAT - not counted as a reach *)
-                handle_directives e Discard
+              begin
+                match sat_status p with
+                | Formula.SAT ->
+                   begin
+                     let c' = Count.decr c in
+                     Logger.result
+                       "@[<h>Directive :: reached address %a (%a to go)@]"
+                       Virtual_address.pp vaddr Count.pp c';
+                     (match Sse_smt.Solver.get_model p with
+                      | Some m ->
+                         Logger.result "@[<v 0>Model %@ %a@ %a@]"
+                           Virtual_address.pp vaddr
+                           Smt_model.pp m;
+                      | None ->
+                         Logger.result
+                           "@[<h>No model %@ %a@]" Virtual_address.pp vaddr);
+                     (match c' with
+                      (* Do not add it to q', this is done*)
+                      | Count.Count 0 -> ()
+                      | Count.Count n ->
+                         let loc = Loader_utils.Binary_loc.address vaddr in
+                         Queue.add (Directive.reach ~n loc) q'
+                      | Count.Unlimited ->
+                         Queue.add g q') ;
+                     handle_directives e path_directive
+                   end
+                | status ->
+                   begin
+                     Logger.warning
+                       "@[<h>Directive :: reach \
+                        reached address %a with %a \
+                        (still %a to go)@]"
+                       Virtual_address.pp vaddr Formula_pp.pp_status status
+                       Count.pp c ;
+                     Queue.add g q';
+                     (* It's not SAT - not counted as a reach *)
+                     handle_directives e Discard
+                   end
               end
             | Enumerate (k, ex) ->
               let e_fml =
@@ -477,7 +481,7 @@ struct
                | Count.Count k ->
                  let m = k - enumerate_at_most k in
                  if m > 0 then
-                   let loc = Binary_loc.address vaddr in
+                   let loc = Loader_utils.Binary_loc.address vaddr in
                    Queue.add (Directive.enumerate ~n:m ex loc) q'
                | Count.Unlimited ->
                  Queue.add g q';
@@ -534,7 +538,7 @@ struct
       | cs ->
         Logger.info "Found some address counters ... great";
         let m =
-          let open Virtual_address in
+          let open! Virtual_address in
           List.fold_left
             (fun m c -> Map.add c.Address_counter.address c m) Map.empty cs in
         Path_state.set_address_counters m ps

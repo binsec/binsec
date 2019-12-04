@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -109,7 +109,7 @@ class invert_child (trace_config:Trace_config.t) =
         | Some a -> a
         | None -> failwith "Error check read (childanalysis)"
       in
-      fread_t.ptr.addr,fread_t.size,fread_t.nmemb,fread_t.stream,fread_t.ret
+      fread_t.ptr.addr,fread_t.Fread_t.size,fread_t.nmemb,fread_t.stream,fread_t.ret
 
     method check_read cc =
       try
@@ -342,7 +342,7 @@ class invert_child (trace_config:Trace_config.t) =
           let next_addr = get_next_address inst.concrete_infos in
           let static_predicate = self#build_cond_predicate cond env in
           let predicate =
-            if Bigint.compare_big_int address (Bigint.big_int_of_int64 next_addr) = 0
+            if Virtual_address.compare address (Virtual_address.of_int64 next_addr) = 0
             then
               (Logger.debug "build negative predicate: %s\n" formula_file;
                mk_bl_not static_predicate)

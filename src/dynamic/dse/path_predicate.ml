@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -165,8 +165,7 @@ class dse_analysis (input_config:Trace_config.t) =
     val mutable cur_key_inst = 0          (* nth instruction in the trace *)
     val mutable cur_inst = Trace_type.empty_inst     (* current asm instruction *)
     val mutable cur_dbainst =
-      let loc = Dba_types.Caddress.block_start
-        @@ Bitvector.zeros (Machine.Word_size.get ())
+      let loc = Dba_types.Caddress.block_start @@ Virtual_address.create 0
       and instr = Dba.Instr.stop None in
       Dba_types.Statement.create loc instr
 
@@ -238,20 +237,20 @@ class dse_analysis (input_config:Trace_config.t) =
       let path = List_utils.drop 1 (List.rev path) in
       let var =
         Dba.Expr.var name (high-low+1)
-          (if is_tmp_variable name then Some Dba.VarTag.temp else None) in
+          ~tag:(if is_tmp_variable name then Dba.VarTag.temp else Dba.VarTag.empty) in
       let rec recurse_path l acc =
         let open Dba_types.Statement in
         match l with
         | { location = _; instruction =  ins } :: tl ->
           begin match ins with
-            | Dba.Instr.Assign(Dba.LValue.Var(n, sz, opt), e, _) ->
+            | Dba.Instr.Assign(Dba.LValue.Var _ as v, e, _) ->
               (* Create a var out of the lhs *)
-              let r_var = Dba.Expr.var n sz opt in
+              let r_var = Dba_types.Expr.of_lvalue v in
               (* Replace r_var by e into the current expr(acc) *)
               recurse_path tl (Dba_utils.substitute_dba_expr r_var e acc)
             | Dba.Instr.Assign(
-                Dba.LValue.Restrict(n, sz, {Interval.lo=low; Interval.hi=hig}), e, _) ->
-              let r_var = Dba.Expr.restrict low hig (Dba.Expr.var n sz None) in
+                Dba.LValue.Restrict(v, {Interval.lo=low; Interval.hi=hig}), e, _) ->
+              let r_var = Dba.Expr.restrict low hig (Dba.Expr.v v) in
               recurse_path tl (Dba_utils.substitute_dba_expr r_var e acc)
             | _ -> recurse_path tl acc
           end
@@ -288,14 +287,16 @@ class dse_analysis (input_config:Trace_config.t) =
       | Dba.Expr.Binary(
           Dba.Binary_op.Plus, (* Hack to concretize the whole address rather than every var, in case of gdt *)
           Dba.Expr.Load(_,_,
-                        Dba.Expr.Binary(Dba.Binary_op.Plus, Dba.Expr.Var("gdt",_,_) ,_)), _) ->
+                        Dba.Expr.Binary(Dba.Binary_op.Plus,
+                                        Dba.Expr.Var { Dba.name = "gdt"; _}, _))
+          , _) ->
         let addr =
           if is_lhs then Trace_type.get_store_addr concrete_infos
           else Trace_type.get_load_addr concrete_infos in
         let bv_addr = Bitvector.create (Bigint.big_int_of_int64 addr) env.Path_predicate_env.formula.addr_size in
         Logger.debug ~level:0 "Heuristic concretize %a -> %Lx"  Pp.pp_bl_term e addr;
         bv_addr
-      | Dba.Expr.Var(name,sz,_) -> conc_var name 0 (sz-1) env
+      | Dba.Expr.Var { Dba.name; Dba.size = sz; _} -> conc_var name 0 (sz-1) env
       | Dba.Expr.Load(sz, _, e) ->
         let addr_v = self#concretize_expr_bv e env |> Bitvector.value_of in
         let raw_content =
@@ -306,7 +307,7 @@ class dse_analysis (input_config:Trace_config.t) =
       | Dba.Expr.Cst(`Constant, bv) -> bv
 
       | Dba.Expr.Unary(Dba.Unary_op.Restrict {Interval.lo = l; Interval.hi = h},
-                       Dba.Expr.Var(n, _, _)) when not (is_tmp_variable n) ->
+                       Dba.Expr.Var {Dba.name = n; _}) when not (is_tmp_variable n) ->
         conc_var n l h env
       | Dba.Expr.Unary(uop, e) ->
         let e' = self#concretize_expr_bv e env in
@@ -436,11 +437,11 @@ class dse_analysis (input_config:Trace_config.t) =
         env.Path_predicate_env.toplevel <- true;
         let open Dba in
         match e with
-        | Dba.Expr.Var(name, size, _) -> self#var_to_f name 0 (size-1) env
+        | Dba.Expr.Var {Dba.name; Dba.size;  _} -> self#var_to_f name 0 (size-1) env
         | Dba.Expr.Load(size, indien, e) ->  self#load_to_f e size indien env
         | Dba.Expr.Unary(Dba.Unary_op.Restrict interval, e) ->
           (match e with
-           | Dba.Expr.Var(name, sz, _) ->
+           | Dba.Expr.Var { Dba.name; Dba.size = sz; _} ->
              self#var_to_f ~restrict_of:sz name interval.Interval.lo interval.Interval.hi env
            | _ -> mk_bv_extract interval (self#expr_to_f e env))
         | Dba.Expr.Cst(region, bv) ->
@@ -576,7 +577,9 @@ class dse_analysis (input_config:Trace_config.t) =
               (Bitvector.create (Bigint.big_int_of_int64 next) env.Path_predicate_env.formula.addr_size)
             else Bitvector.zeros env.Path_predicate_env.formula.addr_size
         in (* create bitvector from int64 *)
-        if not (Bitvector.is_zeros nextaddr) then (* if 0 we are on the last instr in the trace *)
+        if not (Bitvector.is_zeros nextaddr) && not (is_libcall cur_inst.concrete_infos) then
+          (* if 0 we are on the last instr in the trace *)
+          (* if libcall, nextaddr in trace is different from the dcall target *)
           begin
             let f = self#compare_address e nextaddr env in
             Logger.debug ~level:3 "Add djmp constraint:%s" (Formula_pp.print_bl_term f);
@@ -599,7 +602,7 @@ class dse_analysis (input_config:Trace_config.t) =
         Logger.warning ~level:1 "Heuristic: choose else branch local if" ; off1
       | _,_ ->
         begin match cond with
-          | Dba.Expr.Var("DF", 1, None) ->
+          | Dba.Expr.Var {Dba.name = "DF"; Dba.size = 1; Dba.info = Dba.VarTag.Empty} ->
             Logger.warning ~level:1 "Heuristic: choose DF=0 for local if" ; off2
           (* consider that that we iterate string left to right *)
           | _ -> (* Else keep the shortest path to the exit (goto other instr) *)
@@ -615,17 +618,17 @@ class dse_analysis (input_config:Trace_config.t) =
     method private exec_if (cond:Dba.Expr.t) codeaddr (offset2:int) (env:Path_predicate_env.t): unit =
       let concrete_infos = cur_inst.Trace_type.concrete_infos in
       let open Trace_type in
-      try
-        let nextaddr =
-          try
-            get_next_address_bv cur_inst.concrete_infos env.Path_predicate_env.formula.addr_size
-          with Not_found_in_concrete_infos _ ->
-            if InstrMap.mem (cur_key_inst+1) trace.instrs then
-              let next_i = InstrMap.find (cur_key_inst+1) trace.instrs in
-              let next = next_i.location in
-              (Bitvector.create (Bigint.big_int_of_int64 next) env.Path_predicate_env.formula.addr_size)
-            else Bitvector.zeros env.Path_predicate_env.formula.addr_size
-        in (* create bitvector from int64 *)
+      let nextaddr =
+        try
+          get_next_address_bv cur_inst.concrete_infos env.Path_predicate_env.formula.addr_size
+        with Not_found_in_concrete_infos _ ->
+          if InstrMap.mem (cur_key_inst+1) trace.instrs then
+            let next_i = InstrMap.find (cur_key_inst+1) trace.instrs in
+            let next = next_i.location in
+            (Bitvector.create (Bigint.big_int_of_int64 next) env.Path_predicate_env.formula.addr_size)
+          else Bitvector.zeros env.Path_predicate_env.formula.addr_size
+      in (* create bitvector from int64 *)
+      if not (Bitvector.is_zeros nextaddr) then
         let new_f =
           match codeaddr with
           | Dba.JInner offset1 ->
@@ -644,21 +647,22 @@ class dse_analysis (input_config:Trace_config.t) =
             let f_cond = self#cond_to_f cond env in            (* Convert condition into formula *)
             (* let _ = Logger.debug "Add constraint %s" (Formula_pp.print_bl_term f_cond) in *)
             let f_cond =
-              if Bigint.compare_big_int (Dba_types.Caddress.base_value addr) (Bitvector.value_of nextaddr) = 0
+              if Virtual_address.compare (Dba_types.Caddress.base_value addr) (Virtual_address.of_bitvector nextaddr) = 0
               then f_cond else mk_bl_not f_cond
             in add_constraint env.Path_predicate_env.formula f_cond
         in
         env.Path_predicate_env.formula <- new_f (* modify the environnement *)
-      with Not_found_in_concrete_infos _ ->
-        failwith "Next address not found while trying to execute if"
+      else
+        Logger.warning "Trace ends with a Jcc, we don't constraint it because we don't know the taken branch";
 
     method private map_assignmmap (instrs:Dba_types.Statement.t list): (int * int) Basic_types.String.Map.t =
       fst (List.fold_left (fun (acc,c) i ->
           match Dba_types.Statement.instruction i with
-          | Dba.Instr.Assign(Dba.LValue.Var(name,_,_), _, _) ->
+          | Dba.Instr.Assign(Dba.LValue.Var v, _, _) ->
             (* Dot not take in account extract
                (can cause problem if we want to backtrack larger variable) *)
             (* | Assign(LhsVarRestrict(name,_,_,_)) -> *)
+             let name = v.Dba.name in
             if not(Basic_types.String.Map.mem name acc) then
               (Basic_types.String.Map.add name (c,c) acc,c+1)
             else
@@ -823,9 +827,9 @@ class dse_analysis (input_config:Trace_config.t) =
     method private add_initial_state (env:Path_predicate_env.t): unit =
       List.iter (fun mem_t ->
           Logger.debug ~level:0 "Initial state at %Lx:%s" (mem_t.addr) (string_to_hex mem_t.value);
-          let bytes = string_to_int_list mem_t.value in
+          let bytes = String_utils.char_codes mem_t.value in
           let init =
-            List.fold_left
+            Array.fold_left
               (fun (acc, i) v ->
                  Basic_types.Addr64.Map.add (Int64.add (mem_t.addr) i) v acc,
                  Int64.add i 1L
@@ -901,7 +905,7 @@ class dse_analysis (input_config:Trace_config.t) =
       in
       let size = Dba_types.LValue.unsafe_bitsize lhs in
       env.Path_predicate_env.formula <- fst(get_var_or_create new_f name size 0 (size-1));
-      self#exec_lhs lhs (Dba.Expr.var name size None) env
+      self#exec_lhs lhs (Dba.Expr.var name size) env
 
     (* Method abstracting solving via file or incremental mode *)
     method solve_predicate
@@ -967,8 +971,8 @@ class dse_analysis (input_config:Trace_config.t) =
     method private load_to_f (e:Dba.Expr.t) (size:Dba.size) endian (env:Path_predicate_env.t): bv_term =
       (* Convert a load in expression and update memory accordingly *)
       match endian with
-      | Dba.BigEndian -> failwith "Big endian not implemented\n"
-      | Dba.LittleEndian ->
+      | Machine.BigEndian -> failwith "Big endian not implemented\n"
+      | Machine.LittleEndian ->
         let expr_f = self#expr_to_f e env in
         self#logical_load expr_f size env
 
@@ -992,17 +996,17 @@ class dse_analysis (input_config:Trace_config.t) =
     method private exec_store (e_addr:Dba.Expr.t) (size:Dba.size) (e:Dba.Expr.t) endian (env:Path_predicate_env.t): unit =
       (* Purely symbolic implementation *)
       match endian with
-      | Dba.BigEndian -> failwith "Big endianness not yet implemented"
-      | Dba.LittleEndian ->
+      | Machine.BigEndian -> failwith "Big endianness not yet implemented"
+      | Machine.LittleEndian ->
         let f_expr = self#expr_to_f e ~is_lhs:false env in  (* Path_predicate_formula of data to write *)
         let f_addr = self#expr_to_f e_addr ~is_lhs:true env in
         self#logical_store f_addr f_expr size env
 
     method private exec_lhs lhs e (env:Path_predicate_env.t): unit =
       match lhs with
-      | Dba.LValue.Var(name, size, _) ->
+      | Dba.LValue.Var { Dba.name; Dba.size; _} ->
         self#maj_variable name size 0 (size-1) e env
-      | Dba.LValue.Restrict(name, size, {Interval.lo=i; Interval.hi=j}) ->
+      | Dba.LValue.Restrict({Dba.name; Dba.size; _}, {Interval.lo=i; Interval.hi=j}) ->
         self#maj_variable name size i j e env
       | Dba.LValue.Store(size, indien, e_addr) ->
         self#exec_store e_addr size e indien env
@@ -1044,7 +1048,7 @@ class dse_analysis (input_config:Trace_config.t) =
       let stub_inst =
         let bitsize = Size.Bit.create size in
         let instr =
-          Dba.Instr.assign (Dba.LValue.var "dumb" ~bitsize None) e (nth_dbainst + 1) in
+          Dba.Instr.assign (Dba.LValue.var "dumb" ~bitsize) e (nth_dbainst + 1) in
         Dba_types.Statement.set_instruction cur_dbainst instr in
       let saved_inst = cur_dbainst in
       cur_dbainst <- stub_inst;(* Dba.Temporarily replace current inst to make the policy engine matchable *)
@@ -1060,7 +1064,7 @@ class dse_analysis (input_config:Trace_config.t) =
       let size = computesize_dbaexpr e in
       let inst =
         let bitsize = Size.Bit.create size in
-        Dba.Instr.assign (Dba.LValue.var name ~bitsize None) e (nth_dbainst+1) in
+        Dba.Instr.assign (Dba.LValue.var name ~bitsize) e (nth_dbainst+1) in
       let stub_inst = Dba_types.Statement.set_instruction cur_dbainst inst in
       let saved_inst = cur_dbainst in
       cur_dbainst <- stub_inst; (* Dba.Temporarily replace current inst to make the policy engine matchable *)
@@ -1071,7 +1075,8 @@ class dse_analysis (input_config:Trace_config.t) =
     method private tricky_cond_to_f (c:Dba.Expr.t) ?(apply_cs=true) (env:Path_predicate_env.t): bl_term =
       let inst =
         Dba.Instr.ite c
-          (Dba.JOuter (Dba_types.Caddress.block_start @@ Bitvector.zeros 32))
+          (Dba.JOuter (Dba_types.Caddress.block_start @@
+                         Virtual_address.create 0))
           (nth_dbainst+1) in
       let stub_inst =
         Dba_types.Statement.set_instruction cur_dbainst inst in

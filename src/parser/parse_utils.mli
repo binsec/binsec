@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,7 +27,7 @@ val read_file:
 
 val read_dba_file : string -> 'a Dba_types.program
 
-val load_dba_definition : Machine.isa -> 'a Dba_types.program
+val load_dba_definition : Machine.t -> 'a Dba_types.program
 
 val read_optional_config_file : string option -> Infos.t
 (** [read_optional_config_file optfile] parses [optfile] if it is not [None].

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -16,11 +16,13 @@
 (*  See the GNU Lesser General Public License version 2.1                 *)
 (*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
 (**************************************************************************)
+
 open Dse_options
 open Trace_type
 open Config_piqi
 open Configuration
 open Path_predicate_env
+
 
 class check_trace (trace_config:Trace_config.t) =
   object(self) inherit InvertChild.invert_child trace_config
@@ -38,7 +40,8 @@ class check_trace (trace_config:Trace_config.t) =
           let next_addr = get_next_address inst.concrete_infos in
           let static_predicate = self#build_cond_predicate cond env in
           let predicate =
-            if Bigint.compare_big_int address (Bigint.big_int_of_int64 next_addr) <> 0
+            if Virtual_address.compare address
+                 Virtual_address.(of_int64 next_addr) <> 0
             then Formula.mk_bl_not static_predicate
             else static_predicate
           in

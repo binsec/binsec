@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -153,7 +153,7 @@ class opaque_analyzer (input_config:Trace_config.t) =
           let status = Basic_types.Addr64.Map.find addr if_map in
           let pred = self#build_cond_predicate cond env in
           let pred =
-            if Bigint.eq_big_int address (Bigint.big_int_of_int64 next_l)
+            if Virtual_address.equal address (Virtual_address.of_int64 next_l)
             then mk_bl_not pred else pred in
           if self#is_partial_if_to_check addr next_l then
             begin
@@ -315,10 +315,10 @@ class static_opaque_analyzer (input_config:Trace_config.t) =
       try
         match dba_inst.Dba_types.Statement.instruction with
         | Dba.Instr.If (cond, Dba.JOuter {base = address; _ }, off) ->
-          let address1 = Bitvector.to_int64 address in
+          let address1 = Virtual_address.to_int64 address in
           let address2 =
             match (List.nth tr_inst.dbainstrs off).Dba_types.Statement.instruction with
-            | Dba.Instr.SJump(JOuter {base = addr2; _},_) -> Bitvector.to_int64 addr2 | _ -> failwith "Goto not found" in
+            | Dba.Instr.SJump(JOuter {base = addr2; _},_) -> Virtual_address.to_int64 addr2 | _ -> failwith "Goto not found" in
           if  (not(target_exists) && target_addr=0L) || (target_exists && target_addr=addr) then
             (let pred = self#build_cond_predicate cond env in
              let res1,_, t1 = self#solve_predicate pred ~name:f_name ~prek:k_value env in

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -38,7 +38,7 @@ module type S = sig
       character is inserted. *)
 
 
-  val fatal: ('a, Format.formatter, unit) format -> 'a
+  val fatal: ?e:exn -> ('a, Format.formatter, unit, 'b) format4 -> 'a
   (** For messages that show a fatal failure, In this case, you should not be
       able to continue and exit [code] should follow the emission.
       Use [error] otherwise. *)

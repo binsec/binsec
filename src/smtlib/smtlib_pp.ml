@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -160,6 +160,11 @@ let rec pp_term ppf term =
     fprintf ppf "@[<hov 1>(!@ %a %a)@]"
       pp_term term
       pp_attributes attrs
+  | TermLambdaTerm (svars, term) ->
+     fprintf ppf
+    "@[<hov 1>(lambda@ (@[<hov>%a@])@ %a)]"
+    pp_sorted_vars svars
+    pp_term term
 
 and pp_terms ppf terms = fprintf ppf "%a" (pp_list pp_term) terms
 

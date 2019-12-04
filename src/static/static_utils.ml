@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -218,7 +218,7 @@ let discover_from_address disasm imap address =
   let vaddr = Dba_types.Caddress.to_virtual_address address in
   let add_block_starts addr _ set =
     if addr.Dba.id = 0 then
-      let open Virtual_address in
+      let open! Virtual_address in
       Set.add (Dba_types.Caddress.to_virtual_address addr) set
     else set in
   let visited =
@@ -258,8 +258,5 @@ let update_instr_map
         fun visited worklist p ->
           Disasm.Recursive.disassemble ~visited ~worklist ~stops p in
       redisassemble disasm widen inst_map address
-    else begin
-      Static_options.Logger.fatal
-        "No instruction can be retrieved from executable.";
-      exit 3
-    end
+    else Static_options.Logger.fatal
+        "No instruction can be retrieved from executable."

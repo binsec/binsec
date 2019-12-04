@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,13 +33,13 @@ let parse_bitvector (bv:Dba_piqi.bitvector): Bitvector.t =
   Bitvector.create (Bigint.big_int_of_int64 bv.bv) (Int32.to_int bv.size)
 
 let generate_dbacodeaddress (addr:Dba.address): Dba_piqi.dbacodeaddress =
-  let bv = generate_bitvector addr.Dba.base in
+  let bv =  Virtual_address.to_int64 addr.Dba.base in
   { Dba_piqi.Dbacodeaddress.bitvector = bv;
     Dba_piqi.Dbacodeaddress.dbaoffset = Int32.of_int addr.Dba.id;}
 
 let parse_dbacodeaddress addr : Dba.address =
   let open Dba_piqi.Dbacodeaddress in
-  let bv = parse_bitvector addr.bitvector
+  let bv = Virtual_address.of_int64 addr.bitvector
   and id = Int32.to_int addr.dbaoffset in
   Dba_types.Caddress.create bv id
 
@@ -135,20 +135,20 @@ let piqi_to_binaryop = function
   | `dba_geq_s -> Dba.Binary_op.GeqS | `dba_gt_s -> Dba.Binary_op.GtS
 
 let parse_endian = function
-  | `little -> Dba.LittleEndian
-  | `big -> Dba.BigEndian
+  | `little -> Machine.LittleEndian
+  | `big -> Machine.BigEndian
 
 let rec generate_dbaexpr (e:Dba.Expr.t)  =
   let open Dba_piqi.Dbaexpr in
-  let expr  =  Dba_piqi.default_dbaexpr () in
+  let expr = Dba_piqi.default_dbaexpr () in
   match e with
-  | Dba.Expr.Var(s,sz,_) ->
+  | Dba.Expr.Var {Dba.name = s; Dba.size = sz; _} ->
     {expr with typeid = `dba_expr_var;
                name = Some s;
                size = Some (Int32.of_int sz)}
   | Dba.Expr.Load(sz, endian, e1) ->
     let endian =
-      match endian with Dba.LittleEndian -> `little | Dba.BigEndian -> `big in
+      match endian with Machine.LittleEndian -> `little | Machine.BigEndian -> `big in
     {expr with typeid = `dba_load;
                size = Some (Int32.of_int sz);
                endian = Some endian;
@@ -204,7 +204,7 @@ let rec parse_dbaexpr e =
   let open Dba_piqi.Dbaexpr in
   let open Dba.Expr in
   match e.typeid with
-  | `dba_expr_var -> Dba.Expr.var (the e.name) (Int32.to_int (the e.size)) None
+  | `dba_expr_var -> Dba.Expr.var (the e.name) (Int32.to_int (the e.size))
   | `dba_load ->
     load
       (Int32.to_int  (the e.size) |> Size.Byte.create)
@@ -256,17 +256,17 @@ let generate_lhs (lhs:Dba.LValue.t) =
   let open Dba_piqi.Dba_lhs in
   let piq_lhs = Dba_piqi.default_dba_lhs () in
   match lhs with
-  | Dba.LValue.Var(s,sz,_) ->
+  | Dba.LValue.Var {Dba.name = s; Dba.size = sz; _} ->
     {piq_lhs with typeid=`dba_lhs_var; name=Some s; size=Some (Int32.of_int sz)}
-  | Dba.LValue.Restrict(s,sz, {Interval.lo=low; Interval.hi=high}) ->
+  | Dba.LValue.Restrict(v, {Interval.lo=low; Interval.hi=high}) ->
     {piq_lhs with typeid = `dba_lhs_var_restrict;
-                  name = Some s;
-                  size = Some (Int32.of_int sz);
+                  name = Some v.Dba.name;
+                  size = Some (Int32.of_int v.Dba.size);
                   low = Some (Int32.of_int low);
                   high = Some (Int32.of_int high)}
   | Dba.LValue.Store(sz,endian,e) ->
     let indien =
-      match endian with Dba.LittleEndian -> `little | Dba.BigEndian -> `big in
+      match endian with Machine.LittleEndian -> `little | Machine.BigEndian -> `big in
     {piq_lhs with typeid = `dba_store;
                   size = Some (Int32.of_int sz);
                   endian = Some indien;
@@ -278,12 +278,12 @@ let parse_lhs lhs =
   match lhs.typeid with
   | `dba_lhs_var ->
     let bitsize = Size.Bit.of_int32 (the lhs.size) in
-    var (the lhs.name) ~bitsize None
+    var (the lhs.name) ~bitsize
   | `dba_lhs_var_restrict ->
     let bitsize = Size.Bit.of_int32 (the lhs.size)
     and lo = Int32.to_int (the lhs.low)
     and hi = Int32.to_int (the lhs.high) in
-    restrict (the lhs.name) bitsize lo hi
+    _restrict (the lhs.name) bitsize lo hi
   | `dba_store ->
     let bytesize = Size.Byte.of_int32 (the lhs.size) in
     store bytesize (parse_endian (the lhs.endian)) (parse_dbaexpr (the lhs.expr))
@@ -347,11 +347,11 @@ let parse_instr inst =
     | `dba_ik_sjump ->
       let tag = parse_tag_option inst.tags
       and caddr = parse_codeaddress (the inst.address) in
-      static_jump caddr ~tag
+      static_jump caddr ?tag
     | `dba_ik_djump ->
       let tag = parse_tag_option inst.tags
       and e = parse_dbaexpr (the inst.expr) in
-      dynamic_jump e ~tag
+      dynamic_jump e ?tag
 
     | `dba_ik_if ->
       let c = parse_cond (the inst.cond)

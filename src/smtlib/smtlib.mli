@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -175,6 +175,7 @@ and term_desc =
   | TermLetTerm of var_bindings * term
   | TermForallTerm of sorted_vars * term
   | TermExistsTerm of sorted_vars * term
+  | TermLambdaTerm of sorted_vars * term
   | TermAnnotatedTerm of term * attributes
 
 and terms = term list

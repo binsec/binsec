@@ -1,7 +1,7 @@
 ##########################################################################
 #  This file is part of BINSEC.                                          #
 #                                                                        #
-#  Copyright (C) 2016-2018                                               #
+#  Copyright (C) 2016-2019                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -38,6 +38,16 @@ has_lib_or_die ()
 AC_CHECK_PROG(MAKE, make, make, no)
 has_or_die $MAKE "Could not find GNU make"
 
+AC_MSG_CHECKING([GNU make version])
+GNU_MAKE_LEAST_VERSION=3.82
+GNU_MAKE_VERSION=`$MAKE --version | head -n 1 | cut -d' ' -f 3`
+case $GNU_MAKE_VERSION in
+     3.82*) AS_ECHO("Good! ($GNU_MAKE_VERSION)");;
+     4.**) AS_ECHO("Good! ($GNU_MAKE_VERSION)");;
+#     4.2.1.*) AS_ECHO("Good! ($GNU_MAKE_VERSION)");;
+     *) AC_MSG_ERROR("Please use a GNU Make version >= $GNU_MAKE_LEAST_VERSION (found $GNU_MAKE_VERSION).");;
+esac
+
 AC_CHECK_PROG(OCAMLFIND, ocamlfind, ocamlfind, no)
 has_or_die $OCAMLFIND "Could not find ocamlfind"
 
@@ -56,12 +66,15 @@ fi
 AC_MSG_CHECKING([version of OCaml])
 OCAMLCVERSION=`$OCAMLC -version`
 LEAST_VERSION="4.04.2"
-MOST_VERSION="4.05.0"
+MOST_VERSION="4.07.1"
 case $OCAMLCVERSION in
      4.04*) AS_ECHO("Good! ($OCAMLCVERSION)");;
      4.05*) AS_ECHO("Good! ($OCAMLCVERSION)");;
-     # no support for 4.06.* && 4.07 due to piqilib dependency on optcomp which depends on ocaml < 4.06.0
-     *) AC_MSG_ERROR("Please use an ocaml version >= $LEAST_VERSION and <= $MOST_VERSION (found $OCAMLCVERSION).");;
+     4.06.0) AS_ECHO("Good! ($OCAMLCVERSION)");;     # tested & included 2019-07-25
+     4.06.1) AS_ECHO("Good! ($OCAMLCVERSION)");;     # tested & included 2019-07-25
+     4.07.0) AS_ECHO("Good! ($OCAMLCVERSION)");;     # tested & included 2019-07-25
+     4.07.1) AS_ECHO("Good! ($OCAMLCVERSION)");;     # tested & included 2019-07-25
+     *) AC_MSG_ERROR("Please use an OCaml version >= $LEAST_VERSION and <= $MOST_VERSION (found $OCAMLCVERSION).");;
 esac
 
 
@@ -166,9 +179,6 @@ has_or_die $PIQI "Could not find piqi"
 AC_CHECK_PROG(PIQI2CAML, piqic-ocaml , piqic-ocaml, no)
 has_or_die $PIQI2CAML "Could not find piqic-ocaml"
 
-AC_CHECK_PROG(PROTOC, protoc, protoc, no)
-has_or_die $PROTOC "Could not find protoc"
-
 
 
 # Optional libraries #
@@ -180,11 +190,6 @@ else
     OCAMLDOCVERSION=`ocamldoc -version`
 fi
 
-
-AC_CHECK_PROG(CMAKE, cmake, cmake, no)
-if test x"$CMAKE" = xno; then
-   AC_MSG_WARN("You will not be able to compile PINSEC")
-fi
 
 ## headache
 AC_CHECK_PROG(HEADACHE, headache, headache, no)
@@ -223,6 +228,9 @@ AC_CONFIG_COMMANDS([depend], [touch ${depend_file}], [depend_file="src/.depend"]
 PIQI_DIR="piqi"
 AC_CONFIG_COMMANDS([piqi_directory], [mkdir -p $dir],[dir="src/$PIQI_DIR"])
 
+
+AC_CONFIG_COMMANDS([version],[cp VERSION $src_dir],[src_dir="src"])
+
 # See https://www.gnu.org/software/autoconf/manual/autoconf-2.69/html_node/Particular-Programs.html
 AC_PROG_AWK
 AC_PROG_MKDIR_P
@@ -242,7 +250,6 @@ AC_SUBST(OCAMLBEST)
 AC_SUBST(HEADACHE)
 AC_SUBST(PIQI)
 AC_SUBST(PIQI2CAML)
-AC_SUBST(PROTOC)
 AC_SUBST(PIQI_DIR)
 AC_SUBST(AWK)
 AC_SUBST(MKDIR_P)

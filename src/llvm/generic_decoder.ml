@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -91,7 +91,7 @@ module Decode_Expr(I:Expr_Input) = struct
        | Unary_op.Restrict {Interval.lo; Interval.hi;} ->
          I.Binary.bextract ~lo ~hi ~oldsize:(Dba.Expr.size_of e1) v1
       )
-    | Expr.Var(var,size,_) -> I.get_var ~size var
+    | Expr.Var { name = var; size; _ } -> I.get_var ~size var
     | Expr.Load(size,endianness,e) ->
       expr e >>= fun address ->
       I.load ~size:(size * 8) endianness address
@@ -138,8 +138,8 @@ end
   open Dba
 
   let write_lhs state value = function
-    | LValue.Var(name,size,_) -> S.set_var ~size name value state
-    | LValue.Restrict(name,size, {Interval.lo; Interval.hi}) ->
+    | LValue.Var {name; size; _} -> S.set_var ~size name value state
+    | LValue.Restrict({name; size; _}, {Interval.lo; Interval.hi}) ->
       let value_size = size in
       let (old,state) = S.get_var ~size name state in
       let written_size = 1 + hi - lo in

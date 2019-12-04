@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -114,6 +114,7 @@ let rec is_constant_term (t : Smtlib.term) : bool =
   | TermQualIdentifier _
   | TermQualIdentifierTerms _
   | TermForallTerm _
+  | TermLambdaTerm _
   | TermExistsTerm _ -> false
 
 
@@ -219,3 +220,24 @@ let mk_cmd_define_fun fun_def =
 let mk_command (cmd : Smtlib.command_desc) : Smtlib.command =
   { command_desc = cmd; command_loc = Locations.dummy_loc; }
 
+
+let test_model_parsing () =
+  let open Smtlib_options in
+  if Model_from_file.is_set () then begin
+      let filename = Model_from_file.get () in
+      Logger.debug "Parsing SMT model from %s" filename;
+      let parser = Smtlib_parser.model in
+      let lexer = Smtlib_lexer.token in
+      let premodel = Parse_utils.read_file ~parser ~lexer ~filename in
+      Logger.debug "@[Parsed model@\n%a@]" Smtlib_pp.pp_model premodel;
+      let model = Smt_model.extract premodel in
+      Logger.result "%a" Smt_model.pp model
+    end
+;;
+
+
+let _ =
+  Cli.Boot.enlist
+    ~name:"SMT model parser test"
+    ~f:test_model_parsing
+;;

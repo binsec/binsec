@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,72 +21,189 @@
 
 open Loader_types
 
-type identification = private {
-  elf_class      : u8;
-  elf_data       : u8;
-  elf_version    : u8;
-  elf_osabi      : u8;
-  elf_abiversion : u8;
-}
+module E_class : sig
+  type t = [ `x32 | `x64 ]
 
-(* Main header. *)
-type program = private {
-  e_ident     : identification;
-  e_type      : u16;
-  e_machine   : u16;
-  e_version   : u32;
-  e_entry     : u64;
-  e_phoff     : u64;
-  e_shoff     : u64;
-  e_flags     : u32;
-  e_ehsize    : u16;
-  e_phentsize : u16;
-  e_phnum     : u16;
-  e_shentsize : u16;
-  e_shnum     : u16;
-  e_shstrndx  : u16;
-}
+  include Sigs.PRINTABLE with type t := t
+end
 
-(* ELF section header. *)
-type section = private {
-  sh_name      : u32;
-  sh_type      : u32;
-  sh_flags     : u64;
-  sh_addr      : u64;
-  sh_offset    : u64;
-  sh_size      : u64;
-  sh_link      : u32;
-  sh_info      : u32;
-  sh_addralign : u64;
-  sh_entsize   : u64;
-  sh_name_str : string;
-}
+module E_ident : sig
+  type t = private {
+               kind       : E_class.t;
+               data       : Machine.endianness;
+               version    : u8;
+               osabi      : u8;
+               abiversion : u8;
+             }
+end
 
-(* ELF program header *)
-type program_header = private {
-  p_type    : u32;
-  p_flags   : u32;
-  p_offset  : u64;
-  p_vaddr   : u64;
-  p_paddr   : u64;
-  p_filesz  : u64;
-  p_memsz   : u64;
-  p_align   : u64;
-};;
+module Ehdr : sig
+  module ET : sig
+    type t =
+      | NONE
+      | REL
+      | EXEC
+      | DYN
+      | CORE
+      | OS of int
+      | PROC of int
 
-type symbol = private {
-  st_name  : u32;
-  st_info  : u8 ;
-  st_other : u8 ;
-  st_shndx : u16;
-  st_value : u64;
-  st_size  : u64;
-  st_name_str : string;
-}
+    include Sigs.PRINTABLE with type t := t
+  end
+
+  (* Main header. *)
+  type t = private {
+               ident     : E_ident.t;
+               kind      : ET.t;
+               machine   : Machine.t;
+               version   : u32;
+               entry     : u64;
+               phoff     : u64;
+               shoff     : u64;
+               flags     : u32;
+               ehsize    : u16;
+               phentsize : u16;
+               phnum     : u16;
+               shentsize : u16;
+               shnum     : u16;
+               shstrndx  : u16;
+             }
+
+  include Sigs.PRINTABLE with type t := t
+end
+
+module Shdr : sig
+
+  module SHT : sig
+    type t =
+      | NULL
+      | PROGBITS
+      | SYMTAB
+      | STRTAB
+      | RELA
+      | HASH
+      | DYNAMIC
+      | NOTE
+      | NOBITS
+      | REL
+      | SHLIB
+      | DYNSYM
+      | INIT_ARRAY
+      | FINI_ARRAY
+      | PREINIT_ARRAY
+      | GROUP
+      | SYMTAB_SHNDX
+      | OS of int
+      | PROC of int
+      | USER of int
+
+    include Sigs.PRINTABLE with type t := t
+  end
+
+  module SHF : sig
+    type t =
+      | WRITE
+      | ALLOC
+      | EXECINSTR
+      | MERGE
+      | STRINGS
+      | INFO_LINK
+      | LINK_ORDER
+      | OS_NONCONFORMING
+      | GROUP
+      | TLS
+      | OS
+      | PROC
+
+    val is : u16 -> t -> bool
+
+    include Sigs.PRINTABLE with type t := u16
+  end
+
+  (* ELF section header. *)
+  type t = private {
+               idx       : int;
+               name      : string;
+               kind      : SHT.t;
+               flags     : u64;
+               addr      : u64;
+               offset    : u64;
+               size      : u64;
+               link      : u32;
+               info      : u32;
+               addralign : u64;
+               entsize   : u64;
+             }
+
+  module SHN : sig
+    type section = t
+    type t =
+      | UNDEF
+      | SEC of section
+      | PROC of int
+      | OS of int
+      | ABS
+      | COMMON
+
+    include Sigs.PRINTABLE with type t := t
+  end
+end
+
+module Sym : sig
+  module STT : sig
+    type t =
+      | NOTYPE
+      | OBJECT
+      | FUNC
+      | SECTION
+      | FILE
+      | COMMON
+      | TLS
+      | OS of int
+      | PROC of int
+
+    include Sigs.PRINTABLE with type t := t
+  end
+
+  module STB : sig
+    type t =
+      | LOCAL
+      | GLOBAL
+      | WEAK
+      | OS of int
+      | PROC of int
+
+    include Sigs.PRINTABLE with type t := t
+  end
+
+  type t = private {
+               name  : string;
+               kind  : STT.t;
+               bind  : STB.t;
+               other : u8;
+               sh    : Shdr.SHN.t;
+               value : u64;
+               size  : u64;
+             }
+end
+
+module Phdr : sig
+  (* ELF program header *)
+  type t = private {
+               kind    : u32;
+               flags   : u32;
+               offset  : u64;
+               vaddr   : u64;
+               paddr   : u64;
+               filesz  : u64;
+               memsz   : u64;
+               align   : u64;
+             }
+end
 
 include Loader_sigs.S
-  with type Section.header = section
-   and type Symbol.header  = symbol
-   and type Img.header     = program
+  with type Section.header = Shdr.t
+   and type Symbol.header  = Sym.t
+   and type Img.header     = Ehdr.t
 
-val program_headers: Img.t -> program_header array
+val program_headers: Img.t -> Phdr.t array

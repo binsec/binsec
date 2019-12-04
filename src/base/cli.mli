@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -96,12 +96,9 @@ module type S = sig
   module Logger : Logger.S
 end
 
-(** {3 Functor }*)
+(** {3 Functor signature }*)
 
-(** Call [Cli.Make] to create a kind of command line namespace *)
-module Make(D:DECL) : sig
-
-  val is_enabled : unit -> bool
+module type Cli_sig = sig
   module Logger : Logger.S
 
   module Debug_level : INTEGER
@@ -194,7 +191,34 @@ module Make(D:DECL) : sig
   end
 end
 
-(** {2 Startup}
+(** {3 Functor}*)
+
+(** Call [Cli.Make] to create a kind of command line namespace *)
+module Make(D:DECL) : sig
+  (** [is_enabled] is a switch that is automatically set. *)
+  val is_enabled : unit -> bool
+
+  include Cli_sig
+end
+
+(** Call [Cli.Options] instead if you just want to have dedicated options to a
+ ** set of functionalities.
+ **
+ ** The difference with [Cli.Make] is the absence of a dedicated command line
+ ** switch for this set of options.
+ **
+ ** For example [Cli.Make(struct let name = "foo" ... end)] will add a '-foo'
+ ** global switch to the command line whereas [Cli.Options(struct let name =
+ ** "foo" ... end)] will not.
+ **
+ ** Also, using [Cli.Options] entails that there should not be any associated
+ ** functions to be automatically run at startup (i.e., no [Cli.Boot.enlist]
+ ** call from inside the functionality kernel associated with this set of
+ ** command-line switches).
+ *)
+module Options(D:DECL) : Cli_sig ;;
+
+(** {2 Boot}
     This module collects the functions to be executed at startup time.
 *)
 
@@ -222,5 +246,7 @@ end
 
 
 val parse: unit -> string list
+(** [parse ()] parses options from the command line. *)
 
 val parse_configuration_file : filename:string -> string list
+(** [parse ()] parses options from configuration file [filename]. *)

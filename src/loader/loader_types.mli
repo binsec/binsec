@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,28 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-type arch =
-  | Unknown
-  | AMD64
-  | ARM
-  | ARM64
-  | IA64
-  | MIPS
-  | PPC
-  | PPC64
-  | SPARC
-  | XCORE
-  | X86
-
-val pp_arch : Format.formatter -> arch -> unit
-val print_arch : arch -> string
-
 type section_flag = Read | Write | Exec
-
-type endian = LittleEndian | BigEndian
-
-val pp_endian : Format.formatter -> endian -> unit
-val print_endian : endian -> string
 
 type 'a map = {
   raw  : 'a;
@@ -53,3 +32,8 @@ type u8   = int
 type u16  = int
 type u32  = int
 type u64  = int (* Bye bye 32 bits. 63 bits ought to be enough for anyone. *)
+
+type s8   = int
+type s16  = int
+type s32  = int
+type s64  = int (* Bye bye 32 bits. 63 bits ought to be enough for anyone. *)

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -85,7 +85,8 @@ struct
               SubEnv.fold f sub_m acc
             | Static_types.Array `Constant ->
               let f i (v1, v2) acc =
-                let id = Bitvector.create i (Machine.Word_size.get ()) in
+                let id = Bitvector.create i
+                           (Kernel_options.Machine.word_size ()) in
                 let id = Bitvector.to_hexstring id in
                 let sv1 = (Val1.to_string v1) in
                 let sv2 = (Val2.to_string v2) in
@@ -94,7 +95,8 @@ struct
               SubEnv.fold f sub_m acc
             | Static_types.Array `Stack ->
               let f i (v1, v2) acc =
-                let id = Bitvector.create i (Machine.Word_size.get ()) in
+                let id = Bitvector.create i
+                           (Kernel_options.Machine.word_size ()) in
                 let id = Bitvector.to_hexstring id in
                 let s1 = (Val1.to_string v1) in
                 let s2 = (Val2.to_string v2) in
@@ -103,7 +105,8 @@ struct
               SubEnv.fold f sub_m acc
             | Static_types.Array (`Malloc ((id, _), _)) ->
               let f i (v1, v2) acc =
-                let o = Bitvector.create i (Machine.Word_size.get ()) in
+                let o = Bitvector.create i
+                          (Kernel_options.Machine.word_size ()) in
                 let o = Bitvector.to_hexstring o in
                 let s1 = Val1.to_string v1 in
                 let s2 = Val2.to_string v2 in
@@ -256,7 +259,7 @@ struct
 
   let rec eval_expr expr s assumes global_regions : (Val1.t * Val2.t) * (Smt_bitvectors.smtBvExprAlt list)=
     match expr with
-    | Dba.Expr.Var (st,size, _) -> (
+    | Dba.(Expr.Var { name = st; size; _}) -> (
         let v =
           try load (Static_types.Var (st, size)) Bigint.zero_big_int s assumes global_regions, assumes
           with Not_found ->
@@ -268,8 +271,8 @@ struct
     | Dba.Expr.Load (size, endianness, e) ->
       let append_value (v1, v2) (w1, w2) =
         match endianness with
-        | Dba.BigEndian    -> Val1.concat v1 w1, Val2.concat v2 w2
-        | Dba.LittleEndian -> Val1.concat w1 v1, Val2.concat w2 v2
+        | Machine.BigEndian    -> Val1.concat v1 w1, Val2.concat v2 w2
+        | Machine.LittleEndian -> Val1.concat w1 v1, Val2.concat w2 v2
       in
       let join_couple (v1, v2) (w1, w2) = Val1.join v1 w1, Val2.join v2 w2 in
       let (v_exp1, v_exp2), assumes = eval_expr e s assumes global_regions in
@@ -279,7 +282,9 @@ struct
             `Value (`Constant, Region_bitvector.bitvector_of elem) in
           SubEnv.singleton Bigint.zero_big_int
             (Val1.singleton value, Val2.singleton value)
-        in Static_types.Env.add (Static_types.Var ("\\addr", Machine.Word_size.get ())) sub_s s
+        in Static_types.Env.add
+             (Static_types.Var ("\\addr", Kernel_options.Machine.word_size ()))
+             sub_s s
       in
       let values =
         match elements v_exp1 v_exp2 with
@@ -460,7 +465,8 @@ struct
               let sub_m =
                 SubEnv.add Bigint.zero_big_int (Val1.singleton !v_expr, Val2.singleton !v_expr) SubEnv.empty
               in
-              m := Static_types.Env.add (Static_types.Var ("\\addr", Machine.Word_size.get ())) sub_m !m;
+              m := Static_types.Env.add
+                     (Static_types.Var ("\\addr", Kernel_options.Machine.word_size ())) sub_m !m;
               let of1 = 8 * int_of_big_int (sub_big_int !j i) in
               let of2 = of1 + 7 in
               m := store (Static_types.Array region) !j
@@ -504,7 +510,7 @@ struct
                   Bigint.zero_big_int (Val1.singleton !v_expr,
                                        Val2.singleton !v_expr)
               in
-              m := Static_types.Env.add (Static_types.Var ("\\addr", Machine.Word_size.get ())) sub_m !m;
+              m := Static_types.Env.add (Static_types.Var ("\\addr", Kernel_options.Machine.word_size ())) sub_m !m;
               let of1 = 8 * ((size - 1) - int_of_big_int (sub_big_int !j i)) in
               let of2 = of1 + 7 in
               m := store (Static_types.Array region) !j
@@ -519,8 +525,8 @@ struct
 
   (* FIXME: refactor functions above *)
   let store = function
-    | Dba.LittleEndian -> store_little_endian
-    | Dba.BigEndian -> store_big_endian
+    | Machine.LittleEndian -> store_little_endian
+    | Machine.BigEndian -> store_big_endian
 
   let assign lhs e (s: t) assumes global_regions : t * (Smt_bitvectors.smtBvExprAlt list) =
     match s with
@@ -528,10 +534,10 @@ struct
     | Some s ->
       let v, assumes = eval_expr e s assumes global_regions in
       match lhs with
-      | Dba.LValue.Var (st, size, _) ->
+      | Dba.(LValue.Var { name = st; size; _}) ->
         let sub_s = SubEnv.add (Bigint.zero_big_int) v SubEnv.empty in
         Some (Static_types.Env.add (Static_types.Var (st, size)) sub_s s), assumes
-      | Dba.LValue.Restrict (_st, _size, _) ->
+      | Dba.LValue.Restrict _ ->
         failwith "analyse.ml: restrict case not handled"
 
       | Dba.LValue.Store (size, endianness, expr) ->
@@ -562,25 +568,27 @@ struct
            in
            let root_zero = SubEnv.singleton Bigint.zero_big_int in
            (match exp1, exp2 with
-            | Dba.Expr.Var (v1, size, _), Dba.Expr.Cst _ ->
+            | Dba.Expr.Var {Dba.name = v1; Dba.size; _}, Dba.Expr.Cst _ ->
               let sub_m = root_zero v_1 in
               Some (Static_types.Env.add (Static_types.Var (v1, size)) sub_m m), assumes
-            | Dba.Expr.Cst _, Dba.Expr.Var (v2, size, _) ->
+            | Dba.Expr.Cst _, Dba.(Expr.Var { name = v2; size; _}) ->
               let sub_m = root_zero v_2 in
               Some (Static_types.Env.add (Static_types.Var (v2, size)) sub_m m), assumes
-            | Dba.Expr.Var (v1, _, _), Dba.Expr.Var (v2, size, _) ->
-              let sub_m = root_zero v_1 in
-              let m = Static_types.Env.add (Static_types.Var (v1, size)) sub_m m in
-              let sub_m = root_zero v_2 in
-              Some (Static_types.Env.add (Static_types.Var (v2, size)) sub_m m), assumes
-            | Dba.Expr.Var (v, size, _),
+            | Dba.Expr.Var v1, Dba.Expr.Var v2 ->
+               let open Dba in
+               let size = v2.size in
+               let sub_m = root_zero v_1 in
+               let m = Static_types.Env.add (Static_types.Var (v1.name, size)) sub_m m in
+               let sub_m = root_zero v_2 in
+               Some (Static_types.Env.add (Static_types.Var (v2.name , size)) sub_m m), assumes
+            | Dba.(Expr.Var { name = v; size; _}),
               Dba.Expr.Load (lsize, endianness, e) ->
               let sub_m = root_zero v_1 in
               let m = Static_types.Env.add (Static_types.Var (v, size)) sub_m m in
               Some (store endianness lsize v_2 e m assumes global_regions),
               assumes
             | Dba.Expr.Load (size, endianness, e),
-              Dba.Expr.Var (v', size', _) ->
+              Dba.(Expr.Var { name = v'; size = size'; _}) ->
               let sub_m = root_zero v_2 in
               let m = Static_types.Env.add (Static_types.Var (v', size')) sub_m m in
               Some (store endianness size v_1 e m assumes global_regions), assumes
@@ -636,10 +644,10 @@ struct
     match s with
       None -> failwith "unrelstate.ml: check exec permission with empyu state"
     | Some m ->
-      let bv = addr.Dba.base in
+      let bv = Bitvector.create (Virtual_address.to_bigint addr.Dba.base) 32 in
       let s = Val1.singleton (`Value (`Constant, bv)), Val2.singleton (`Value (`Constant, bv)) in
       let sub_m = SubEnv.singleton Bigint.zero_big_int s  in
-      let m = Static_types.Env.add (Static_types.Var ("\\addr", Machine.Word_size.get ())) sub_m m in
+      let m = Static_types.Env.add (Static_types.Var ("\\addr", Kernel_options.Machine.word_size ())) sub_m m in
       let c =
         try Dba_types.Rights.find_exec_right `Constant !Concrete_eval.permis
         with Not_found ->  Dba.Expr.one
@@ -707,10 +715,12 @@ struct
       in
       let locations, djumps_map = List.fold_right (fun elem (acc1, acc2) ->
           if Region_bitvector.region_of elem = `Constant then
-            if Region_bitvector.size_of elem = Machine.Word_size.get () then
+            if Region_bitvector.size_of elem =
+                 Kernel_options.Machine.word_size () then
               begin
                 let a = Dba_types.Caddress.block_start
-                  @@ Region_bitvector.bitvector_of elem in
+                  @@ Virtual_address.of_bitvector @@
+                    Region_bitvector.bitvector_of elem in
                 let t1 = ((a, cstack, loop), Some m, flgs, equalities) :: acc1 in
                 let t2 =
                   let s =
@@ -773,29 +783,27 @@ struct
       let rec update_memory_nondet lhslist s assumes global_regions =
         match lhslist with
         | [] -> s, assumes
-        | [Dba.LValue.Var (st, size, _)] ->
+        | [Dba.(LValue.Var { name = st; size; _})] ->
           let sub_s =
             SubEnv.add (Bigint.zero_big_int) (Val1.universe, Val2.universe) SubEnv.empty
           in (Static_types.Env.add (Static_types.Var (st, size)) sub_s s), assumes
-        | [Dba.LValue.Restrict (_st, _size, _)] ->
-          failwith "analyse.ml: restrict case not handled"
-        | [Dba.LValue.Store (size, Dba.BigEndian, expr)] ->
+        | [Dba.LValue.Store (size, Machine.BigEndian, expr)] ->
           (store_big_endian size (Val1.universe, Val2.universe) expr s assumes global_regions), assumes
-        | [Dba.LValue.Store (size, Dba.LittleEndian, expr)] ->
+        | [Dba.LValue.Store (size, Machine.LittleEndian, expr)] ->
           (store_little_endian size (Val1.universe, Val2.universe) expr s assumes global_regions), assumes
-        | (Dba.LValue.Var (st, size, _)) :: tl ->
+        | Dba.(LValue.Var { name = st; size; _}) :: tl ->
           let m' =
             let sub_s =
               SubEnv.add (Bigint.zero_big_int) (Val1.universe, Val2.universe) SubEnv.empty
             in (Static_types.Env.add (Static_types.Var (st, size)) sub_s s)
           in update_memory_nondet tl m' assumes global_regions
-        | Dba.LValue.Restrict (_st, _size, _) :: _tl ->
+        | Dba.LValue.Restrict _ :: _ ->
           failwith "reduced_product.ml: restrict case not handled"
-        | Dba.LValue.Store (size, Dba.BigEndian, expr) :: tl ->
+        | Dba.LValue.Store (size, Machine.BigEndian, expr) :: tl ->
           let m' =
             store_big_endian size (Val1.universe, Val2.universe) expr s assumes global_regions in
           update_memory_nondet tl m' assumes global_regions
-        | (Dba.LValue.Store (size, Dba.LittleEndian, expr)) :: tl ->
+        | (Dba.LValue.Store (size, Machine.LittleEndian, expr)) :: tl ->
           let m' = (store_little_endian size (Val1.universe, Val2.universe) expr s assumes global_regions) in
           update_memory_nondet tl m' assumes global_regions
       in
@@ -819,15 +827,15 @@ struct
     | Some s ->
       let m =
         match lhs with
-        | Dba.LValue.Var (st, size, _) ->
+        | Dba.(LValue.Var { name = st; size; _}) ->
           let sub_s =
             SubEnv.add (Bigint.zero_big_int) (Val1.universe, Val2.universe) SubEnv.empty
           in Some (Static_types.Env.add (Static_types.Var (st, size)) sub_s s)
-        | Dba.LValue.Restrict (_st, _size, _) ->
+        | Dba.LValue.Restrict _ ->
           failwith "analyse.ml: restrict case not handled"
-        | Dba.LValue.Store (size, Dba.BigEndian, expr) ->
+        | Dba.LValue.Store (size, Machine.BigEndian, expr) ->
           Some (store_big_endian size (Val1.universe, Val2.universe) expr s assumes global_regions)
-        | Dba.LValue.Store (size, Dba.LittleEndian, expr) ->
+        | Dba.LValue.Store (size, Machine.LittleEndian, expr) ->
           Some (store_little_endian size (Val1.universe, Val2.universe) expr s assumes global_regions) in
       [addr_suiv, m, flgs, equalities]
 
@@ -838,19 +846,20 @@ struct
     match s with
     | None -> failwith "resolve_nondet with empty state"
     | Some s ->
-      let m = match lhs with
-          Dba.LValue.Var (st, size, _) ->
-          let sub_s =
-            SubEnv.add (Bigint.zero_big_int) (Val1.singleton (`Undef (Dba_utils.computesize_dbalhs lhs)), Val2.singleton (`Undef (Dba_utils.computesize_dbalhs lhs)))
-              SubEnv.empty
-          in Some (Static_types.Env.add (Static_types.Var (st, size)) sub_s s)
-        | Dba.LValue.Restrict (_st, _size, _) ->
+      let m =
+        let v =
+          let v = `Undef (Dba_utils.computesize_dbalhs lhs) in
+          (Val1.singleton v, Val2.singleton v) in
+        match lhs with
+        | Dba.LValue.Var { Dba.name = st; Dba.size; _} ->
+          let sub_s = SubEnv.singleton Bigint.zero_big_int v in
+          Some (Static_types.Env.add (Static_types.Var (st, size)) sub_s s)
+        | Dba.LValue.Restrict _ ->
           failwith "analyse.ml: restrict case not handled"
-        | Dba.LValue.Store (size, Dba.BigEndian, expr) ->
-          Some (store_big_endian size
-                  (Val1.singleton (`Undef (Dba_utils.computesize_dbalhs lhs)), Val2.singleton (`Undef (Dba_utils.computesize_dbalhs lhs))) expr s assumes global_regions)
-        | Dba.LValue.Store (size, Dba.LittleEndian, expr) ->
-          Some (store_little_endian size (Val1.singleton (`Undef (Dba_utils.computesize_dbalhs lhs)), Val2.singleton (`Undef (Dba_utils.computesize_dbalhs lhs))) expr s assumes global_regions) in
+        | Dba.LValue.Store (size, Machine.BigEndian, expr) ->
+          Some (store_big_endian size v expr s assumes global_regions)
+        | Dba.LValue.Store (size, Machine.LittleEndian, expr) ->
+          Some (store_little_endian size v  expr s assumes global_regions) in
       [addr_suiv, m, flgs, equalities]
 
   let resolve_print args s flgs equalities addr_suiv assumes global_regions =
@@ -888,7 +897,7 @@ struct
           | _ -> failwith "unrelstate.ml: malloc size"
       in
       let region = `Malloc ((!Dba_types.malloc_id, addr), size) in
-      let bv = Bitvector.zeros (Machine.Word_size.get ()) in
+      let bv = Bitvector.zeros (Kernel_options.Machine.word_size ()) in
       Simulate.mallocs :=
         Malloc_status.add region Dba.Freeable !Simulate.mallocs;
       let op, assumes = assign lhs (Dba.Expr.constant ~region bv) m assumes global_regions in
@@ -985,7 +994,7 @@ struct
 
 
   let get_initial_state inits =
-    let addr = Dba_types.Caddress.block_start @@ Bitvector.zeros 32 in
+    let addr = Dba_types.Caddress.block_start @@ Virtual_address.create 0 in
     let cstack = [] in
     let loop = 0 in
     let addrStack = (addr, cstack, loop) in

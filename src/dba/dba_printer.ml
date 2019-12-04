@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,7 +24,7 @@ open Format
 module type Renderer = sig
   val binary_ops : (Dba.Binary_op.t * string) list
   val unary_ops : (Dba.Unary_op.t * string) list
-  val endiannesses : (Dba.endianness * string) list
+  val endiannesses : (Machine.endianness * string) list
   val string_of_digit_char : char -> string
   val left_right_parentheses : string * string
 end
@@ -65,8 +65,8 @@ module AsciiRenderer = struct
   ]
 
   let endiannesses = [
-    Dba.BigEndian, "B";
-    Dba.LittleEndian, "L";
+    Machine.BigEndian, "B";
+    Machine.LittleEndian, "L";
   ]
 
   let string_of_digit_char c = Format.sprintf "%c" c
@@ -109,10 +109,7 @@ module UnicodeRenderer : Renderer = struct
     Dba.Unary_op.Not, "¬";
   ]
 
-  let endiannesses = [
-    Dba.LittleEndian, "𝐿";
-    Dba.BigEndian, "𝐵";
-  ]
+  let endiannesses = [ Machine.LittleEndian, "𝐿"; Machine.BigEndian, "𝐵";];;
 
   let string_of_digit_char = function
     (* Unicode lowercase digits starts at 0x2080 *)
@@ -146,6 +143,7 @@ module type DbaPrinter = sig
   val pp_binary_op : Format.formatter -> Dba.Binary_op.t -> unit
   val pp_unary_op : Format.formatter -> Dba.Unary_op.t -> unit
   val pp_bl_term: Format.formatter -> Dba.Expr.t -> unit
+  val pp_expr: Format.formatter -> Dba.Expr.t -> unit
   val pp_instruction : Format.formatter -> Dba.Instr.t -> unit
   val pp_lhs :  Format.formatter -> Dba.LValue.t -> unit
   val pp_region : Format.formatter -> Dba.region -> unit
@@ -188,7 +186,7 @@ module Make(R:Renderer) : DbaPrinter = struct
 
 
   let pp_code_address ppf addr =
-    fprintf ppf "(%a, %d)" Bitvector.pp_hex_or_bin addr.Dba.base addr.Dba.id
+    fprintf ppf "(%a, %d)" Virtual_address.pp addr.Dba.base addr.Dba.id
 
 
   let pp_opt pp_value ppf = function
@@ -203,21 +201,21 @@ module Make(R:Renderer) : DbaPrinter = struct
       fprintf ppf "#return"
 
   (* Arbitrarily set value limits displayed as integer *)
-  let max_display_int = Bigint.big_int_of_int 127
-  let min_display_int = Bigint.big_int_of_int (-128)
+  let max_display_int = Bigint.big_int_of_int 4096
+  let min_display_int = Bigint.big_int_of_int (-4096)
 
   let pp_constant ppf bv =
-    let n = Bitvector.value_of bv in
+    let n = Bitvector.signed_of bv in
     if n < min_display_int || n > max_display_int then
       fprintf ppf "%a" Bitvector.pp_hex_or_bin bv
     else
       let size = Bitvector.size_of bv in
       fprintf ppf "%s<%a>" (Bigint.string_of_big_int n)
-        pp_size size 
+        pp_size size
 
 
   let rec pp_bl_term ppf = function
-    | Dba.Expr.Var(name, size, _) ->
+    | Dba.Expr.Var {Dba.name; Dba.size; _} ->
       fprintf ppf "%s<%a>" name pp_size size
     | Dba.Expr.Load(size, _endian, expr) ->
       fprintf ppf "%@[%a,%a]"
@@ -243,26 +241,26 @@ module Make(R:Renderer) : DbaPrinter = struct
         pp_unary_op unary_op
         pp_bl_term expr
     | Dba.Expr.Binary(binary_op, lexpr, rexpr) ->
-      fprintf ppf "@[<hov 2>(%a@ %a@ %a)@]"
+      fprintf ppf "@[<hov 1>(%a@ %a@ %a)@]"
         pp_bl_term lexpr
         pp_binary_op binary_op
         pp_bl_term rexpr
     | Dba.Expr.Ite (cond, then_expr, else_expr) ->
-      fprintf ppf "@[<hov>%a@ ? %a@ :@ %a@]"
+      fprintf ppf "@[<hov 0>%a@ ? %a@ : %a@]"
         pp_bl_term cond
         pp_bl_term then_expr
         pp_bl_term else_expr
 
-
   let pp_lhs ppf = function
-    | Dba.LValue.Var(name, size, _tag) ->
+    | Dba.(LValue.Var {name; size; _}) ->
       fprintf ppf "%s<%d>" name size
-    | Dba.LValue.Restrict(name, size, {Interval.lo; Interval.hi}) ->
-      fprintf ppf "%s<%d>{%d, %d}" name size lo hi
+    | Dba.(LValue.Restrict({name; size; _}, {Interval.lo; Interval.hi})) ->
+       if lo <> hi then fprintf ppf "%s<%d>{%d, %d}" name size lo hi
+       else fprintf ppf "%s<%d>{%d}" name size lo
     | Dba.LValue.Store(size, _endian, expr) ->
       fprintf ppf "%@[%a,%a]"
         pp_bl_term expr
-        pp_size size        
+        pp_size size
         (* pp_endianness endian *)
 
   let pp_lhss ppf lhss =
@@ -294,7 +292,7 @@ module Make(R:Renderer) : DbaPrinter = struct
     in
     match instruction with
     | Dba.Instr.Assign(lhs, expr, id) ->
-      fprintf ppf "%a := %a%a"
+      fprintf ppf "@[<hov 1>%a :=@ %a@,%a@]"
         pp_lhs lhs
         pp_bl_term expr
         suffix id
@@ -346,11 +344,12 @@ module Make(R:Renderer) : DbaPrinter = struct
         pp_region region
         suffix id
 
+  let pp_expr = pp_bl_term
 
   let old_pp = pp_instruction
   let pp_instruction ppf instruction = old_pp None ppf instruction
   let pp_instruction_maybe_goto ~current_id ppf instruction =
-    old_pp (Some current_id) ppf instruction      
+    old_pp (Some current_id) ppf instruction
 end
 
 module Ascii = Make(AsciiRenderer)

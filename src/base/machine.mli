@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,59 +21,45 @@
 
 (** Abstract description of machines *)
 
-module type Gettable_settable = sig
-  type t
-  val set : t -> unit
-  val get : unit -> t
-  val pp : Format.formatter -> t -> unit
-  val pp_current : Format.formatter -> unit -> unit
-end
-
 (** Abstract representation of hardware architecture *)
 
-type isa =
-  | X86     (** x86 32 bits *)
-  | AMD64   (** aka x86-64 *)
-  | PowerPC (** Power PC 32 bits *)
-  | ARMv7   (** ARM 32 bits *)
-  | Unknown
-
-
-val pp_isa : Format.formatter -> isa -> unit
+type bitwidth = [ `x16 | `x32 | `x64 | `x128 ]
 
 type endianness =
   | LittleEndian
   | BigEndian
 
+type isa = private
+  | Unknown
+  | ARM of { rev: [ `v7 ]; endianness: endianness }
+  | RISCV of { bits: [ `x32 | `x64 | `x128 ] }
+  | X86 of { bits: [ `x16 | `x32 | `x64 ] }
 
-(** Instruction set : defaults to X86 *)
-
-module Endianness : Gettable_settable with type t = endianness
+module ISA : sig
+  include Sigs.PRINTABLE with type t = isa
+  val endianness : t -> endianness
+  val bits : t -> bitwidth
+  val to_string : isa -> string
+end
 
 (** Word size of the machine in bits *)
-module Word_size : Gettable_settable with type t = int
+module Bitwidth : sig
+  include Sigs.PRINTABLE with type t = bitwidth
+  val bitsize : t -> Size.Bit.t
+  val bytesize : t -> Size.Byte.t
 
+  val pp_print_hex : t -> Format.formatter -> int -> unit
+end
 
-(** {2 General setters} *)
+module Endianness : Sigs.PRINTABLE with type t = endianness
 
-val set_x86 : unit -> unit
-(** X86 and LittleEndian *)
+type t = isa
 
-val set_amd64 : unit -> unit
-(** AMD64 and LittleEndian *)
+val amd64 : t
+val armv7 : endianness -> t
+val riscv : [ `x32 | `x64 | `x128 ] -> t
+val x86 : t
+val unknown : t
 
-val set_powerpc : unit -> unit
-(** PowerPC and BigEndian *)
+include Sigs.PRINTABLE with type t := t
 
-val is_unknown : unit -> bool
-val set_unknown : unit -> unit
-(** No architecture and LittleEndian. Anything can happen. *)
-
-val set_armv7 : endianness -> unit
-(** ARM with chosen endianness. *)
-
-val set_armv7_little : unit -> unit
-val set_armv7_big : unit -> unit
-
-val pp : Format.formatter -> unit -> unit
-(** [pp ppf arch] pretty-prints an arch value into [ppf] *)

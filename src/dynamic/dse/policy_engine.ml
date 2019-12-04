@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -41,62 +41,64 @@ let merge_metavar ?(soft_merge=false) map1 map2: metavarmap =
         if soft_merge then Some x else failwith "Duplicate metavar name !"
     ) map1 map2
 
-let get_metavar_expr (var:Dba.Expr.t): string =
-  match var with | Dba.Expr.Var(s,0,_) when (String.get s 0) = '?' -> s | _ -> ""
+let get_metavar_expr = function
+  | Dba.(Expr.Var { name = s; size = 0; _}) when (String.get s 0) = '?' -> s
+  | _ -> ""
 
 let get_metavar_cond = function
-  | Dba.Expr.Var(s, 0, _) when String.get s 0 = '?' -> s
+  | Dba.(Expr.Var { name = s; size = 0; _}) when (String.get s 0) = '?' -> s
   | _ -> ""
 
 let get_metavar_lhs (var:Dba.LValue.t): string =
   match var with
-  | Dba.LValue.Var(s, 0, _) when (String.get s 0) = '?' -> s
+  | Dba.(LValue.Var { name = s; size = 0; _}) when (String.get s 0) = '?' -> s
   | _ -> ""
+;;
 
-let is_wildcard_expr var: bool =
-  match var with | Dba.Expr.Var("*",0,_) -> true | _ -> false
+let is_wildcard v =
+  let open Dba in v.name = "*" && v.size = 0
+
 
 let is_wildcard_cond = function
-  | Dba.Expr.Var("*",0,_) -> true
+  | Dba.Expr.Var v -> is_wildcard v
   | _ -> false
 
+let is_wildcard_expr = is_wildcard_cond
+
 let is_wildcard_lhs (var:Dba.LValue.t): bool =
-  match var with | Dba.LValue.Var("*",0,_) -> true | _ -> false
+  match var with | Dba.LValue.Var v -> is_wildcard v | _ -> false
+
+let is_metavar v = let open Dba in v.name.[0] = '?' && v.size = 0
 
 let is_metavar_expr (var:Dba.Expr.t): bool =
-  match var with | Dba.Expr.Var(s,0,_) when (String.get s 0) = '?' -> true | _ -> false
+  match var with | Dba.Expr.Var v -> is_metavar v | _ -> false
 
 let is_metavar_cond = function
-  | Dba.Expr.Var(s, 0, _) when (String.get s 0) = '?' -> true
+  | Dba.Expr.Var v -> is_metavar v
   | _ -> false
 
 let is_metavar_lhs (var:Dba.LValue.t): bool =
   match var with
-  | Dba.LValue.Var(s, 0, _) when (String.get s 0) = '?' -> true
+  | Dba.LValue.Var v -> is_metavar v
   | _ -> false
+
+let is_placeholder v = let open Dba in v.name.[0] = '!' && v.size = 0
 
 let is_placeholder_expr (var:Dba.Expr.t): bool =
-  match var with
-  | Dba.Expr.Var(s,0,_) when (String.get s 0) = '!' -> true
-  | _ -> false
+  match var with | Dba.Expr.Var v -> is_placeholder v | _ -> false
 
 let is_placeholder_cond = function
-  | Dba.Expr.Var(s, 0, _) when (String.get s 0) = '!' -> true
+  | Dba.Expr.Var v -> is_placeholder v
   | _ -> false
 
-let _is_placeholder_lhs (var:Dba.LValue.t): bool =
-  match var with
-  | Dba.LValue.Var(s, 0, _) when (String.get s 0) = '!' -> true
-  | _ -> false
 
 let get_placeholder (s:string) (metas:metavarmap): metavar_item =
-  try
-    MetaVarMap.find s metas
+  try MetaVarMap.find s metas
   with Not_found -> raise (PlaceHolderNotFound(s))
 
 let get_placeholder_expr (var:Dba.Expr.t) (metas:metavarmap): Dba.Expr.t =
   match var with
-  | Dba.Expr.Var(s,_,_) ->
+  | Dba.(Expr.Var { name = s; _}) ->
     begin match get_placeholder s metas with
       | ExprReif e -> e
       | CondReif _ -> raise InvalidPlaceHolderType
@@ -106,7 +108,7 @@ let get_placeholder_expr (var:Dba.Expr.t) (metas:metavarmap): Dba.Expr.t =
 
 let get_placeholder_cond var metas =
   match var with
-  | Dba.Expr.Var(s, _, _) ->
+  | Dba.(Expr.Var { name = s; _}) ->
     begin match get_placeholder s metas with
       | CondReif c -> c
       | _ -> raise InvalidPlaceHolderType
@@ -114,7 +116,7 @@ let get_placeholder_cond var metas =
   | _ -> failwith "Not a placeholder"
 
 let is_current_expr = function
-  | Dba.Expr.Var("!$$", 0, _) -> true
+  | Dba.(Expr.Var { name = "!$$"; size = 0; _}) -> true
   |  _ -> false
 
 let to_placeholder (s:string): string =
@@ -148,7 +150,8 @@ let rec check_recursive_expr ?(current=None) (exp_rule:Dba.Expr.t) (exp:Dba.Expr
     check_recursive_expr ~current (get_placeholder_expr exp_rule metas) exp metas
   else
     match exp_rule, exp with
-    | Dba.Expr.Var(n1, _, _), Dba.Expr.Var(n2, _, _) when n1=n2 -> true, metas
+    | Dba.(Expr.Var {name =n1; _}), Dba.(Expr.Var {name = n2; _}) when n1=n2 ->
+       true, metas
     | Dba.Expr.Load(_, in1, e1),  Dba.Expr.Load(_, in2, e2) when in1 = in2 ->
       (* Do not compare sizes (if where not infered in parsing) *)
       check_recursive_expr ~current e1 e2 metas
@@ -197,10 +200,10 @@ let check_recursive_lhs (lhs_rule:Dba.LValue.t) (lhs:Dba.LValue.t): bool * metav
     true, MetaVarMap.add (to_placeholder (get_metavar_lhs lhs_rule)) (LhsReif(lhs)) MetaVarMap.empty
   else
     match lhs_rule, lhs with
-    | Dba.LValue.Var(n1, _, _), Dba.LValue.Var(n2,_,_)
-      when n1=n2 -> true, MetaVarMap.empty
-    | Dba.LValue.Restrict(n1,_, {Interval.lo=i1; Interval.hi=j1}),
-      Dba.LValue.Restrict(n2,_, {Interval.lo=i2; Interval.hi=j2})
+    | Dba.(LValue.Var { name = n1; _}), Dba.(LValue.Var {name = n2; _})
+         when n1=n2 -> true, MetaVarMap.empty
+    | Dba.LValue.Restrict({Dba.name = n1; _}, {Interval.lo=i1; Interval.hi=j1}),
+      Dba.LValue.Restrict({Dba.name = n2; _}, {Interval.lo=i2; Interval.hi=j2})
       when n1=n2 && i1=i2 && j1=j2 ->
       true, MetaVarMap.empty
     | Dba.LValue.Store(_, in1, e1), Dba.LValue.Store(_, in2, e2)
@@ -226,7 +229,8 @@ let rec check_subterm_expr
     true, MetaVarMap.add (to_placeholder (get_metavar_expr exp_sub)) (ExprReif(exp_sur)) metas
   else
     match exp_sub, exp_sur with
-    | Dba.Expr.Var(n1, _, _), Dba.Expr.Var(n2, _, _) when n1 = n2 -> true, metas
+     | Dba.(Expr.Var {name =n1; _}), Dba.(Expr.Var {name = n2; _}) when n1=n2
+       -> true, metas
     | Dba.Expr.Load(_, in1, e1),  Dba.Expr.Load(_, in2, e2) when in1 = in2 ->
       check_subterm_expr e1 e2 current ~strict_match:true metas
     | Dba.Expr.Cst(`Constant, v1), Dba.Expr.Cst(`Constant, v2)
@@ -455,7 +459,7 @@ let eval_expr_policy (policy:policy) li (e:Dba.Expr.t) analysis: cs_action =
     List.iter (fun rule ->
         try
           Logger.debug ~level:5 "Rule:%a " pp_rule rule;
-          let addr = int64_of_big_int addr in
+          let addr = Virtual_address.to_int64 addr in
           if match_location rule.loc_p addr e then
             let do_match, metas = match_instruction rule.inst_p instr in
             if do_match then
@@ -567,3 +571,4 @@ let read_raw_policy (name:string): string list =
       close_in fd;
       List.rev !pol
     end
+;;

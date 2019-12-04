@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -66,13 +66,6 @@ let string_to_hex ?(with_space=false) (raw:string) : string =
 let little_string_to_big_string ?(with_space=false) (raw:string): string =
   String_utils.reverse raw |> string_to_hex ~with_space
 
-let string_to_int_list (raw:string):int list =
-  let len = String.length raw in
-  let rec aux acc i =
-    if i < 0 then acc
-    else aux ( Char.code raw.[i] :: acc) (i - 1)
-  in aux [] (len - 1)
-
 let string_to_big_int (raw:string): t =
   let rec loop acc n =
     if n > 0 then
@@ -91,12 +84,6 @@ let extract_byte (value: int64) (offset: int): char =
   |> (fun i -> Int64.shift_right_logical i (8 * offset))
   |> Int64.to_int
   |> Char.chr
-
-let _int64_to_bigendian_bin (value: int64) (addr_size: int): string =
-  match addr_size with
-  | 32 -> String.init 4 (fun i -> extract_byte value (4 - i))
-  | 64 -> String.init 8 (fun i -> extract_byte value (8 - i))
-  | _  -> failwith "Unknown addr_size"
 
 let int64_to_littleendian_bin (value: int64) (addr_size: int): string =
   match addr_size with

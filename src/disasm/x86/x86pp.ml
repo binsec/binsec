@@ -1,37 +1,23 @@
-(***********************************************************************************)
-(*  Copyright (c) 2005, Regents of the University of California                    *)
-(*  All rights reserved.                                                           *)
-(*                                                                                 *)
-(*  Author: Adam Chlipala                                                          *)
-(*                                                                                 *)
-(*  Redistribution and use in source and binary forms, with or without             *)
-(*  modification, are permitted provided that the following conditions are met:    *)
-(*                                                                                 *)
-(*  - Redistributions of source code must retain the above copyright notice,       *)
-(*    this list of conditions and the following disclaimer.                        *)
-(*  - Redistributions in binary form must reproduce the above copyright notice,    *)
-(*    this list of conditions and the following disclaimer in the documentation    *)
-(*    and/or other materials provided with the distribution.                       *)
-(*  - Neither the name of the University of California, Berkeley nor the names of  *)
-(*    its contributors may be used to endorse or promote products derived from     *)
-(*    this software without specific prior written permission.                     *)
-(*                                                                                 *)
-(*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"    *)
-(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE      *)
-(*  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE     *)
-(*  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE       *)
-(*  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR            *)
-(*  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF           *)
-(*  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS       *)
-(*  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN        *)
-(*  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)        *)
-(*  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE     *)
-(*  POSSIBILITY OF SUCH DAMAGE.                                                    *)
-(*                                                                                 *)
-(*                                                                                 *)
-(*  Modified for BINSEC                                                            *)
-(*                                                                                 *)
-(***********************************************************************************)
+(**************************************************************************)
+(*  This file is part of BINSEC.                                          *)
+(*                                                                        *)
+(*  Copyright (C) 2016-2019                                               *)
+(*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
+(*         alternatives)                                                  *)
+(*                                                                        *)
+(*  you can redistribute it and/or modify it under the terms of the GNU   *)
+(*  Lesser General Public License as published by the Free Software       *)
+(*  Foundation, version 2.1.                                              *)
+(*                                                                        *)
+(*  It is distributed in the hope that it will be useful,                 *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of        *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *)
+(*  GNU Lesser General Public License for more details.                   *)
+(*                                                                        *)
+(*  See the GNU Lesser General Public License version 2.1                 *)
+(*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
+(*                                                                        *)
+(**************************************************************************)
 
 
 open Format
@@ -128,6 +114,22 @@ let pp_genop32 = function
   | `M16 -> pp_genop32_16
   | `M8  -> pp_genop32_8
 
+let pp_ext0 ppf = function
+  | 8 -> fprintf ppf "b"
+  | 16 -> fprintf ppf "w"
+  | 32 -> fprintf ppf "d"
+  | 64 -> fprintf ppf "q"
+  | _ -> assert false
+let pp_ext1 ppf = function
+  | 8 -> fprintf ppf "bw"
+  | 16 -> fprintf ppf "wd"
+  | 32 -> fprintf ppf "dq"
+  | 64 -> fprintf ppf "qdq"
+  | _ -> assert false
+let pp_ext2 ppf = function
+  | 8 -> fprintf ppf "wb"
+  | 16 -> fprintf ppf "dw"
+  | _ -> assert false
 let pp_instr instr ppf rep =
   match instr with
   | Arith (mode, aop, dst, src) ->
@@ -190,16 +192,11 @@ let pp_instr instr ppf rep =
   | Loopnz (_, _, _)
   | Loopz (_, _, _)
   | Loop (_, _, _) -> fprintf ppf "@[loop@]"
-  | Psrlw (_,_,_,_)
-  | Psrld (_,_,_,_)
-  | Psrlq (_,_,_,_)
-  | Psllw (_,_,_,_)
-  | Pslld (_,_,_,_)
-  | Psllq (_,_,_,_)
-  | Psraw (_,_,_,_)
-  | Psrad (_,_,_,_)
-  | Psrldq (_,_)
-  | Pslldq (_,_) -> fprintf ppf "@[psr/psl ....@]"
+  | Psrl (_,_,_,_, ext) -> fprintf ppf "@[psrl%a ...@]" pp_ext0 ext
+  | Psll (_,_,_,_, ext) -> fprintf ppf "@[psll%a ...@]" pp_ext0 ext
+  | Psra (_,_,_,_, ext) -> fprintf ppf "@[psra%a ...@]" pp_ext0 ext
+  | Psrldq (_,_) -> fprintf ppf "@[psrldq ...@]"
+  | Pslldq (_,_) -> fprintf ppf "@[pslldq ...@]"
   | Palignr (_xmm, _, dst, src, imm) ->
     fprintf ppf "@[palignr %a,%a,0x%x@]"
       pp_genop_xmm dst
@@ -212,19 +209,29 @@ let pp_instr instr ppf rep =
   | Pcmpgtw (_, _, _, _) -> fprintf ppf "@[pcmpgtw ...@]"
   | Pcmpgtd (_, _, _, _) -> fprintf ppf "@[pcmpgtd ...@]"
   | PmovMSKB (_, _, _, _) -> fprintf ppf "@[pmovmskb ...@]"
-  | Pminub (_,_, _, _) -> fprintf ppf "@[pminub ...@]"
+  | Pminu (_,_, _, _, e) -> fprintf ppf "@[pminu%a ...@]" pp_ext0 e
+  | Pmins (_,_, _, _, e) -> fprintf ppf "@[pmins%a ...@]" pp_ext0 e
   | Pxor (_,_, _, _) -> fprintf ppf "@[pxor ...@]"
   | Por (_,_, _, _) -> fprintf ppf "@[por ...@]"
   | Pand (_,_, _, _) -> fprintf ppf "@[pand ...@]"
   | Pandn (_,_, _, _) -> fprintf ppf "@[pandn ...@]"
-  | Psubb (_,_, _, _) -> fprintf ppf "@[psubb ...@]"
+  | Padd (_, _, _, _, _) -> fprintf ppf "@[padd ...@]"
+  | Padds (_, _, _, _, _) -> fprintf ppf "@[padds ...@]"
+  | Paddus (_, _, _, _, _) -> fprintf ppf "@[paddus ...@]"
+  | Psub (_, _, _, _, _) -> fprintf ppf "@[psub ...@]"
+  | Psubs (_, _, _, _, _) -> fprintf ppf "@[psubs ...@]"
+  | Psubus (_,_, _, _, _) -> fprintf ppf "@[psubus ...@]"
+  | Pmulhw (_, _, _, _) -> fprintf ppf "@[pmulhw ...@]"
+  | Pmullw (_, _, _, _) -> fprintf ppf "@[pmullw ...@]"
   | Ptest (_, _, _, _) -> fprintf ppf "@[ptest ...@]"
-  | Pmaxub (_, _, _, _) -> fprintf ppf "@[pmaxub ...@]"
-  | Pmaxuw (_, _, _, _) -> fprintf ppf "@[pmaxuw ...@]"
-  | Pmaxud (_, _, _, _) -> fprintf ppf "@[pmaxud ...@]"
-  | Punpcklbw (_,_, _, _) -> fprintf ppf "@[punpcklbw ...@]"
-  | Punpcklwd (_,_, _, _) -> fprintf ppf "@[punpcklwd ...@]"
-  | Punpckldq (_,_, _, _) -> fprintf ppf "@[punpckldq ...@]"
+  | Pmaxu (_, _, _, _, e) -> fprintf ppf "@[pmaxu%a ...@]" pp_ext0 e
+  | Pmaxs (_, _, _, _, e) -> fprintf ppf "@[pmaxs%a ...@]" pp_ext0 e
+  | Punpckl (_, _, _, _, ext) -> fprintf ppf "@[punpckl%a ...@]" pp_ext1 ext
+  | Punpckh (_, _, _, _, ext) -> fprintf ppf "@[punpckh%a ...@]" pp_ext1 ext
+  | Packus (_, _, _, _, ext) -> fprintf ppf "@[packus%a ...@]" pp_ext2 ext
+  | Packss (_, _, _, _, ext) -> fprintf ppf "@[packss%a ...@]" pp_ext2 ext
+  | Pmaddwd _ -> fprintf ppf "@[pmaddwd ...@]"
+  | Pclmulqdq _ -> fprintf ppf "@[pclmulqdq ...@]"
   | Bswap (_, dst) -> fprintf ppf "@[bswap@ %a@]" pp_reg32 dst
   | Bsr (mode, dst, src) ->
     fprintf ppf "@[bsr@ %a, %a@]" pp_reg32 dst (pp_genop32 mode) src
@@ -299,15 +306,18 @@ let pp_instr instr ppf rep =
   | Stc -> fprintf ppf "@[stc@]"
   | Cld -> fprintf ppf "@[cld@]"
   | Std -> fprintf ppf "@[std@]"
-  | Bt (m, dst, src) ->
-    let pp_genop = pp_genop32 m in
+  | Bt { mode; dst; src; } ->
+    let pp_genop = pp_genop32 mode in
     fprintf ppf "@[bt@ %a,@ %a@]" pp_genop dst pp_genop src
-  | Bts (m, dst, src) ->
-    let pp_genop = pp_genop32 m in
+  | Bts { mode; dst; src; } ->
+    let pp_genop = pp_genop32 mode in
     fprintf ppf "@[bts@ %a,@ %a@]" pp_genop dst pp_genop src
-  | Btr (m, dst, src) ->
-    let pp_genop = pp_genop32 m in
+  | Btr { mode; dst; src; } ->
+    let pp_genop = pp_genop32 mode in
     fprintf ppf "@[btr@ %a,@ %a@]" pp_genop dst pp_genop src
+  | Btc { mode; src; dst; } ->
+     let pp_genop = pp_genop32 mode in
+     fprintf ppf "@[btc@ %a,@ %a@]" pp_genop dst pp_genop src
   | Xchg (`M32, _, _) -> fprintf ppf "@[xchg32@]"
   | Xchg (`M16, _, _) -> fprintf ppf "@[xchg16@]"
   | Xchg (`M8, _, _) -> fprintf ppf "@[xchg8@]"
@@ -337,9 +347,14 @@ let pp_instr instr ppf rep =
   | Sahf -> fprintf ppf "@[sahf@]"
   | Salc -> fprintf ppf "@[salc@]"
   | Wait -> fprintf ppf "@[wait@]"
+  | Emms -> fprintf ppf "@[emms@]"
+  | Prefetch suffix -> fprintf ppf "@[prefetch%s@]" suffix
   | Popcnt (mode, dst, src) ->
     let pp_genop = pp_genop32 mode in
     fprintf ppf "@[popcnt@ %a,@ %a@]" pp_genop dst pp_genop src
+  | Lzcnt (mode, dst, src) ->
+    let pp_genop = pp_genop32 mode in
+    fprintf ppf "@[lzcnt@ %a,@ %a@]" pp_genop dst pp_genop src
   | Unsupported descr -> fprintf ppf "@[binsec_unsupported %s@]" descr
 
 

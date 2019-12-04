@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,7 +25,7 @@ open Formula_pp
 (* Converts a dba expression into SMT formula *)
 let rec dbaExpr_to_smtExpr expr inputs : bv_term * VarSet.t =
   match expr with
-  | Dba.Expr.Var (name, size, _) ->
+  | Dba.(Expr.Var {name; size; _}) ->
     let var = bv_var name size in
     let inputs = VarSet.add (BvVar var) inputs in
     mk_bv_var var, inputs
@@ -103,7 +103,8 @@ let rec dbaExpr_to_smtExpr expr inputs : bv_term * VarSet.t =
     mk_bv_ite (mk_bv_equal f_c (mk_bv_one)) smt_e1 smt_e2, inputs
 
 and logical_load (addr: bv_term) size : bv_term = (* size in BYTES *)
-  let memory = mk_ax_var (ax_var "memory" (Machine.Word_size.get ()) 8) in
+  let memory = mk_ax_var
+                 (ax_var "memory" (Kernel_options.Machine.word_size ()) 8) in
   mk_select size memory addr
 (*
   (* Recursive function to concat each byte read into a single bitvector *)
@@ -114,7 +115,7 @@ and logical_load (addr: bv_term) size : bv_term = (* size in BYTES *)
       then addr
       else (smtbv_add_int addr to_add)
     in
-    let memory = SmtABvArray ("memory", Machine.Word_size.get (), 8) in
+    let memory = SmtABvArray ("memory", Machine.word_size (), 8) in
     match sz with
     | 1 -> SmtABvSelect (memory, new_addr)
     | 4 -> SmtABvLoad32 (memory, addr)
@@ -129,8 +130,8 @@ and logical_load (addr: bv_term) size : bv_term = (* size in BYTES *)
 (* Converts a load in expression *)
 and load_to_smt expr size endianness inputs : bv_term * VarSet.t =
   match endianness with
-  | Dba.BigEndian -> failwith "Big endian is not implemented\n"
-  | Dba.LittleEndian ->
+  | Machine.BigEndian -> failwith "Big endian is not implemented\n"
+  | Machine.LittleEndian ->
     let expr_f, inputs = dbaExpr_to_smtExpr expr inputs in
     logical_load expr_f size, inputs
 
@@ -149,7 +150,8 @@ let make_smt_program smt_cond predicate inputs =
 
 let apply_smt_natural_cond_recovery predicates ~condition op1 op2 =
   let inputs =
-    VarSet.singleton (AxVar (ax_var "memory" (Machine.Word_size.get ()) 8)) in
+    VarSet.singleton (AxVar (ax_var "memory"
+                               (Kernel_options.Machine.word_size ()) 8)) in
   let smt_cond, inputs = dbaExpr_to_smtExpr condition inputs in
   let _smt_op1, inputs = dbaExpr_to_smtExpr op1 inputs in
   let _smt_op2, inputs = dbaExpr_to_smtExpr op2 inputs in

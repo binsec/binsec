@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    VERIMAG                                                             *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
@@ -17,7 +17,6 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
 (**************************************************************************)
 
-open Dba
 open Path_predicate_env
 open Path_predicate_formula
 open Formula_utils
@@ -208,9 +207,11 @@ class uaf_detection (trace_config:Trace_config.t) =
               Path_predicate.DoExec
           end
         end
-      else if List.exists (fun x -> Int64.compare addr x =0) !use_addr || key = !use_nth then
+      else
+        if List.exists (Int64.equal addr) !use_addr || key = !use_nth then
+        let open Dba in
         match Dba_types.Statement.instruction dbainst with
-        | Instr.Assign (Dba.LValue.Store(size,_,Dba.Expr.Var(name,_,_)),_,_) ->
+        | Instr.Assign (Dba.LValue.Store(size,_,Dba.Expr.Var {Dba.name; _}),_,_) ->
           let formula_file = Printf.sprintf "formula-uaf-%d.smt2" key in
           let static_predicate =
             self#build_cond_predicate Dba.Expr._true env in

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -116,8 +116,7 @@ let find key kvs =
   try List.assoc key kvs
   with
   | Not_found ->
-    Disasm_options.Logger.fatal "Decoder message has no %s field. Aborting." key;
-    exit 1
+    Arm_options.Logger.fatal "Decoder message has no %s field. Aborting." key
 
 
 (* Some conversion functions from parsed categorized value to the expected types
@@ -195,7 +194,7 @@ let dummy_parse ?(etype=EParser) s =
   | exception Failure _ -> Error (EMnemonic, empty_instruction)
 
 let parse_result s =
-  Disasm_options.Logger.debug ~level:1 "@[<v 0>Parsing %s@]" s;
+  Arm_options.Logger.debug ~level:1 "@[<v 0>Parsing %s@]" s;
   let open Lexing in
   let lexbuf = from_string s in
   try
@@ -208,7 +207,7 @@ let parse_result s =
     dummy_parse s
   | Parser.Error  ->
     let pos = lexeme_start_p lexbuf in
-    Disasm_options.Logger.fatal
+    Arm_options.Logger.error
       "@[<v 0>Probable parse error at line %d, column %d@ \
        Lexeme was: %s@ \
        Entry was: %s@ \
@@ -225,7 +224,7 @@ let run_external_decoder addr bytes =
   let exe = Kernel_options.Decoder.get () in
   let cmd = Format.sprintf "%s arm 0x%x 0x%x" exe addr bytes in
   Unix.open_process_in cmd
-
+;;
 
 let read_sample_size = 4
 (* This value is chosen to be large enough to get a sure opcode hit *)
@@ -234,14 +233,16 @@ let peek_at_most reader size =
   let rec aux n =
     if n <= 0 then failwith "Trying to decode an empty bitstream"
     else
-      try
-        Lreader.Peek.peek reader n
+      try Lreader.Peek.peek reader n
       with _ -> aux (n - 1)
   in aux size
+;;
 
 let decode_from_reader addr reader =
-  let bytes = peek_at_most reader read_sample_size in
-  let r = run_external_decoder addr bytes |> get_and_parse_result in
+  let bytes = peek_at_most reader read_sample_size
+              |> Bitvector.value_of |> Bigint.int_of_big_int in
+  let r = run_external_decoder addr bytes
+          |> get_and_parse_result in
   match r with
   | Ok i ->
     Statistics.incr_decoded i stats;
@@ -258,5 +259,17 @@ let decode_from_reader addr reader =
 
 let decode reader (addr:Virtual_address.t) =
   let res = decode_from_reader (addr:>int) reader in
-  Disasm_options.Logger.debug ~level:3 "@[%a@]" show_stats ();
+  Arm_options.Logger.debug ~level:3 "@[%a@]" show_stats ();
   res
+;;
+
+let cached_decode reader =
+  let h = Virtual_address.Htbl.create 7 in
+  fun (addr:Virtual_address.t) ->
+  match Virtual_address.Htbl.find h addr with
+  | res -> res
+  | exception Not_found ->
+     let res = decode reader addr in
+     Virtual_address.Htbl.add h addr res;
+     res
+;;

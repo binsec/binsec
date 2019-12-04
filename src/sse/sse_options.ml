@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -30,7 +30,7 @@ module MaxDepth = Builder.Integer(
   struct
     let name = "depth"
     let default = 1000
-    let doc = "set exploration maximal depth"
+    let doc = "Set exploration maximal depth"
   end
   )
 
@@ -58,7 +58,7 @@ module Randomize = Builder.False(
   end
   )
 
-module SmtDir = Builder.String_option(
+module SMT_dir = Builder.String_option(
   struct
     let name = "smt-dir"
     let doc = "set directory to cache smt scripts"
@@ -92,7 +92,7 @@ module LoadSections = Builder.String_set(
   struct
     let name = "load-sections"
     let doc =
-      "sections to load in initial memory (may be overridden by -memory)"
+      "Sections to load in initial memory (may be overridden by -memory)"
   end
   )
 
@@ -100,7 +100,7 @@ module LoadROSections = Builder.False(
   struct
     let name = "load-ro-sections"
     let doc =
-      "load the content of all read-only sections (see also -sse-load-sections)"
+      "Load the content of all read-only sections (see also -sse-load-sections)"
   end
   )
 
@@ -220,5 +220,15 @@ module Dot_filename_out =
       struct
         let name = "cfg-o"
         let doc  = "Output CFG in this file"
+      end
+    )
+
+
+module SMT_log_directory =
+  Builder.String(
+      struct
+        let name = "smt-dump-dir"
+        let doc  = "Set directory where unsolved SMT scripts are dumped"
+        let default = "binsec_smtdump"
       end
     )

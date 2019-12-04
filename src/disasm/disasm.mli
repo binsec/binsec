@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -39,8 +39,6 @@ module Program : sig
   val pp : Format.formatter -> t -> unit
 end
 
-
-
 module Recursive : sig
   val disassemble:
     ?jumps:Dba_types.Caddress.Set.elt list Dba_types.Caddress.Map.t ->
@@ -52,11 +50,17 @@ module Recursive : sig
 end
 
 
+(** Function *)
+
 val disassemble : Infos.t ->  Program.t
 
 val file : filename:string -> Program.t
 
-val run : configuration_file:string option -> unit
+val section : ?program:Program.t -> Loader.Img.t -> string -> Program.t
+
+val sections : ?program:Program.t -> Loader.Img.t -> Basic_types.String.Set.t -> Program.t
+
+val run : ?configuration_file:string -> unit -> unit
 (** Run disassembly with stubs from [configuration_file] *)
 
 val decode : string -> unit

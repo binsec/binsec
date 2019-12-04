@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,10 +21,12 @@
 
 (** Generic utility functions for DBA simplification *)
 
+type stats
 val statistics :
-  (Dba.Instr.t * 'a) Dba_types.Caddress.Map.t -> int * int * int * int
+  (Dba.Instr.t * 'a) Dba_types.Caddress.Map.t -> stats
 
 val display_results :
+  stats ->
   (Dba.Instr.t * 'a) Dba_types.Caddress.Map.t ->
   Format.formatter -> float -> unit
 

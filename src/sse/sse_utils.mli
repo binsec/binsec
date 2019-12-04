@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,7 +20,15 @@
 (**************************************************************************)
 
 val temp_file : unit -> string
-(** [temp_file ()] create a new temporary file *)
+(** [temp_file ()] create a new temporary file in
+    [Sse_options.SMT_dir]
+ *)
+
+val dump_file : unit -> string
+(** [dump_file ()] create a new temporary file in
+    [Sse_options.SMT_log_directory]
+ *)
+
 
 val mk_var_name : string -> int -> string
 (** [mk_var_name basename idx] *)

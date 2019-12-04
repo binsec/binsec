@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -58,8 +58,7 @@ module Img = struct
   type header = unit
   type t = {
     sections: Section.t list;
-    arch: arch;
-    endian:endian;
+    arch: Machine.t;
     entry: int;
   }
 
@@ -67,9 +66,11 @@ module Img = struct
   let symbols _ = [||]
   let arch t = t.arch
   let header _ = ()
-  let endian t = t.endian
   let entry t = t.entry
 
+  let cursor ?at:_ _ = assert false
+
+  let pp _ _ = assert false
 end
 
 
@@ -93,7 +94,6 @@ let read_address img i =
   with Ret x -> x
 ;;
 
-let write_address _ = assert false
 let read_offset _ = assert false
 let load_file _ = assert false
 let load_file_descr _ = assert false
@@ -119,6 +119,6 @@ let add_section ~flag ~name ~pos ~size binstream img =
   let sec = {Section.flag=flag;name=name;pos;size;binstream} in
   {img with Img.sections = sec::img.Img.sections}
 
-let initial_img ~entry ~arch ~endian = {
-  Img.entry=entry;Img.arch=arch;Img.endian=endian;Img.sections=[]
+let initial_img ~entry ~arch = {
+  Img.entry=entry;Img.arch=arch;Img.sections=[]
 }

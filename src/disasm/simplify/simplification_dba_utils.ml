@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,6 +20,8 @@
 (**************************************************************************)
 
 open Dba
+
+type stats = int * int * int * int ;;
 
 let statistics instMap =
   let f _ (ik, _) (accusize, accugoto, temp, flag) =
@@ -53,12 +55,11 @@ let must_lhs_expr_equal lhs expr : bool =
   (* on n'evalue pas expr des arrays, car utilisation sur locs differentes *)
   (* donc valuations differentes *)
   match lhs, expr with
-  | Dba.LValue.Var (name1, _, _), Dba.Expr.Var(name2, _, _) ->
-    String.compare name1 name2 = 0
-  | Dba.LValue.Restrict (name1, _, {Interval.lo=i1; Interval.hi=j1}),
+  | Dba.LValue.Var v1, Dba.Expr.Var v2 -> String.compare v1.name v2.name = 0
+  | Dba.LValue.Restrict (v1, {Interval.lo=i1; Interval.hi=j1}),
     Dba.Expr.Unary(Unary_op.Restrict {Interval.lo = i2; Interval.hi = j2;},
-                   Dba.Expr.Var (name2, _, _)) ->
-    (=) name1 name2 && i1 = i2 && j1 = j2
+                   Dba.Expr.Var v2) ->
+    (=) v1.name v2.name && i1 = i2 && j1 = j2
   | Dba.LValue.Store (_, endian1, e1), Dba.Expr.Load (_, endian2, e2) ->
     (* on se limite au cas ou tableaux a acces constants *)
     endian1 = endian2 && are_expr_same_cst e1 e2
@@ -68,27 +69,27 @@ let must_lhs_expr_equal lhs expr : bool =
 let lhs_mustkilled_by_lhs lhs1 lhs2 : bool =
   (*  est-ce que si j'affecte lhs2, je tue a coup sûr lhs1 *)
   match lhs1 with
-  | Dba.LValue.Var (name1, _size1, _) ->
+  | Dba.LValue.Var { name = name1; _} ->
     begin
       match lhs2 with
-      | Dba.LValue.Var (name2, _size2, _) -> name1 = name2
-      | Dba.LValue.Restrict (name2, size2, {Interval.lo=i2; Interval.hi=j2}) ->
-        name1 = name2 && i2 = 0 && j2 = size2 - 1
+      | Dba.LValue.Var { name = name2; _}-> name1 = name2
+      | Dba.LValue.Restrict (v, {Interval.lo=i2; Interval.hi=j2}) ->
+        v.name = name1 && i2 = 0 && j2 = v.size - 1
       | Dba.LValue.Store (_, _, _) -> false
     end
-  | Dba.LValue.Restrict (name1, _size1, {Interval.lo=i1; Interval.hi=j1}) ->
+  | Dba.LValue.Restrict ({name = name1; _}, {Interval.lo=i1; Interval.hi=j1}) ->
     begin
       match lhs2 with
-      | Dba.LValue.Var (name2, _size2, _) -> (name1 = name2)
-      | Dba.LValue.Restrict (name2, _size2, {Interval.lo=i2; Interval.hi=j2}) ->
-        ((name1 = name2) && not(j1 < i2 || j2 < i1))
+       | Dba.LValue.Var { name = name2; _}-> name1 = name2
+       | Dba.LValue.Restrict ({ name = name2; _}, {Interval.lo=i2; Interval.hi=j2}) ->
+          name1 = name2 && not(j1 < i2 || j2 < i1)
       | Dba.LValue.Store (_size2, _endian2, _expr2) -> false
     end
   | Dba.LValue.Store (_size1, _endian1, expr1) ->
     begin
       match lhs2 with
-      | Dba.LValue.Var (_name2,_size2, _) -> false
-      | Dba.LValue.Restrict (_name2, _size2, _) -> false
+      | Dba.LValue.Var _
+      | Dba.LValue.Restrict _ -> false
       | Dba.LValue.Store (_size2, _endian2, expr2) ->
         (are_expr_same_cst expr1 expr2)
     end
@@ -99,17 +100,17 @@ let rec lhs_mayused_in_expr lhs expr =
   match lhs, expr with
   | _, Dba.Expr.Cst _
   | Dba.LValue.Store _, Dba.Expr.Var _ -> false
-  | Dba.LValue.Restrict (name1, _, {Interval.lo=i1; Interval.hi=j1}),
+  | Dba.LValue.Restrict ({name = name1; _}, {Interval.lo=i1; Interval.hi=j1}),
     Dba.Expr.Unary (Dba.Unary_op.Restrict {Interval.lo = i2; Interval.hi = j2;},
-                    Dba.Expr.Var (name2, _, _)) ->
+                    Dba.Expr.Var v) ->
     (* If restricted areas overlap then may be used *)
-    name1 = name2 && j1 >= i2 && j2 >= i1
+    name1 = v.name && j1 >= i2 && j2 >= i1
   | _, Dba.Expr.Unary (_, e)
   | Dba.LValue.Restrict _, Dba.Expr.Load (_, _, e)
   | Dba.LValue.Var _, Dba.Expr.Load(_, _, e) -> lhs_mayused_in_expr lhs e
-  | Dba.LValue.Restrict (name1, _, _), Dba.Expr.Var (name2, _, _)
-  | Dba.LValue.Var (name1, _, _), Dba.Expr.Var(name2, _, _) ->
-    name1 = name2
+  | (Dba.LValue.Restrict ({name; _}, _) | Dba.LValue.Var { name;_}),
+    Dba.Expr.Var v ->
+    name = v.name
   | Dba.LValue.Store (size1, _, Dba.Expr.Cst (r1, bi1)),
     Dba.Expr.Load (size2, _, Dba.Expr.Cst (r2, bi2)) ->
     let bi1 = Bitvector.value_of bi1 in
@@ -166,7 +167,7 @@ and is_not_mayused_in_instr ik prog addr niter var flags_env :
       is_not_mayused prog addr' (niter - 1) var flags_env
   | Dba.Instr.SJump (JOuter addr', Some (Dba.Call _ | Dba.Return)) ->
      begin
-       let open Disasm_options in
+       let open Simplification_options in
        match Simplification.get () with
        | Function s  | Sequence s ->
           if s = NoInline then flags_env, false
@@ -183,7 +184,7 @@ and is_not_mayused_in_instr ik prog addr niter var flags_env :
   | Dba.Instr.DJump (_e, _tag) -> flags_env, false
   | Dba.Instr.If (cond, t, id2) ->
      begin
-       let open Disasm_options in
+       let open Simplification_options in
        match Simplification.get () with
        | Sequence _ -> flags_env, false
        | _ ->
@@ -241,9 +242,9 @@ and is_not_mayused_in_instr ik prog addr niter var flags_env :
 and is_not_mayused_in_call prog addr lhs flags_env :
   ((bool Basic_types.String.Map.t) Dba_types.Caddress.Map.t) * bool =
   match lhs with
-  | Dba.LValue.Var (name, _, _) ->
+  | Dba.LValue.Var {name; _} ->
     begin
-      let open Disasm_options in
+      let open Simplification_options in
       let magic_value = 100 in
       match Simplification.get () with
       | Sequence NoSummaries | Function NoSummaries ->
@@ -268,11 +269,8 @@ and is_not_mayused_in_call prog addr lhs flags_env :
   | Dba.LValue.Store _ -> flags_env, false (* lhs is a flag = cannot be a store *)
 
 
-let display_results map ppf time =
+let display_results (initsize, _, itemps, iflags) map ppf time =
   let finalsize, _finalgoto, ftemps, fflags = statistics map in
-  Ai_options.finalsize := !Ai_options.finalsize + finalsize;
-  Ai_options.ftemps := !Ai_options.ftemps + ftemps;
-  Ai_options.fflags := !Ai_options.fflags + fflags;
   let mk_ratio init final = (float (100 * (init - final))) /. (float init) in
   let pp_ratio init ppf final =
     let r = mk_ratio init final in
@@ -288,7 +286,8 @@ let display_results map ppf time =
         @] "
     time
     (X86toDba.native_instructions_decoded ())
-    !Ai_options.finalsize
-    (pp_ratio !Ai_options.initsize) !Ai_options.finalsize
-    (pp_ratio !Ai_options.itemps) !Ai_options.ftemps
-    (pp_ratio !Ai_options.iflags) !Ai_options.fflags
+    finalsize
+    (pp_ratio initsize) finalsize
+    (pp_ratio itemps) ftemps
+    (pp_ratio iflags) fflags
+    ;;

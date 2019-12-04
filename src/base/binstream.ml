@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -29,6 +29,7 @@ let length = Sequence.length
 let empty = Sequence.empty
 
 
+
 let is_byte_value n = n >= 0 && n < 256
 
 let iteri f s =
@@ -46,7 +47,10 @@ let get_byte_exn t n =
     | Byte_found x -> x
 
 let get_byte t n =
-  try Some (get_byte_exn t n) with Not_found -> None
+  match get_byte_exn t n with
+  | by -> Some by
+  | exception Not_found -> None
+;;
 
 let value_of c =
   let cc = Char.code c in
@@ -106,7 +110,6 @@ let clean_string s =
   done;
   Buffer.contents b
 
-
 let of_nibbles s =
   Logger.debug ~level:5 "Binstream.of_string %s" s;
   let s = clean_string s in
@@ -126,6 +129,8 @@ let of_nibbles s =
 let iter = Sequence.iter_forward
 let map = Sequence.map_forward
 let fold = Sequence.fold_forward
+
+let rev sq = fold Sequence.push_back sq empty ;;
 
 let pp ppf t =
   let open Format in

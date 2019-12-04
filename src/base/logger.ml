@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -198,7 +198,7 @@ module type S = sig
   val info_channel    : channel
   val debug_channel   : channel
 
-  val fatal: ('a, Format.formatter, unit) format -> 'a
+  val fatal: ?e:exn -> ('a, Format.formatter, unit, 'b) format4 -> 'a
   val error: ('a, Format.formatter, unit) format -> 'a
   val result: ('a, Format.formatter, unit) format -> 'a
   val warning: ?level:int -> ('a, Format.formatter, unit) format -> 'a
@@ -338,25 +338,26 @@ module Make(G : ChannelGroup) = struct
     in { mark_open_tag; mark_close_tag; print_open_tag; print_close_tag; }
 
 
-  let log channel txt  =
+  let log finally channel txt =
     let ppfs = channel.ppfs in
     let pp fmt txt =
       if ChannelKind.loglevel channel.kind >= get_log_level ()
       then
         Format.kfprintf
           (fun fmt ->
-             Format.kfprintf (fun fmt -> Format.fprintf fmt "@]@}@}@.") fmt txt)
+             Format.kfprintf
+               (fun fmt -> Format.kfprintf finally fmt "@]@}@}@.") fmt txt)
           fmt "@{<%s>@{<%s>@[<hov 0>"
           (ChannelKind.color channel.kind |> Color.to_string)
           (channel_name channel.kind)
-      else Format.ifprintf fmt txt
+      else Format.ikfprintf finally fmt txt
     in
     let rec aux = function
       | [] -> assert false
       (* One should not be able to "dry" a channel,
          i.e. have no pretty-printing formatter associated to it *)
       | [ppf] -> pp ppf txt
-      | ppf :: ppfs -> pp ppf txt; aux ppfs
+      | ppf :: ppfs -> ignore @@ pp ppf txt; aux ppfs
     in aux ppfs
 
 
@@ -409,30 +410,33 @@ module Make(G : ChannelGroup) = struct
   let get_warning_level, set_warning_level, warning_pass =
     mk_level_functions warning_channel
 
-  let leveled_channel channel level_pass =
+  let leveled_channel finally channel level_pass =
     (fun ?(level=0) txt ->
        if level_pass level
-       then log channel txt
+       then log finally channel txt
        else Format.ifprintf Format.std_formatter txt)
 
+  let finally_unit _ = ()
+
   let debug ?(level=0) txt =
-    leveled_channel debug_channel debug_pass ~level txt
+    leveled_channel finally_unit debug_channel debug_pass ~level txt
 
   let fdebug ?(level=0) f =
     if debug_pass level
-    then log debug_channel (f ())
+    then log finally_unit debug_channel (f ())
     else Format.ifprintf Format.std_formatter ""
   ;;
 
   let info ?(level=0) txt =
-    leveled_channel info_channel info_pass ~level txt
+    leveled_channel finally_unit info_channel info_pass ~level txt
 
   let warning ?(level=0) txt =
-    leveled_channel warning_channel warning_pass ~level txt
+    leveled_channel finally_unit warning_channel warning_pass ~level txt
 
-  let fatal  txt = log fatal_channel txt
-  let error  txt = log error_channel txt
-  let result txt = log result_channel txt
+  let fatal ?(e=Failure "abort") txt =
+    log (fun _ -> raise e) fatal_channel txt
+  let error  txt = log finally_unit error_channel txt
+  let result txt = log finally_unit result_channel txt
 
   let _ =
     List.iter
@@ -451,11 +455,7 @@ module Make(G : ChannelGroup) = struct
     (fun b channel ->
        Hashtbl.replace color_tbl channel b;
        let ppfs = channel.ppfs in
-       match b with
-       | true ->
-         List.iter (fun ppf -> pp_set_mark_tags ppf true) ppfs
-       | false ->
-         List.iter (fun ppf -> pp_set_mark_tags ppf false) ppfs
+       List.iter (fun ppf -> pp_set_mark_tags ppf b) ppfs
     ),
     (fun channel ->
        match Hashtbl.find color_tbl channel with

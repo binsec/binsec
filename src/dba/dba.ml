@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,10 +21,6 @@
 
 (** Definition of DBA type *)
 
-type endianness =
-  | LittleEndian
-  | BigEndian
-
 type size = int
 
 type malloc_size = Bigint.t
@@ -34,7 +30,7 @@ type id = int
     inside a Dba.block *)
 
 type address = {
-  base : Bitvector.t;
+  base : Virtual_address.t;
   id : id;
 }
 (** A DBA [address] is the association of a DBA block address represented by
@@ -56,6 +52,9 @@ type state =
   | KO
   | Undefined of string
   | Unsupported of string
+
+type 'a var = { name: string; size: size; info: 'a }
+(** The base type for variables *)
 
 module Unary_op = struct
   type t =
@@ -139,17 +138,21 @@ module ComparableRegion = struct
     | `Malloc _, _ -> -1
 end
 
+
+
+
 module rec Expr :
 sig
   type t = private
-    | Var of string * size * VarTag.t option  (* size: bits *)
-    | Load of size * endianness * t (* size: bytes *)
+    | Var of VarTag.t var  (* size: bits *)
+    | Load of size * Machine.endianness * t (* size: bytes *)
     | Cst of region * Bitvector.t
     | Unary of Unary_op.t * t
     | Binary of Binary_op.t * t * t
     | Ite of t *  t *  t (* sugar operator *)
 
-  val var : string -> int -> VarTag.t option -> t
+  val v: VarTag.t var -> t
+  val var : ?tag:VarTag.t -> string -> int -> t
 
   val is_equal : t -> t -> bool
   val size_of : t -> int
@@ -202,15 +205,15 @@ sig
 
   val restrict : int -> int -> t -> t
   val bit_restrict : int -> t -> t
-  val load : Size.Byte.t -> endianness -> t -> t
+  val load : Size.Byte.t -> Machine.endianness -> t -> t
 
   val is_max : t -> bool
 end
 = struct
   open Binary_op
   type t =
-    | Var of string * size * VarTag.t option  (* size: bits *)
-    | Load of size * endianness * t (* size: bytes *)
+    | Var of VarTag.t var  (* size: bits *)
+    | Load of size * Machine.endianness * t (* size: bytes *)
     | Cst of region * Bitvector.t
     | Unary of Unary_op.t * t
     | Binary of Binary_op.t * t * t
@@ -220,7 +223,7 @@ end
 
   let rec size_of = function
     | Cst(_, b) -> Bitvector.size_of b
-    | Var(_, size, _) -> size
+    | Var v -> v.size
     | Load(bytesize, _, _) -> 8 * bytesize
     | Ite(_, e, _)
     | Unary((Unary_op.UMinus | Unary_op.Not), e) -> size_of e
@@ -239,8 +242,7 @@ end
 
   let rec is_equal e1 e2 =
     match e1, e2 with
-    | Var (n1, sz1, t1),
-      Var (n2, sz2, t2) -> n1 = n2 && sz1 = sz2 && t1 = t2
+    | Var v1, Var v2 -> v1 = v2
     | Load (sz1, en1, e1),
       Load (sz2, en2, e2) -> sz1 = sz2 && en1 = en2 && is_equal e1 e2
     | Cst (r1, bv1), Cst (r2, bv2) ->
@@ -272,8 +274,9 @@ end
     | Cst (`Constant, bv) -> Bitvector.is_max_ubv bv
     | _ -> false
 
-  let var name nbits vtagopt = Var (name, nbits, vtagopt)
-  let temporary ~size name = var name size (Some VarTag.temp)
+  let v va = Var va
+  let var ?(tag=VarTag.empty) name size = Var { name; size; info = tag; }
+  let temporary ~size name = var name size ~tag:VarTag.temp
 
   let constant ?(region=`Constant) bv = Cst (region, bv)
 
@@ -669,17 +672,26 @@ and VarTag : sig
   type t =
     | Flag of Flag.t
     | Temp
+    | Register
+    | Empty
 
   val flag : Flag.t -> t
   val temp : t
+  val empty: t
+  val register: t
 end = struct
   type t =
     | Flag of Flag.t
     | Temp
+    | Register
+    | Empty
 
   let flag f = Flag f
   let temp = Temp
+  let empty = Empty
+  let register = Register
 end
+
 
 
 type exprs = Expr.t list
@@ -718,57 +730,64 @@ end
 
 module LValue = struct
   type t =
-    | Var of string * size * VarTag.t option (* size in bits *)
-    | Restrict of string * size * int Interval.t
-    | Store of size * endianness * Expr.t  (* size in bytes *)
+    | Var of VarTag.t var (* size in bits *)
+    | Restrict of VarTag.t var * int Interval.t
+    | Store of size * Machine.endianness * Expr.t  (* size in bytes *)
 
   let equal lv1 lv2 =
     match lv1, lv2 with
-    | Var (x1, sz1, _), Var (x2, sz2, _) ->
+    | Var {name = x1; size = sz1; _}, Var { name = x2; size = sz2; _ } ->
       x1 = x2 && sz1 = sz2
-    | Restrict (x1, sz1, {Interval.lo=o11; Interval.hi=o12}),
-      Restrict (x2, sz2, {Interval.lo=o21; Interval.hi=o22}) ->
-      x1 = x2 && sz1 = sz2 && o11 = o21 && o12 = o22
+    | Restrict (v1, {Interval.lo=o11; Interval.hi=o12}),
+      Restrict (v2, {Interval.lo=o21; Interval.hi=o22}) ->
+      v1.name = v2.name && v1.size = v2.size && o11 = o21 && o12 = o22
     | Store (sz1, en1, e1), Store (sz2, en2, e2) ->
       sz1 = sz2 && en1 = en2 && Expr.is_equal e1 e2
     | _, _ -> false
 
   let size_of = function
-    | Var (_, sz, _) -> sz
-    | Restrict (_, sz, {Interval.lo; Interval.hi}) ->
+    | Var v -> v.size
+    | Restrict (v, {Interval.lo; Interval.hi}) ->
       let restricted_size = hi - lo + 1 in
-      assert (restricted_size <= sz);
+      assert (restricted_size <= v.size);
       restricted_size
     | Store (sz, _, _) -> 8 * sz
 
-  let var ~bitsize name tagopt =
-    let bsz = Size.Bit.to_int bitsize in
-    Var(name, bsz, tagopt)
+  let v va = Var va
+
+  let var ?(tag=VarTag.empty) ~bitsize name =
+    let size = Size.Bit.to_int bitsize in
+    Var {name; size; info = tag }
 
   let flag
       ?(bitsize=Size.Bit.bits1)
       ?(flag_t=Flag.unspecified) flagname =
-    var flagname ~bitsize (Some (VarTag.flag flag_t))
+    var flagname ~bitsize ~tag:(VarTag.flag flag_t)
 
-  let temporary tempname bitsize = var tempname ~bitsize (Some VarTag.temp)
+  let temporary tempname bitsize = var tempname ~bitsize ~tag:VarTag.temp
 
   let temp nbits =
     let name = Format.asprintf "temp%a" Size.Bit.pp nbits in
     temporary name nbits
 
-  let restrict name sz lo hi =
+  let restrict v lo hi =
     assert(lo <= hi);
     assert(lo >= 0);
-    let bsz = Size.Bit.to_int sz in
-    assert(hi < bsz); (* TODO? : create a pure variable if hi - lo + 1 = sz *)
-    Restrict(name, bsz, {Interval.lo; Interval.hi})
+    assert(hi - lo + 1 < v.size); (* TODO? : create a pure variable if hi - lo + 1 = sz *)
+    Restrict(v, {Interval.lo; Interval.hi})
 
-  let bit_restrict name sz bit = restrict name sz bit bit
+  let _restrict name sz lo hi =
+    let v = {name; size = Size.Bit.to_int sz; info = VarTag.empty } in
+    restrict v lo hi
+  ;;
+
+  let bit_restrict v bit = restrict v bit bit
+  let _bit_restrict name sz bit = _restrict name sz bit bit
 
   let store nbytes endianness e =
     let sz = Size.Byte.to_int nbytes in
 (*    Format.printf "store : %d@." (Expr.size_of e); *)
-    assert (Expr.size_of e = Machine.Word_size.get ());
+    assert (Expr.size_of e = Kernel_options.Machine.word_size ());
     Store(sz, endianness, e)
 
   let is_expr_translatable = function
@@ -781,13 +800,14 @@ module LValue = struct
     | Expr.Ite _ -> false
 
   let of_expr = function
-    | Expr.Var(name, sz, tag) ->
-      var name ~bitsize:(Size.Bit.create sz) tag
+    | Expr.Var { name; size = sz; info = tag } ->
+      var ~bitsize:(Size.Bit.create sz) ~tag name
     | Expr.Load(size, endian, e) ->
       store (Size.Byte.create size) endian e
-    | Expr.Unary(Unary_op.Restrict {Interval.lo; Interval.hi},
-                 Expr.Var(name, sz, _)) ->
-      restrict name (Size.Bit.create sz) lo hi
+    | Expr.Unary(
+        Unary_op.Restrict {Interval.lo; Interval.hi},
+        Expr.Var v) ->
+      restrict v  lo hi
     | Expr.Cst _
     | Expr.Unary _
     | Expr.Binary _
@@ -795,29 +815,30 @@ module LValue = struct
       failwith "LValue.of_expr : Cannot create lvalue from expression"
 
   let to_expr = function
-    | Var(name,size,tag) -> Expr.var name size tag
-    | Restrict(name,size, { Interval.lo; hi}) ->
-       Expr.restrict lo hi (Expr.var name size None)
+    | Var { name; size; info = tag } -> Expr.var name size ~tag
+    | Restrict(v, { Interval.lo; hi}) ->
+       Expr.restrict lo hi (Expr.var v.name v.size ~tag:v.info)
     | Store(size,endianness,address) ->
        Expr.load (Size.Byte.create size) endianness address
 
 
   (* size expected for rhs *)
   let bitsize = function
-    | Var (_vname, sz, _tag) ->
-      Size.Bit.create sz
-    | Restrict(_vname, sz, {Interval.lo; Interval.hi}) ->
+    | Var { size; _} ->
+      Size.Bit.create size
+    | Restrict(v, {Interval.lo; Interval.hi}) ->
       let res = hi - lo + 1 in
-      assert (sz >= res);
+      assert (v.size >= res);
       Size.Bit.create res
     | Store (sz, _endianness, _e) ->
       Size.Byte.(create sz |> to_bitsize)
 
   let resize size = function
-    | Var (vname, _sz, tag) -> var vname ~bitsize:size tag
-    | Restrict(vname, _sz, {Interval.lo; Interval.hi}) ->
-      restrict vname size lo hi
-    | Store (_sz, endianness, e) -> store size endianness e
+    | Var {name; info = tag; _} -> var name ~bitsize:size ~tag
+    | Restrict(v, {Interval.lo; Interval.hi}) ->
+      restrict v lo hi
+    | Store (_sz, endianness, e) ->
+       store (Size.Byte.of_bitsize size) endianness e
 end
 
 
@@ -846,16 +867,22 @@ module Instr = struct
     assert ( lval_sz = rval_sz );
     Assign(lval, rval, nid)
 
-  let static_jump ?(tag=None) jt = SJump (jt, tag)
+  let static_jump ?tag jt = SJump (jt, tag)
 
-  let static_inner_jump ?(tag=None) n =
-    static_jump (Jump_target.inner n) ~tag
+  let static_inner_jump ?tag n =
+    static_jump (Jump_target.inner n) ?tag
 
   let call ~return_address jt =
     let tag = Some (Call return_address) in
-    static_jump ~tag jt
+    static_jump ?tag jt
 
-  let dynamic_jump ?(tag=None) e = DJump (e, tag)
+  let dynamic_jump ?tag e =
+    match e with
+    | Expr.Cst (_, v) ->
+       let addr = { id = 0; base = Virtual_address.of_bitvector v; } in
+       static_jump (Jump_target.outer addr )
+    | _ ->  DJump (e, tag)
+  ;;
 
   let stop state = Stop state
 

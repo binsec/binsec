@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -73,7 +73,7 @@ class flare_one (input_config:Trace_config.t) =
                         let v =
                           Int64.add base_input counter
                           |> Bigint.big_int_of_int64 in
-                        Bitvector.create v (Machine.Word_size.get ()) in
+                        Bitvector.create v (Kernel_options.Machine.word_size ()) in
                       match Smt_model.find_address_contents model addr with
                       | Some c ->
                         counter <- Int64.succ counter;
@@ -137,7 +137,7 @@ class flare_one (input_config:Trace_config.t) =
         let value =
           let bv =
             let value = Bigint.big_int_of_int64 base_input in
-            Bitvector.create value (Machine.Word_size.get ()) in
+            Bitvector.create value (Kernel_options.Machine.word_size ()) in
           aux bv in
         let input  =
           Input_t.({typeid = `mem;

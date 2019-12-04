@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -63,7 +63,7 @@ let pp_options ppf options =
       let box_open =
         if String.length values = 0 then pp_open_hovbox else pp_open_vbox in
       box_open ppf indent_newline;
-      fprintf ppf fmt (option_name^values) docstring;
+      fprintf ppf fmt (option_name ^ values) docstring;
       pp_close_box ppf ();
       pp_print_cut ppf ()
     )
@@ -136,10 +136,8 @@ module Cli_spec = struct
     else String.trim doc
 
   let create ~values ~key ~doc ~spec =
-    (* let key = (\* temporary measure for auto backward compatitility *\)
-     *   if key.[0] = '-' then String.sub key 1 (String.length key - 1) else key
-    in *)
-    let doc = align doc in Argv.create ~values ~key ~doc ~spec
+    let doc = align @@ String.capitalize_ascii doc in
+    Argv.create ~values ~key ~doc ~spec
 
   let simple ~key ~doc ~spec =
     let values = Values.Unconstrained in
@@ -193,7 +191,8 @@ end
     let pp_args ppf () =
       let args = args t |> Argv.list_of_args in
       pp_options ppf args
-    in Format.fprintf ppf "@[<v 4>* %s options@ @ %a@]" t.title pp_args ()
+    in Format.fprintf ppf "@[<v 4>* %s options@ @ %a@]"
+         (String.capitalize_ascii t.title) pp_args ()
 end
 
 and Cli: sig
@@ -208,7 +207,6 @@ and Cli: sig
   val create : unit -> t
   val insert_leaf : t -> Cli_spec.t -> unit
   val insert_node : t -> Cli_node.t -> unit
-  (* val is_leaf : t -> string -> bool *)
   val pp: Format.formatter -> unit -> unit
   val size : t -> int
 end
@@ -301,10 +299,13 @@ end
 module type BOOLEAN = GENERIC with type t = bool
 
 (** {5 Integer parameters} *)
+
 module type INTEGER = GENERIC with type t = int
 module type INTEGER_SET = CHECKABLE with type t = Basic_types.Int.Set.t
 module type INTEGER_LIST = CHECKABLE with type t = int list
 module type INTEGER_OPT = GENERIC_OPT with type t = int
+
+(** {5 Floating point parameters} *)
 
 module type FLOAT = GENERIC with type t = float
 module type FLOAT_SET = CHECKABLE with type t = Basic_types.Float.Set.t
@@ -312,6 +313,7 @@ module type FLOAT_LIST = CHECKABLE with type t = float list
 module type FLOAT_OPT = GENERIC_OPT with type t = float
 
 (** {5 String parameters} *)
+
 module type STRING = GENERIC with type t = string
 module type STRING_OPT = GENERIC_OPT with type t = string
 module type STRING_SET = CHECKABLE with type t = Basic_types.String.Set.t
@@ -353,7 +355,100 @@ module type DETAILED_CLI_DECL = sig
 end
 
 
-module Make(D: DECL) = struct
+module type Cli_sig = sig
+  module Logger : Logger.S
+
+  module Debug_level : INTEGER
+  module Loglevel : STRING
+  module Quiet : BOOLEAN
+
+  module Builder : sig
+
+    module Any(P: DETAILED_CLI_DECL):
+      GENERIC with type t = P.t
+    (** A very generic functor that lets you handle cases that are not provided
+        otherwise. Use it only as last resort.
+     *)
+
+
+    (** {4 Boolean functors}*)
+    module Boolean(P: sig include CLI_DECL val default : bool end) :
+    BOOLEAN
+    (** Generic boolean option to which you give a [default] value *)
+
+
+    module False(P:CLI_DECL) : BOOLEAN
+    (** An option that defaults to [false]. *)
+
+    module True (P:CLI_DECL) : BOOLEAN
+    (** An options that defaults to [true].
+       The provided command-line switch
+       automatically add a [no-] prefix to your option name.
+     *)
+
+
+    (** {4 Integer functors}*)
+    module Integer(P: sig include CLI_DECL val default : int end) :
+    INTEGER
+    module Zero(P:CLI_DECL) : INTEGER
+    module Integer_set(P: CLI_DECL) : INTEGER_SET
+    module Integer_list(P: CLI_DECL) : INTEGER_LIST
+    module Integer_option(P:CLI_DECL) : INTEGER_OPT
+
+
+    (** {4 Floating point functors}*)
+    module Float(P: sig include CLI_DECL val default : float end) :
+    FLOAT
+    module Float_set(P: CLI_DECL) : FLOAT_SET
+    module Float_list(P: CLI_DECL) : FLOAT_LIST
+    module Float_option(P:CLI_DECL) : FLOAT_OPT
+
+
+    (** {4 String functors}*)
+    module String(P: sig include CLI_DECL val default : string end) :
+    STRING
+
+    module String_choice(P: sig include CLI_DECL
+                               val default : string
+                               val choices : string list
+                          end) : STRING
+
+    module String_option(P: CLI_DECL) : STRING_OPT
+    module String_set(P: CLI_DECL)  : STRING_SET
+    module String_list(P: CLI_DECL) : STRING_LIST
+
+    (** {4 Variant functors} *)
+    module Variant_choice (P: sig include CLI_DECL
+                                 type t
+                                 val to_string : t -> string
+                                 val of_string : string -> t
+                                 val choices : string list
+                                 val default : t
+                            end): GENERIC with type t = P.t
+    (** Functor to map a string choice --- i.e., just one out of a set of
+        possible value --- into a variant type.
+     *)
+
+
+    module Variant_choice_assoc(P: sig
+                                    include CLI_DECL
+                                    type t
+                                    val assoc_map: (string * t) list
+                                    val default : t
+                                end) : GENERIC with type t = P.t
+    (** Like [Variant_choice] but with automatically generated [to_string] and
+        [of_string] function from [assoc_map].
+     *)
+
+
+    module Variant_list(
+               P:sig include CLI_DECL
+                     include Sigs.STR_INJECTIBLE end):
+    CHECKABLE with type t = P.t list
+  end
+end
+
+module Generic_make(D: DECL) = struct
 
   let sep = ","
   let cli_space = Cli_node.create ~key:D.shortname ~title:D.name
@@ -478,17 +573,6 @@ module Make(D: DECL) = struct
     add_help ();
     Logger.debug ~level:5 "Help added";
     Cli.insert_node Cli.cli cli_space
-
-  (* Add enabled switch *)
-  let is_enabled = ref false
-  let doc = Printf.sprintf "Enable %s" name
-  let key = ""
-  let spec = Unit (fun () -> is_enabled := true)
-  let cspec = Cli_spec.simple ~key ~doc ~spec
-
-  let _ = if not is_kernel then unsafe_extend cspec
-
-  let is_enabled () = is_kernel || !is_enabled
 
   module Builder = struct
     module Any(P:  DETAILED_CLI_DECL) = struct
@@ -641,7 +725,7 @@ module Make(D: DECL) = struct
 
         let key = P.name
         and spec = Scan (fun s -> float_of_string s |> set)
-        and doc = P.doc
+        and doc = Printf.sprintf "%s [%f]" P.doc P.default
 
 
         let cspec = Cli_spec.simple ~key ~spec ~doc
@@ -726,13 +810,13 @@ module Make(D: DECL) = struct
         type t = string
         let value = ref P.default
 
-        let set v = Logger.debug "Set %s to %s" P.name v; value := v
+        let set v = value := v
         let get () = !value
         let is_default () = !value = P.default
 
         let key = P.name
         and spec = Scan set
-        and doc = P.doc
+        and doc = Printf.sprintf "%s [%s]" P.doc P.default
 
         let cspec = Cli_spec.simple ~key ~spec ~doc
 
@@ -931,6 +1015,24 @@ module Make(D: DECL) = struct
 end
 
 
+module Make(D: DECL) = struct
+  include Generic_make(D);;
+  module Enabled = struct
+    (* Add enabled switch *)
+    let is_enabled = ref false
+    let doc = Printf.sprintf "Enable %s" name
+    let key = ""
+    let spec = Unit (fun () -> is_enabled := true)
+    let cspec = Cli_spec.simple ~key ~doc ~spec
+    let is_enabled () = is_kernel || !is_enabled
+    let _ = if not is_kernel then unsafe_extend cspec
+  end
+  include Enabled;;
+end ;;
+
+
+module Options = Generic_make ;;
+
 module Boot = struct
   let h = H.create 7
 
@@ -949,8 +1051,12 @@ module Boot = struct
 
   let run () =
     L.debug ~level:5 "Boot has %d enlisted closures" (H.length h);
-    let i = ref 0 in
-    H.iter (fun name f -> incr i;  launch name f) h
+    H.iter launch h;
+  ;;
+
+  let warn name =
+    L.warning "Could not find command line argument %s. Ignoring ..." name
+  ;;
 
   let find_switch name =
     let open Cli in
@@ -964,9 +1070,10 @@ module Boot = struct
          (* | Leaf { spec = Arg.Set v;  _ } -> v := true *)
          | Leaf _
          | Node _ -> assert false
-         | exception Not_found -> ()
+         | exception Not_found -> warn name
        end
-    | exception Not_found -> ()
+    | exception Not_found -> warn name
+  ;;
 
     (* let p (cli, _f, _doc) = String.compare cli switch = 0 in
      * match List.find p (get ()) with
@@ -986,7 +1093,7 @@ module Parse = struct
 
   module L = Logger.Make(struct let name = "cli_parser" end)
 
-  (* let _ = L.set_debug_level 3;; *)
+(*  let _ = L.set_debug_level 3;; *)
 
   let level = 3
 
@@ -1033,9 +1140,9 @@ module Parse = struct
                f arg;
              with
              | _e ->
-               L.fatal "@[<v 5>Error parsing %s %s@ %s@]"
-                 switch arg doc;
-               raise (Cli_parse_error ("Error parsing option " ^ switch))
+               L.fatal ~e:(Cli_parse_error ("Error parsing option " ^ switch))
+                 "@[<v 5>Error parsing %s %s@ %s@]"
+                 switch arg doc
              );
              arg_loop (j + 1)
           | exception Not_found ->
@@ -1051,12 +1158,10 @@ module Parse = struct
            let msg =
              Printf.sprintf
                "Error for option %s (maybe a missing option value ?)" switch in
-           L.fatal "%s" msg;
-           raise (Cli_parse_error msg)
+           L.fatal ~e:(Cli_parse_error msg) "%s" msg
         | Not_found ->
-           L.fatal "Unkown option %s" switch;
-           raise (Cli_parse_error ("Unknown option " ^ switch))
-
+           L.fatal ~e:(Cli_parse_error ("Unknown option " ^ switch))
+             "Unkown option %s" switch
     in
     let start_index =
       match origin with
@@ -1116,7 +1221,7 @@ module Parse = struct
         let line = input_line ic |> String.trim in
         let length = String.length line in
         match String.get line (length - 1) with
-        | exception _ -> assert(length == 0); acc
+        | exception _ -> assert (length = 0); acc
         (* Substitute the '\' with a space and continue  reading. *)
         | '\\' -> multi_line_read (acc ^ (String.sub line 0 @@ length - 1) ^ " ")
         | _ -> acc ^ line
@@ -1161,12 +1266,10 @@ module Parse = struct
     run_on ~origin:Config_file (unstack stack)
 
 
-  let run () = run_on Sys.argv
+  let run () = run_on ~origin:Command_line Sys.argv
 
 end
 
-
 let parse = Parse.run
 
-let parse_configuration_file ~filename =
-  Parse.of_filename ~filename
+let parse_configuration_file ~filename = Parse.of_filename ~filename

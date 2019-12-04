@@ -1,7 +1,7 @@
 (**************************************************************************)
-(*  This file is part of Binsec.                                          *)
+(*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2017                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -40,13 +40,14 @@ module Env = struct
   module Load = struct
     let ox8BADF00D s m i =
       let sz = Size.Byte.create s in
-      let ax = Machine.Word_size.get () |> Bv.create @@ Addr.to_bigint i in
+      let ax = Kernel_options.Machine.word_size ()
+               |> Bv.create @@ Addr.to_bigint i in
       let ex = Dba.Expr.load sz m @@ Dba.Expr.constant ax in
       Ox8BADF00D ex
   end
   module Restrict = struct
     let ox8BADF00D n s =
-      let ex = Dba.Expr.var n s None in
+      let ex = Dba.Expr.var n s in
       Ox8BADF00D ex
   end
 
@@ -57,9 +58,9 @@ module Env = struct
       @@ Addr.Map.add i (Bv.extract v It.l8) t
 
   let write e m i v s = match m with
-    | Dba.BigEndian ->
+    | Machine.BigEndian ->
       {e with main = split Addr.pred (i |> Addr.add_int @@ s - 1) v s e.main}
-    | Dba.LittleEndian ->
+    | Machine.LittleEndian ->
       {e with main = split Addr.succ i v s e.main}
 
   let rec join succ i l s t =
@@ -67,9 +68,9 @@ module Env = struct
     else join succ (succ i) (Addr.Map.find i t :: l) (s - 1) t
 
   let read e m i s = try match m with
-    | Dba.BigEndian ->
+    | Machine.BigEndian ->
       join Addr.pred (Addr.add_int s i) [] s e.main |> Bv.concat
-    | Dba.LittleEndian -> join Addr.succ i [] s e.main |> Bv.concat
+    | Machine.LittleEndian -> join Addr.succ i [] s e.main |> Bv.concat
     with Not_found -> raise @@ Load.ox8BADF00D s m i
 
   let empty = {meta=Var.Map.empty; main=Addr.Map.empty}
@@ -126,8 +127,8 @@ module Env = struct
 
   let rec eval e = let open Dba.Expr in function
       | Cst (_, v)         -> v
-      | Var (n, _, _) as v ->
-        begin try Var.Map.find n e.meta
+      | Var { Dba.name; _} as v ->
+        begin try Var.Map.find name e.meta
         with Not_found -> raise @@ Ox8BADF00D v end
       | Load (s, m, a)     ->
         read e m (Addr.of_bitvector @@ eval e a) s
@@ -141,8 +142,8 @@ module Env = struct
   let assign e l v = match l with
     | Dba.LValue.Store (s, m, a) ->
       write e m (Addr.of_bitvector @@ eval e a) v s
-    | Dba.LValue.Var (n, _, _) -> {e with meta = Var.Map.add n v e.meta}
-    | Dba.LValue.Restrict (n, s, {It.lo; It.hi}) ->
+    | Dba.LValue.Var va -> {e with meta = Var.Map.add va.Dba.name v e.meta}
+    | Dba.(LValue.Restrict ({name = n; size = s; _}, {It.lo; It.hi})) ->
       let v = match Var.Map.find n e.meta with
         | o when lo = 0 ->
           v |> Bv.append @@ Bv.extract o It.{lo=hi + 1; hi=Bv.size_of o - 1}
@@ -155,8 +156,8 @@ module Env = struct
 
   let kill e = function
     | Dba.LValue.Store _ -> Errors.not_yet_implemented "Undef on memory cell."
-    | Dba.LValue.Var (n, _, _) | Dba.LValue.Restrict (n, _, _) ->
-      {e with meta = Var.Map.remove n e.meta}
+    | Dba.LValue.Var v | Dba.LValue.Restrict (v, _) ->
+      {e with meta = Var.Map.remove v.Dba.name e.meta}
 
   let load_memory_file e filename =
     let map =
@@ -188,7 +189,7 @@ module Env = struct
        raise @@ Ox8BADF00D (Dba.LValue.to_expr lval)
     | I.Mem_load (addr, size) ->
       let img = Kernel_functions.get_img () in
-      let wsize = Machine.Word_size.get () in
+      let wsize = Kernel_options.Machine.word_size () in
       let rec loop e s =
         if s = 0 then e
         else
@@ -197,7 +198,7 @@ module Env = struct
           let byte = Loader_utils.get_byte_at img addr |> Bv.of_int ~size:8 in
           let e =
             let addr = Virtual_address.of_bitvector addr in
-            write e Dba.LittleEndian addr byte 1 in
+            write e Machine.LittleEndian addr byte 1 in
           loop e @@ s - 1 in
       loop e size
 
@@ -228,7 +229,8 @@ module Interpreter (P: Program) = struct
     | Undef (l, n) -> Env.kill e l, Caddr.reid a n
     | SJump (Dba.JInner n, _) -> e, Caddr.reid a n
     | SJump (Dba.JOuter n, _) -> e, n
-    | DJump (t, _) -> e, Caddr.block_start @@ Env.eval e t
+    | DJump (t, _) -> e, Caddr.block_start @@
+                           Virtual_address.of_bitvector @@ Env.eval e t
     | If (c, Dba.JInner i, n) ->
       if Bv.is_zero @@ Env.eval e c then e, Caddr.reid a n
       else e, Caddr.reid a i
@@ -281,7 +283,7 @@ end
 module Goal = struct
   let address d =
     let img = Kernel_functions.get_img () in
-    match Binary_loc.to_virtual_address ~img (Directive.loc d) with
+    match Loader_utils.Binary_loc.to_virtual_address ~img (Directive.loc d) with
     | Some a -> a
     | None -> raise Not_found
 
@@ -327,9 +329,12 @@ let run () = if Simulation.is_enabled () then try
       let env = match Simulation.InitFile.get_opt () with
         | None -> env
         | Some f -> Env.load_init_file env f in
-      let ep = Bv.of_string @@ Kernel_options.Entry_point.get () in
+      let entrypoint = match Kernel_functions.get_ep () with
+        | Some v -> v
+        | None ->
+          Simulation.Logger.fatal "Entrypoint is not set or not valid" in
       let goals = Simulation.Directives.get () in
-      ignore @@ Img.run env goals @@ Caddr.block_start ep
+      ignore @@ Img.run env goals @@ Caddr.block_start entrypoint
     with
     | Env.Ox8BADF00D ex ->
       Simulation.Logger.error "No concrete value for %a"

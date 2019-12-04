@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -76,7 +76,7 @@ val find_address_contents : t -> address -> Bitvector.t option
 *)
 
 val find_address_content :
-  t -> address -> Size.Byte.t -> Dba.endianness -> Bitvector.t option
+  t -> address -> Size.Byte.t -> Machine.endianness -> Bitvector.t option
 (** Not yet implemented *)
 
 val variables : t -> identifier list

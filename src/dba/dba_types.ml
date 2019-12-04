@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,19 +27,11 @@ type instruction_sequence = (Dba.address *  Dba.Instr.t) list
 
 let malloc_id = ref 0
 
-let get_endianness, set_endianness =
-  let endianness = ref LittleEndian in
-  (fun () -> !endianness),
-  (fun e -> endianness := e)
-
 module Caddress = struct
   module X = struct
     type t = Dba.address
     let compare a1 a2 =
-      assert (Bitvector.size_of a1.base = Bitvector.size_of a2.base);
-      let v1 = Bitvector.value_of a1.base in
-      let v2 = Bitvector.value_of a2.base in
-      let c = Bigint.compare_big_int v1 v2 in
+      let c = Virtual_address.compare a1.base a2.base in
       if c = 0 then a1.id - a2.id else c
   end
 
@@ -49,12 +41,6 @@ module Caddress = struct
 
   let create base id =
     assert (id >= 0);
-    let sz = Bitvector.size_of base in
-    let word_size = Machine.Word_size.get () in
-    assert (sz <= word_size);
-    (* Auto-extend smaller address to the expected word-size for this machine *)
-    let base =
-      if sz < word_size then Bitvector.extend base word_size else base in
     { base; id; }
 
   let rebase a base = create base a.id
@@ -62,31 +48,27 @@ module Caddress = struct
 
   let block_start bv = create bv 0
 
-  let base_value addr = Bitvector.value_of addr.base
+  let base_value addr = addr.base
 
   let equal caddr1 caddr2 = compare caddr1 caddr2 = 0
 
-  let pp_base ppf v = Format.fprintf ppf "%a" Bitvector.pp_hex v.base
+  let pp_base ppf v = Format.fprintf ppf "%a" Virtual_address.pp v.base
 
   let add_int a n =
-    let bv =
-      Bitvector.create (Bigint.big_int_of_int n) (Bitvector.size_of a.base) in
-    rebase a (Bitvector.add a.base bv)
+    rebase a (Virtual_address.add_int n a.base)
 
   let add_id a n = reid a (n + a.id)
 
   let block_start_of_int n =
-    let v = Bigint.big_int_of_int n in
-    block_start (Bitvector.create v (Machine.Word_size.get ()))
+    block_start (Virtual_address.create n)
 
   let default_init = ref (block_start_of_int 0)
 
   let to_virtual_address caddr =
-    base_value caddr |> Bigint.int_of_big_int |> Virtual_address.create
+    base_value caddr
 
   let of_virtual_address n =
-    block_start @@
-    Bitvector.create (Virtual_address.to_bigint n) (Machine.Word_size.get ())
+    block_start n
 end
 
 
@@ -141,9 +123,8 @@ end
 module Region = struct
   include Basic_types.Collection_make.Default(ComparableRegion)
 
-  let malloc sz =
-    let minus_one = Bigint.big_int_of_int (-1) in
-    let a = Caddress.block_start (Bitvector.create minus_one sz) in
+  let malloc _sz =
+    let a = Caddress.block_start (Virtual_address.create (-1)) in
     `Malloc ((-1, a), Bigint.zero_big_int)
 
   let pp ppf = function
@@ -176,7 +157,7 @@ module Expr:  sig
   include Sigs.PRINTABLE with type t := Dba.Expr.t
 
   type t = Dba.Expr.t
-  val var : string -> Size.Bit.t -> Dba.VarTag.t option -> t
+  val var : string -> Size.Bit.t -> Dba.VarTag.t -> t
   val flag : ?bits:Size.Bit.t -> string -> t
 
   val temporary : string -> Size.Bit.t -> t
@@ -199,14 +180,17 @@ module Expr:  sig
 end = struct
   type t = Dba.Expr.t
 
-  let var name nbits vtagopt =
+  let var name nbits tag =
     let sz = Size.Bit.to_int nbits in
-    Dba.Expr.var name sz vtagopt
+    Dba.Expr.var name sz ~tag
 
   let flag ?(bits=Size.Bit.bits1) flagname =
-    var flagname bits (Some (Dba.VarTag.flag Flag.unspecified))
+    var flagname bits (Dba.VarTag.flag Flag.unspecified)
 
-  let temporary tempname nbits = var tempname nbits (Some Dba.VarTag.temp)
+  let temporary tempname nbits =
+    let size = Size.Bit.to_int nbits in
+    Dba.Expr.temporary ~size tempname
+  ;;
 
   let pp = Dba_printer.Ascii.pp_bl_term
 
@@ -215,7 +199,7 @@ end = struct
 
   let temp size =
     let name = Format.asprintf "temp%a" Size.Bit.pp size in
-    var name size (Some Dba.VarTag.temp)
+    temporary name size
 
   let bool_true = Dba.Expr.one
   let bool_false = Dba.Expr.zero
@@ -232,9 +216,9 @@ end = struct
     | _ -> false
 
   let of_lvalue = function
-    | LValue.Var (x, sz, tag) -> Expr.var x sz tag
-    | LValue.Restrict (x, sz, {Interval.lo=o1; Interval.hi=o2}) ->
-      Expr.restrict o1 o2 (Expr.var x sz None)
+    | LValue.Var {name; size; info = tag} -> Expr.var name size ~tag
+    | LValue.Restrict (v, {Interval.lo=o1; Interval.hi=o2}) ->
+      Expr.restrict o1 o2 (Expr.var v.name v.size ~tag:v.info)
     | LValue.Store (sz, endiannness, e) ->
        let bysz = Size.Byte.create sz in
        Expr.load bysz endiannness e
@@ -256,7 +240,7 @@ end = struct
     | Dba.Expr.Cst _ -> Basic_types.String.Set.empty
     | Dba.Expr.Unary(_, e)
     | Dba.Expr.Load(_, _, e)  -> variables e
-    | Dba.Expr.Var(name, _, _) -> Basic_types.String.Set.singleton name
+    | Dba.Expr.Var { name; _ } -> Basic_types.String.Set.singleton name
     | Dba.Expr.Binary(_, e1, e2)
     | Dba.Expr.Ite(_, e1, e2) ->
       Basic_types.String.Set.union (variables e1) (variables e2)
@@ -265,7 +249,7 @@ end = struct
     | Dba.Expr.Cst _ -> Basic_types.String.Set.empty
     | Dba.Expr.Unary(_, e)
     | Dba.Expr.Load(_, _, e) -> temporaries e
-    | Dba.Expr.Var(name, _, Some Dba.VarTag.Temp) ->
+    | Dba.Expr.Var { name; info = Dba.VarTag.Temp; _ } ->
       Basic_types.String.Set.singleton name
     | Dba.Expr.Var _ -> Basic_types.String.Set.empty
     | Dba.Expr.Binary(_, e1, e2)
@@ -288,9 +272,9 @@ module LValue = struct
   let bitsize lval =
     let sz =
       match lval with
-      | LValue.Var(_, size, _) -> size
+      | LValue.Var v -> v.size
       | LValue.Store(size, _, _) -> 8 * size
-      | LValue.Restrict(_, _, {Interval.lo; Interval.hi}) -> hi - lo + 1
+      | LValue.Restrict(_,  {Interval.lo; Interval.hi}) -> hi - lo + 1
     in Size.Bit.create sz
 
   let unsafe_bitsize lval = bitsize lval |> Size.Bit.to_int
@@ -298,29 +282,29 @@ module LValue = struct
   let _pp = Dba_printer.Ascii.pp_lhs
 
   let name_of = function
-    | LValue.Var (name, _, _)
-    | LValue.Restrict (name, _, _) -> Some name
+    | LValue.Var { name; _}
+    | LValue.Restrict ({name; _}, _) -> Some name
     | LValue.Store _ -> None
 
   let is_temporary = function
-    | LValue.Var (_, _, Some VarTag.Temp) -> true
+    | LValue.Var { info = VarTag.Temp; _ } -> true
     | LValue.Var _
     | LValue.Restrict _
     | LValue.Store _ -> false
 
   let is_flag = function
-    | LValue.Var (_, _, Some (VarTag.Flag _)) -> true
+    | LValue.Var {info = VarTag.Flag _; _} -> true
     | LValue.Var _
     | LValue.Restrict _
     | LValue.Store _ -> false
 
   let variables = function
-    | LValue.Var (name, _, _)
-    | LValue.Restrict (name, _, _) -> Basic_types.String.Set.singleton name
+    | LValue.Var { name; _ }
+    | LValue.Restrict ({name; _},  _) -> Basic_types.String.Set.singleton name
     | LValue.Store (_, _, e) -> Expr.variables e
 
   let temporaries = function
-    | LValue.Var (name, _, Some VarTag.Temp) ->
+    | LValue.Var { name; info = VarTag.Temp; _ } ->
       Basic_types.String.Set.singleton name
     | LValue.Var _
     | LValue.Restrict _ -> Basic_types.String.Set.empty
@@ -357,7 +341,7 @@ type 'a dbainstrmap = (Dba.Instr.t * 'a option) Caddress.Map.t
 
 
 module Declarations = struct
-  type t = (Dba.size * Dba.VarTag.t option) Basic_types.String.Map.t
+  type t = (Dba.size * Dba.VarTag.t) Basic_types.String.Map.t
 
   open Basic_types.String.Map
   let of_list declarations =
@@ -419,7 +403,7 @@ module Instruction = struct
     | Malloc (lv, e, id) -> malloc lv e (new_id id)
     | Free (e, id) -> free e (new_id id)
     | Print (ds, id) -> print ds (new_id id)
-    | SJump (jt, tag) -> static_jump ~tag (new_jt jt)
+    | SJump (jt, tag) -> static_jump ?tag (new_jt jt)
     | Stop _
     | DJump _ -> instr
 
@@ -517,7 +501,7 @@ module Instruction = struct
     | Instr.DJump (_, (Some Return | None))
     | Instr.Print _ -> Virtual_address.Set.empty
     | Instr.DJump (_, Some Call a) ->
-      Virtual_address.(Set.singleton (Caddress.to_virtual_address a))
+      Virtual_address.Set.singleton (Caddress.to_virtual_address a)
     | Instr.SJump (jt, Some Call a) ->
       Virtual_address.Set.add
         (Caddress.to_virtual_address a) (Jump_target.outer_jumps jt)

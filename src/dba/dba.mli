@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,9 +20,6 @@
 (**************************************************************************)
 
 (** Definition of DBA type *)
-type endianness =
-  | LittleEndian
-  | BigEndian
 
 type size = int
 
@@ -33,7 +30,7 @@ type id = int
     inside a Dba.block *)
 
 type address = {
-  base : Bitvector.t;
+  base : Virtual_address.t;
   id : id;
 }
 (** A DBA [address] is the association of a DBA block address represented by
@@ -109,11 +106,12 @@ type restricted_region =
 
 type region = [ `Constant | restricted_region ]
 
+type 'a var = { name: string; size: size; info: 'a }
 
 module rec Expr : sig
   type t = private
-    | Var of string * size * VarTag.t option  (* size: bits *)
-    | Load of size * endianness * t (* size: bytes *)
+    | Var of VarTag.t var  (* size: bits *)
+    | Load of size * Machine.endianness * t (* size: bytes *)
     | Cst of region * Bitvector.t
     | Unary of Unary_op.t * t
     | Binary of Binary_op.t * t * t
@@ -124,7 +122,9 @@ module rec Expr : sig
 
   val is_constant : t -> bool
 
-  val var : string -> int -> VarTag.t option -> t
+  (** {2 Constructors} *)
+  val var : ?tag:VarTag.t -> string -> int -> t
+  val v: VarTag.t var -> t
   val temporary : size:int -> string -> t
   val constant : ?region:region -> Bitvector.t -> t
   (** [constant ~region bv] creates a constant expression from the bitvector
@@ -132,18 +132,23 @@ module rec Expr : sig
       Default region is [`Constant].
   *)
 
+  (** {3 Specific constants }*)
+
   val zeros : int -> t
-  (** [zeros n] creates a constant expression of value 0 with length [n]*)
+  (** [zeros n] creates a constant expression of value 0 with length [n] *)
 
   val ones : int -> t
   (** [ones n] creates a constant expression of value 1 with length [n].
-      I.e. it has (n - 1) zeros in binary.
-  *)
+      I.e.; it has (n - 1) zeros in binary.
+   *)
 
-  val one : t
-  val _true: t
-  val zero : t
+  val one    : t
+  val zero   : t
+
+  val _true  : t
   val _false : t
+
+  (** {3 Binary expressions} *)
   val binary          : Binary_op.t -> t -> t -> t
   val add                : t -> t -> t
   val sub                : t -> t -> t
@@ -189,7 +194,7 @@ module rec Expr : sig
   val bit_restrict : int -> t -> t
   (** [bit_restrict o e] is [restrict o o e] *)
 
-  val load : Size.Byte.t -> endianness -> t -> t
+  val load : Size.Byte.t -> Machine.endianness -> t -> t
   (** [load nbytes endianness t] *)
 
   val is_max : t -> bool
@@ -215,9 +220,13 @@ and VarTag : sig
   type t = private
     | Flag of Flag.t
     | Temp
+    | Register
+    | Empty
 
   val flag : Flag.t -> t
   val temp : t
+  val empty: t
+  val register: t
 end
 
 
@@ -230,17 +239,19 @@ type printable =
 module LValue : sig
 
   type t = private
-    | Var of string * size * VarTag.t option (* size in bits *)
-    | Restrict of string * size * int Interval.t
-    | Store of size * endianness * Expr.t  (* size in bytes *)
+    | Var of VarTag.t var (* size in bits *)
+    | Restrict of VarTag.t var * int Interval.t
+    | Store of size * Machine.endianness * Expr.t  (* size in bytes *)
 
   include Sigs.Eq with type t := t
 
   val size_of : t -> int
-  (* [size_of lv] yields the size of [lv] in bits *)
+  (** [size_of lv] yields the size of [lv] in bits **)
 
-  val var : bitsize:Size.Bit.t -> string -> VarTag.t option -> t
-  (** [var name size tagopt] creates a DBA lvalue for a variable *)
+  val var : ?tag:VarTag.t -> bitsize:Size.Bit.t -> string -> t
+  (** [var tag name ~size] creates a DBA lvalue for a variable *)
+
+  val v: VarTag.t var -> t
 
   val flag : ?bitsize:Size.Bit.t -> ?flag_t:Flag.t -> string -> t
   (** [flag ~size ~flag_t fname] creates a variable whose flag is of the
@@ -250,9 +261,17 @@ module LValue : sig
   *)
 
   val temporary : string -> Size.Bit.t -> t
-  val restrict : string -> Size.Bit.t -> int -> int -> t
-  val bit_restrict : string -> Size.Bit.t -> int -> t
-  val store : Size.Byte.t -> endianness -> Expr.t -> t
+
+  val _restrict : string -> Size.Bit.t -> int -> int -> t
+  val _bit_restrict : string -> Size.Bit.t -> int -> t
+  (** [_restrict] and [_bit_restrict] are deprecated. Use the other forms
+   ** below.
+   *)
+
+  val restrict : VarTag.t var -> int -> int -> t
+  val bit_restrict : VarTag.t var -> int -> t
+
+  val store : Size.Byte.t -> Machine.endianness -> Expr.t -> t
 
   val temp: Size.Bit.t -> t
   (** [temp n] creates a lvalue representing a temporary of size [n] with name
@@ -325,10 +344,10 @@ module Instr : sig
   val ite : Expr.t -> id Jump_target.t -> int -> t
   val undefined : LValue.t -> int -> t
   val non_deterministic : ?region:region -> LValue.t -> int -> t
-  val static_jump : ?tag:Tag.t option -> id Jump_target.t -> t
-  val static_inner_jump : ?tag:Tag.t option -> int -> t
+  val static_jump : ?tag:Tag.t -> id Jump_target.t -> t
+  val static_inner_jump : ?tag:Tag.t -> int -> t
   val call : return_address:address -> id Jump_target.t -> t
-  val dynamic_jump : ?tag:Tag.t option -> Expr.t -> t
+  val dynamic_jump : ?tag:Tag.t -> Expr.t -> t
 
   val malloc : LValue.t -> Expr.t -> int -> t
   val free : Expr.t -> int -> t

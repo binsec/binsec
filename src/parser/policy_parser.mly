@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2018                                               */
+/*  Copyright (C) 2016-2019                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -22,7 +22,8 @@
 %{
   open Dba
   open Policy_type
-  open Kernel_options
+
+
 
   let infer_size_variable (name:string): int =
     match name with
@@ -40,9 +41,10 @@
     let first_char = String.get name 0 in
     if first_char = '_' || first_char =  '?' ||  first_char  = '!' then
       let name = if first_char = '_' then "*" else name in
-      var name ~bitsize:(Size.Bit.create 0) None
+      var name ~bitsize:(Size.Bit.create 0)
     else
-      let reg name = var name ~bitsize:bits32 None in
+      let reg name = var name ~bitsize:bits32 in
+      let restrict = _restrict in
       match name with
       | "al" -> restrict "eax" bits32 0 7
       | "ah" -> restrict "eax" bits32 8 15
@@ -68,11 +70,12 @@
       | "ebp" -> reg "ebp"
       | "sp"  -> restrict "esp" bits32 0 15
       | "esp" -> reg "esp"
-      | "btemp" -> var "btemp" ~bitsize:bits8 None
-      | "stemp" -> var "stemp" ~bitsize:bits16 None
-      | "temp" ->  var "temp"  ~bitsize:bits32 None
-      | "dtemp" -> var "dtemp" ~bitsize:bits64 None
-      | _ -> Logger.error "Unknown LHS variable"; raise Parsing.Parse_error
+      | "btemp" -> var "btemp" ~bitsize:bits8
+      | "stemp" -> var "stemp" ~bitsize:bits16
+      | "temp" ->  var "temp"  ~bitsize:bits32
+      | "dtemp" -> var "dtemp" ~bitsize:bits64
+      | _ -> Kernel_options.Logger.error "Unknown LHS variable";
+             raise Parsing.Parse_error
 
 %}
 
@@ -169,21 +172,21 @@ inst:
   let size = Dba.Expr.size_of e in
   let sizelhs =
     match lv with
-    | Dba.LValue.Var(_,sz,_)
-    | Dba.LValue.Restrict(_,sz,_)
+    | Dba.LValue.Var { size = sz; _}
+    | Dba.LValue.Restrict({Dba.size = sz; _},_)
     | Dba.LValue.Store(sz,_,_) -> sz in
-  Logger.debug ~level:2 "Lhs:%d | Expr (infered):%d" sizelhs size;
+  Kernel_options.Logger.debug ~level:2 "Lhs:%d | Expr (infered):%d" sizelhs size;
   let lhs =
     if size <> 0 then
     match lv with
-    | Dba.LValue.Var(_n, sz, _) ->
-      Logger.debug ~level:2 "Var Size:%d" sz;
+    | Dba.LValue.Var { size = sz; _} ->
+      Kernel_options.Logger.debug ~level:2 "Var Size:%d" sz;
       if sz <> size && sz <> 0 then raise Parsing.Parse_error else lv
-    | Dba.LValue.Restrict(_,sz, {Interval.lo=l; Interval.hi=h}) ->
-      Logger.debug ~level:2 "VarR Size:%d" sz;
+    | Dba.LValue.Restrict({Dba.size = sz; _}, {Interval.lo=l; Interval.hi=h}) ->
+      Kernel_options.Logger.debug ~level:2 "VarR Size:%d" sz;
       if size <> h - l + 1 && sz <> 0 then raise Parsing.Parse_error else lv
     | Dba.LValue.Store(sz,en,e) ->
-       Logger.debug ~level:2 "LhsStore Size:%d" sz;
+       Kernel_options.Logger.debug ~level:2 "LhsStore Size:%d" sz;
        if sz = 0 then
          let bytes = Size.Byte.create size in
          Dba.LValue.store bytes en e
@@ -193,8 +196,8 @@ inst:
   let exp =
     if size = 0 && sizelhs <> 0 then
     match lv with
-    | Dba.LValue.Var(_n,sz,_) -> Parse_helpers.patch_expr_size e sz
-    | Dba.LValue.Restrict(_n,_sz, {Interval.lo=l; Interval.hi=h}) ->
+    | Dba.LValue.Var { size; _} -> Parse_helpers.patch_expr_size e size
+    | Dba.LValue.Restrict(_, {Interval.lo=l; Interval.hi=h}) ->
     Parse_helpers.patch_expr_size e (h-l+1)
     | Dba.LValue.Store(sz,_en,_e) ->
        if sz <> 0 then Parse_helpers.patch_expr_size e sz else e
@@ -204,7 +207,7 @@ inst:
   | NEXT expr { Dba.Instr.dynamic_jump $2 }
   | IFJUMP c=cond; NEXT expr ELSE NEXT expr {
     Dba.Instr.ite c
-    (Dba.Jump_target.outer (Dba_types.Caddress.block_start @@ Bitvector.zeros 32)) 0
+    (Dba.Jump_target.outer (Dba_types.Caddress.block_start @@ Virtual_address.create 0)) 0
   }
 (*  | IFJUMP cond NEXT address ELSE NEXT INT {
    Dba.Instr.If ($2, JOuter $4, (int_of_string $7))
@@ -221,7 +224,7 @@ lhs :
     let off1 = int_of_string lo in
     let off2 = int_of_string hi in
     let size = infer_size_variable id |> Size.Bit.create in
-    Dba.LValue.restrict id size off1 off2
+    Dba.LValue._restrict id size off1 off2
   }
   | STORELOAD LBRACKET e=expr; sz=ioption(preceded(COMMA, INT)); RBRACKET
   {
@@ -229,7 +232,7 @@ lhs :
       match sz with
       | None -> Size.Byte.create 0
       | Some v -> Size.Byte.of_string v
-   in Dba.LValue.store bytesize LittleEndian e
+   in Dba.LValue.store bytesize Machine.LittleEndian e
   }
 ;
 
@@ -256,10 +259,10 @@ expr:
   }
   | STORELOAD LBRACKET expr COMMA INT RBRACKET {
     let size = int_of_string $5 |> Size.Byte.create in
-    Dba.Expr.load size LittleEndian $3
+    Dba.Expr.load size Machine.LittleEndian $3
   }
   | STORELOAD LBRACKET expr RBRACKET {
-    Dba.Expr.load (Size.Byte.create 0) LittleEndian $3
+    Dba.Expr.load (Size.Byte.create 0) Machine.LittleEndian $3
   }
   | NOT expr %prec NOT      { Dba.Expr.lognot $2 }
   | MINUS expr %prec UMINUS { Dba.Expr.uminus $2 }

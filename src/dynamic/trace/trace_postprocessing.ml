@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -48,13 +48,14 @@ exception Not_cmp_instruction
 
 let get_comp_instruction inst: cmp_type =
   match inst.dbainstrs |> List.hd |> Dba_types.Statement.instruction with
-  | Dba.Instr.Assign(Dba.LValue.Var(name,size,opts),Dba.Expr.Binary(_,x,y),_) ->
+  | Dba.Instr.Assign(Dba.(LValue.Var {name; size; info = opts}),
+                     Dba.Expr.Binary(_,x,y),_) ->
     if startswith inst.mnemonic "cmp" then
       Cmp (x,y)
     else if startswith inst.mnemonic "test" then
       Test (x,y)
     else if startswith inst.mnemonic "sub" then
-      Sub (Dba.Expr.var name size opts)
+      Sub (Dba.Expr.var name size ~tag:opts)
     else
       raise Not_cmp_instruction
   | _ -> raise Not_cmp_instruction

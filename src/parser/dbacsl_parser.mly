@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2018                                               */
+/*  Copyright (C) 2016-2019                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -120,10 +120,10 @@ expr:
       int_of_string $5
       |> Size.Bit.create
       |> Size.Byte.of_bitsize in
-    Dba.Expr.load size LittleEndian $3
+    Dba.Expr.load size Machine.LittleEndian $3
   }
   | STORELOAD LBRACKET expr RBRACKET {
-    Dba.Expr.load (Size.Byte.create 0) LittleEndian $3
+    Dba.Expr.load (Size.Byte.create 0) Machine.LittleEndian $3
   }
   | NOT expr %prec NOT         { Dba.Expr.lognot $2 }
   | MINUS e=expr; %prec UMINUS { Dba.Expr.uminus e }

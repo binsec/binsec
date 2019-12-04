@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -96,7 +96,7 @@ let read_dba_file filename =
 
 let find_dba_definition isa =
   let basename =
-    Format.asprintf "%a.dba" Kernel_options.Machine.ISA.pp isa in
+    Format.asprintf "%a.dba" Machine.ISA.pp isa in
   let subdir = Filename.concat "arch" basename in
   Kernel_options.Share_directories.find_file ~filename:subdir
 

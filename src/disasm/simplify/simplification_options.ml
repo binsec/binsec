@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -35,7 +35,39 @@ module Display_statistics =
   end
   )
 
-
 type pmap =
   (Dba.Instr.t * Instruction.Generic.t option)
     Dba_types.Caddress.Map.t
+
+
+type specifics =
+  | All
+  | NoInline
+  | NoSummaries
+
+type simplification =
+  | No_simplification
+  | Program
+  | Function of specifics
+  | Sequence of specifics
+
+module Simplification = Builder.Variant_choice_assoc(
+struct
+  type t = simplification
+
+  let assoc_map = [
+      "prog", Program;
+      "fun", Function All;
+      "seq", Sequence All;
+      "fun-no-inline", Function NoInline;
+      "seq-no-inline", Function NoInline;
+      "fun-no-sum", Function NoSummaries;
+      "seq-no-sum", Function NoSummaries;
+      "none", No_simplification;
+    ]
+
+  let default = No_simplification
+  let name = "simplify"
+  let doc = " Activate DBA simplification on given level"
+end
+)

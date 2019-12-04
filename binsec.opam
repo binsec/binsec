@@ -1,0 +1,88 @@
+opam-version: "2.0"
+name: "binsec"
+synopsis: "Semantic analysis of binary executables"
+version: "0.3"
+description: "
+BINSEC aims at developing an open-source platform filling the gap between formal
+methods over executable code and binary-level security analyses currently used
+in the security industry.
+
+The project targets the following applicative domains:
+
+    vulnerability analyses
+    malware comprehension
+    code protection
+    binary-level verification
+
+BINSEC is developed at CEA List in scientfic collaboration with Verimag and LORIA.
+
+An overview of some BINSEC features can be found in our SSPREW'17 tutorial."
+maintainer: "BINSEC <binsec@saxifrage.saclay.cea.fr>"
+authors: [
+"Adel Djoudi"
+"Benjamin Farinier"
+"Frédéric Recoules"
+"Josselin Feist"
+"Lesly-Ann Daniel"
+"Manh-Dung Nguyen"
+"Mathilde Ollivier"
+"Matthieu Lemerre"
+"Olivier Nicole"
+"Richard Bonichon"
+"Robin David"
+"Ta Thanh Dinh"
+"Yaëlle Vinçont"
+]
+homepage: "https://binsec.github.io"
+license: "GNU Lesser General Public License version 2.1"
+doc: ["http://binsec.github.io/apiref/index.html"]
+bug-reports: "https://github.com/binsec/binsec/issues"
+tags: [
+  "binary code analysis"
+  "symbolic execution"
+  "deductive"
+  "program verification"
+  "formal specification"
+  "automated theorem prover"
+  "plugins"
+  "abstract interpretation"
+  "dataflow analysis"
+  "linking"
+  "disassembly"
+]
+
+build: [
+ ["autoconf"] {pinned}
+  ["./configure" "--prefix" prefix]
+  [make "-C" "src" "depend"]
+  [make "-C" "src" "-j%{jobs}%"]
+]
+
+install: [
+  [make "-C" "src" "install"]
+]
+
+depends: [
+  "ocaml" { >= "4.04.2" & <= "4.07.1" }
+  "ocamlfind" {build}
+  "menhir"
+  "ocamlgraph" { >= "1.8.5" & < "1.9~" }
+  "piqi"
+  "piqilib"
+  "zarith"
+  "zmq"
+  "llvm"
+]
+
+depexts: [
+  [ "z3" "protobuf-compiler" ] { os-family = "debian" }
+  [ "z3" "protobuf-compiler" ] { os-family = "fedora" }
+  [ "z3" "protobuf" ] { os-family = "archlinux" }
+  [ "z3" "protobuf" ] { os-family = "openbsd" }
+]
+
+messages: [
+  "BINSEC uses external automatic solvers, like boolector, z3, cvc4, or yices
+  for some functionalities. Only Z3 is listed in depexts.
+  install the others through your package manager."
+]

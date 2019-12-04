@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -70,6 +70,15 @@ val create :
   Virtual_address.t -> Size.Byte.t -> Binstream.t ->
   Mnemonic.t -> Dhunk.t -> t
 
+val unsupported :
+  Virtual_address.t -> Size.Byte.t -> Binstream.t ->
+  Mnemonic.t -> t
+(** Create an instruction without supporting DBA semantics.
+
+   This function should not be used when the menmonic is supported.
+   It will fail in that case.
+ *)
+
 val of_generic_instruction :
   Virtual_address.t -> Generic.t -> Dhunk.t -> t
 
@@ -78,6 +87,7 @@ val of_dba_block : Virtual_address.t -> Dhunk.t -> t
 val to_generic_instruction : t -> Generic.t
 
 val set_dba_block : t -> Dhunk.t -> t
+val set_mnemonic : Mnemonic.t -> t -> t
 
 val is_decoded : t -> bool
 

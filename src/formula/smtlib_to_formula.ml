@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -952,7 +952,7 @@ let rec eval_term env term =
     let env', bindings = add_vbindings env vbindings in
     let env'', se = eval_term env' term in
     env'', genr_let bindings se
-
+  | TermLambdaTerm _
   | TermExistsTerm _
   | TermForallTerm _
   | TermAnnotatedTerm _ -> assert false

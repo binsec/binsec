@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2018                                               *)
+(*  Copyright (C) 2016-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,10 +19,25 @@
 (*                                                                        *)
 (**************************************************************************)
 
-exception Found of int
+let rec untili p t i =
+  if i = Array.length t then raise Not_found
+  else if p t.(i) then i
+  else untili p t @@ i + 1
 
-let find p array =
-  try
-    Array.iteri (fun i x -> if p x then raise (Found i)) array;
-    raise Not_found
-  with Found i -> array.(i)
+let findi p t = untili p t 0
+
+let find p t = t.(findi p t)
+
+let fold_lefti f a t =
+  let a = ref a in
+  for i = 0 to Array.length t - 1 do
+    a := f i !a t.(i)
+  done;
+  !a
+
+let fold_righti f a t =
+  let a = ref a in
+  for i = Array.length t - 1 downto 0 do
+    a := f i !a t.(i)
+  done;
+  !a
