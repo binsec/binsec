@@ -2,13 +2,20 @@
 
 ## BINSEC
 
+Requirements (tested on Ubuntu 20.04 LTS):
+- OCaml version 4.05.0 (to be installed via the OPAM package manager)
+- The following APT packages: libgmp-dev libzmq3-dev cmake llvm-10-dev pkg-config python2.7 g++ libexpat1-dev libgtk2.0-dev graphviz z3 cvc4 boolector protobuf-compiler
+- The following OPAM packages: ocamlfind menhir ocamlgraph piqilib zarith zmq llvm piqi headache ocamldot 
+- Yices2 from source ( https://github.com/SRI-CSL/yices2 )
+
+
 The following usual steps should do the trick:
 
 ```
 % autoconf
 % ./configure
 % make 
-% make install 
+% sudo make install 
 ```
 
 
