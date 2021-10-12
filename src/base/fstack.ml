@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,12 +24,11 @@ module type Typed = sig
 end
 
 module Make (X : Typed) = struct
-
   type elem = X.t
+
   type t = elem list
 
   let empty = []
-
 
   let is_empty l = l = []
 
@@ -37,19 +36,13 @@ module Make (X : Typed) = struct
 
   let singleton e = push e empty
 
-  let top = function
-    | e :: _ -> e
-    | [] -> raise Not_found
+  let top = function e :: _ -> e | [] -> raise Not_found
 
-  let pop = function
-    | e :: es -> e, es
-    | [] -> raise Not_found
-
+  let pop = function e :: es -> (e, es) | [] -> raise Not_found
 
   let iter f s = List.iter f s
 
   let fold f acc s = List.fold_left f acc s
 
   let length = List.length
-
 end

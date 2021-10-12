@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -59,6 +59,16 @@ val yices_extract : string -> t
     filename
 *)
 
+(** {2 Create from scratch} *)
+
+val create : ?len:int -> unit -> t
+
+val add_var : t -> string -> Bitvector.t -> unit
+
+val add_memcell : t -> Bitvector.t -> Bitvector.t -> unit
+
+val add_memory_term : t -> (Smtlib.term * Smtlib.term) list -> unit
+
 (** {2 Pretty-printer} *)
 
 val pp : Format.formatter -> t -> unit
@@ -91,9 +101,12 @@ val is_memory_set : t -> address -> bool
     memory of this model
 *)
 
-val filter:
+val filter :
   ?keep_default:bool ->
-  addr_p:(Bitvector.t -> bool) -> var_p:(string -> bool) -> t -> t
+  addr_p:(Bitvector.t -> bool) ->
+  var_p:(string -> bool) ->
+  t ->
+  t
 (** [filter ?keep_default ~addr_p ~var_p model] creates a new model [m] with the
     following properties:
     - [m] has the same default value for memory adresses than [model] if

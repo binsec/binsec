@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,18 +19,14 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Cli.Make(
-struct
+include Cli.Make (struct
   let name = "Risc-V"
+
   let shortname = "rv"
-end
-)
+end)
 
+module Odump_file = Builder.String_option (struct
+  let name = "odfile"
 
-module Odump_file =
-  Builder.String_option(
-      struct
-        let name = "odfile"
-        let doc = "Test with this obdjump file"
-      end
-    )
+  let doc = "Test with this obdjump file"
+end)

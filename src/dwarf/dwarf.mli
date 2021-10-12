@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,15 +19,13 @@
 (*                                                                        *)
 (**************************************************************************)
 
-type t = private
-  {
-    units : Dwarf_cunit.t list;
-    frame : Dwarf_frame.t;
-    lines : Dwarf_lines.t;
-  }
+type t = private {
+  units : Dwarf_cunit.t list;
+  frame : Dwarf_frame.t;
+  lines : Dwarf_lines.t;
+}
 
 val load : Loader.Img.t -> t
 (** [load img] extract and interpret the content of debugging sections *)
 
 include Sigs.PRINTABLE with type t := t
-

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,18 +24,22 @@
 (** {2 Type} *)
 
 type t = private {
-  address:  Virtual_address.t;
+  address : Virtual_address.t;
   size : Size.Byte.t;
   opcode : Binstream.t;
   mnemonic : Mnemonic.t;
   dba_block : Dhunk.t;
 }
 
-(** {2 Accessors} *)
 val address : t -> Virtual_address.t
+(** {2 Accessors} *)
+
 val size : t -> Size.Byte.t
+
 val opcode : t -> Binstream.t
+
 val mnemonic : t -> Mnemonic.t
+
 val hunk : t -> Dhunk.t
 
 (** {3 Basics} *)
@@ -43,18 +47,16 @@ val hunk : t -> Dhunk.t
 module type Basic = sig
   type mnemonic
 
-  type t = private {
-    size : Size.Byte.t;
-    opcode : string;
-    mnemonic : mnemonic;
-  }
+  type t = private { size : Size.Byte.t; opcode : string; mnemonic : mnemonic }
 
-  val create : int -> string -> mnemonic ->  t
+  val create : int -> string -> mnemonic -> t
+
   val pp_opcode : Format.formatter -> t -> unit
+
   val pp_mnemonic : Format.formatter -> t -> unit
 end
 
-module Make(P:Sigs.PRINTABLE): Basic with type mnemonic = P.t
+module Make (P : Sigs.PRINTABLE) : Basic with type mnemonic = P.t
 
 (** {3 Generic disassembled instruction type} *)
 
@@ -67,26 +69,24 @@ end
 val empty : Dba_types.Caddress.t -> t
 
 val create :
-  Virtual_address.t -> Size.Byte.t -> Binstream.t ->
-  Mnemonic.t -> Dhunk.t -> t
+  Virtual_address.t -> Size.Byte.t -> Binstream.t -> Mnemonic.t -> Dhunk.t -> t
 
 val unsupported :
-  Virtual_address.t -> Size.Byte.t -> Binstream.t ->
-  Mnemonic.t -> t
+  Virtual_address.t -> Size.Byte.t -> Binstream.t -> Mnemonic.t -> t
 (** Create an instruction without supporting DBA semantics.
 
    This function should not be used when the menmonic is supported.
    It will fail in that case.
  *)
 
-val of_generic_instruction :
-  Virtual_address.t -> Generic.t -> Dhunk.t -> t
+val of_generic_instruction : Virtual_address.t -> Generic.t -> Dhunk.t -> t
 
 val of_dba_block : Virtual_address.t -> Dhunk.t -> t
 
 val to_generic_instruction : t -> Generic.t
 
 val set_dba_block : t -> Dhunk.t -> t
+
 val set_mnemonic : Mnemonic.t -> t -> t
 
 val is_decoded : t -> bool
@@ -99,4 +99,4 @@ val get_caddress : t -> Dba_types.Caddress.t
 
 val start : t -> Dhunk.Node.t
 
-include Sigs.PRINTABLE with type t:=t
+include Sigs.PRINTABLE with type t := t

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -28,8 +28,13 @@ module State : sig
 
   val create : unit -> t
 
-  val assign :  ?wild:bool -> string -> Formula.sort -> Formula.term -> t -> t
+  val assign : ?wild:bool -> string -> Formula.sort -> Formula.term -> t -> t
+
+  val havoc : ?wild:bool -> string -> Formula.sort -> t -> t
+  (** assign variable with a fresh symbolic value *)
+
   val declare : ?wild:bool -> string -> Formula.sort -> t -> t
+  (** if [wild] is set, then the variable is appended to uncontroled *)
 
   val constrain : Formula.bl_term -> t -> t
   (** [constrain c s] adds constraint [c] to state [s] *)
@@ -43,17 +48,14 @@ module State : sig
 
   val get_memory : t -> Formula.ax_term
 
-  val get_bv : string -> Size.Bit.t -> t -> Formula.bv_term
+  val get_path_constraint : t -> Formula.bl_term
+
+  val get_bv : string -> Size.Bit.t -> t -> Formula.bv_term * t
+  (** automatically declares missing variables, thus returns [t] *)
 
   val init_mem_at : addr:Bitvector.t -> size:int -> t -> t
 
   val uncontrolled : t -> Formula.VarSet.t
 
   val pp : Format.formatter -> t -> unit
-
-  (* Do not use *)
-  val add_entry : Formula.entry -> t -> unit
-
-  (* Do not use *)
-  val sync : t -> t
 end

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,5 +21,4 @@
 
 (** Decode a function from a reader *)
 
-val read :
-  Lreader.t -> X86Instruction.t * X86Types.rep * X86Types.segment_reg option
+val read : Lreader.t -> X86Instruction.t * X86Types.segment_reg option

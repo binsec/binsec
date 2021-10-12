@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -39,10 +39,9 @@ val native_instructions_decoded : unit -> int
 
 val pp_unknown_instructions : Format.formatter -> unit -> unit
 
-val decode:
-  Lreader.t -> Virtual_address.t -> X86Instruction.t * Dhunk.t
+val decode : Lreader.t -> Virtual_address.t -> X86Instruction.t * Dhunk.t
 
-val decode_binstream:
+val decode_binstream :
   ?base_addr:Virtual_address.t -> Binstream.t -> X86Instruction.t * Dhunk.t
 (** [decode_binstream base_addr bstream] decodes a binary stream whose address
     is supposed to be [base_addr] into an instruction and its DBA hunk encoding.

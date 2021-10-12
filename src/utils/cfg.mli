@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,32 +21,38 @@
 
 (** Control Flow Graphs *)
 
-type direction = Forward |  Backward
+type direction = Forward | Backward
 
-module type S =
-sig
-
+module type S = sig
   type addr (* Addresses    *)
+
   type inst (* Instructions *)
+
   type symb (* Symbols      *)
 
-  (** Abstract type of graphs *)
   type t
+  (** Abstract type of graphs *)
 
   (** Vertices *)
   module V : sig
     type t
 
     val compare : t -> t -> int
+
     val hash : t -> int
+
     val equal : t -> t -> bool
 
     val of_addr : addr -> t
+
     val of_inst : addr -> inst -> t
+
     val of_symb : addr -> symb -> t
 
     val addr : t -> addr
+
     val inst : t -> inst option
+
     val symb : t -> symb option
   end
 
@@ -55,10 +61,15 @@ sig
   (** Edges *)
   module E : sig
     type t
+
     type label
+
     val compare : t -> t -> int
+
     val label : t -> label
+
     val src : t -> vertex
+
     val dst : t -> vertex
 
     val create : vertex -> label -> vertex -> t
@@ -66,25 +77,23 @@ sig
 
   type edge = E.t
 
-  module Fixpoint
-      (X : sig
-         type data
-         (** Information stored at each vertex. *)
+  module Fixpoint (X : sig
+    type data
+    (** Information stored at each vertex. *)
 
-         val direction : direction
-         (** The direction of the analysis. *)
+    val direction : direction
+    (** The direction of the analysis. *)
 
-         val join : data -> data -> data
-         (** Operation how to join data when paths meet. *)
+    val join : data -> data -> data
+    (** Operation how to join data when paths meet. *)
 
-         val equal : data -> data -> bool
-         (** Predicate to determine the fixpoint. *)
+    val equal : data -> data -> bool
+    (** Predicate to determine the fixpoint. *)
 
-         val analyze : E.t -> data -> data
-         (** The actual analysis of one edge; provided the edge and the incoming
+    val analyze : E.t -> data -> data
+    (** The actual analysis of one edge; provided the edge and the incoming
            * data, it needs to compute the outgoing data. *)
-       end) :
-  sig
+  end) : sig
     val analyze : (V.t -> X.data) -> t -> V.t -> X.data
     (** [analyze f g] computes the fixpoint on the given graph using the work
       * list algorithm. Beware that a misconstructed Fixpoint will not terminate!
@@ -109,7 +118,7 @@ sig
     * hash tables-based implementations). The graph grows as needed, so [size] is
     * just an initial guess. *)
 
-  val clear: t -> unit
+  val clear : t -> unit
   (** Remove all vertices and edges from the given graph. *)
 
   val copy : t -> t
@@ -121,7 +130,9 @@ sig
     * is already in [g]. *)
 
   val add_addr : t -> addr -> unit
+
   val add_inst : t -> addr -> inst -> unit
+
   val add_symb : t -> addr -> symb -> unit
 
   val remove_vertex : t -> vertex -> unit
@@ -129,7 +140,9 @@ sig
     * going from [v] in [g]). Do nothing if [v] is not in [g]. *)
 
   val remove_addr : t -> addr -> unit
+
   val remove_inst : t -> addr -> unit
+
   val remove_symb : t -> addr -> unit
 
   val add_edge : t -> vertex -> vertex -> unit
@@ -158,9 +171,11 @@ sig
 
   (** {2 Size functions} *)
 
-  val is_empty  : t -> bool
+  val is_empty : t -> bool
+
   val nb_vertex : t -> int
-  val nb_edges  : t -> int
+
+  val nb_edges : t -> int
 
   (** Degree of a vertex *)
 
@@ -175,11 +190,14 @@ sig
 
   (** {2 Membership functions} *)
 
-  val mem_vertex   : t -> vertex -> vertex option
+  val mem_vertex : t -> vertex -> vertex option
+
   val mem_vertex_a : t -> addr -> vertex option
 
-  val mem_edge   : t -> vertex -> vertex -> edge option
+  val mem_edge : t -> vertex -> vertex -> edge option
+
   val mem_edge_a : t -> addr -> addr -> edge option
+
   val mem_edge_e : t -> edge -> edge option
 
   (** {2 Successors and predecessors of a vertex} *)
@@ -207,13 +225,17 @@ sig
   (** iter/fold on all vertices/edges of a graph *)
 
   val iter_vertex : (vertex -> unit) -> t -> unit
-  val iter_edges  : (vertex -> vertex -> unit) -> t -> unit
-  val fold_vertex : (vertex -> 'a -> 'a) -> t  -> 'a -> 'a
-  val fold_edges  : (vertex -> vertex -> 'a -> 'a) -> t -> 'a -> 'a
+
+  val iter_edges : (vertex -> vertex -> unit) -> t -> unit
+
+  val fold_vertex : (vertex -> 'a -> 'a) -> t -> 'a -> 'a
+
+  val fold_edges : (vertex -> vertex -> 'a -> 'a) -> t -> 'a -> 'a
 
   (** iter/fold on all labeled edges of a graph *)
 
   val iter_edges_e : (edge -> unit) -> t -> unit
+
   val fold_edges_e : (edge -> 'a -> 'a) -> t -> 'a -> 'a
 
   (** {2 Vertex iterators}
@@ -224,22 +246,26 @@ sig
   (** iter/fold on all successors/predecessors of a vertex. *)
 
   val iter_succ : (vertex -> unit) -> t -> vertex -> unit
+
   val iter_pred : (vertex -> unit) -> t -> vertex -> unit
+
   val fold_succ : (vertex -> 'a -> 'a) -> t -> vertex -> 'a -> 'a
+
   val fold_pred : (vertex -> 'a -> 'a) -> t -> vertex -> 'a -> 'a
 
   (** iter/fold on all edges going from/to a vertex. *)
 
   val iter_succ_e : (edge -> unit) -> t -> vertex -> unit
+
   val fold_succ_e : (edge -> 'a -> 'a) -> t -> vertex -> 'a -> 'a
+
   val iter_pred_e : (edge -> unit) -> t -> vertex -> unit
+
   val fold_pred_e : (edge -> 'a -> 'a) -> t -> vertex -> 'a -> 'a
 end
 
 module Make
-    (A: Sigs.HASHABLE)
-    (I: Hashtbl.HashedType)
-    (S: Hashtbl.HashedType) :
-  S with type addr = A.t
-     and type inst = I.t
-     and type symb = S.t
+    (A : Sigs.HASHABLE)
+    (I : Hashtbl.HashedType)
+    (S : Hashtbl.HashedType) :
+  S with type addr = A.t and type inst = I.t and type symb = S.t

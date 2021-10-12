@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,16 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Command-line and API options for example plugin *)
 include Cli.S
+(** Command-line and API options for example plugin *)
 
-
-(** The maximal number of mnemonics to display. Defaults to [5], *)
 module Limit : Cli.INTEGER
-
-(** User-provided set of prefixes. Prefixes are discarded when counting
- ** mnemonics so as to consider <prefix> m1 and m1 as two occurrences of the
- ** same mnemonic.
- ** A typical example is [rep] in the X86 ISA.
- *)
-module Asm_prefixes : Cli.STRING_SET

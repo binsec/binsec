@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,27 +24,26 @@ open Sse_graph
 let is_djump v =
   match G.V.inst v with
   | Some (Dba.Instr.DJump _) -> true
-  | None
-  | Some _ -> false
+  | None | Some _ -> false
 
-let v_to_intvaddr v =
-  (G.V.addr v).Dba.base |> Virtual_address.to_int
+let v_to_vaddr v = (G.V.addr v).Dba.base
 
 module Distance = struct
   type t = Finite of int | Infinite
 
-  let add a b = match (a,b) with
-    | Finite a, Finite b -> Finite (a+b)
-    | _ -> Infinite
+  let add a b =
+    match (a, b) with Finite a, Finite b -> Finite (a + b) | _ -> Infinite
 
-  let lt a b = match (a,b) with
+  let lt a b =
+    match (a, b) with
     | Finite x, Finite y -> x < y
     | Finite _, Infinite -> true
     | Infinite, _ -> false
 
-  let min a b = match (a,b) with
+  let min a b =
+    match (a, b) with
     | Finite a, Finite b -> Finite (min a b)
-    | Finite _ as x, Infinite -> x
+    | (Finite _ as x), Infinite -> x
     | Infinite, (Finite _ as y) -> y
     | Infinite, Infinite -> Infinite
 
@@ -55,23 +54,25 @@ end
 
 let initial default v =
   let open Distance in
-  let goals = Sse_options.GoalAddresses.get ()
-  and avoids = Sse_options.AvoidAddresses.get ()
-  and addr = v_to_intvaddr v in
-  if Basic_types.Int.Set.mem addr avoids then Infinite
-  else if is_djump v || Basic_types.Int.Set.mem addr goals then Finite 0
+  let goals = Sse_utils.get_goal_addresses ()
+  and avoids = Sse_utils.get_goal_addresses ()
+  and vaddr = v_to_vaddr v in
+  if Virtual_address.Set.mem vaddr avoids then Infinite
+  else if is_djump v || Virtual_address.Set.mem vaddr goals then Finite 0
   else default
 
-module Analysis =
-  G.Fixpoint
-    (struct
-      type data = Distance.t
-      let direction = Cfg.Backward
-      let join = Distance.min
-      let equal = (=)
-      let analyze edge incoming =
-        initial Distance.(add incoming (Finite 1)) (G.E.src edge)
-    end)
+module Analysis = G.Fixpoint (struct
+  type data = Distance.t
+
+  let direction = Cfg.Backward
+
+  let join = Distance.min
+
+  let equal = ( = )
+
+  let analyze edge incoming =
+    initial Distance.(add incoming (Finite 1)) (G.E.src edge)
+end)
 
 let get_distances_to_goals cfg _branch_root _depth =
   let analysis = Analysis.analyze (initial Distance.Infinite) cfg in

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,19 +19,16 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Instruction.Make(
-  struct
-    type t = X86Types.instruction_kind
-    let pp ppf v = X86pp.pp_instr ppf v
-  end)
+include Instruction.Make (struct
+  type t = X86Types.instruction_kind
 
+  let pp ppf v = X86pp.pp_instr ppf v
+end)
 
 let to_generic_mnemonic = function
-  | X86Types.Bad -> Mnemonic.unknown
-  | X86Types.Unsupported mnemonic_hint ->
-    Mnemonic.unsupported ~mnemonic_hint ()
+  | X86Types.Undecoded -> Mnemonic.unknown
+  | X86Types.Unsupported mnemonic_hint -> Mnemonic.unsupported ~mnemonic_hint ()
   | other -> Mnemonic.supported other X86pp.pp_instr
-
 
 let to_generic_instruction v =
   let mnemonic = to_generic_mnemonic v.mnemonic in

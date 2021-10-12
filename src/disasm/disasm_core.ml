@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,9 +24,10 @@ open Disasm_options
 
 (* Disasembly worklists works on Caddresses *)
 module W = struct
-  include Worklist.Make(Virtual_address)
+  include Worklist.Make (Virtual_address)
 
   let add_list wl l = List.fold_left (fun wl a -> add a wl) wl l
+
   let of_list = add_list empty
 
   let add_set wl s = Virtual_address.Set.fold add s wl
@@ -42,98 +43,138 @@ module W = struct
 
   let pp ppf wl =
     fprintf ppf "@[<hov 0>{%a}@]"
-      (fun ppf wl ->
-         iter (fun a -> fprintf ppf "%a; " Virtual_address.pp a) wl)
+      (fun ppf wl -> iter (fun a -> fprintf ppf "%a; " Virtual_address.pp a) wl)
       wl
 end
-
 
 let compute_next_address current_address current_instruction =
   let size = current_instruction.Instruction.Generic.size in
   if Size.Byte.is_zero size then None
-  else Some (Virtual_address.add_int (size:>int) current_address )
+  else Some (Virtual_address.add_int (size :> int) current_address)
 
 (* Platform-specific decoding wrappers *)
 
 let simplify_hunk dh =
-  if Disasm_options.SimplifiedDisassembly.get () then
-    Dhunk.Simplify.run dh
+  if Disasm_options.SimplifiedDisassembly.get () then Dhunk.Simplify.run dh
 
-let generic_decode decode to_generic address =
-  let xinstr, dhunk = decode address in
-  simplify_hunk dhunk; (* Side effects beware *)
+let generic_decode reader decode to_generic address =
+  let xinstr, dhunk = decode reader address in
+  simplify_hunk dhunk;
+  (* Side effects beware *)
   let ginstr = to_generic xinstr in
   let next_address = compute_next_address address ginstr in
-  Instruction.of_generic_instruction address ginstr dhunk,
-  next_address
+  (Instruction.of_generic_instruction address ginstr dhunk, next_address)
 
 exception Decode_error of string
-let x86_decode reader (addr:Virtual_address.t) =
+
+let x86_decode reader (addr : Virtual_address.t) =
   let result =
-    generic_decode (X86toDba.decode reader)
-      X86Instruction.to_generic_instruction addr in
+    generic_decode reader X86toDba.decode X86Instruction.to_generic_instruction
+      addr
+  in
 
   match result with
-  | { Instruction.mnemonic = Mnemonic.Unknown; _} as inst, _ ->
-    let open Instruction in
-    Logger.error
-      "@[<v 0>Unknown instruction opcode prefix %@ %a:@ %a@]"
-      Virtual_address.pp inst.address
-      pp inst;
-    raise (Decode_error "Bad opcode sequence")
+  | ({ Instruction.mnemonic = Mnemonic.Unknown; _ } as inst), _ ->
+      let open Instruction in
+      Logger.error "@[<v 0>Unknown instruction opcode prefix %@ %a:@ %a@]"
+        Virtual_address.pp inst.address pp inst;
+      raise (Decode_error "Bad opcode sequence")
   | res -> res
 
-
-let arm_decode reader (addr:Virtual_address.t) =
-  let decoder =
-    if Disasm_options.Cache_decoder.get () then ArmToDba.cached_decode reader
-    else ArmToDba.decode reader in
-  generic_decode decoder (fun x -> x) addr
-;;
-
 let riscv_decode reader vaddr =
-  generic_decode (Riscv_to_dba.decode reader) (fun x -> x) vaddr
-;;
+  generic_decode reader Riscv_to_dba.decode (fun x -> x) vaddr
 
 (* End wrappers *)
 
 let decode_at_address decode reader address =
   let instr, next = decode reader address in
-  if Instruction.is_decoded instr then instr, next
-  else begin
-    Logger.warning "No instruction at %a ... stopping"
-      Virtual_address.pp address;
+  if Instruction.is_decoded instr then (instr, next)
+  else (
+    Logger.warning "No instruction at %a ... stopping" Virtual_address.pp
+      address;
     let dba_block = Dba.Instr.stop (Some Dba.KO) |> Dhunk.singleton in
-    Instruction.set_dba_block instr dba_block,
-    None
-  end
+    (Instruction.set_dba_block instr dba_block, None))
+
+module M = Hashtbl.Make (struct
+  type t = Machine.t
+
+  let equal = ( = )
+
+  let hash = Hashtbl.hash
+end)
+
+let tbl = M.create 8
+
+let register_decoder isa decode convert =
+  M.replace tbl isa (fun reader vaddr ->
+      generic_decode reader decode convert vaddr)
+
+let () = M.add tbl Machine.x86 x86_decode
+
+let () = M.add tbl (Machine.riscv `x32) riscv_decode
+
+let () =
+  M.add tbl Machine.unknown (fun _ ->
+      failwith
+        "Machine ISA set to unknown. Aborting. Did you forget to set an -isa \
+         switch on the command line ?")
 
 let decoder_of_machine () =
-  match Kernel_options.Machine.get () with
-  | Machine.X86 { bits=`x32 } -> x86_decode
-  | Machine.ARM { rev=`v7; _ } -> arm_decode
-  | Machine.RISCV _ -> riscv_decode
-  | Machine.Unknown ->
-     failwith
-       "Machine ISA set to unknown. Aborting. \
-        Did you forget to set an -isa switch on the command line ?"
-  | isa ->
+  let isa = Kernel_options.Machine.get () in
+  try M.find tbl isa
+  with Not_found ->
     let msg = Format.asprintf "missing ISA %a" Machine.pp isa in
     Errors.not_yet_implemented msg
 
-let decode (vaddress:Virtual_address.t) =
+let decode_replacement = ref None
+
+(** parses the option -disasm-decode-replacement and memoises the result *)
+let get_decode_replacement () =
+  match !decode_replacement with
+  | None ->
+      let map =
+        match Disasm_options.Decode_replacement.get_opt () with
+        | None -> Virtual_address.Map.empty
+        | Some str ->
+            let l =
+              Parse_utils.read_string ~parser:Parser.dhunk_substitutions_eof
+                ~lexer:Lexer.token ~string:str
+            in
+            let img = Kernel_functions.get_img () in
+            let map =
+              List.fold_left
+                (fun acc (loc, dhunk) ->
+                  match Loader_utils.Binary_loc.to_virtual_address ~img loc with
+                  | Some addr -> Virtual_address.Map.add addr dhunk acc
+                  | None ->
+                      Logger.fatal "unable to parse the address %a"
+                        Loader_utils.Binary_loc.pp loc)
+                Virtual_address.Map.empty l
+            in
+            map
+      in
+      decode_replacement := Some map;
+      map
+  | Some x -> x
+
+let add_replacement addr dhunk =
+  let map = get_decode_replacement () in
+  decode_replacement := Some (Virtual_address.Map.add addr dhunk map)
+
+let decode (vaddress : Virtual_address.t) =
   let decoder = decoder_of_machine () in
-  let reader=
-    Lreader.of_img (Kernel_functions.get_img ()) ~cursor:(vaddress:>int) in
-  let instr,next = decode_at_address decoder reader vaddress in
+  let reader =
+    Lreader.of_img (Kernel_functions.get_img ()) ~cursor:(vaddress :> int)
+  in
+  let instr, next = decode_at_address decoder reader vaddress in
   try
-    let repl = Disasm_options.Decode_replacement.get() in
+    let repl = get_decode_replacement () in
     let subst = Virtual_address.Map.find vaddress repl in
     let open Instruction in
-    Instruction.create instr.address instr.size instr.opcode instr.mnemonic subst,next
-  with Not_found -> instr,next
-
-
+    ( Instruction.create instr.address instr.size instr.opcode instr.mnemonic
+        subst,
+      next )
+  with Not_found -> (instr, next)
 
 let decode_from_reader lreader =
   let decoder = decoder_of_machine () in
@@ -147,25 +188,23 @@ let decode_binstream ?base bs =
       "@[<v 0>Could not decode opcode %a.@,\
        The provided hexadecimal stream does not contain a recognized opcode.@,\
        Check that you selected the correct ISA.@,\
-       Or maybe your input is too short or does not use the correct endianness.\
-       @]" Binstream.pp bs;
-    exit 2;
-;;
-
+       Or maybe your input is too short or does not use the correct \
+       endianness.@]"
+      Binstream.pp bs;
+    exit 2
 
 module Successors = struct
   open Instruction
 
   let recursive instr =
     Logger.debug ~level:5
-      "@[<v 0>Computing recursive successors for block@ %a@]"
-      Dhunk.pp instr.dba_block;
+      "@[<v 0>Computing recursive successors for block@ %a@]" Dhunk.pp
+      instr.dba_block;
     Dhunk.outer_jumps instr.dba_block
 
   let linear instr =
     assert (not (Size.Byte.is_zero instr.size));
-    let hwa =
-      Virtual_address.add_int (instr.size:>int) instr.address in
+    let hwa = Virtual_address.add_int (instr.size :> int) instr.address in
     Virtual_address.Set.singleton hwa
 
   let extended_linear instr =
@@ -184,46 +223,51 @@ end
 
 module Make (I : Iterable) = struct
   let fold step_fun program worklist =
-    let rec loop program worklist  =
+    let rec loop program worklist =
       if W.is_empty worklist then program
       else
         let address, addresses = W.pop worklist in
         let p, wl =
           try
-            let instr, _ = decode address in (* FIXME *)
+            let instr, _ = decode address in
+            (* FIXME *)
             let succs = I.successors instr in
             step_fun program addresses instr succs
           with Invalid_argument msg ->
             Disasm_options.Logger.warning "%s" msg;
-            program, addresses in
+            (program, addresses)
+        in
         loop p wl
-    in loop program worklist
+    in
+    loop program worklist
 
   let iter step_fun worklist =
-    let step_fun' = fun () wl instr succs -> (), step_fun wl instr succs in
+    let step_fun' () wl instr succs = ((), step_fun wl instr succs) in
     fold step_fun' () worklist
 end
 
 (* Iterators *)
 let fold step_fun program worklist =
-  let rec loop program worklist  =
+  let rec loop program worklist =
     if W.is_empty worklist then program
     else
       let address, addresses = W.pop worklist in
-      let instr, _ = decode address in (* FIXME *)
+      let instr, _ = decode address in
+      (* FIXME *)
       let fsuccs =
         match Disassembly_mode.get () with
         | Linear -> Successors.linear
         | Linear_byte_wise -> Successors.linear_bytewise
         | Recursive -> Successors.recursive
         | Extended_linear -> Successors.extended_linear
-      in let p, wl = step_fun program addresses instr (fsuccs instr) in
+      in
+      let p, wl = step_fun program addresses instr (fsuccs instr) in
       loop p wl
-  in loop program worklist
-
+  in
+  loop program worklist
 
 let iter step_fun worklist =
-  let step_fun' = fun () wl instr succs -> (), step_fun wl instr succs in
+  let step_fun' () wl instr succs = ((), step_fun wl instr succs) in
   fold step_fun' () worklist
 
 (* End iterators *)

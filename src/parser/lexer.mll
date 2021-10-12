@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -70,6 +70,8 @@ let keywords = [
   "entry_point"   , ENTRYPOINT;
   "word_size"     , WORDSIZE ;
   "endianness"    , ENDIANNESS;
+  "unimplemented" , UNIMPLEMENTED;
+  "undefined"     , UNDEFINED;
   "cut"           , CUT;
   "enum"          , ENUMERATE;
   "enumerate"     , ENUMERATE;
@@ -98,7 +100,7 @@ let hex = '0' ['x']['0'-'9''A'-'F''a'-'f']+
 let bin = '0' ['b']['0''1']+
 let alpha = ['a'-'z''A'-'Z']
 let alpha_num = (alpha | digit)
-let ident = alpha (alpha_num | '_')*
+let ident = '_'* alpha (alpha_num | '_')*
 
 rule token = parse
   | "@"             { AT }
@@ -147,7 +149,7 @@ rule token = parse
   | "&&"
   | "&"             { AND }
   | "^"             { XOR }
-  | "@"             { CONCAT }
+  | "::"             { CONCAT }
   | "!"             { NOT }
   | "<TEMP>"        { TEMPTAG }
   | "<FLAG>"        { FLAGTAG }

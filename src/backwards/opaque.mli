@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,27 +21,28 @@
 
 module Opacity_status : sig
   type t
+
   val is_clear : t -> bool
+
   val pp : Format.formatter -> t -> unit
 end
 
 module Check : sig
+  type t = Opacity_status.t Virtual_address.Map.t
 
-  type t = Opacity_status.t Virtual_address.Map.t ;;
+  val vertex : cfg:Instr_cfg.t -> Instr_cfg.V.t -> Opacity_status.t option
 
-  val vertex : cfg:Instr_cfg.t -> Instr_cfg.V.t -> Opacity_status.t option ;;
+  val vertices : cfg:Instr_cfg.t -> Instr_cfg.V.t list -> t
 
-  val vertices : cfg:Instr_cfg.t -> Instr_cfg.V.t list -> t ;;
+  val addresses : cfg:Instr_cfg.t -> Virtual_address.t list -> t
 
-  val addresses : cfg:Instr_cfg.t -> Virtual_address.t list -> t ;;
+  val graph : cfg:Instr_cfg.t -> t
 
-  val graph : cfg:Instr_cfg.t -> t ;;
+  val file : filename:string -> t
 
-  val file : filename:string -> t ;;
+  val subset : unit -> t
 
-  val subset : unit -> t ;;
+  val sections : Basic_types.String.Set.t -> t
 
-  val sections : Basic_types.String.Set.t ->  t ;;
-
-  val all : unit -> t ;;
+  val all : unit -> t
 end

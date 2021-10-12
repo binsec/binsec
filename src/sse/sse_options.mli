@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -35,25 +35,24 @@ module SMT_dir : Cli.STRING_OPT
 
 module AddressTraceFile : Cli.STRING_OPT
 
-module AvoidAddresses : Cli.INTEGER_SET
+module AvoidAddresses : Cli.STRING_SET
 
-module GoalAddresses : Cli.INTEGER_SET
+module GoalAddresses : Cli.STRING_SET
 
 module LoadSections : Cli.STRING_SET
 
 module LoadROSections : Cli.BOOLEAN
 
-module MemoryFile : Cli.STRING
+module MemoryFile : Cli.STRING_OPT
+
+module ScriptFiles : Cli.STRING_LIST
 
 module Comment : Cli.BOOLEAN
 
 module Timeout : Cli.FLOAT
 
 module Address_counter : sig
-  type t  = private {
-    address : Virtual_address.t;
-    counter : int;
-    }
+  type t = private { address : Virtual_address.t; counter : int }
 
   val check_and_decr : t -> t option
 end
@@ -61,10 +60,7 @@ end
 module Visit_address_counter :
   Cli.CHECKABLE with type t = Address_counter.t list
 
-type search_heuristics =
-  | Dfs
-  | Bfs
-  | Nurs
+type search_heuristics = Dfs | Bfs | Nurs
 
 module Search_heuristics : Cli.GENERIC with type t = search_heuristics
 
@@ -74,7 +70,6 @@ module Solver_call_frequency : Cli.INTEGER
 
 module Seed : Cli.INTEGER_OPT
 (** Seed for the random number generator *)
-
 
 module Directives : Cli.GENERIC with type t = Directive.t list
 

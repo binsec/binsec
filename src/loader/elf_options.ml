@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,24 +19,21 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Cli.Make (
-            struct
-              let shortname = "elf"
-              let name = "Elf loader"
-            end
-          )
+include Cli.Make (struct
+  let shortname = "elf"
 
-module Alloc = Builder.False (
-                   struct
-                     let name = "alloc"
-                     let doc = "arbitrary but consistently allocate memory \
-                                for relocatable object file"
-                   end
-                 )
+  let name = "Elf loader"
+end)
 
-module Reloc = Builder.False (
-                   struct
-                     let name = "reloc"
-                     let doc = "limited support for static relocation entry"
-                   end
-                 )
+module Alloc = Builder.False (struct
+  let name = "alloc"
+
+  let doc =
+    "arbitrary but consistently allocate memory for relocatable object file"
+end)
+
+module Reloc = Builder.False (struct
+  let name = "reloc"
+
+  let doc = "limited support for static relocation entry"
+end)

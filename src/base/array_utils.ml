@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,11 +22,13 @@
 let rec untili p t i =
   if i = Array.length t then raise Not_found
   else if p t.(i) then i
-  else untili p t @@ i + 1
+  else untili p t @@ (i + 1)
 
 let findi p t = untili p t 0
 
 let find p t = t.(findi p t)
+
+let find_opt p t = try Some (find p t) with Not_found -> None
 
 let fold_lefti f a t =
   let a = ref a in

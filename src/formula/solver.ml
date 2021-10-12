@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,9 +22,7 @@
 open Formula_pp
 open Formula_options
 
-module Command =
-struct
-
+module Command = struct
   type command =
     | PutEntry of Formula.entry
     | CheckSat
@@ -37,68 +35,80 @@ struct
     | PutEntry en -> fprintf ppf "@[%a@]" pp_entry en
     | CheckSat -> fprintf ppf "(check-sat)"
     | GetModel -> fprintf ppf "(get-model)"
-    | GetValue tm ->
-      fprintf ppf "@[<hov 2>(get-value@ (%a))@]" pp_term tm
+    | GetValue tm -> fprintf ppf "@[<hov 2>(get-value@ (%a))@]" pp_term tm
 
   let put_entry en = PutEntry en
+
   let check_sat = CheckSat
+
   let get_model = GetModel
+
   let get_value v = GetValue v
 end
 
 type solver_session = {
-    id : int;
-    solver: Prover.t;
-    stdin: out_channel;
-    stdout: in_channel;
-    stderr: in_channel;
-    dump: out_channel option;
-    combined: Format.formatter;
-    incremental: bool
-  }
+  id : int;
+  solver : Prover.t;
+  pid : Subprocess.t;
+  stdin : out_channel;
+  stdout : in_channel;
+  stderr : in_channel;
+  dump : out_channel option;
+  combined : Format.formatter;
+  incremental : bool;
+}
 
 let new_id =
   let n = ref 0 in
-  fun () -> incr n; !n
-;;
+  fun () ->
+    incr n;
+    !n
 
-let make_session ?file ?(incremental=false) solver stdin stdout stderr =
+let make_session ?file ?(incremental = false) solver pid =
+  let stdin = Subprocess.stdin pid
+  and stdout = Subprocess.stdout pid
+  and stderr = Subprocess.stderr pid in
   let dump, outs =
     match file with
-    | None -> None, [| stdin |]
+    | None -> (None, [| stdin |])
     | Some f ->
-       assert (f <> "");
-       Logger.debug "Will open %s" f;
-       let fd = open_out f in Some fd, [| stdin; fd |]
+        assert (f <> "");
+        Logger.debug "Will open %s" f;
+        let fd = open_out f in
+        (Some fd, [| stdin; fd |])
   in
   let out, flush =
-    (fun buf pos len ->
-      Array.iter (fun fd -> Pervasives.output_substring fd buf pos len) outs),
-    fun () -> Array.iter Pervasives.flush outs
+    ( (fun buf pos len ->
+        Array.iter (fun fd -> output_substring fd buf pos len) outs),
+      fun () -> Array.iter flush outs )
   in
   let combined = Format.make_formatter out flush in
-  { id = new_id (); solver; stdin; stdout; stderr; dump; combined; incremental; }
+  {
+    id = new_id ();
+    solver;
+    pid;
+    stdin;
+    stdout;
+    stderr;
+    dump;
+    combined;
+    incremental;
+  }
 
 let stop_interactive session =
-  ignore @@
-    Unix.close_process_full (session.stdout, session.stdin, session.stderr);
+  ignore @@ Subprocess.close session.pid;
   match session.dump with Some d -> close_out d | None -> ()
-;;
-
-let default_session ?file () =
-  let solver = Formula_options.Solver.get () in
-  make_session solver stdout stdin stdin ?file
 
 let get_formatter_of_session session = session.combined
 
 let append_to_file ~file content =
-  let fd = open_out_gen [Open_append;Open_wronly;Open_text] 644 file in
+  let fd = open_out_gen [ Open_append; Open_wronly; Open_text ] 644 file in
   output_string fd content;
 
   close_out fd
-;;
 
 let patch_regexp = Str.regexp "(((let (\\([^(]\\)"
+
 (* boolector sometimes forgets a paren or two *)
 let patch_model_for_boolector solver s =
   match solver with
@@ -108,25 +118,22 @@ let patch_model_for_boolector solver s =
 let read_raw_model ~model solver fd =
   let b = Buffer.create 256 in
   let rec loop npar =
-    try
-      let s = input_line fd |> patch_model_for_boolector solver in
-      Buffer.add_char b '\n';
-      Buffer.add_string b s;
-      let lpar = String.length (String_utils.remove_char '(' s) in
-      let rpar = String.length (String_utils.remove_char ')' s) in
-      let npar = npar + (lpar - rpar) in
-      let still_to_be_read =
-        match solver, model with
-        | Yices, true -> s <> "(((_ bv1 1) #b1))"
-        | _ -> npar <> 0 in
-      if still_to_be_read then loop npar else Buffer.contents b
-    with
-    | End_of_file -> Buffer.contents b
-  in loop 0
+    let s = input_line fd |> patch_model_for_boolector solver in
+    Buffer.add_char b '\n';
+    Buffer.add_string b s;
+    let lpar = String.length (String_utils.remove_char '(' s) in
+    let rpar = String.length (String_utils.remove_char ')' s) in
+    let npar = npar + (lpar - rpar) in
+    let still_to_be_read =
+      match (solver, model) with
+      | Yices, true -> s <> "(((_ bv1 1) #b1))"
+      | _ -> npar <> 0
+    in
+    if still_to_be_read then loop npar else Buffer.contents b
+  in
+  try loop 0 with End_of_file -> Buffer.contents b
 
-let flush session =
-  Format.pp_print_flush (get_formatter_of_session session) ();
-;;
+let flush session = Format.pp_print_flush (get_formatter_of_session session) ()
 
 let has_time_limit =
   let pat = Str.regexp ".*time limit.*" in
@@ -138,21 +145,19 @@ let get_result_and session f =
     let first_line = input_line session.stdout in
     Logger.debug ~level:5 "Value read:%s" first_line;
     match first_line with
-    | "sat"     -> Formula.SAT    , Some (f session)
-    | "unsat"   -> Formula.UNSAT  , None
-    | "timeout" -> Formula.TIMEOUT, None
-    | "unknown" -> Formula.UNKNOWN, None
+    | "sat" -> (Formula.SAT, Some (f session))
+    | "unsat" -> (Formula.UNSAT, None)
+    | "timeout" -> (Formula.TIMEOUT, None)
+    | "unknown" -> (Formula.UNKNOWN, None)
     | s ->
-       Logger.debug "Got status %s" s;
-       if has_time_limit first_line then begin
-           ignore (input_line session.stdout);
-           Formula.TIMEOUT, None
-         end
-       else
-         failwith ("Unknown status returned :"^first_line)
+        Logger.debug "Got status %s" s;
+        if has_time_limit first_line then (
+          ignore (input_line session.stdout);
+          (Formula.TIMEOUT, None))
+        else failwith ("Unknown status returned :" ^ first_line)
   with End_of_file ->
-    Logger.error "Solver piped closed unexpected (got killed ?)";
-    Formula.UNKNOWN, None
+    Logger.error "Solver pipe closed unexpectedly (was the solver killed ?)";
+    (Formula.UNKNOWN, None)
 
 let get_return_value_ast parser raw_model =
   (* not for yices *)
@@ -173,84 +178,71 @@ let get_return_value_ast parser raw_model =
       "Parsing of solver output failed approximately here :@ @[<v>%s@,%s^@]"
       extract underline;
     raise e
-;;
 
 let extract_model_from_string s = function
   | Yices -> Smt_model.yices_extract s
   | _ ->
-     let m = get_return_value_ast Smtlib_parser.model s in
-     Smt_model.extract m
-;;
+      let m = get_return_value_ast Smtlib_parser.model s in
+      Smt_model.extract m
 
 let parse_model session =
   Logger.debug "Parsing model";
   flush session;
   let solver = session.solver in
-  let raw_model =
-    read_raw_model ~model:true solver session.stdout in
+  let raw_model = read_raw_model ~model:true solver session.stdout in
   try extract_model_from_string raw_model solver
   with e ->
-    Logger.error "@[<v 0>Could not parse %a model %s@]"
-      Prover.pp solver raw_model;
+    Logger.error "@[<v 0>Could not parse %a model %s@]" Prover.pp solver
+      raw_model;
     raise e
-;;
 
 (* command (get-model) *)
 let read_model session =
   Logger.debug "Read model";
-  if session.incremental
-  then begin
-      let open Format in
-      let ppf = get_formatter_of_session session in
-      fprintf ppf "(get-model)";
-      pp_print_flush ppf ();
-    end;
+  if session.incremental then (
+    let open Format in
+    let ppf = get_formatter_of_session session in
+    fprintf ppf "(get-model)";
+    pp_print_flush ppf ());
   parse_model session
-;;
 
 (* Getting the value from the model *)
 let read_value session =
   read_raw_model ~model:false session.solver session.stdout
-  |> get_return_value_ast Smtlib_parser.value |> Smt_model.extract_value
-;;
+  |> get_return_value_ast Smtlib_parser.value
 
-let model_opt = function
-  | None -> Smt_model.empty
-  | Some m -> m
-;;
+let model_opt = function None -> Smt_model.empty | Some m -> m
 
-let solve_model_time ?(timeout=0) ?(get_model=false) ~file solver =
+let solve_model_time ?(timeout = 0) ?(get_model = false) ~file solver =
   let b = Buffer.create 24 in
   Buffer.add_string b "(check-sat)";
   if get_model then Buffer.add_string b "(get-model)";
   append_to_file ~file (Buffer.contents b);
-  let fullcmdline =
-    Printf.sprintf "%s %s" (Prover.command_string timeout solver) file in
-  Logger.debug "Solving %s" fullcmdline ;
-  let fdout, fdin, fderr =
-    Unix.open_process_full fullcmdline (Unix.environment()) in
-  let before = Unix.gettimeofday ()
-  and session = make_session solver fdin fdout fderr in
+  let args = Array.concat [ Prover.command timeout solver; [| file |] ] in
+  let fullcmdline = Prover.Command.to_string args in
+  Logger.debug "Solving %s" fullcmdline;
+  let pid = Subprocess.spawn ~pdeathsig:Sys.sigkill args in
+  let before = Unix.gettimeofday () and session = make_session solver pid in
   let r, m = get_result_and session read_model in
-  Unix.close_process_full (fdout, fdin, fderr) |> ignore;
-  r, model_opt m, Unix.gettimeofday () -. before
+  Subprocess.close pid |> ignore;
+  (r, model_opt m, Unix.gettimeofday () -. before)
 
-let solve_model ?(timeout=0) file solver =
+let solve_model ?(timeout = 0) file solver =
   let res, model, _ = solve_model_time ~timeout ~get_model:true ~file solver in
-  res, model
+  (res, model)
 
-let solve ?(timeout=0) file solver  =
-  let res, _, _ = solve_model_time ~timeout ~file solver in res
+let solve ?(timeout = 0) file solver =
+  let res, _, _ = solve_model_time ~timeout ~file solver in
+  res
 
-let start_interactive ?file ?(timeout=0) solver =
+let start_interactive ?file ?(timeout = 0) solver =
   let incremental = true in
-  let fullcmdline = Prover.command_string ~incremental timeout solver in
-  let fdout, fdin, fderr =
-    Unix.open_process_full fullcmdline (Unix.environment ()) in
-  let session = make_session solver ~incremental fdin fdout fderr ?file in
+  let fullcmdline = Prover.command ~incremental timeout solver in
+  let pid = Subprocess.spawn ~pdeathsig:Sys.sigkill fullcmdline in
+  let session = make_session solver ~incremental pid ?file in
   Logger.debug ~level:4 "@[<hov>Starting session %d@ for %s@ with command %s@]"
     session.id (Prover.name_of solver)
-    fullcmdline ;
+    (Prover.Command.to_string fullcmdline);
   if file <> None then
     Logger.debug ~level:4 "@[<hov>Session transcript written to file@ %s@]"
       (Utils.unsafe_get_opt file);
@@ -265,105 +257,95 @@ let pp_assert_check_sat ?term session =
   if term <> None then
     fprintf ppf "(assert %a)" pp_bl_term (Utils.unsafe_get_opt term);
   pp_print_string ppf "(check_sat)@."
-;;
 
 let solve_incremental_and ?term session func =
   let before = Unix.gettimeofday () in
   pp_assert_check_sat ?term session;
   let r, m = get_result_and session func in
-  r, m, Unix.gettimeofday () -. before
-;;
+  (r, m, Unix.gettimeofday () -. before)
 
-let solve_incremental_model_time ?term ?(get_model=false) session =
+let solve_incremental_model_time ?term ?(get_model = false) session =
   let read_result =
-    if get_model then read_model else fun _ -> Smt_model.empty in
+    if get_model then read_model else fun _ -> Smt_model.empty
+  in
   let res, m, time = solve_incremental_and ?term session read_result in
-  res, model_opt m, time
+  (res, model_opt m, time)
 
 let solve_incremental_model ?term session =
-  let res, m, _ =
-    solve_incremental_model_time ?term ~get_model:true session
-  in res, m
+  let res, m, _ = solve_incremental_model_time ?term ~get_model:true session in
+  (res, m)
 
-let solve_incremental
-    ?term (session:solver_session):
-  Formula.status =
-  let res, _, _ =
-    solve_incremental_and ?term session ignore
-  in res
+let solve_incremental ?term (session : solver_session) : Formula.status =
+  let res, _, _ = solve_incremental_and ?term session ignore in
+  res
 
-let solve_incremental_value ?term expr session  =
+let solve_incremental_value ?term expr session =
   let ppf = get_formatter_of_session session in
   pp_assert_check_sat ?term session;
   Format.fprintf ppf "(get-value %a)@." pp_bv_term expr;
-  get_result_and session read_value
+  get_result_and session (fun session -> read_value session |> List.hd |> snd)
 
-let push session =
-  Format.fprintf (get_formatter_of_session session) "(push 1)"
+let push session = Format.fprintf (get_formatter_of_session session) "(push 1)"
 
-let pop session =
-  Format.fprintf (get_formatter_of_session session) "(pop 1)"
+let pop session = Format.fprintf (get_formatter_of_session session) "(pop 1)"
 
 module Session = struct
   open Formula
 
   type t = {
     process : solver_session;
-    mutable state: status option;
-    mutable model: Smt_model.t option;
+    mutable state : status option;
+    mutable model : Smt_model.t option;
   }
 
   type output =
     | Nil
     | Model of Smt_model.t
     | Sat of status
-    | Value of Bitvector.t
+    | Values of (Smtlib.term * Smtlib.term) list
 
-  let create ?file ?(timeout=0) solver = {
-    process = start_interactive ?file ~timeout solver;
-    state = None;
-    model = None;
-  }
+  let create ?file ?(timeout = 0) solver =
+    {
+      process = start_interactive ?file ~timeout solver;
+      state = None;
+      model = None;
+    }
 
   let pp ppf session =
-    Format.fprintf ppf "Session %d with %s"
-      session.process.id
+    Format.fprintf ppf "Session %d with %s" session.process.id
       (Prover.name_of session.process.solver)
-  ;;
 
   let destroy session = stop_interactive session.process
 
   let rec write session command =
-    Format.fprintf session.process.combined "@[<h>%a@]@."
-      Command.pp_command command;
+    Format.fprintf session.process.combined "@[<h>%a@]@." Command.pp_command
+      command;
     (* yices outputs models without a deterministic way to mark the end of the
      * model. we send (get-value (1)) after (get-model) so that we know the
      * model is complete when we read ((1 1))
      * Awful. I know.
-    *)
+     *)
     if command = Command.get_model && session.process.solver = Yices then
-      write session (Command.get_value (mk_bv_term (mk_bv_one)))
+      write session (Command.get_value (mk_bv_term mk_bv_one))
 
   let run session command =
     let open Command in
     write session command;
     match command with
     | PutEntry _ ->
-      session.state <- None;
-      session.model <- None;
-      Nil
+        session.state <- None;
+        session.model <- None;
+        Nil
     | CheckSat ->
-      let res, _ = get_result_and session.process ignore in
-      session.state <- Some res;
-      session.model <- None;
-      Sat res
+        let res, _ = get_result_and session.process ignore in
+        session.state <- Some res;
+        session.model <- None;
+        Sat res
     | GetModel ->
-      let model = parse_model session.process in
-      session.model <- Some model;
-      Model model
-    | GetValue _ ->
-      let value = read_value session.process in
-      Value value
+        let model = parse_model session.process in
+        session.model <- Some model;
+        Model model
+    | GetValue _ -> Values (read_value session.process)
 
   let put_entry session en =
     match run session (Command.put_entry en) with
@@ -372,27 +354,21 @@ module Session = struct
 
   let check_sat session =
     match session.state with
-    | None ->
-      begin
+    | None -> (
         match run session Command.check_sat with
         | Sat x -> x
-        | _ -> assert false
-      end
+        | _ -> assert false)
     | Some x -> x
 
   let get_model session =
     match session.model with
-    | None ->
-      begin
+    | None -> (
         match run session Command.get_model with
         | Model m -> m
-        | _ -> assert false
-      end
+        | _ -> assert false)
     | Some x -> x
 
   let get_value session value =
     let res = Command.get_value value |> run session in
-    match res with
-    | Value v -> v
-    | _ -> assert false
+    match res with Values vs -> vs | _ -> assert false
 end

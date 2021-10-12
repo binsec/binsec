@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,9 +19,15 @@
 (*                                                                        *)
 (**************************************************************************)
 
-type entry =
-  { addresses: int Interval.t; path: string; line: int; column: int;
-    is_stmt: bool; basic_block: bool; discriminator: int }
+type entry = {
+  addresses : int Interval.t;
+  path : string;
+  line : int;
+  column : int;
+  is_stmt : bool;
+  basic_block : bool;
+  discriminator : int;
+}
 (** represent one or more rows of the addresse / line matrix
     [addresses]     the range of virtual addresses of the entry
     [path]          the path of the processed file
@@ -31,6 +37,7 @@ type entry =
     [basic_block]   if the entry is the start of a basic block
     [discriminator] an integer identifying the block to which the entry belong
 *)
+
 type t
 
 val load : Loader.Img.t -> t
@@ -38,6 +45,7 @@ val load : Loader.Img.t -> t
 
 val fold : ('a -> entry -> 'a) -> 'a -> t -> 'a
 (** [fold f line] iterate through the line matrix *)
+
 val iter : (entry -> unit) -> t -> unit
 (** [iter f line] same as fold but without return *)
 

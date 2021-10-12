@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,10 +21,14 @@
 
 (** Translation functions from BINSEC inner representation to SMT-LIB terms *)
 
-val bl_term    : Formula.bl_term    -> Smtlib.term
-val bv_term    : Formula.bv_term    -> Smtlib.term
-val ax_term    : Formula.ax_term    -> Smtlib.term
+val bl_term : Formula.bl_term -> Smtlib.term
 
-val term    : Formula.term    -> Smtlib.term
-val entry   : Formula.entry   -> Smtlib.command
+val bv_term : Formula.bv_term -> Smtlib.term
+
+val ax_term : Formula.ax_term -> Smtlib.term
+
+val term : Formula.term -> Smtlib.term
+
+val entry : Formula.entry -> Smtlib.command
+
 val formula : Formula.formula -> Smtlib.script

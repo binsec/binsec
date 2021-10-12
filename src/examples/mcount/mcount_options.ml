@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,26 +19,16 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Cli.Make(
-  struct
-    let shortname = "mcount"
-    let name = "Plugin example (Mnemonic count)"
-  end
-)
+include Cli.Make (struct
+  let shortname = "mcount"
 
-module Limit =
-  Builder.Integer(
-      struct
-        let name = "limit" ;;
-        let doc  = " Only print the <n> most frequent mnemonics"
-        let default = 5
-      end
-    )
+  let name = "Plugin example (Mnemonic count)"
+end)
 
-module Asm_prefixes =
-  Builder.String_set(
-  struct
-    let name = "prefixes" ;;
-    let doc = " Consider the following strings as mnemonic prefies" ;;
-  end
-)
+module Limit = Builder.Integer (struct
+  let name = "limit"
+
+  let doc = " Only print the <n> most frequent mnemonics"
+
+  let default = 5
+end)

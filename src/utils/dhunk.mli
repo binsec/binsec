@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -30,13 +30,13 @@ type t
     instruction.
 *)
 
-
 module Node : sig
   type t
+
   val id : t -> int
+
   val inst : t -> Dba.Instr.t option
 end
-
 
 val empty : t
 (** The one and only empty DBA hunk. Get it here! *)
@@ -47,17 +47,21 @@ val stop : t
 val is_empty : t -> bool
 
 val init : int -> (int -> Dba.Instr.t) -> t
+
 val singleton : Dba.Instr.t -> t
+
 val length : t -> int
 
 val node : t -> int -> Node.t option
+
 val inst : t -> int -> Dba.Instr.t option
 
 val start : t -> Node.t
 (** [start b] is the first index of block [b] *)
 
 val copy : t -> t
-val iter  : f:(Dba.Instr.t -> unit) -> t -> unit
+
+val iter : f:(Dba.Instr.t -> unit) -> t -> unit
 
 val iteri : f:(int -> Dba.Instr.t -> unit) -> t -> unit
 
@@ -69,13 +73,14 @@ val of_labelled_list : (int * Dba.Instr.t) list -> t
 (** [of_list l] assumes the list is sorted in increasing order inside the
     block, i.e. the labels are contiguous starting from 0. *)
 
-
 val mapi : f:(int -> Dba.Instr.t -> Dba.Instr.t) -> t -> t
 
 val flatten : t -> (int * Dba.Instr.t) list
 
 val to_list : t -> Dba.Instr.t list
+
 val fold : ('a -> Dba.Instr.t -> 'a) -> 'a -> t -> 'a
+
 val for_all : (Dba.Instr.t -> bool) -> t -> bool
 
 val export_and_view : ?cmd:string -> t -> unit
@@ -85,9 +90,10 @@ val export_and_view : ?cmd:string -> t -> unit
 *)
 
 val pred : t -> Node.t -> Node.t list
+
 val succ : t -> Node.t -> Node.t list
 
-include Sigs.PRINTABLE with type t:=t
+include Sigs.PRINTABLE with type t := t
 
 (** {7 Dhunk properties}*)
 
@@ -122,8 +128,7 @@ module Simplify : sig
   (** [run d] does all simplifications for dhunk [d]*)
 end
 
-val to_stmts :
-  t -> Virtual_address.t -> Dba_types.Statement.t list
+val to_stmts : t -> Virtual_address.t -> Dba_types.Statement.t list
 
 val outer_jumps : t -> Virtual_address.Set.t
 (** [outer_jumps b] computes the set of jumps to external addresses in hunk
@@ -144,9 +149,9 @@ val has_indirect_jump : t -> bool
 *)
 
 type conditional = {
-    condition : Dba.Expr.t;
-    consequent : Virtual_address.t;
-    alternative : Virtual_address.t;
+  condition : Dba.Expr.t;
+  consequent : Virtual_address.t;
+  alternative : Virtual_address.t;
 }
 
 val conditional : t -> conditional option

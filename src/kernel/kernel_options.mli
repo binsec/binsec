@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -31,17 +31,24 @@ module Config_file : Cli.STRING_OPT
 
 module Machine : sig
   include Cli.GENERIC with type t := Machine.t
+
   val isa : unit -> Machine.isa
+
   val endianness : unit -> Machine.endianness
+
   val bits : unit -> Machine.bitwidth
+
   val word_size : unit -> int
+
+  val stack_register : unit -> string
+
   include Sigs.PRINTABLE with type t := unit
 end
 
+module Decoder : Cli.STRING
 (** Use external decoder
     This is for example needed for arm support.
 *)
-module Decoder : Cli.STRING
 
 (** {2 Static disassembly / Analysis } *)
 
@@ -53,16 +60,11 @@ module Dba_config : Cli.STRING_OPT
 
 module Entry_point : Cli.STRING_OPT
 
-module Describe_binary: Cli.BOOLEAN
+module Describe_binary : Cli.BOOLEAN
 
 (** {2 Tests} *)
 
-(** {b Experimental purposes only} *)
 module Experimental : Cli.BOOLEAN
-
-module Share_directories : sig
-  include Cli.STRING_LIST
-  val find_file : filename:string -> string
-end
+(** {b Experimental purposes only} *)
 
 module Version : Cli.BOOLEAN

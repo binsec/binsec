@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,11 +21,20 @@
 
 module Distance : sig
   type t = Finite of int | Infinite
+
   val add : t -> t -> t
+
   val lt : t -> t -> bool
+
   val min : t -> t -> t
+
   val pp : Format.formatter -> t -> unit
 end
 
-val get_distances_to_goals : Sse_graph.G.t -> Virtual_address.t -> int ->
-  Dba_types.Caddress.t -> Distance.t (* distance au but le plus proche *)
+val get_distances_to_goals :
+  Sse_graph.G.t ->
+  Virtual_address.t ->
+  int ->
+  Dba_types.Caddress.t ->
+  Distance.t
+(* distance au but le plus proche *)

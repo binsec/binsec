@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,8 +23,9 @@ type t
 
 val load : Loader.Img.t -> t list
 
-val dir  : t -> string
+val dir : t -> string
 (** [dir cunit] return the path from where the compiler have proceed *)
+
 val file : t -> string
 (** [file cunit] return the path of the proceesed file
     of the compilation unit *)
@@ -47,7 +48,7 @@ module Var : sig
   val line : t -> int
   (** [line var] return the line of the declaration of the variable var *)
 
-  val typ  : t -> Type.t
+  val typ : t -> Type.t
   (** [typ var] return the type of the declaration of the variable var *)
 
   val loc : t -> (int -> Dba.Expr.t option) -> int -> Dba.Expr.t
@@ -59,10 +60,12 @@ end
 
 module Func : sig
   type func
+
   val find : t -> string -> func
   (** [find cunit func_name] return the function named func_name
       of the compilation unit
       @raise Exception Not_found *)
+
   type t = func
 
   val name : t -> string
@@ -71,7 +74,7 @@ module Func : sig
   val line : t -> int
   (** [line func] return the line of the declaration of the function func *)
 
-  val typ  : t -> Type.t
+  val typ : t -> Type.t
   (** [typ func] return the type of the declaration of the function func *)
 
   val cfa : t -> Dwarf_expr.t

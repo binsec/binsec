@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,18 +23,19 @@ let simplify_dba inst_map =
   match Simplification_options.Simplification.get () with
   | Simplification_options.No_simplification -> inst_map
   | _ ->
-    begin
       let simplify () =
-        Simplification_dba_prog.remove_mustkill_lfp inst_map |>
-        Simplification_dba_block.block_simplifications |>
-        Simplification_dba_prog.remove_goto
+        Simplification_dba_prog.remove_mustkill_lfp inst_map
+        |> Simplification_dba_block.block_simplifications
+        |> Simplification_dba_prog.remove_goto
       in
       Simplification_options.Logger.debug "Starting DBA simplification ...";
       let stats = Simplification_dba_utils.statistics inst_map in
       let t, res = Utils.time simplify in
-      if Simplification_options.Display_statistics.get () &&
-         not (Dba_types.Caddress.Map.is_empty res) then
+      if
+        Simplification_options.Display_statistics.get ()
+        && not (Dba_types.Caddress.Map.is_empty res)
+      then
         Simplification_options.Logger.info "%a"
-          (Simplification_dba_utils.display_results stats res) t;
+          (Simplification_dba_utils.display_results stats res)
+          t;
       res
-    end

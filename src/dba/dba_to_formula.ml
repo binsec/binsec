@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -28,7 +28,8 @@ let unary = function
   | Dba.Unary_op.Not -> BvNot
   | _ -> assert false
 
-let binary = function (* DBAs are broken *)
+let binary = function
+  (* DBAs are broken *)
   | Dba.Binary_op.Plus -> `Bnop BvAdd
   | Dba.Binary_op.Minus -> `Bnop BvSub
   | Dba.Binary_op.Mult -> `Bnop BvMul

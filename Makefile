@@ -19,28 +19,70 @@
 #                                                                        #
 ##########################################################################
 
-all : binsec
+default: binsec
 
-# The order of includes is important
-# Piqi.mk depends on values set from Config.mk
-include Config.mk
+ifneq (, $(shell which opam 2> /dev/null))
 
-BINSEC_DIR = src
-binsec:
-ifeq ($(USE_OCAMLBUILD), no)
-	$(MAKE) -C $(BINSEC_DIR) depend
+define install_deps
+	$(shell dune external-lib-deps --missing $(1) 2>&1 \
+	      | grep -e "opam install")
+endef
+
+OCAML_COMPILER ?= $(shell opam switch list | grep -m 1 -oe "ocaml-system[^ ]*")
+
+_opam:
+	opam switch create . $(OCAML_COMPILER) --no-install
+	opam install tuareg merlin ocp-indent user-setup -y
+	opam user-setup install
+	opam pin add . -n
+	opam install binsec --deps-only --with-test --with-doc -y
+
+switch: _opam
+
+else
+
+switch:
+	$(error "Please install opam.")
+
 endif
-	$(MAKE) -C $(BINSEC_DIR) -j
 
-binsec-clean:
-	$(MAKE) -C $(BINSEC_DIR) clean
+ifeq (, $(shell which dune 2> /dev/null))
 
-clean:: binsec-clean
+define check_dune
+	$(error "Please install dune or run 'make switch'.")
+endef
 
-clean-configure:
-	$(RRM) autom4te.cache config.status configure
+else
 
-veryclean: clean clean-configure
+define clean_build
+	dune clean
+endef
 
-install:
-	$(MAKE) -C src install
+endif
+
+.PHONY: default switch install uninstall binsec test doc clean
+
+binsec:
+	$(call check_dune)
+	$(call install_deps,@install)
+	dune build @install
+
+install: binsec
+	dune install $(INSTALL_FLAGS)
+
+uninstall:
+	$(call check_dune)
+	dune uninstall $(INSTALL_FLAGS)
+
+test: binsec
+	$(call install_deps,@runtest)
+	dune build @runtest
+
+doc:
+	$(call check_dune)
+	$(call install_deps,@doc)
+	dune build @doc
+	@echo "Documentation available @ _build/default/_doc/_html/"
+
+clean::
+	$(call clean_build)

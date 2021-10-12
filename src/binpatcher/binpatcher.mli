@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -48,19 +48,15 @@ module PatchMap : sig
       }
   *)
 
-  val of_list :
-    (Virtual_address.t * Binstream.t) list -> t
+  val of_list : (Virtual_address.t * Binstream.t) list -> t
   (** [of_list l] converts an association list [l] of addresses to opcodes to a
       patch map  *)
 
-
-  val add_bytes :
-    Virtual_address.t -> Binstream.t -> t -> t
-    (** [add_bytes address bytes patchmap] writes the opcode [bytes] to [address]
+  val add_bytes : Virtual_address.t -> Binstream.t -> t -> t
+  (** [add_bytes address bytes patchmap] writes the opcode [bytes] to [address]
         in the [patchmap]. The full length of the byte sequence is writtent
         starting at [address]. *)
 end
-
 
 (** {2 Writable loader} *)
 

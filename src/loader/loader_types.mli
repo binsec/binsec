@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,19 +21,22 @@
 
 type section_flag = Read | Write | Exec
 
-type 'a map = {
-  raw  : 'a;
-  virt : 'a;
-}
+type 'a map = { raw : 'a; virt : 'a }
 
+type u8 = int
 (** Some aliases to make more explicit the nature of values being read. As a
     first approximation, all values are expected to fit in OCaml integers. *)
-type u8   = int
-type u16  = int
-type u32  = int
-type u64  = int (* Bye bye 32 bits. 63 bits ought to be enough for anyone. *)
 
-type s8   = int
-type s16  = int
-type s32  = int
-type s64  = int (* Bye bye 32 bits. 63 bits ought to be enough for anyone. *)
+type u16 = int
+
+type u32 = int
+
+type u64 = int (* Bye bye 32 bits. 63 bits ought to be enough for anyone. *)
+
+type s8 = int
+
+type s16 = int
+
+type s32 = int
+
+type s64 = int (* Bye bye 32 bits. 63 bits ought to be enough for anyone. *)

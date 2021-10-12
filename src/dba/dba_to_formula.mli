@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,19 +21,22 @@
 
 (** Convert some DBA structure to Smtlib *)
 
+exception NoSmtEquivalent
 (** Raised if trying to convert DBA operators
     that don't have equivalent in smtlib2. The
     two operators that don't have equivalent are:
     {!const:Dba.LeftRotate} and {!const:Dba.RightRotate} that
     can take a variable shift value while smtlib2
     only support constant *)
-exception NoSmtEquivalent
 
+val unary : Dba.Unary_op.t -> Formula.bv_unop
 (** convert a DBA unary operator to a Smtlib
     unary operator *)
-val unary: Dba.Unary_op.t -> Formula.bv_unop
 
+val binary :
+  Dba.Binary_op.t ->
+  [ `Unop of Formula.bv_unop
+  | `Bnop of Formula.bv_bnop
+  | `Comp of Formula.bv_comp ]
 (** convert a DBA binary operator to a Smtlib
     binary operator *)
-val binary: Dba.Binary_op.t ->
-  [ `Unop of Formula.bv_unop | `Bnop of Formula.bv_bnop | `Comp of Formula.bv_comp]

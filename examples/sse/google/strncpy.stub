@@ -1,0 +1,10 @@
+replace strncpy by
+  caller<64> := @[rsp, 8]
+  i<64>      := 0
+  while i < rdx && @[rsi + i] <> 0 do
+    @[rdi + i] := @[rsi + i]
+    i := i + 1
+  end
+  rax        := rdi
+  rsp        := rsp + 8
+  jump at caller

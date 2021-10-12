@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -40,7 +40,8 @@ val fold : ('a -> char -> 'a) -> 'a -> string -> 'a
  **)
 
 val for_all : (char -> bool) -> string -> bool
-val exists  : (char -> bool) -> string -> bool
+
+val exists : (char -> bool) -> string -> bool
 
 val lfindi : string -> (char -> bool) -> int option
 (** [lfindi s p] retrieves the first index of a character verifying predicate
@@ -88,8 +89,7 @@ val split : sep:string -> string -> string list
 val cli_split : string -> string list
 (** [cli_split s] is [split ~sep:"," s] *)
 
-
-val char_codes : string -> int array ;;
+val char_codes : string -> int array
 
 (** {3 Character functions}*)
 
@@ -104,5 +104,6 @@ val is_hex_char : char -> bool
 
 val to_hex : string -> string
 (** [to_hex s] return the hexadecimal representation of stored bytes *)
+
 val pp_hex : Format.formatter -> string -> unit
 (** [pp_hex s] print the hexadecimal representation of stored bytes *)

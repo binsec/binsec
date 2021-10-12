@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -26,18 +26,13 @@ type instruction_kinds = Dba.Instr.t list
 type widening_delay = int
 
 module BoundThreshold : sig
-  type t = private
-    { los : int array;
-      his : int array; }
+  type t = private { los : int array; his : int array }
 
   val mk_from_list : int list -> int list -> t
 end
 
-
 module WideningThreshold : sig
-  type t = private
-    { signed : BoundThreshold.t;
-      unsigned : BoundThreshold.t; }
+  type t = private { signed : BoundThreshold.t; unsigned : BoundThreshold.t }
 
   val mk : BoundThreshold.t -> BoundThreshold.t -> t
 
@@ -45,34 +40,31 @@ module WideningThreshold : sig
     t -> int array * int array * int array * int array
 end
 
-
 val default_global_widening_thresholds : WideningThreshold.t
 
 val default_global_widening_delay : int
 
-(** {2 Configuration definition} *)
 type t = private {
   entry_points : Virtual_address.Set.t;
   jumps : Dba.addresses Dba_types.Caddress.Map.t;
   allowed_jumpzones : (Dba.address * Dba.address) list;
-  stops : Dba_types.Caddress.Set.t ;
+  stops : Dba_types.Caddress.Set.t;
   prepend_stubs : instruction_kinds Dba_types.Caddress.Map.t;
   substitute_stubs : Dba_types.instruction_sequence Dba_types.Caddress.Map.t;
-  linear_addresses :
-    (Virtual_address.t * Virtual_address.t
-    ) list;
+  linear_addresses : (Virtual_address.t * Virtual_address.t) list;
   global_widening : WideningThreshold.t * widening_delay;
   local_widening_thresholds : WideningThreshold.t Dba_types.Caddress.Map.t;
   local_widening_delays : widening_delay Dba_types.Caddress.Map.t;
 }
+(** {2 Configuration definition} *)
 
-
-(** {3 Constructors and modificators } *)
 val default : t
+(** {3 Constructors and modificators } *)
+
 val empty : t
 
-
 val set_entry_points : Virtual_address.Set.t -> t -> t
+
 val has_entry_points : t -> bool
 
 val set_jumps : Dba.addresses Dba_types.Caddress.Map.t -> t -> t
@@ -81,13 +73,12 @@ val set_stops : Dba_types.Caddress.Set.t -> t -> t
 
 val set_prepend_stubs : instruction_kinds Dba_types.Caddress.Map.t -> t -> t
 
-val set_substitute_stubs : Dba_types.instruction_sequence Dba_types.Caddress.Map.t -> t -> t
+val set_substitute_stubs :
+  Dba_types.instruction_sequence Dba_types.Caddress.Map.t -> t -> t
 
-val set_allowed_jumpzones :
-  (Dba.address * Dba.address) list -> t -> t
+val set_allowed_jumpzones : (Dba.address * Dba.address) list -> t -> t
 
-val set_linear_addresses :
-  (Dba.address * Dba.address) list -> t -> t
+val set_linear_addresses : (Dba.address * Dba.address) list -> t -> t
 
 val set_global_widening_delay : widening_delay -> t -> t
 

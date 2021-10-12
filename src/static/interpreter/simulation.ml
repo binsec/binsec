@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,33 +19,36 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Cli.Make
-    (struct
-      let shortname = "sim2"
-      let name = "Simulation"
-    end)
+include Cli.Make (struct
+  let shortname = "sim2"
 
-module MemoryFile = Builder.String_option
-    (struct
-      let name = "memory"
-      let doc = "set file containing the initial (concrete) memory state"
-    end)
+  let name = "Simulation"
+end)
 
-module InitFile = Builder.String_option
-    (struct
-      let name = "init"
-      let doc = "set dba file containing arbitrary initialisation instructions"
-    end)
+module MemoryFile = Builder.String_option (struct
+  let name = "memory"
 
-module Directives = Builder.Any
-    (struct
-      type t = Directive.t list
-      let name = "goals"
-      let doc = "Set simulation goals"
-      let default = []
-      let to_string _ = "no action"
+  let doc = "set file containing the initial (concrete) memory state"
+end)
 
-      let of_string s =
-        let lexbuf = Lexing.from_string s in
-        Parser.directives Lexer.token lexbuf
-    end)
+module InitFile = Builder.String_option (struct
+  let name = "init"
+
+  let doc = "set dba file containing arbitrary initialisation instructions"
+end)
+
+module Directives = Builder.Any (struct
+  type t = Directive.t list
+
+  let name = "goals"
+
+  let doc = "Set simulation goals"
+
+  let default = []
+
+  let to_string _ = "no action"
+
+  let of_string s =
+    let lexbuf = Lexing.from_string s in
+    Parser.directives Lexer.token lexbuf
+end)

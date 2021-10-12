@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2019                                               */
+/*  Copyright (C) 2016-2021                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -21,10 +21,10 @@
 
 %{
     open Smtlib
-    open Locations ;;
+    open Location ;;
 
     (* Helper construction functions.
-       File locations is handled in production rules.
+       File location is handled in production rules.
        *)
     let mk_sexpr sexpr_desc sexpr_loc = { sexpr_desc; sexpr_loc; } ;;
     let mk_identifier id_desc id_loc = { id_desc; id_loc; } ;;
@@ -144,11 +144,13 @@
 (* output of get-model *)
 %type  <Smtlib.model>  model
 (* output of get-value *)
-%type  <Smtlib.term * Smtlib.constant> value
+%type  <(Smtlib.term * Smtlib.term) list> value
+%type  <(Smtlib.term * Smtlib.term) list> ivalue
 
 %start script
 %start model
 %start value
+%start ivalue
 %%
 
 script:
@@ -159,17 +161,28 @@ script:
 
 model :
 | commands=delimited(LPAREN,
-     preceded(MODEL, list(delimited(LPAREN,command,RPAREN))),
+     preceded(option(MODEL), list(delimited(LPAREN,command,RPAREN))),
      RPAREN); EOF
   { let loc = mk_loc $startpos $endpos in
     mk_model commands loc
    }
 ;
 
-value :
-| LPAREN LPAREN t=term v=spec_constant RPAREN RPAREN EOF
-  { t, v }
+ivalue :
+| LPAREN LPAREN t=term v=term RPAREN RPAREN
+    { [ t, v ] }
+  | LPAREN LPAREN ts=nonempty_list(delimited(LPAREN, pair(term, term), RPAREN));
+    RPAREN RPAREN
+  { ts }
+| LPAREN RPAREN
+  { [] }
 ;
+
+value :
+| v=ivalue EOF
+  { v }
+;
+
 
 %inline command:
 | ASSERT t=term;

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,135 +19,107 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Cli.Make(
-struct
+include Cli.Make (struct
   let shortname = "fml"
+
   let name = "Formulas"
 end)
 
-module OptimAll = Builder.False(
-  struct
-    let name = "optim-all"
-    let doc = "Enable all the following optimizations"
-  end
-  )
+module OptimAll = Builder.True (struct
+  let name = "optim-all"
 
-module OptimCst = Builder.False(
-  struct
-    let name = "optim-cst"
-    let doc = "Enable constant propagation"
-  end
-  )
+  let doc = "Enable all the following optimizations"
+end)
 
-module OptimItv = Builder.False(
-  struct
-    let name = "optim-itv"
-    let doc = "Enable intervals in read-over-write"
-  end
-  )
+module OptimCst = Builder.False (struct
+  let name = "optim-cst"
 
-module OptimPrn = Builder.False(
-  struct
-    let name = "optim-prn"
-    let doc = "Enable pruning and inlining"
-  end
-  )
+  let doc = "Enable constant propagation"
+end)
 
-module OptimRbs = Builder.False(
-  struct
-    let name = "optim-rbs"
-    let doc = "Enable rebasing in read-over-write"
-  end
-  )
+module OptimItv = Builder.False (struct
+  let name = "optim-itv"
 
-module OptimRow = Builder.False(
-  struct
-    let name = "optim-row"
-    let doc = "Enable read-over-write"
-  end
-  )
+  let doc = "Enable intervals in read-over-write"
+end)
 
-module OptimSsa = Builder.False(
-  struct
-    let name = "optim-ssa"
-    let doc = "Enable static single assignment"
-  end
-  )
+module OptimPrn = Builder.False (struct
+  let name = "optim-prn"
 
-module OptimLst = Builder.Integer(
-  struct
-    let name = "optim-lst"
-    let doc = "Switch to list-like memory representation in read-over-write"
-    let default = 0
-  end
-  )
+  let doc = "Enable pruning and inlining"
+end)
 
+module OptimRbs = Builder.False (struct
+  let name = "optim-rbs"
 
-module Flatten_memory = Builder.False(
-struct
+  let doc = "Enable rebasing in read-over-write"
+end)
+
+module OptimRow = Builder.False (struct
+  let name = "optim-row"
+
+  let doc = "Enable read-over-write"
+end)
+
+module OptimSsa = Builder.False (struct
+  let name = "optim-ssa"
+
+  let doc = "Enable static single assignment"
+end)
+
+module OptimLst = Builder.Integer (struct
+  let name = "optim-lst"
+
+  let doc = "Switch to list-like memory representation in read-over-write"
+
+  let default = 0
+end)
+
+module Flatten_memory = Builder.False (struct
   let name = "flat-mem"
-  let doc = "Remove memory reads if indexes are constant"
-end
-)
 
-type solver =
-  | Boolector
-  | Z3
-  | CVC4
-  | Yices
+  let doc = "Remove memory reads if indexes are constant"
+end)
+
+type solver = Boolector | Bitwuzla | Z3 | CVC4 | Yices
 
 module Solver = struct
-  include Builder.Variant_choice_assoc(
-  struct
-  type t = solver
-  let assoc_map = [
-      "z3", Z3;
-      "cvc4", CVC4;
-      "yices", Yices;
-      "boolector", Boolector;
-    ]
-  let default = Z3
+  include Builder.Variant_choice_assoc (struct
+    type t = solver
 
-  let name = "solver"
-  let doc = " Set solver to use"
-end
-)
+    let assoc_map =
+      [
+        ("z3", Z3);
+        ("cvc4", CVC4);
+        ("yices", Yices);
+        ("boolector", Boolector);
+        ("bitwuzla", Bitwuzla);
+      ]
 
-let of_piqi = function
-  | `boolector -> Boolector
-  | `z3 -> Z3
-  | `cvc4 -> CVC4
-  | `yices -> Yices
-  | _ -> get () (* The current value *)
+    let default = Z3
 
-let to_piqi = function
-  | Boolector -> `boolector
-  | Z3 -> `z3
-  | CVC4 -> `cvc4
-  | Yices -> `yices
+    let name = "solver"
 
+    let doc = " Set solver to use"
+  end)
 
- module Timeout = Builder.Integer(
-struct
-  let name = "solver-timeout"
-  let doc = "Timeout for solver queries"
-  let default = 5
-end
-)
+  module Timeout = Builder.Integer (struct
+    let name = "solver-timeout"
 
+    let doc = "Timeout for solver queries"
 
- module Options = Builder.String_option(
-  struct
-     let name = "solver-options"
-     let doc = "Use these options to launch the solver (ignore default options)"
+    let default = 5
+  end)
+
+  module Options = Builder.String_option (struct
+    let name = "solver-options"
+
+    let doc = "Use these options to launch the solver (ignore default options)"
   end)
 end
 
+module No_stitching = Builder.False (struct
+  let name = "no-stitching"
 
-module No_stitching =
-  Builder.False(
-  struct
-    let name = "no-stitching"
-    let doc = "Do not try to stitch together continuous stores/select"
-  end
-  )
+  let doc = "Do not try to stitch together continuous stores/select"
+end)

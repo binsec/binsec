@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,7 +25,7 @@ module Opaque_predicates : Cli.BOOLEAN
 
 module Opaque_addresses : Cli.INTEGER_LIST
 
-module Opaque_sections : Cli.STRING_LIST ;;
+module Opaque_sections : Cli.STRING_LIST
 
 module K : Cli.INTEGER
 (** Number of instructions that the backward slice should contain.

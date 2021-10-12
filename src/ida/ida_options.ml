@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,34 +19,28 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Cli.Make(
- struct
-   let shortname = "ida"
-   let name = "IDA Pro interface"
- end
-)
+include Cli.Make (struct
+  let shortname = "ida"
 
-module IdaOutputFile =
-  Builder.String(
-    struct
-      let name = "o-ida"
-      let default = "out.ida"
-      let doc =  " Set IDA output file"
-    end)
+  let name = "IDA Pro interface"
+end)
 
+module IdaOutputFile = Builder.String (struct
+  let name = "o-ida"
 
-module IdaCfg =
-  Builder.False(
-      struct
-        let name = "cfg-dot"
-        let doc = " Generate CFGs in dot format"
-      end
-    )
+  let default = "out.ida"
 
-module IdaSimpleCfg =
-  Builder.True(
-  struct
-    let name = "simple"
-    let doc = "Simple CFG containing basic blocks"
-  end
-  )
+  let doc = " Set IDA output file"
+end)
+
+module IdaCfg = Builder.False (struct
+  let name = "cfg-dot"
+
+  let doc = " Generate CFGs in dot format"
+end)
+
+module IdaSimpleCfg = Builder.True (struct
+  let name = "simple"
+
+  let doc = "Simple CFG containing basic blocks"
+end)

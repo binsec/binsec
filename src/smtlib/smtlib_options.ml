@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,16 +19,14 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Cli.Options(
-  struct
-    let name = "smtlib"
-    let shortname = name
-  end
-)
+include Cli.Options (struct
+  let name = "smtlib"
 
-module Model_from_file = Builder.String_option (
-struct
+  let shortname = name
+end)
+
+module Model_from_file = Builder.String_option (struct
   let name = "model-from-file"
-  let doc  = "Parse model from given file."
-end
-)
+
+  let doc = "Parse model from given file."
+end)

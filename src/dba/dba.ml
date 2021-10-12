@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,16 +23,13 @@
 
 type size = int
 
-type malloc_size = Bigint.t
+type malloc_size = Z.t
 
 type id = int
 (** An [id] is a local identifier which characterizes an atomic instruction
     inside a Dba.block *)
 
-type address = {
-  base : Virtual_address.t;
-  id : id;
-}
+type address = { base : Virtual_address.t; id : id }
 (** A DBA [address] is the association of a DBA block address represented by
     [base] and a unique [id].
     The first element of a block has [id] [0]. *)
@@ -40,20 +37,18 @@ type address = {
 type addresses = address list
 
 type 'a jump_target =
-  | JInner of 'a (** Jump inside the same block *)
-  | JOuter of address (** Jump outside the block to its first element *)
+  | JInner of 'a  (** Jump inside the same block, to a label *)
+  | JOuter of address  (** Jump outside the block to its first element *)
 
-type tag =
-  | Call of address
-  | Return (** For call address of return site *)
+type tag = Call of address | Return  (** For call address of return site *)
 
 type state =
   | OK
   | KO
-  | Undefined of string
-  | Unsupported of string
+  | Undecoded of string  (** Stop because of unanticipated string of bytes **)
+  | Unsupported of string  (** Stop because instr is not supported by Binsec **)
 
-type 'a var = { name: string; size: size; info: 'a }
+type 'a var = { name : string; size : size; info : 'a }
 (** The base type for variables *)
 
 module Unary_op = struct
@@ -66,7 +61,6 @@ module Unary_op = struct
 end
 
 module Binary_op = struct
-
   type t =
     | Plus
     | Minus
@@ -95,203 +89,205 @@ module Binary_op = struct
     | GeqS
     | GtS
 
-
   let invert = function
-    | Eq   -> Diff
+    | Eq -> Diff
     | Diff -> Eq
     | LeqU -> GtU
-    | LtU  -> GeqU
+    | LtU -> GeqU
     | GeqU -> LtU
-    | GtU  -> LeqU
+    | GtU -> LeqU
     | LeqS -> GtS
-    | LtS  -> GeqS
+    | LtS -> GeqS
     | GeqS -> LtS
-    | GtS  -> LeqS
+    | GtS -> LeqS
     | _ -> failwith "BinaryOperator.invert"
 
   let has_inverse = function
-    | Eq  | Diff | LeqU | LtU  | GeqU
-    | GtU | LeqS | LtS  | GeqS | GtS -> true
+    | Eq | Diff | LeqU | LtU | GeqU | GtU | LeqS | LtS | GeqS | GtS -> true
     | _ -> false
-
 end
 
 type malloc_status = Freed | Freeable
-type restricted_region =
-  [ `Stack
-  | `Malloc of (int * address) * Bigint.t ]
+
+type restricted_region = [ `Stack | `Malloc of (int * address) * Z.t ]
 
 type region = [ `Constant | restricted_region ]
 
-(* Region *)
-module ComparableRegion = struct
-  type _t = region
+module VarTag = struct
+  type attribute = Value | Size | Last
 
-  let compare r1 r2 =
-    match r1, r2 with
-    | `Constant, `Constant -> 0
-    | `Stack, `Stack -> 0
-    | `Malloc ((id1, _), _), `Malloc ((id2, _), _) -> Pervasives.compare id1 id2
-    | `Constant, _ -> 1
-    | `Stack, `Constant -> -1
-    | `Stack, _ -> 1
-    | `Malloc _, _ -> -1
+  type t = Flag | Temp | Register | Symbol of attribute | Empty
 end
 
-
-
-
-module rec Expr :
-sig
+module Expr : sig
   type t = private
-    | Var of VarTag.t var  (* size: bits *)
+    | Var of VarTag.t var (* size: bits *)
     | Load of size * Machine.endianness * t (* size: bytes *)
-    | Cst of region * Bitvector.t
+    | Cst of Bitvector.t
     | Unary of Unary_op.t * t
     | Binary of Binary_op.t * t * t
-    | Ite of t *  t *  t (* sugar operator *)
+    | Ite of t * t * t
+  (* sugar operator *)
 
-  val v: VarTag.t var -> t
+  val v : VarTag.t var -> t
+
   val var : ?tag:VarTag.t -> string -> int -> t
 
   val is_equal : t -> t -> bool
+
   val size_of : t -> int
-(*
- *   val var : Size.Bit.t -> string -> Tag.t option -> t
- *   val flag : ?bits:Size.Bit.t -> string -> t
- *
- *)
+  (*
+   *   val var : Size.Bit.t -> string -> Tag.t option -> t
+   *   val flag : ?bits:Size.Bit.t -> string -> t
+   *
+   *)
 
   val is_constant : t -> bool
-  val constant : ?region:region -> Bitvector.t -> t
+
+  val constant : Bitvector.t -> t
+
   val temporary : size:int -> string -> t
 
   val zeros : int -> t
+
   val ones : int -> t
+
   val one : t
+
   val _true : t
+
   val zero : t
+
   val _false : t
-  val binary: Binary_op.t -> t -> t -> t
-  val add                : t -> t -> t
-  val sub                : t -> t -> t
-  val mul                : t -> t -> t
-  val smod               : t -> t -> t
-  val umod               : t -> t -> t
-  val udiv               : t -> t -> t
-  val sdiv               : t -> t -> t
-  val append             : t -> t -> t
+
+  val binary : Binary_op.t -> t -> t -> t
+
+  val add : t -> t -> t
+
+  val sub : t -> t -> t
+
+  val mul : t -> t -> t
+
+  val smod : t -> t -> t
+
+  val umod : t -> t -> t
+
+  val udiv : t -> t -> t
+
+  val sdiv : t -> t -> t
+
+  val append : t -> t -> t
 
   include Sigs.Comparisons with type t := t and type boolean = t
 
-  val unary              : Unary_op.t -> t -> t
-  val uminus             : t -> t
+  val unary : Unary_op.t -> t -> t
+
+  val uminus : t -> t
 
   include Sigs.Logical with type t := t
 
   val logxor : t -> t -> t
-  val shift_left  : t -> t -> t
+
+  val shift_left : t -> t -> t
+
   val shift_right : t -> t -> t
+
   val shift_right_signed : t -> t -> t
 
-  val rotate_left  : t -> t -> t
+  val rotate_left : t -> t -> t
+
   val rotate_right : t -> t -> t
 
   val sext : int -> t -> t
-  val uext : int -> t -> t
 
+  val uext : int -> t -> t
 
   val ite : t -> t -> t -> t
 
   val restrict : int -> int -> t -> t
+
   val bit_restrict : int -> t -> t
+
   val load : Size.Byte.t -> Machine.endianness -> t -> t
 
   val is_max : t -> bool
-end
-= struct
+end = struct
   open Binary_op
+
   type t =
-    | Var of VarTag.t var  (* size: bits *)
+    | Var of VarTag.t var (* size: bits *)
     | Load of size * Machine.endianness * t (* size: bytes *)
-    | Cst of region * Bitvector.t
+    | Cst of Bitvector.t
     | Unary of Unary_op.t * t
     | Binary of Binary_op.t * t * t
-    | Ite of t *  t *  t (* sugar operator *)
+    | Ite of t * t * t
+  (* sugar operator *)
 
   type boolean = t
 
   let rec size_of = function
-    | Cst(_, b) -> Bitvector.size_of b
+    | Cst b -> Bitvector.size_of b
     | Var v -> v.size
-    | Load(bytesize, _, _) -> 8 * bytesize
-    | Ite(_, e, _)
-    | Unary((Unary_op.UMinus | Unary_op.Not), e) -> size_of e
+    | Load (bytesize, _, _) -> 8 * bytesize
+    | Ite (_, e, _) | Unary ((Unary_op.UMinus | Unary_op.Not), e) -> size_of e
     | Unary ((Unary_op.Sext bits | Unary_op.Uext bits), _) -> bits
-    | Unary (Unary_op.Restrict {Interval.lo; Interval.hi}
-            , _) -> hi - lo + 1
-    | Binary(bop, e1, e2) ->
-      begin match bop with
+    | Unary (Unary_op.Restrict { Interval.lo; Interval.hi }, _) -> hi - lo + 1
+    | Binary (bop, e1, e2) -> (
+        match bop with
         | Concat -> size_of e1 + size_of e2
         | Eq | Diff | LeqU | LtU | GeqU | GtU | LeqS | LtS | GeqS | GtS -> 1
-        | Plus | Minus | Mult
-        | DivU | DivS | ModU | ModS | Or
-        | And | Xor | LShift | RShiftU | RShiftS | LeftRotate | RightRotate
-          -> size_of e1
-      end
+        | Plus | Minus | Mult | DivU | DivS | ModU | ModS | Or | And | Xor
+        | LShift | RShiftU | RShiftS | LeftRotate | RightRotate ->
+            size_of e1)
 
   let rec is_equal e1 e2 =
-    match e1, e2 with
+    match (e1, e2) with
     | Var v1, Var v2 -> v1 = v2
-    | Load (sz1, en1, e1),
-      Load (sz2, en2, e2) -> sz1 = sz2 && en1 = en2 && is_equal e1 e2
-    | Cst (r1, bv1), Cst (r2, bv2) ->
-      ComparableRegion.compare r1 r2 = 0 && Bitvector.equal bv1 bv2
-    | Unary (unop1, e1), Unary (unop2, e2) ->
-      unop1 = unop2 && is_equal e1 e2
-    | Binary (binop1, lexpr1, rexpr1),
-      Binary (binop2, lexpr2, rexpr2) ->
-      binop1 = binop2 && is_equal lexpr1 lexpr2 && is_equal rexpr1 rexpr2
-    | Ite (c1, e11, e12),
-      Ite (c2, e21, e22) ->
-      is_equal c1 c2 && is_equal e11 e21 && is_equal e12 e22
+    | Load (sz1, en1, e1), Load (sz2, en2, e2) ->
+        sz1 = sz2 && en1 = en2 && is_equal e1 e2
+    | Cst bv1, Cst bv2 -> Bitvector.equal bv1 bv2
+    | Unary (unop1, e1), Unary (unop2, e2) -> unop1 = unop2 && is_equal e1 e2
+    | Binary (binop1, lexpr1, rexpr1), Binary (binop2, lexpr2, rexpr2) ->
+        binop1 = binop2 && is_equal lexpr1 lexpr2 && is_equal rexpr1 rexpr2
+    | Ite (c1, e11, e12), Ite (c2, e21, e22) ->
+        is_equal c1 c2 && is_equal e11 e21 && is_equal e12 e22
     | _, _ -> false
 
+  let is_constant = function Cst _ -> true | _ -> false
 
-  let is_constant = function
-    | Cst _ -> true
-    | _ -> false
+  let _is_zero = function Cst bv -> Bitvector.is_zeros bv | _ -> false
 
-  let _is_zero = function
-    | Cst (`Constant, bv) -> Bitvector.is_zeros bv
-    | _ -> false
+  let _is_one = function Cst bv -> Bitvector.is_ones bv | _ -> false
 
-  let _is_one = function
-    | Cst (_, bv) -> Bitvector.is_ones bv
-    | _ -> false
-
-  let is_max = function
-    | Cst (`Constant, bv) -> Bitvector.is_max_ubv bv
-    | _ -> false
+  let is_max = function Cst bv -> Bitvector.is_max_ubv bv | _ -> false
 
   let v va = Var va
-  let var ?(tag=VarTag.empty) name size = Var { name; size; info = tag; }
-  let temporary ~size name = var name size ~tag:VarTag.temp
 
-  let constant ?(region=`Constant) bv = Cst (region, bv)
+  let var ?(tag = VarTag.Empty) name size = Var { name; size; info = tag }
+
+  let temporary ~size name = var name size ~tag:VarTag.Temp
+
+  let constant bv = Cst bv
 
   let zeros length = constant (Bitvector.zeros length)
+
   let ones length = constant (Bitvector.ones length)
 
-  let zero = constant (Bitvector.zero)
+  let zero = constant Bitvector.zero
+
   let _false = zero
-  let one = constant (Bitvector.one)
+
+  let one = constant Bitvector.one
+
   let _true = one
 
   let ite condition then_expr else_expr =
     (* Valid conditions are bitvectors of size one  only *)
     assert (size_of condition = 1);
-    Ite (condition, then_expr, else_expr)
+    match condition with
+    | Cst b when Bitvector.is_zero b -> else_expr
+    | Cst b when Bitvector.is_one b -> then_expr
+    | _ -> Ite (condition, then_expr, else_expr)
 
   let load nbytes endianness e =
     let nbytes = Size.Byte.to_int nbytes in
@@ -301,551 +297,654 @@ end
     let binary op e1 e2 = Binary (op, e1, e2)
 
     let append = binary Concat
+
     let shift_left = binary LShift
+
     let shift_right = binary RShiftU
+
     let shift_right_signed = binary RShiftS
+
     let rotate_left = binary LeftRotate
+
     let rotate_right = binary RightRotate
 
     let symmetric_binary op e1 e2 =
       assert (size_of e1 = size_of e2);
       binary op e1 e2
 
-    let add    = symmetric_binary Plus
-    let sub    = symmetric_binary Minus
-    let mul    = symmetric_binary Mult
-    let smod   = symmetric_binary ModS
-    let umod   = symmetric_binary ModU
-    let udiv   = symmetric_binary DivU
-    let sdiv   = symmetric_binary DivS
-    let logor  = symmetric_binary Or
-    let logxor = symmetric_binary Xor
-    let logand = symmetric_binary And
-    let equal  = symmetric_binary Eq
-    let diff   = symmetric_binary Diff
-    let ule    = symmetric_binary LeqU
-    let sle    = symmetric_binary LeqS
-    let ult    = symmetric_binary LtU
-    let slt    = symmetric_binary LtS
-    let uge    = symmetric_binary GeqU
-    let sge    = symmetric_binary GeqS
-    let ugt    = symmetric_binary GtU
-    let sgt    = symmetric_binary GtS
+    let add = symmetric_binary Plus
 
+    let sub = symmetric_binary Minus
+
+    let mul = symmetric_binary Mult
+
+    let smod = symmetric_binary ModS
+
+    let umod = symmetric_binary ModU
+
+    let udiv = symmetric_binary DivU
+
+    let sdiv = symmetric_binary DivS
+
+    let logor = symmetric_binary Or
+
+    let logxor = symmetric_binary Xor
+
+    let logand = symmetric_binary And
+
+    let equal = symmetric_binary Eq
+
+    let diff = symmetric_binary Diff
+
+    let ule = symmetric_binary LeqU
+
+    let sle = symmetric_binary LeqS
+
+    let ult = symmetric_binary LtU
+
+    let slt = symmetric_binary LtS
+
+    let uge = symmetric_binary GeqU
+
+    let sge = symmetric_binary GeqS
+
+    let ugt = symmetric_binary GtU
+
+    let sgt = symmetric_binary GtS
 
     let unary op e = Unary (op, e)
 
     let lognot = unary Unary_op.Not
+
     let uminus = unary Unary_op.UMinus
 
-    let sext bits  = unary (Unary_op.Sext bits)
+    let sext bits = unary (Unary_op.Sext bits)
 
     let uext bits = unary (Unary_op.Uext bits)
 
-    let restrict lo hi =
-      assert (hi >= lo && lo >= 0);
-      (* Probably should check later on or now that off1 & off2 are within the
-       * bounds of the size of e *)
-      unary (Unary_op.Restrict {Interval.lo; Interval.hi})
-
+    let restrict lo hi e =
+      assert (hi < size_of e);
+      assert (hi >= lo);
+      assert (lo >= 0);
+      unary (Unary_op.Restrict { Interval.lo; Interval.hi }) e
   end
+
+  (* f e1 (e2::e3) -> g (f e1_(|e3|..|e1| - 1) e2) (f e1_(0..|e3| - 1) e3) *)
+  let rec split_apply f g e1 e2 e3 =
+    let s1 = size_of e1 and s3 = size_of e3 in
+    let e1_2 = restrict s3 (s1 - 1) e1 and e1_3 = restrict 0 (s3 - 1) e1 in
+    g (f e1_2 e2) (f e1_3 e3)
 
   (* All the following construction functions are defined w.r.t to the
    * "straight" ones. Hence no "rec" keyword after the let is usually *not* an
    * error
-  *)
-  let rec uminus = function
-    | Cst (`Constant, bv) -> Bitvector.neg bv |> constant ~region:`Constant
+   *)
+  and uminus = function
+    | Cst bv -> constant (Bitvector.neg bv)
     | Unary (Unary_op.UMinus, e) -> e
     | e -> Straight.uminus e
 
   and lognot = function
-    | Cst (`Constant, bv) -> Bitvector.lognot bv |> constant ~region:`Constant
+    | Cst bv -> constant (Bitvector.lognot bv)
     | Unary (Unary_op.Not, e) -> e
+    | Binary (op, e1, e2) when Binary_op.has_inverse op ->
+        binary (Binary_op.invert op) e1 e2
     | e -> Straight.lognot e
 
   and uext size = function
     | e when size = size_of e -> e
-    | Cst (`Constant, bv) ->
-      Bitvector.extend bv size |> constant ~region:`Constant
+    | Cst bv -> constant Bitvector.(extend bv size)
     | Unary (Unary_op.Uext _, e) | e -> Straight.uext size e
 
   and sext size = function
     | e when size = size_of e -> e
-    | Cst (`Constant, bv) ->
-      Bitvector.extend_signed bv size |> constant ~region:`Constant
+    | Cst bv -> constant Bitvector.(extend_signed bv size)
     | Unary (Unary_op.Uext _, e) -> Straight.uext size e
     | Unary (Unary_op.Sext _, e) | e -> Straight.sext size e
 
   and restrict lo hi = function
     | e when lo = 0 && hi = size_of e - 1 -> e
-    | Cst (`Constant, bv) ->
-      Bitvector.extract bv Interval.{lo; hi} |> constant ~region:`Constant
-    | Unary (Unary_op.Restrict {Interval.lo=lo'; _}, e) ->
-      Straight.restrict (lo' + lo) (lo' + hi) e
+    | Cst bv -> constant (Bitvector.extract bv Interval.{ lo; hi })
+    | Load (sz, LittleEndian, addr) when (8 * sz) - hi > 8 ->
+        let sz' = Size.Byte.create (sz - (((8 * sz) - hi - 1) / 8)) in
+        restrict lo hi (load sz' LittleEndian addr)
+    | Load (sz, LittleEndian, addr) when lo >= 8 ->
+        let bz' = lo / 8 in
+        let lo' = lo - (8 * bz') and hi' = hi - (8 * bz') in
+        let sz' = Size.Byte.create (sz - bz') in
+        let size = size_of addr in
+        let addr' = add addr (constant (Bitvector.of_int ~size bz')) in
+        restrict lo' hi' (load sz' LittleEndian addr')
+    | Unary (Unary_op.Restrict { Interval.lo = lo'; _ }, e) ->
+        Straight.restrict (lo' + lo) (lo' + hi) e
+    | Unary (Unary_op.Uext _, e) when size_of e <= lo -> zeros (hi - lo + 1)
     | Unary ((Unary_op.Uext _ | Unary_op.Sext _), e) when size_of e > hi ->
-      Straight.restrict lo hi e
-    | Binary ((Binary_op.And | Binary_op.Or | Binary_op.Xor) as op, e1, e2) ->
-      restrict lo hi e2 |> binary op @@ restrict lo hi e1
-    | Binary (Binary_op.LShift, _, Cst (`Constant, b2))
-      when Bitvector.to_int b2 > hi ->
-      hi - lo + 1 |> zeros
-    | Binary (Binary_op.LShift, e1, Cst (`Constant, b2))
-      when Bitvector.to_int b2 <= lo ->
-      restrict (lo - Bitvector.to_int b2) (hi - Bitvector.to_int b2) e1
-    | Binary ((Binary_op.RShiftU | Binary_op.RShiftS), e1, Cst (`Constant, b2))
-      when size_of e1 > hi + Bitvector.to_int b2 ->
-      restrict (lo + Bitvector.to_int b2) (hi + Bitvector.to_int b2) e1
-    | Binary (Binary_op.Concat, _, e2) when hi < size_of e2 ->
-      restrict lo hi e2
+        restrict lo hi e
+    | Unary (Unary_op.Uext _, e) ->
+        uext (hi - lo + 1) (restrict lo (size_of e - 1) e)
+    | Unary (Unary_op.Sext _, e) when lo < size_of e ->
+        sext (hi - lo + 1) (restrict (min lo (size_of e - 1)) (size_of e - 1) e)
+    | Binary (((Binary_op.And | Binary_op.Or | Binary_op.Xor) as op), e1, e2) ->
+        binary op (restrict lo hi e1) (restrict lo hi e2)
+    | Binary (Binary_op.LShift, _, Cst b2) when Bitvector.to_uint b2 > hi ->
+        zeros (hi - lo + 1)
+    | Binary (Binary_op.LShift, e1, Cst b2) when Bitvector.to_uint b2 <= lo ->
+        restrict (lo - Bitvector.to_uint b2) (hi - Bitvector.to_uint b2) e1
+    | Binary ((Binary_op.RShiftU | Binary_op.RShiftS), e1, Cst b2)
+      when size_of e1 > hi + Bitvector.to_uint b2 ->
+        restrict (lo + Bitvector.to_uint b2) (hi + Bitvector.to_uint b2) e1
+    | Binary (Binary_op.Concat, _, e2) when hi < size_of e2 -> restrict lo hi e2
     | Binary (Binary_op.Concat, e1, e2) when lo >= size_of e2 ->
-      restrict (lo - size_of e2) (hi - size_of e2) e1
+        restrict (lo - size_of e2) (hi - size_of e2) e1
+    | Binary (Binary_op.Concat, e1, e2) ->
+        append
+          (restrict 0 (hi - size_of e2) e1)
+          (restrict lo (size_of e2 - 1) e2)
     | e -> Straight.restrict lo hi e
 
   and bit_restrict off = restrict off off
 
-  and unary op e = match op with
+  and unary op e =
+    match op with
     | Unary_op.Not -> lognot e
     | Unary_op.UMinus -> uminus e
     | Unary_op.Sext s -> sext s e
     | Unary_op.Uext s -> uext s e
-    | Unary_op.Restrict {Interval.lo; Interval.hi} ->
-      restrict lo hi e
+    | Unary_op.Restrict { Interval.lo; Interval.hi } -> restrict lo hi e
 
-  and add e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.add b1 b2 |> constant ~region:`Constant
-    | Cst (`Constant, b1), Binary (Binary_op.Plus, Cst (`Constant, b2), e3) ->
-      add (Bitvector.add b1 b2 |> constant ~region:`Constant) e3
-    | Cst (`Constant, b1), Binary (Binary_op.Minus, Cst (`Constant, b2), e3) ->
-      sub (Bitvector.add b1 b2 |> constant ~region:`Constant) e3
-    | Cst (`Constant, b1), Binary (Binary_op.Minus, e3, Cst (`Constant, b2)) ->
-      add (Bitvector.sub b1 b2 |> constant ~region:`Constant) e3
-    | Cst (`Constant, b1), _ when Bitvector.is_zeros b1 -> e2
-    | _, Cst (`Constant, _) -> add e2 e1
+  and add e1 e2 =
+    match (e1, e2) with
+    (* Constant propagation *)
+    | Cst b1, Cst b2 -> constant (Bitvector.add b1 b2)
+    (* Invariant: A constant is always on the right side of the root *)
+    | Cst _, _ -> add e2 e1
+    | Binary (Binary_op.Plus, e3, Cst b1), Cst b2 ->
+        add e3 (constant (Bitvector.add b1 b2))
+    | Binary (Binary_op.Plus, e3, (Cst _ as c4)), _ -> add (add e3 e2) c4
+    | Binary (Binary_op.Minus, e3, Cst b1), Cst b2 when Bitvector.sge b2 b1 ->
+        add e3 (constant (Bitvector.sub b2 b1))
+    | Binary (Binary_op.Minus, e3, Cst b1), Cst b2 ->
+        sub e3 (constant (Bitvector.sub b1 b2))
+    (* Except when it is on the left side of a substraction root *)
+    | Binary (Binary_op.Minus, Cst b1, e3), Cst b2 ->
+        sub (constant (Bitvector.add b1 b2)) e3
+    (* Invariant: Linear structure of expression *)
+    | Binary (Binary_op.Plus, _, _), Binary (Binary_op.Plus, e3, e4) ->
+        add (add e1 e3) e4
+    (* Straightforward elimination *)
     | _, Binary (Binary_op.Minus, e3, e4) when is_equal e1 e4 -> e3
     | Binary (Binary_op.Minus, e3, e4), _ when is_equal e4 e2 -> e3
+    (* Neutral element *)
+    | _, Cst b2 when Bitvector.is_zeros b2 -> e1
+    (* Default *)
     | _, _ -> Straight.add e1 e2
 
-  and sub e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.sub b1 b2 |> constant ~region:`Constant
-    | Cst (`Constant, b1), Binary (Binary_op.Plus, Cst (`Constant, b2), e3) ->
-      sub (Bitvector.sub b1 b2 |> constant ~region:`Constant) e3
-    | Cst (`Constant, b1), Binary (Binary_op.Minus, Cst (`Constant, b2), e3) ->
-      add (Bitvector.sub b1 b2 |> constant ~region:`Constant) e3
-    | Cst (`Constant, b1), Binary (Binary_op.Minus, e3, Cst (`Constant, b2)) ->
-      sub (Bitvector.add b1 b2 |> constant ~region:`Constant) e3
-    | Cst (`Constant, b1), _ when Bitvector.is_zeros b1 -> uminus e2
-    | _, Cst (`Constant, b2) when Bitvector.is_zeros b2 -> e1
-    | _, _ when is_equal e1 e2 -> size_of e1 |> zeros
+  and sub e1 e2 =
+    match (e1, e2) with
+    (* Constant propagation *)
+    | Cst b1, Cst b2 -> constant (Bitvector.sub b1 b2)
+    (* Invariant: Constant is only on: *)
+    (* - the left side of the substraction root *)
+    (* - the right side of the root *)
+    | Cst b1, Binary (Binary_op.Plus, e3, Cst b2) ->
+        sub (constant (Bitvector.sub b1 b2)) e3
+    | Cst b1, Binary (Binary_op.Minus, e3, Cst b2) ->
+        sub (constant (Bitvector.add b1 b2)) e3
+    | Cst b1, Binary (Binary_op.Minus, Cst b2, e3) when Bitvector.sge b1 b2 ->
+        add e3 (constant (Bitvector.sub b1 b2))
+    | Cst b1, Binary (Binary_op.Minus, Cst b2, e3) ->
+        sub e3 (constant (Bitvector.sub b2 b1))
+    | Binary (Binary_op.Plus, e3, Cst b1), Cst b2 when Bitvector.sge b1 b2 ->
+        add e3 (constant (Bitvector.sub b1 b2))
+    | Binary (Binary_op.Plus, e3, Cst b1), Cst b2 ->
+        sub e3 (constant (Bitvector.sub b2 b1))
+    | Binary (Binary_op.Minus, Cst b1, e3), Cst b2 ->
+        sub (constant (Bitvector.sub b1 b2)) e3
+    | Binary (Binary_op.Minus, e3, Cst b1), Cst b2 ->
+        sub e3 (constant (Bitvector.add b1 b2))
+    | Binary (Binary_op.Minus, e3, (Cst _ as c4)), _ -> sub (sub e3 e2) c4
+    (* Neutral element *)
+    | Cst b1, _ when Bitvector.is_zeros b1 -> uminus e2
+    | _, Cst b2 when Bitvector.is_zeros b2 -> e1
+    (* Straightforward elimination *)
+    | _, _ when is_equal e1 e2 -> zeros (size_of e1)
     | _, Binary (Binary_op.Plus, e3, e4) when is_equal e1 e3 -> uminus e4
     | _, Binary (Binary_op.Plus, e3, e4) when is_equal e1 e4 -> uminus e3
     | Binary (Binary_op.Plus, e3, e4), _ when is_equal e2 e3 -> e4
     | Binary (Binary_op.Plus, e3, e4), _ when is_equal e2 e4 -> e3
     | _, Binary (Binary_op.Minus, e3, e4) when is_equal e1 e3 -> e4
     | Binary (Binary_op.Minus, e3, e4), _ when is_equal e2 e3 -> uminus e4
+    (* Default *)
     | _, _ -> Straight.sub e1 e2
 
-  and mul e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.mul b1 b2 |> constant ~region:`Constant
+  and mul e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 -> constant (Bitvector.mul b1 b2)
     (* neutral element *)
-    | Cst (`Constant, b1), _ when Bitvector.is_ones b1 -> e2
+    | Cst b1, _ when Bitvector.is_ones b1 -> e2
     (* abosrbing element *)
-    | Cst (`Constant, b1), _ when Bitvector.is_zeros b1 -> e1
-    | _, Cst (`Constant, _) -> mul e2 e1
+    | Cst b1, _ when Bitvector.is_zeros b1 -> e1
+    | _, Cst _ -> mul e2 e1
     | _, _ -> Straight.mul e1 e2
 
-  and udiv e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.udiv b1 b2 |> constant ~region:`Constant
+  and udiv e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 -> constant (Bitvector.udiv b1 b2)
     (* neutral element *)
-    | _, Cst (`Constant, b2) when Bitvector.is_ones b2 -> e1
+    | _, Cst b2 when Bitvector.is_ones b2 -> e1
     | _, _ -> Straight.udiv e1 e2
 
-  and umod e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.umod b1 b2 |> constant ~region:`Constant
+  and umod e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 -> constant (Bitvector.umod b1 b2)
     | _, _ -> Straight.umod e1 e2
 
-  and sdiv e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.sdiv b1 b2 |> constant ~region:`Constant
+  and sdiv e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 -> constant (Bitvector.sdiv b1 b2)
     (* neutral element *)
-    | _, Cst (`Constant, b2) when Bitvector.is_ones b2 -> e1
+    | _, Cst b2 when Bitvector.is_ones b2 -> e1
     | _, _ -> Straight.sdiv e1 e2
 
-  and smod e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.smod b1 b2 |> constant ~region:`Constant
+  and smod e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 -> constant (Bitvector.smod b1 b2)
     | _, _ -> Straight.smod e1 e2
 
-  and logxor e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.logxor b1 b2 |> constant ~region:`Constant
-    | Cst (`Constant, b1), _ when Bitvector.is_zeros b1 -> e2
-    | Cst (`Constant, b1), _ when Bitvector.is_fill b1 -> lognot e2
-    | _, Cst (`Constant, _) -> logxor e2 e1
-    | _, _ when is_equal e1 e2 -> size_of e1 |> zeros
+  and logxor e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 -> constant (Bitvector.logxor b1 b2)
+    | Cst b1, _ when Bitvector.is_zeros b1 -> e2
+    | Cst b1, _ when Bitvector.is_fill b1 -> lognot e2
+    | Cst b1, Binary (Binary_op.Concat, e3, e4) ->
+        let s2 = size_of e2 and s4 = size_of e4 in
+        let b3 =
+          Bitvector.extract b1 { Interval.lo = s4; Interval.hi = s2 - 1 }
+        in
+        let b4 =
+          Bitvector.extract b1 { Interval.lo = 0; Interval.hi = s4 - 1 }
+        in
+        let x3 = logxor (constant b3) e3 in
+        let x4 = logxor (constant b4) e4 in
+        append x3 x4
+    | _, Cst _ -> logxor e2 e1
+    | _, _ when is_equal e1 e2 -> zeros (size_of e1)
     | _, _ -> Straight.logxor e1 e2
 
-  and logor e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.logor b1 b2 |> constant ~region:`Constant
-    | Cst (`Constant, b1), _ when Bitvector.is_zeros b1 -> e2
-    | Cst (`Constant, b1), _ when Bitvector.is_fill b1 -> e1
-    | _, Cst (`Constant, _) -> logor e2 e1
+  and logor e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 -> constant (Bitvector.logor b1 b2)
+    | Cst b1, _ when Bitvector.is_zeros b1 -> e2
+    | Cst b1, _ when Bitvector.is_fill b1 -> e1
+    | Cst b1, Binary (Binary_op.Concat, e3, e4) ->
+        let s2 = size_of e2 and s4 = size_of e4 in
+        let b3 =
+          Bitvector.extract b1 { Interval.lo = s4; Interval.hi = s2 - 1 }
+        in
+        let b4 =
+          Bitvector.extract b1 { Interval.lo = 0; Interval.hi = s4 - 1 }
+        in
+        let x3 = logor (constant b3) e3 in
+        let x4 = logor (constant b4) e4 in
+        append x3 x4
+    | _, Cst _ -> logor e2 e1
+    | _, Unary (Unary_op.Uext _, e3) ->
+        try_merge ~k:(fun _ -> Straight.logor e1 e2) e3 ~at:0 e1
+    | _, Binary (Binary_op.LShift, Unary (Unary_op.Uext _, e3), Cst b1) ->
+        let at = Bitvector.to_uint b1 in
+        try_merge ~k:(fun _ -> Straight.logor e1 e2) e3 ~at e1
+    | Unary (Unary_op.Uext _, _), _
+    | Binary (Binary_op.LShift, Unary (Unary_op.Uext _, _), Cst _), _ ->
+        logor e2 e1
+    | _, _ when is_equal e1 e2 -> e1
     | _, _ -> Straight.logor e1 e2
 
-  and logand e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.logand b1 b2 |> constant ~region:`Constant
-    | Cst (`Constant, b1), _ when Bitvector.is_zeros b1 -> e1
-    | Cst (`Constant, b1), _ when Bitvector.is_fill b1 -> e2
-    | _, Cst (`Constant, _) -> logand e2 e1
+  and logand e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 -> constant (Bitvector.logand b1 b2)
+    | Cst b1, _ when Bitvector.is_zeros b1 -> e1
+    | Cst b1, _ when Bitvector.is_fill b1 -> e2
+    | _, Cst _ -> logand e2 e1
+    | Cst b1, Binary (Binary_op.Concat, e3, e4) ->
+        let rec try_refine ~f ~k b e1 e2 =
+          let hi = Bitvector.size_of b - 1 in
+          let lo = hi - size_of e1 + 1 in
+          let b1 = Bitvector.extract b { Interval.lo; hi } in
+          if Bitvector.is_fill b1 || Bitvector.is_zeros b1 then
+            let e1 = if Bitvector.is_fill b1 then e1 else constant b1 in
+            let b2 = Bitvector.extract b { Interval.lo = 0; hi = lo - 1 } in
+            match e2 with
+            | Binary (Binary_op.Concat, e3, e4) ->
+                try_refine ~f ~k:(fun r -> k (append e1 r)) b2 e3 e4
+            | _ -> k (append e1 (logand (constant b2) e2))
+          else f ()
+        in
+        try_refine ~f:(fun _ -> Straight.logand e1 e2) ~k:(fun x -> x) b1 e3 e4
+    | _, _ when is_equal e1 e2 -> e1
     | _, _ -> Straight.logand e1 e2
 
-  and append e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.append b1 b2 |> constant ~region:`Constant
-    | Cst (`Constant, b1), _ when Bitvector.is_zeros b1 ->
-      e2 |> uext @@ size_of e1 + size_of e2
-    | Unary (Unary_op.Restrict {Interval.lo; Interval.hi}, e1),
-      Unary (Unary_op.Restrict {Interval.lo=lo'; Interval.hi=hi'}, e2)
-      when hi + 1 = lo' && is_equal e1 e2 ->
-      restrict lo hi' e1
-    | Binary ((Binary_op.And | Binary_op.Or | Binary_op.Xor) as op, e1, e2),
-      Binary (op', e1', e2') when op = op' ->
-      append e2 e2' |> binary op @@ append e1 e1'
+  and append e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 -> constant (Bitvector.append b1 b2)
+    | Cst b1, _ when Bitvector.is_zeros b1 -> uext (size_of e1 + size_of e2) e2
+    | Unary (Unary_op.Uext s1, e3), _ -> uext (s1 + size_of e2) (append e3 e2)
+    | _, Unary (Unary_op.Uext s, e2) ->
+        Straight.append e1 (Straight.append (zeros (s - size_of e2)) e2)
+    | ( Unary (Unary_op.Restrict { Interval.lo; Interval.hi }, e1),
+        Unary (Unary_op.Restrict { Interval.lo = lo'; Interval.hi = hi' }, e2) )
+      when hi' + 1 = lo && is_equal e1 e2 ->
+        restrict lo' hi e1
+    | ( Binary (((Binary_op.And | Binary_op.Or | Binary_op.Xor) as op), e1, e2),
+        Binary (op', e1', e2') )
+      when op = op' ->
+        binary op (append e1 e1') (append e2 e2')
+    | Binary (Binary_op.Concat, e3, e4), _ -> append e3 (append e4 e2)
     | _, _ -> Straight.append e1 e2
 
-  and equal e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.equal b1 b2 |> Bitvector.of_bool |> constant ~region:`Constant
+  and equal e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 -> constant (Bitvector.of_bool (Bitvector.equal b1 b2))
+    | Cst _, Binary (Binary_op.Concat, e3, e4) ->
+        split_apply equal logand e1 e3 e4
+    | Cst _, Unary (Unary_op.Uext n, e3) ->
+        split_apply equal logand e1 (constant (Bitvector.zeros n)) e3
+    | Binary (Binary_op.Concat, e3, e4), Binary (Binary_op.Concat, e5, e6)
+      when size_of e3 = size_of e5 ->
+        logand (equal e3 e4) (equal e4 e6)
+    | _, Cst _ -> equal e2 e1
     | _, _ when is_equal e1 e2 -> one
     | _, _ -> Straight.equal e1 e2
 
-  and diff e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.diff b1 b2 |> Bitvector.of_bool |> constant ~region:`Constant
+  and diff e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 -> constant (Bitvector.of_bool (Bitvector.diff b1 b2))
+    | Cst _, Binary (Binary_op.Concat, e3, e4) ->
+        split_apply diff logor e1 e3 e4
+    | Cst _, Unary (Unary_op.Uext n, e3) ->
+        split_apply diff logor e1 (constant (Bitvector.zeros n)) e3
+    | Binary (Binary_op.Concat, e3, e4), Binary (Binary_op.Concat, e5, e6)
+      when size_of e3 = size_of e5 ->
+        logor (diff e3 e4) (diff e4 e6)
+    | _, Cst _ -> diff e2 e1
     | _, _ when is_equal e1 e2 -> zero
     | _, _ -> Straight.diff e1 e2
 
-  and ult e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.ult b1 b2 |> Bitvector.of_bool |> constant ~region:`Constant
+  and ult e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 -> constant (Bitvector.of_bool (Bitvector.ult b1 b2))
     | _, _ when is_equal e1 e2 -> zero
     | _, _ -> Straight.ult e1 e2
 
-  and ule e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.ule b1 b2 |> Bitvector.of_bool |> constant ~region:`Constant
+  and ule e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 -> constant (Bitvector.of_bool (Bitvector.ule b1 b2))
     | _, _ when is_equal e1 e2 -> one
     | _, _ -> Straight.ule e1 e2
 
-  and ugt e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.ugt b1 b2 |> Bitvector.of_bool |> constant ~region:`Constant
+  and ugt e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 -> constant (Bitvector.of_bool (Bitvector.ugt b1 b2))
     | _, _ when is_equal e1 e2 -> zero
     | _, _ -> Straight.ugt e1 e2
 
-  and uge e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.uge b1 b2 |> Bitvector.of_bool |> constant ~region:`Constant
+  and uge e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 -> constant (Bitvector.of_bool (Bitvector.uge b1 b2))
     | _, _ when is_equal e1 e2 -> one
     | _, _ -> Straight.uge e1 e2
 
-  and slt e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.slt b1 b2 |> Bitvector.of_bool |> constant ~region:`Constant
+  and slt e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 -> constant (Bitvector.of_bool (Bitvector.slt b1 b2))
     | _, _ when is_equal e1 e2 -> zero
     | _, _ -> Straight.slt e1 e2
 
-  and sle e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.sle b1 b2 |> Bitvector.of_bool |> constant ~region:`Constant
+  and sle e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 -> constant (Bitvector.of_bool (Bitvector.sle b1 b2))
     | _, _ when is_equal e1 e2 -> one
     | _, _ -> Straight.sle e1 e2
 
-  and sgt e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.sgt b1 b2 |> Bitvector.of_bool |> constant ~region:`Constant
+  and sgt e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 -> constant (Bitvector.of_bool (Bitvector.sgt b1 b2))
     | _, _ when is_equal e1 e2 -> zero
     | _, _ -> Straight.sgt e1 e2
 
-  and sge e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.sge b1 b2 |> Bitvector.of_bool |> constant ~region:`Constant
+  and sge e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 -> constant (Bitvector.of_bool (Bitvector.sge b1 b2))
     | _, _ when is_equal e1 e2 -> one
     | _, _ -> Straight.sge e1 e2
 
-  and rotate_left e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.value_of b2 |> Bigint.int_of_big_int |>
-      Bitvector.rotate_left b1 |> constant ~region:`Constant
-    | _, Cst (`Constant, b2) when Bitvector.is_zeros b2 -> e1
+  and rotate_left e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 ->
+        constant (Bitvector.rotate_left b1 (Bitvector.to_uint b2))
+    | _, Cst b2 when Bitvector.is_zeros b2 -> e1
     | _, _ -> Straight.rotate_left e1 e2
 
-  and rotate_right e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.value_of b2 |> Bigint.int_of_big_int |>
-      Bitvector.rotate_right b1 |> constant ~region:`Constant
-    | _, Cst (`Constant, b2) when Bitvector.is_zeros b2 -> e1
+  and rotate_right e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 ->
+        constant (Bitvector.rotate_right b1 (Bitvector.to_uint b2))
+    | _, Cst b2 when Bitvector.is_zeros b2 -> e1
     | _, _ -> Straight.rotate_right e1 e2
 
-  and shift_left e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.value_of b2 |> Bigint.int_of_big_int |>
-      Bitvector.shift_left b1 |> constant ~region:`Constant
-    | _, Cst (`Constant, b2) when Bitvector.is_zeros b2 -> e1
+  and shift_left e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 ->
+        constant (Bitvector.shift_left b1 (Bitvector.to_uint b2)) (* w << 0 *)
+    | _, Cst b2 when Bitvector.is_zeros b2 -> e1 (* 0 << w *)
+    | Cst b1, _ when Bitvector.is_zeros b1 -> e1
     | _, _ -> Straight.shift_left e1 e2
 
-  and shift_right e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.value_of b2 |> Bigint.int_of_big_int |>
-      Bitvector.shift_right b1 |> constant ~region:`Constant
-    | _, Cst (`Constant, b2) when Bitvector.is_zeros b2 -> e1
+  and shift_right e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 ->
+        constant (Bitvector.shift_right b1 (Bitvector.to_uint b2)) (* w >> 0 *)
+    | _, Cst b2 when Bitvector.is_zeros b2 -> e1 (* 0 >> w *)
+    | Cst b1, _ when Bitvector.is_zeros b1 -> e1
     | _, _ -> Straight.shift_right e1 e2
 
-  and shift_right_signed e1 e2 = match e1, e2 with
-    | Cst (`Constant, b1), Cst (`Constant, b2) ->
-      Bitvector.value_of b2 |> Bigint.int_of_big_int |>
-      Bitvector.shift_right_signed b1 |> constant ~region:`Constant
-    | _, Cst (`Constant, b2) when Bitvector.is_zeros b2 -> e1
+  and shift_right_signed e1 e2 =
+    match (e1, e2) with
+    | Cst b1, Cst b2 ->
+        constant (Bitvector.shift_right_signed b1 (Bitvector.to_uint b2))
+        (* w >> 0 *)
+    | _, Cst b2 when Bitvector.is_zeros b2 -> e1 (* 0 >> w *)
+    | Cst b1, _ when Bitvector.is_zeros b1 -> e1
     | _, _ -> Straight.shift_right_signed e1 e2
 
-  and binary op = match op with
-    | Plus        -> add
-    | Minus       -> sub
-    | Mult        -> mul
-    | DivU        -> udiv
-    | DivS        -> sdiv
-    | ModU        -> umod
-    | ModS        -> smod
-    | And         -> logand
-    | Or          -> logor
-    | Xor         -> logxor
-    | Concat      -> append
-    | LShift      -> shift_left
-    | RShiftU     -> shift_right
-    | RShiftS     -> shift_right_signed
-    | LeftRotate  -> rotate_left
+  and try_merge ~k e1 ~at e2 =
+    let sz1 = size_of e1 and sz2 = size_of e2 in
+    if at + sz1 <= sz2 && restrict at (at + sz1 - 1) e2 = zeros sz1 then
+      if at = 0 then append (restrict sz1 (sz2 - 1) e2) e1
+      else if at + sz1 = sz2 then append e1 (restrict 0 (at - 1) e2)
+      else
+        append
+          (append (restrict (at + sz1) (sz2 - 1) e2) e1)
+          (restrict 0 (at - 1) e2)
+    else k ()
+
+  and binary op =
+    match op with
+    | Plus -> add
+    | Minus -> sub
+    | Mult -> mul
+    | DivU -> udiv
+    | DivS -> sdiv
+    | ModU -> umod
+    | ModS -> smod
+    | And -> logand
+    | Or -> logor
+    | Xor -> logxor
+    | Concat -> append
+    | LShift -> shift_left
+    | RShiftU -> shift_right
+    | RShiftS -> shift_right_signed
+    | LeftRotate -> rotate_left
     | RightRotate -> rotate_right
-    | Eq          -> equal
-    | Diff        -> diff
-    | LeqU        -> ule
-    | LtU         -> ult
-    | LeqS        -> sle
-    | LtS         -> slt
-    | GeqU        -> uge
-    | GtU         -> ugt
-    | GeqS        -> sge
-    | GtS         -> sgt
+    | Eq -> equal
+    | Diff -> diff
+    | LeqU -> ule
+    | LtU -> ult
+    | LeqS -> sle
+    | LtS -> slt
+    | GeqU -> uge
+    | GtU -> ugt
+    | GeqS -> sge
+    | GtS -> sgt
 end
-
-and Flag : sig
-  type t =
-    | Cmp of Expr.t * Expr.t
-    | Sub of Expr.t * Expr.t
-    | Test of Expr.t * Expr.t
-    | Unspecified
-
-  val comparison  : Expr.t -> Expr.t -> t
-  val subtraction : Expr.t -> Expr.t -> t
-  val test        : Expr.t -> Expr.t -> t
-  val unspecified : t
-end = struct
-  type t =
-    | Cmp of Expr.t * Expr.t
-    | Sub of Expr.t * Expr.t
-    | Test of Expr.t * Expr.t
-    | Unspecified
-
-  let comparison e1 e2 = Cmp(e1, e2)
-  let subtraction e1 e2 = Sub(e1, e2)
-  let test e1 e2 = Test(e1, e2)
-  let unspecified = Unspecified
-end
-
-and VarTag : sig
-  type t =
-    | Flag of Flag.t
-    | Temp
-    | Register
-    | Empty
-
-  val flag : Flag.t -> t
-  val temp : t
-  val empty: t
-  val register: t
-end = struct
-  type t =
-    | Flag of Flag.t
-    | Temp
-    | Register
-    | Empty
-
-  let flag f = Flag f
-  let temp = Temp
-  let empty = Empty
-  let register = Register
-end
-
-
 
 type exprs = Expr.t list
 
-type printable =
-  | Exp of Expr.t
-  | Str of string
+type printable = Exp of Expr.t | Str of string
 
 module Tag = struct
   type t = tag
-  let equal t1 t2 = Pervasives.compare t1 t2 = 0
+
+  let equal = ( = )
 end
 
 module Jump_target = struct
   type 'a t = 'a jump_target
 
   let inner n = JInner n
+
   let outer a = JOuter a
 
-  let is_inner = function
-    | JInner _ -> true
-    | JOuter _ -> false
+  let is_inner = function JInner _ -> true | JOuter _ -> false
 
-  let is_outer = function
-    | JOuter _ -> true
-    | JInner _ -> false
+  let is_outer = function JOuter _ -> true | JInner _ -> false
 end
-
 
 module type INSTR = sig
   type t
+
   include Sigs.Arithmetic with type t := t
+
   include Sigs.Bitwise with type t := t
 end
 
+module Var = struct
+  type t = VarTag.t var
+
+  let create name ~bitsize ~tag =
+    { name; size = Size.Bit.to_int bitsize; info = tag }
+
+  let flag ?(bitsize = Size.Bit.bits1) flagname =
+    create flagname ~bitsize ~tag:VarTag.Flag
+
+  let temporary tempname bitsize = create tempname ~bitsize ~tag:VarTag.Temp
+
+  let temp nbits =
+    let name = Format.asprintf "temp%a" Size.Bit.pp nbits in
+    temporary name nbits
+end
 
 module LValue = struct
   type t =
     | Var of VarTag.t var (* size in bits *)
     | Restrict of VarTag.t var * int Interval.t
-    | Store of size * Machine.endianness * Expr.t  (* size in bytes *)
+    | Store of size * Machine.endianness * Expr.t
+  (* size in bytes *)
 
   let equal lv1 lv2 =
-    match lv1, lv2 with
-    | Var {name = x1; size = sz1; _}, Var { name = x2; size = sz2; _ } ->
-      x1 = x2 && sz1 = sz2
-    | Restrict (v1, {Interval.lo=o11; Interval.hi=o12}),
-      Restrict (v2, {Interval.lo=o21; Interval.hi=o22}) ->
-      v1.name = v2.name && v1.size = v2.size && o11 = o21 && o12 = o22
+    match (lv1, lv2) with
+    | Var { name = x1; size = sz1; _ }, Var { name = x2; size = sz2; _ } ->
+        x1 = x2 && sz1 = sz2
+    | ( Restrict (v1, { Interval.lo = o11; Interval.hi = o12 }),
+        Restrict (v2, { Interval.lo = o21; Interval.hi = o22 }) ) ->
+        v1.name = v2.name && v1.size = v2.size && o11 = o21 && o12 = o22
     | Store (sz1, en1, e1), Store (sz2, en2, e2) ->
-      sz1 = sz2 && en1 = en2 && Expr.is_equal e1 e2
+        sz1 = sz2 && en1 = en2 && Expr.is_equal e1 e2
     | _, _ -> false
 
   let size_of = function
     | Var v -> v.size
-    | Restrict (v, {Interval.lo; Interval.hi}) ->
-      let restricted_size = hi - lo + 1 in
-      assert (restricted_size <= v.size);
-      restricted_size
+    | Restrict (v, { Interval.lo; Interval.hi }) ->
+        let restricted_size = hi - lo + 1 in
+        assert (restricted_size <= v.size);
+        restricted_size
     | Store (sz, _, _) -> 8 * sz
 
   let v va = Var va
 
-  let var ?(tag=VarTag.empty) ~bitsize name =
+  let var ?(tag = VarTag.Empty) ~bitsize name =
     let size = Size.Bit.to_int bitsize in
-    Var {name; size; info = tag }
+    Var { name; size; info = tag }
 
-  let flag
-      ?(bitsize=Size.Bit.bits1)
-      ?(flag_t=Flag.unspecified) flagname =
-    var flagname ~bitsize ~tag:(VarTag.flag flag_t)
+  let flag ?(bitsize = Size.Bit.bits1) flagname =
+    var flagname ~bitsize ~tag:VarTag.Flag
 
-  let temporary tempname bitsize = var tempname ~bitsize ~tag:VarTag.temp
+  let temporary tempname bitsize = var tempname ~bitsize ~tag:VarTag.Temp
 
   let temp nbits =
     let name = Format.asprintf "temp%a" Size.Bit.pp nbits in
     temporary name nbits
 
   let restrict v lo hi =
-    assert(lo <= hi);
-    assert(lo >= 0);
-    assert(hi - lo + 1 < v.size); (* TODO? : create a pure variable if hi - lo + 1 = sz *)
-    Restrict(v, {Interval.lo; Interval.hi})
+    assert (lo <= hi);
+    assert (lo >= 0);
+    assert (hi < v.size);
+    if hi - lo + 1 = v.size then Var v
+    else Restrict (v, { Interval.lo; Interval.hi })
 
   let _restrict name sz lo hi =
-    let v = {name; size = Size.Bit.to_int sz; info = VarTag.empty } in
+    let v = { name; size = Size.Bit.to_int sz; info = VarTag.Empty } in
     restrict v lo hi
-  ;;
 
   let bit_restrict v bit = restrict v bit bit
+
   let _bit_restrict name sz bit = _restrict name sz bit bit
 
   let store nbytes endianness e =
     let sz = Size.Byte.to_int nbytes in
-(*    Format.printf "store : %d@." (Expr.size_of e); *)
+    (*    Format.printf "store : %d@." (Expr.size_of e); *)
     assert (Expr.size_of e = Kernel_options.Machine.word_size ());
-    Store(sz, endianness, e)
+    Store (sz, endianness, e)
 
   let is_expr_translatable = function
-    | Expr.Var _
-    | Expr.Load _
-    | Expr.Unary(Unary_op.Restrict _ , Expr.Var _) -> true
-    | Expr.Cst _
-    | Expr.Unary _
-    | Expr.Binary _
-    | Expr.Ite _ -> false
+    | Expr.Var _ | Expr.Load _ | Expr.Unary (Unary_op.Restrict _, Expr.Var _) ->
+        true
+    | Expr.Cst _ | Expr.Unary _ | Expr.Binary _ | Expr.Ite _ -> false
 
   let of_expr = function
     | Expr.Var { name; size = sz; info = tag } ->
-      var ~bitsize:(Size.Bit.create sz) ~tag name
-    | Expr.Load(size, endian, e) ->
-      store (Size.Byte.create size) endian e
-    | Expr.Unary(
-        Unary_op.Restrict {Interval.lo; Interval.hi},
-        Expr.Var v) ->
-      restrict v  lo hi
-    | Expr.Cst _
-    | Expr.Unary _
-    | Expr.Binary _
-    | Expr.Ite _ ->
-      failwith "LValue.of_expr : Cannot create lvalue from expression"
+        var ~bitsize:(Size.Bit.create sz) ~tag name
+    | Expr.Load (size, endian, e) -> store (Size.Byte.create size) endian e
+    | Expr.Unary (Unary_op.Restrict { Interval.lo; Interval.hi }, Expr.Var v) ->
+        restrict v lo hi
+    | Expr.Cst _ | Expr.Unary _ | Expr.Binary _ | Expr.Ite _ ->
+        failwith "LValue.of_expr : Cannot create lvalue from expression"
 
   let to_expr = function
     | Var { name; size; info = tag } -> Expr.var name size ~tag
-    | Restrict(v, { Interval.lo; hi}) ->
-       Expr.restrict lo hi (Expr.var v.name v.size ~tag:v.info)
-    | Store(size,endianness,address) ->
-       Expr.load (Size.Byte.create size) endianness address
-
+    | Restrict (v, { Interval.lo; hi }) ->
+        Expr.restrict lo hi (Expr.var v.name v.size ~tag:v.info)
+    | Store (size, endianness, address) ->
+        Expr.load (Size.Byte.create size) endianness address
 
   (* size expected for rhs *)
   let bitsize = function
-    | Var { size; _} ->
-      Size.Bit.create size
-    | Restrict(v, {Interval.lo; Interval.hi}) ->
-      let res = hi - lo + 1 in
-      assert (v.size >= res);
-      Size.Bit.create res
-    | Store (sz, _endianness, _e) ->
-      Size.Byte.(create sz |> to_bitsize)
+    | Var { size; _ } -> Size.Bit.create size
+    | Restrict (v, { Interval.lo; Interval.hi }) ->
+        let res = hi - lo + 1 in
+        assert (v.size >= res);
+        Size.Bit.create res
+    | Store (sz, _endianness, _e) -> Size.Byte.(to_bitsize (create sz))
 
   let resize size = function
-    | Var {name; info = tag; _} -> var name ~bitsize:size ~tag
-    | Restrict(v, {Interval.lo; Interval.hi}) ->
-      restrict v lo hi
+    | Var { name; info = tag; _ } -> var name ~bitsize:size ~tag
+    | Restrict (v, { Interval.lo; Interval.hi }) -> restrict v lo hi
     | Store (_sz, endianness, e) ->
-       store (Size.Byte.of_bitsize size) endianness e
+        store (Size.Byte.of_bitsize size) endianness e
 end
 
-
 module Instr = struct
-
   type t =
-    | Assign of LValue.t * Expr.t *  id
+    | Assign of LValue.t * Expr.t * id
     | SJump of id jump_target * tag option
     | DJump of Expr.t * tag option
     | If of Expr.t * id jump_target * id
@@ -859,18 +958,15 @@ module Instr = struct
     | Free of Expr.t * id
     | Print of printable list * id
 
-
-
   let assign lval rval nid =
-    let lval_sz = LValue.bitsize lval |> Size.Bit.to_int
+    let lval_sz = Size.Bit.to_int (LValue.bitsize lval)
     and rval_sz = Expr.size_of rval in
-    assert ( lval_sz = rval_sz );
-    Assign(lval, rval, nid)
+    assert (lval_sz = rval_sz);
+    Assign (lval, rval, nid)
 
   let static_jump ?tag jt = SJump (jt, tag)
 
-  let static_inner_jump ?tag n =
-    static_jump (Jump_target.inner n) ?tag
+  let static_inner_jump ?tag n = static_jump (Jump_target.inner n) ?tag
 
   let call ~return_address jt =
     let tag = Some (Call return_address) in
@@ -878,19 +974,21 @@ module Instr = struct
 
   let dynamic_jump ?tag e =
     match e with
-    | Expr.Cst (_, v) ->
-       let addr = { id = 0; base = Virtual_address.of_bitvector v; } in
-       static_jump (Jump_target.outer addr )
-    | _ ->  DJump (e, tag)
-  ;;
+    | Expr.Cst v ->
+        let addr = { id = 0; base = Virtual_address.of_bitvector v } in
+        static_jump (Jump_target.outer addr)
+    | _ -> DJump (e, tag)
 
   let stop state = Stop state
 
-  let ite c goto nid = If (c, goto, nid)
+  let ite c goto nid =
+    if Expr.(is_equal c zero) then static_inner_jump nid
+    else if Expr.(is_equal c one) then static_jump goto
+    else If (c, goto, nid)
 
   let undefined lv nid = Undef (lv, nid)
 
-  let non_deterministic ?(region=`Constant) lv nid = Nondet (lv, region, nid)
+  let non_deterministic ?(region = `Constant) lv nid = Nondet (lv, region, nid)
 
   let malloc lv e nid = Malloc (lv, e, nid)
 

@@ -1,0 +1,5 @@
+(menhir
+ (modules bbsse_parser))
+
+(ocamllex
+ (modules bbsse_lexer))

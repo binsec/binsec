@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -26,25 +26,33 @@
 *)
 
 type t = private int
+
 val create : int -> t
+
 val to_int : t -> int
-val equal: t -> t -> bool
+
+val equal : t -> t -> bool
 
 val of_int64 : int64 -> t
+
 val of_bitvector : Bitvector.t -> t
 
 val to_int64 : t -> int64
 
-val of_bigint : Bigint.t -> t
-val to_bigint : t -> Bigint.t
+val of_bigint : Z.t -> t
+
+val to_bigint : t -> Z.t
 
 val of_string : string -> t
 
 val add_int : int -> t -> t
+
 val succ : t -> t
+
 val pred : t -> t
 
 include Sigs.PRINTABLE with type t := t
+
 include Sigs.Collection with type t := t
 
 val pp_set : Format.formatter -> Set.t -> unit

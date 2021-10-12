@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,6 +20,7 @@
 (**************************************************************************)
 
 open Sse_options
+
 let sse_dirname = "binsec_sse"
 
 let mk_file ~dir =
@@ -29,22 +30,34 @@ let mk_file ~dir =
     let temp_dir = dir () in
     if not (Sys.file_exists temp_dir) then (
       Logger.debug ~level:6 "Creating directory %s" temp_dir;
-      Unix.mkdir temp_dir 0o700
-    );
+      Unix.mkdir temp_dir 0o700);
     let filename =
-      Filename.concat temp_dir @@ Printf.sprintf "sse_%d.smt2" !n in
+      Filename.concat temp_dir @@ Printf.sprintf "sse_%d.smt2" !n
+    in
     Logger.debug ~level:5 "Creating temporary %s" filename;
     filename
-;;
-
 
 let temp_file =
   let dir () =
     let tmpdir = Sse_options.SMT_dir.get () in
-    Filename.concat tmpdir sse_dirname in
-  mk_file ~dir ;;
+    Filename.concat tmpdir sse_dirname
+  in
+  mk_file ~dir
 
-let dump_file = mk_file ~dir:Sse_options.SMT_log_directory.get ;;
+let dump_file = mk_file ~dir:Sse_options.SMT_log_directory.get
 
-let mk_var_name basename idx =
-  Format.sprintf "%s_%d" basename idx
+let mk_var_name basename idx = Format.sprintf "%s_%d" basename idx
+
+let string_to_vaddr sloc acc =
+  let img = Kernel_functions.get_img () in
+  match Loader_utils.Binary_loc.(to_virtual_address ~img (of_string sloc)) with
+  | Some vaddr -> Virtual_address.Set.add vaddr acc
+  | None -> Logger.fatal "Unable to parse the address %s" sloc
+
+let get_goal_addresses () =
+  Basic_types.String.Set.fold string_to_vaddr (GoalAddresses.get ())
+    Virtual_address.Set.empty
+
+let get_avoid_addresses () =
+  Basic_types.String.Set.fold string_to_vaddr (AvoidAddresses.get ())
+    Virtual_address.Set.empty

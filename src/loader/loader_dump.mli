@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,13 +21,15 @@
 
 (* A loader for memory dumps and raw files. *)
 
-
 include Loader_sigs.S
 
-val add_section:
-  flag:int -> name:string ->
-  pos:int -> size:int ->
-  Binstream.t -> Img.t -> Img.t
+val add_section :
+  flag:int ->
+  name:string ->
+  pos:int ->
+  size:int ->
+  Binstream.t ->
+  Img.t ->
+  Img.t
 
-val initial_img:
-  entry:int -> arch:Machine.t -> Img.t
+val initial_img : entry:int -> arch:Machine.t -> Img.t

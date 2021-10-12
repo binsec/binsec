@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -29,10 +29,10 @@ val pp_bytes : int -> Format.formatter -> int -> unit
     word (32 bits).
 *)
 
-val pp_byte :  Format.formatter -> int -> unit
+val pp_byte : Format.formatter -> int -> unit
 (** [pp_byte ppf v] is [pp_bytes 1 ppf v] *)
 
-val pp_word :  Format.formatter -> int -> unit
+val pp_word : Format.formatter -> int -> unit
 (** [pp_word ppf v] is [pp_bytes 4 ppf v] *)
 
-val pp_instr :  Format.formatter -> X86Types.instruction_kind -> unit
+val pp_instr : Format.formatter -> X86Types.instruction_kind -> unit

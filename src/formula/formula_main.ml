@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,32 +33,28 @@ let transform ~filename =
     if i = 0 then None else Some i
   in
   let smt_script =
-    Parse_utils.read_file
-      ~parser:Smtlib_parser.script ~lexer:Smtlib_lexer.token ~filename
+    Parse_utils.read_file ~parser:Smtlib_parser.script ~lexer:Smtlib_lexer.token
+      ~filename
   in
-  Smtlib_to_formula.script smt_script
-  (* itv & keep are set to their default values *)
-  |> Formula_transformation.optimize
-    ~is_controlled:(fun _ -> false)
-    ~keep:Formula.VarSet.empty ?lst ~cst ~itv ~prn ~rbs ~row ~ssa
-  |> Formula_to_smtlib.formula,
-  match lst with
-  | None -> "smt_simpl_out.smt2"
-  | Some n -> Printf.sprintf "smt_simpl_out_%08i.smt2" n
-
+  ( Smtlib_to_formula.script smt_script
+    (* itv & keep are set to their default values *)
+    |> Formula_transformation.optimize
+         ~is_controlled:(fun _ -> false)
+         ~keep:Formula.VarSet.empty ?lst ~cst ~itv ~prn ~rbs ~row ~ssa
+    |> Formula_to_smtlib.formula,
+    match lst with
+    | None -> "smt_simpl_out.smt2"
+    | Some n -> Printf.sprintf "smt_simpl_out_%08i.smt2" n )
 
 let maybe_smt_transform_only () =
-  if Formula_options.is_enabled () && Kernel_options.ExecFile.is_set () then begin
+  if Formula_options.is_enabled () && Kernel_options.ExecFile.is_set () then
     let filename = Kernel_options.ExecFile.get () in
-    if File_utils.has_suffix ~suffixes:[".smt"; ".smt2"] filename then
-      transform ~filename
-      |> (fun (script, file) -> Smtlib_pp.pp_tofile file script; exit 0)
-    else begin
+    if File_utils.has_suffix ~suffixes:[ ".smt"; ".smt2" ] filename then (
+      transform ~filename |> fun (script, file) ->
+      Smtlib_pp.pp_tofile file script;
+      exit 0)
+    else (
       Logger.error "Bad filename extension: %s" filename;
-      exit 1;
-    end
-  end
+      exit 1)
 
-
-let _ =
-  Cli.Boot.enlist ~name:"transform" ~f:maybe_smt_transform_only
+let _ = Cli.Boot.enlist ~name:"transform" ~f:maybe_smt_transform_only

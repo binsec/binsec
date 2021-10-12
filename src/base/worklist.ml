@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,114 +21,112 @@
 
 module type S = sig
   type elt
+
   type t
 
   val empty : t
+
   val singleton : elt -> t
+
   val is_empty : t -> bool
+
   val length : t -> int
 
   val add : elt -> t -> t
+
   val remove : t -> t
 
   val pop : t -> elt * t
+
   val peek : t -> elt
 
   val merge : t -> t -> t
 
   val iter : (elt -> unit) -> t -> unit
+
   val fold : ('a -> elt -> 'a) -> 'a -> t -> 'a
+
   val map : (elt -> elt) -> t -> t
 end
 
-
-module Make(X: Sigs.COMPARABLE) = struct
-
-  type t =
-    | Empty
-    | Heap of X.t * t list
+module Make (X : Sigs.COMPARABLE) = struct
+  type t = Empty | Heap of X.t * t list
 
   type elt = X.t
 
   let empty = Empty
 
   let singleton x = Heap (x, [])
+
   let is_empty h = h = Empty
 
   let merge h1 h2 =
-    match h1, h2 with
+    match (h1, h2) with
     | Empty, _ -> h2
     | _, Empty -> h1
-    | Heap (x1, l1), Heap(x2, l2) ->
-      if X.compare x1 x2 > 0
-      then Heap (x1, h2 :: l1)
-      else Heap (x2, h1 :: l2)
+    | Heap (x1, l1), Heap (x2, l2) ->
+        if X.compare x1 x2 > 0 then Heap (x1, h2 :: l1) else Heap (x2, h1 :: l2)
 
   let rec merge_pairs l =
     match l with
     | [] -> Empty
-    | [h] -> h
+    | [ h ] -> h
     | h1 :: h2 :: hs -> merge (merge h1 h2) (merge_pairs hs)
 
-
-  let add x h = merge (Heap (x, [])) h ;;
+  let add x h = merge (Heap (x, [])) h
 
   let remove h =
-    match h with
-    | Empty -> failwith "remove"
-    | Heap (_, l) -> merge_pairs l
+    match h with Empty -> failwith "remove" | Heap (_, l) -> merge_pairs l
 
-  let peek h =
-    match h with
-    | Empty -> failwith "peek"
-    | Heap (x, _) -> x
+  let peek h = match h with Empty -> failwith "peek" | Heap (x, _) -> x
 
   let pop h =
     try
       let v = peek h in
-      v, remove h
+      (v, remove h)
     with Failure _ -> failwith "pop"
-
 
   let rec fold f acc = function
     | Empty -> acc
-    | Heap (x, l) ->
-      List.fold_left (fold f) (f acc x) l
+    | Heap (x, l) -> List.fold_left (fold f) (f acc x) l
 
   let rec map f = function
     | Empty -> Empty
     | Heap (x, l) ->
-      let l' = List.map (map f) l in
-      add (f x) (merge_pairs l')
+        let l' = List.map (map f) l in
+        add (f x) (merge_pairs l')
 
   let rec iter f = function
     | Empty -> ()
     | Heap (x, l) ->
-      f x;
-      List.iter (iter f) l
+        f x;
+        List.iter (iter f) l
 
   let length h = fold (fun acc _ -> acc + 1) 0 h
-
 end
 
+module CMake (X : Sigs.ANY) = struct
+  module H = Make (struct
+    type t = X.t * int
 
-module CMake (X: Sigs.ANY) = struct
-
-  module H = Make (
-    struct
-      type t = X.t * int
-      let compare (_, n1) (_, n2) = Pervasives.compare n1 n2
-    end)
+    let compare (_, n1) (_, n2) = compare n1 n2
+  end)
 
   type elt = X.t
+
   type t = H.t
 
   let front_idx = ref 0
+
   let rear_idx = ref 0
 
-  let front x = incr front_idx; x, !front_idx
+  let front x =
+    incr front_idx;
+    (x, !front_idx)
 
-  let rear x = decr rear_idx; x, !rear_idx
+  let rear x =
+    decr rear_idx;
+    (x, !rear_idx)
 
   let empty = H.empty
 
@@ -139,18 +137,18 @@ module CMake (X: Sigs.ANY) = struct
   let remove = H.remove
 
   let cons x = add x
+
   let singleton x = add x empty
 
   let snoc x = H.add (rear x)
 
   let pop h =
     let (v, _), l = H.pop h in
-    v, l
+    (v, l)
 
   let peek h = fst (H.peek h)
 
-  let fold f acc h =
-    H.fold (fun acc (e, _) -> f acc e) acc h
+  let fold f acc h = H.fold (fun acc (e, _) -> f acc e) acc h
 
   let iter f h = H.iter (fun (e, _) -> f e) h
 
@@ -159,5 +157,4 @@ module CMake (X: Sigs.ANY) = struct
   let merge = H.merge
 
   let length = H.length
-
 end

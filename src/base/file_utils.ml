@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,21 +19,21 @@
 (*                                                                        *)
 (**************************************************************************)
 
-let load (filename:string): string =
+let load (filename : string) : string =
   let ic = open_in filename in
   let n = in_channel_length ic in
-  let s = Bytes.create n  in
-  Pervasives.really_input ic s 0 n;
+  let s = Bytes.create n in
+  really_input ic s 0 n;
   close_in ic;
   Bytes.unsafe_to_string s
 
-let copy (input:string) (output:string): unit =
+let copy (input : string) (output : string) : unit =
   let s = load input in
   let ic = open_out output in
   output_string ic s;
   close_out ic
 
-let readlines (filename:string): string list =
+let readlines (filename : string) : string list =
   let fd = open_in filename in
   let lines = ref [] in
   try
@@ -43,14 +43,12 @@ let readlines (filename:string): string list =
     done;
     assert false
   with End_of_file ->
-    begin
-      close_in fd;
-      List.rev !lines
-    end
-
+    close_in fd;
+    List.rev !lines
 
 let has_suffix ~suffixes filename =
   let rec loop = function
     | [] -> false
     | sfx :: sfxs -> Filename.check_suffix filename sfx || loop sfxs
-  in loop suffixes
+  in
+  loop suffixes

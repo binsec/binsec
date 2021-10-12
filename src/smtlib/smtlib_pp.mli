@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,10 +19,10 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Pretty-printer for SMT-LIB AST *)
 val pp_spec_constant : Format.formatter -> Smtlib.constant -> unit
+(** Pretty-printer for SMT-LIB AST *)
 
-val pp_loc : Format.formatter -> Locations.t -> unit
+val pp_loc : Format.formatter -> Location.t -> unit
 (** pretty-prints a location *)
 
 val pp_symbol : Format.formatter -> Smtlib.symbol -> unit
@@ -37,19 +37,19 @@ val pp_term : Format.formatter -> Smtlib.term -> unit
 val pp_qual_identifier : Format.formatter -> Smtlib.qual_identifier -> unit
 (** pretty-prints a SMT qualified identifier *)
 
-val pp: Format.formatter -> Smtlib.script -> unit
+val pp : Format.formatter -> Smtlib.script -> unit
 (** [pp fmt ast] pretty-prints a full SMT-LIB script onto a formatter *)
 
-val pp_command: Format.formatter -> Smtlib.command -> unit
+val pp_command : Format.formatter -> Smtlib.command -> unit
 
-val pp_commands: Format.formatter -> Smtlib.commands -> unit
+val pp_commands : Format.formatter -> Smtlib.commands -> unit
 (** pp_commands pretty_prints an arbitrary command list onto a formatter.
     Used by pp.
 *)
 
 val pp_model : Format.formatter -> Smtlib.model -> unit
 
-val pp_tofile: string -> Smtlib.script -> unit
+val pp_tofile : string -> Smtlib.script -> unit
 (** [pp_tofile filename script] Prints a SMT-LIB script into the file named
  ** [filename]. The file is created if needed. Contents from any present file is
  ** not preserved.

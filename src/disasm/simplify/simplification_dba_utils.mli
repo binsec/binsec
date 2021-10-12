@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,23 +22,28 @@
 (** Generic utility functions for DBA simplification *)
 
 type stats
-val statistics :
-  (Dba.Instr.t * 'a) Dba_types.Caddress.Map.t -> stats
+
+val statistics : (Dba.Instr.t * 'a) Dba_types.Caddress.Map.t -> stats
 
 val display_results :
   stats ->
   (Dba.Instr.t * 'a) Dba_types.Caddress.Map.t ->
-  Format.formatter -> float -> unit
-
+  Format.formatter ->
+  float ->
+  unit
 
 val must_lhs_expr_equal : Dba.LValue.t -> Dba.Expr.t -> bool
 
 val lhs_mustkilled_by_lhs : Dba.LValue.t -> Dba.LValue.t -> bool
+
 val lhs_mayused_in_expr : Dba.LValue.t -> Dba.Expr.t -> bool
+
 val lhs_mayused_in_lhs : Dba.LValue.t -> Dba.LValue.t -> bool
 
 val is_not_mayused :
   (Dba.Instr.t * 'a) Dba_types.Caddress.Map.t ->
-  Dba_types.Caddress.Map.key -> int -> Dba.LValue.t ->
+  Dba_types.Caddress.Map.key ->
+  int ->
+  Dba.LValue.t ->
   bool Basic_types.String.Map.t Dba_types.Caddress.Map.t ->
   bool Basic_types.String.Map.t Dba_types.Caddress.Map.t * bool

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,36 +22,30 @@
 module type Basic = sig
   type mnemonic
 
-  type t = private {
-    size     : Size.Byte.t;
-    opcode   : string;
-    mnemonic : mnemonic;
-  }
+  type t = private { size : Size.Byte.t; opcode : string; mnemonic : mnemonic }
 
-  val create      : int -> string -> mnemonic ->  t
-  val pp_opcode   : Format.formatter -> t -> unit
+  val create : int -> string -> mnemonic -> t
+
+  val pp_opcode : Format.formatter -> t -> unit
+
   val pp_mnemonic : Format.formatter -> t -> unit
 end
 
-module Make (P: Sigs.PRINTABLE) = struct
+module Make (P : Sigs.PRINTABLE) = struct
   type mnemonic = P.t
 
-  type t = {
-    size : Size.Byte.t;
-    opcode : string;
-    mnemonic : mnemonic ;
-  }
+  type t = { size : Size.Byte.t; opcode : string; mnemonic : mnemonic }
 
   let create size opcode mnemonic =
     let size = Size.Byte.create size in
-    { size; opcode; mnemonic; }
+    { size; opcode; mnemonic }
 
   let pp_opcode ppf t = Format.fprintf ppf "%s" t.opcode
+
   let pp_mnemonic ppf t = Format.fprintf ppf "%a" P.pp t.mnemonic
 end
 
-
-module Generic = Make(Mnemonic)
+module Generic = Make (Mnemonic)
 
 type t = {
   address : Virtual_address.t;
@@ -62,27 +56,26 @@ type t = {
 }
 
 let hunk t = t.dba_block
+
 let address t = t.address
+
 let size t = t.size
+
 let opcode t = t.opcode
+
 let mnemonic t = t.mnemonic
 
-
 let create address size opcode mnemonic dba_block =
-  { address; size; opcode; mnemonic; dba_block; }
+  { address; size; opcode; mnemonic; dba_block }
 
 let unsupported address size opcode mnemonic =
-  assert (let open Mnemonic in
-          match mnemonic with
-          | Unknown | Unsupported _ -> true
-          | Supported _ -> false);
+  assert (
+    let open Mnemonic in
+    match mnemonic with Unknown | Unsupported _ -> true | Supported _ -> false);
   create address size opcode mnemonic Dhunk.empty
-;;
-
 
 let of_generic_instruction address ginstr dba_block =
-  create address
-    ginstr.Generic.size
+  create address ginstr.Generic.size
     (Binstream.of_nibbles ginstr.Generic.opcode)
     ginstr.Generic.mnemonic dba_block
 
@@ -97,23 +90,17 @@ let empty address =
   of_dba_block addr Dhunk.empty
 
 let to_generic_instruction e =
-  Generic.create
-    (Size.Byte.to_int e.size)
+  Generic.create (Size.Byte.to_int e.size)
     (Binstream.to_string e.opcode)
     e.mnemonic
 
 let set_dba_block t dba_block = { t with dba_block }
-let set_mnemonic mnemonic t = { t with mnemonic } ;;
 
-let is_decoded t =
-  not (
-    Dhunk.is_empty t.dba_block
-    || Size.Byte.is_zero t.size)
+let set_mnemonic mnemonic t = { t with mnemonic }
 
+let is_decoded t = not (Dhunk.is_empty t.dba_block || Size.Byte.is_zero t.size)
 
-let get_caddress t =
-  Dba_types.Caddress.block_start_of_int (t.address:>int)
-
+let get_caddress t = Dba_types.Caddress.block_start_of_int (t.address :> int)
 
 let stop vaddr =
   let dba_block = Dba.Instr.stop (Some Dba.OK) |> Dhunk.singleton in
@@ -122,8 +109,5 @@ let stop vaddr =
 let start i = Dhunk.start i.dba_block
 
 let pp ppf i =
-  Format.fprintf ppf
-    "@[<v 0>@[<h>%a/@ %a@]@ %a@]"
-    Binstream.pp i.opcode
-    Mnemonic.pp i.mnemonic
-    Dhunk.pp i.dba_block
+  Format.fprintf ppf "@[<v 0>@[<h>%a/@ %a@]@ %a@]" Binstream.pp i.opcode
+    Mnemonic.pp i.mnemonic Dhunk.pp i.dba_block

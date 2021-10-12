@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,8 +25,10 @@ type entry
 
 val addresses : entry -> int Interval.t
 (** [address entry] return the address range of the entry *)
+
 val cfa : entry -> Dba.Expr.t
 (** [cfa entry] return the canonical frame address of the entry *)
+
 val rule : int -> entry -> rule
 (** [rule n entry] return the rule of the n'th column of the entry *)
 
@@ -38,13 +40,15 @@ val load : Loader.Img.t -> t
 
 val fold :
   ('a -> return_address:int -> columns:int array -> entry -> 'a) ->
-  'a -> t -> 'a
+  'a ->
+  t ->
+  'a
 (** [fold f frame] iterate through the frame matrix
     columns is the list of valid column indexes of the given entry
     return_address is the column index of the return address of the function *)
+
 val iter :
-  (return_address:int -> columns:int array -> entry -> unit) ->
-  t -> unit
+  (return_address:int -> columns:int array -> entry -> unit) -> t -> unit
 (** [iter frame] same as fold but without return *)
 
 include Sigs.PRINTABLE with type t := t

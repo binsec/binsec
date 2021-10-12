@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -29,6 +29,13 @@ val dump_file : unit -> string
     [Sse_options.SMT_log_directory]
  *)
 
-
 val mk_var_name : string -> int -> string
 (** [mk_var_name basename idx] *)
+
+val get_goal_addresses : unit -> Virtual_address.Set.t
+(** Returns the set of virtual addresses to reach according to
+    [Sse_options.GoalAddresses] *)
+
+val get_avoid_addresses : unit -> Virtual_address.Set.t
+(** Returns the set of virtual addresses to avoid according to
+    [Sse_options.AvoidAddresses] *)

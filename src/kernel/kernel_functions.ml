@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,41 +24,36 @@ module KO = Kernel_options
 let get_ep () =
   match KO.Entry_point.get_opt () with
   | None -> None
-  | Some s ->
-     match KO.ExecFile.get () with
-     | "" -> None
-     | filename ->
-        let bloc = Loader_utils.Binary_loc.of_string s in
-        Loader_utils.Binary_loc.to_virtual_address_from_file ~filename bloc
+  | Some s -> (
+      match KO.ExecFile.get () with
+      | "" -> None
+      | filename ->
+          let bloc = Loader_utils.Binary_loc.of_string s in
+          Loader_utils.Binary_loc.to_virtual_address_from_file ~filename bloc)
 
 let get_img =
   let img = ref None in
   fun () ->
-  (match !img with
-   | None ->
-      (match KO.ExecFile.get_opt () with
-       | None ->
-          let msg = "Cannot get image since you have not set any binary file" in
-          failwith msg
-       | Some f ->
-          let i = Loader.load_file f in
-          img := Some i;
-          i
-      )
-   | Some i -> i
-  )
-
+    match !img with
+    | None -> (
+        match KO.ExecFile.get_opt () with
+        | None ->
+            let msg =
+              "Cannot get image since you have not set any binary file"
+            in
+            failwith msg
+        | Some f ->
+            let i = Loader.load_file f in
+            img := Some i;
+            i)
+    | Some i -> i
 
 module Loader = struct
+  let set_arch img =
+    let isa = Loader.Img.arch img in
+    KO.Machine.set isa
 
-let set_arch img =
-  let isa = Loader.Img.arch img in
-  KO.Machine.set isa
+  let set_arch_from_file ~filename = Loader.load_file filename |> set_arch
 
-let set_arch_from_file ~filename =
-  Loader.load_file filename |> set_arch
-
-let pp_loader_summary ppf file =
-  Loader.(Img.pp ppf (load_file file))
-
+  let pp_loader_summary ppf file = Loader.(Img.pp ppf (load_file file))
 end

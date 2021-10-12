@@ -1,0 +1,17 @@
+(menhir
+ (modules parser))
+
+(ocamllex
+ (modules lexer))
+
+(menhir
+ (modules parser_infos))
+
+(ocamllex
+ (modules lexer_infos))
+
+(menhir
+ (modules dbacsl_parser))
+
+(ocamllex
+ (modules dbacsl_token))

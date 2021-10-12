@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,9 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Cli.Make(
-struct
+include Cli.Make (struct
   let name = "Debug"
+
   let shortname = "g"
-end
-)
+end)

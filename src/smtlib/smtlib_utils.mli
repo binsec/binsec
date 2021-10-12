@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -28,7 +28,8 @@ val sort_of_svar : Smtlib.sorted_var -> Smtlib.sort
 val symbol_of_vbinding : Smtlib.var_binding -> Smtlib.symbol
 (** Extracts the newly defined symbol part out of a variable binding. *)
 
-val symbols_of_sort : Smtlib.sort ->  Smtlib.symbol list
+val symbols_of_sort : Smtlib.sort -> Smtlib.symbol list
+
 val string_of_symbol : Smtlib.symbol -> string
 
 val get_logic : Smtlib.script -> string
@@ -51,7 +52,7 @@ val is_variable_term : Smtlib.term -> bool
 val mk_symbol : string -> Smtlib.symbol
 (** [mk_symbol name] creates a dummy symbol for name *)
 
-val mk_localized_symbol : string -> Locations.t -> Smtlib.symbol
+val mk_localized_symbol : string -> Location.t -> Smtlib.symbol
 
 val mk_idx_num : int -> Smtlib.index
 
@@ -73,7 +74,8 @@ val mk_term_spec_constant : Smtlib.constant -> Smtlib.term
 
 val mk_term_qual_identifier : Smtlib.qual_identifier -> Smtlib.term
 
-val mk_term_qual_identifier_terms : Smtlib.qual_identifier -> Smtlib.terms -> Smtlib.term
+val mk_term_qual_identifier_terms :
+  Smtlib.qual_identifier -> Smtlib.terms -> Smtlib.term
 
 val mk_term_let_term : Smtlib.var_bindings -> Smtlib.term -> Smtlib.term
 
@@ -81,11 +83,17 @@ val mk_term_forall_term : Smtlib.sorted_vars -> Smtlib.term -> Smtlib.term
 
 val mk_term_exists_term : Smtlib.sorted_vars -> Smtlib.term -> Smtlib.term
 
-val mk_fun_def : Smtlib.symbol -> Smtlib.sort -> Smtlib.sorted_vars -> Smtlib.term -> Smtlib.fun_def
+val mk_fun_def :
+  Smtlib.symbol ->
+  Smtlib.sort ->
+  Smtlib.sorted_vars ->
+  Smtlib.term ->
+  Smtlib.fun_def
 
-val mk_cmd_declare_fun : Smtlib.symbol -> Smtlib.sorts -> Smtlib.sort -> Smtlib.command
+val mk_cmd_declare_fun :
+  Smtlib.symbol -> Smtlib.sorts -> Smtlib.sort -> Smtlib.command
 
 val mk_cmd_define_fun : Smtlib.fun_def -> Smtlib.command
 
-val mk_command: Smtlib.command_desc -> Smtlib.command
+val mk_command : Smtlib.command_desc -> Smtlib.command
 (** [mk_command cmd_des] creates a command with a dummy location *)

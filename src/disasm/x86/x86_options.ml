@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,24 +19,21 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Cli.Options(
-struct
+include Cli.Options (struct
   let name = "x86"
+
   let shortname = name
-end
-)
+end)
 
-module HandleSegments =
-  Builder.String_set(
-  struct
-    let name = "handle-seg"
-    let doc = "Activate set of segments"
-  end)
+module HandleSegments = Builder.String_set (struct
+  let name = "handle-seg"
 
-module ProtectedMode = Builder.False (
-  struct
-    let name = "protected-mode"
-    let doc =
-      "Activate protected mode memory addressing (using segment selectors)"
-  end
-  )
+  let doc = "Activate set of segments"
+end)
+
+module ProtectedMode = Builder.False (struct
+  let name = "protected-mode"
+
+  let doc =
+    "Activate protected mode memory addressing (using segment selectors)"
+end)

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,30 +19,23 @@
 (*                                                                        *)
 (**************************************************************************)
 
-type executable = string ;;
-type arguments  = string array ;;
-
 module Command : sig
-  type t = private {
-     executable : executable;
-     arguments  : arguments;
-  } ;;
+  type t = string array
 
-  val to_string : t -> string ;;
+  val to_string : t -> string
 end
 
-type t = Formula_options.solver ;;
+type t = Formula_options.solver
 
-val pp : Format.formatter -> t -> unit ;;
+val pp : Format.formatter -> t -> unit
 
-val is_boolector : t -> bool ;;
-val is_yices : t -> bool ;;
+val is_boolector : t -> bool
 
+val is_yices : t -> bool
+
+val name_of : t -> string
 (** {2 Accessors} *)
-val name_of : t -> string ;;
 
-val command : ?incremental:bool -> int -> t -> Command.t ;;
+val command : ?incremental:bool -> int -> t -> Command.t
 
-val command_string : ?incremental:bool -> int -> t -> string ;;
-
-val timeout_s : int -> t -> int ;;
+val timeout_s : int -> t -> int

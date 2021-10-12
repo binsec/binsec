@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,11 +19,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module G: sig
-  include Cfg.S with
-    type addr = Dba_types.Caddress.t
-                 and type inst = Dba_types.Instruction.t
-                 and type symb = unit
+module G : sig
+  include
+    Cfg.S
+      with type addr = Dba_types.Caddress.t
+       and type inst = Dba_types.Instruction.t
+       and type symb = unit
 end
 
 val populate_from : G.t -> Virtual_address.t -> int -> unit

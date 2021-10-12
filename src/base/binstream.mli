@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,13 +23,11 @@
 
 (** {2 Types} *)
 
-
 type t
 
 (** {3 Constructors} *)
 
 val empty : t
-
 
 val of_nibbles : string -> t
 (** [of_nibbles s] converts a string [s] of hexadecimal characters.
@@ -50,21 +48,26 @@ val of_list : int list -> t
 
 (** {3 Operations} *)
 
-val append_int    : int -> t -> t
-val prepend_int   : int -> t -> t
+val append_int : int -> t -> t
 
-val append_int64  : int64 -> t -> t
+val prepend_int : int -> t -> t
+
+val append_int64 : int64 -> t -> t
+
 val prepend_int64 : int64 -> t -> t
 
 val append_char : char -> t -> t
+
 val prepend_char : char -> t -> t
 
-val rev: t -> t
+val rev : t -> t
 
 (** {3 Iterators }*)
 
 val iter : (int -> unit) -> t -> unit
-val map  : (int -> int) -> t -> t
+
+val map : (int -> int) -> t -> t
+
 val fold : (int -> 'a -> 'a) -> t -> 'a -> 'a
 
 (** {3 Accessors} *)
@@ -80,7 +83,6 @@ val get_byte_exn : t -> int -> int
 
     @raise Invalid_argument if the index is not between [0] and [length b - 1]
 *)
-
 
 val to_string : t -> string
 

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,7 +19,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-
 (** Main entry point for formula handling *)
 
-val transform: filename:string -> Smtlib.script * string
+val transform : filename:string -> Smtlib.script * string

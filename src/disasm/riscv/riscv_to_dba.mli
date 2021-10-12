@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,7 +19,5 @@
 (*                                                                        *)
 (**************************************************************************)
 
+val decode : Lreader.t -> Virtual_address.t -> Instruction.Generic.t * Dhunk.t
 (** [decode r addr] decodes what is at address [addr] in reader [r]. *)
-val decode :
-  Lreader.t -> Virtual_address.t -> Instruction.Generic.t * Dhunk.t
-;;

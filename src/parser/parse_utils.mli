@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,15 +19,21 @@
 (*                                                                        *)
 (**************************************************************************)
 
-
 (** General BINSEC related utilities *)
 
-val read_file:
+exception UserFriendlyParseError of string
+(** the exception for errors in read_* functions. Use `to_string` on it to get
+ * a user-friendly error message *)
+
+val read_file :
   parser:('a -> Lexing.lexbuf -> 'b) -> lexer:'a -> filename:string -> 'b
+(** parses a file with nice error messages *)
+
+val read_string :
+  parser:('a -> Lexing.lexbuf -> 'b) -> lexer:'a -> string:string -> 'b
+(** parses the content of a string with nice error messages *)
 
 val read_dba_file : string -> 'a Dba_types.program
-
-val load_dba_definition : Machine.t -> 'a Dba_types.program
 
 val read_optional_config_file : string option -> Infos.t
 (** [read_optional_config_file optfile] parses [optfile] if it is not [None].

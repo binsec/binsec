@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -29,11 +29,14 @@ type t
 
 val of_img : ?endianness:Machine.endianness -> ?cursor:int -> Loader.Img.t -> t
 
-val of_nibbles : ?endianness:Machine.endianness -> ?cursor:int -> ?base:int -> string -> t
+val of_nibbles :
+  ?endianness:Machine.endianness -> ?cursor:int -> ?base:int -> string -> t
 
-val of_bytes : ?endianness:Machine.endianness -> ?cursor:int -> ?base:int -> string -> t
+val of_bytes :
+  ?endianness:Machine.endianness -> ?cursor:int -> ?base:int -> string -> t
 
-val of_binstream : ?endianness:Machine.endianness -> ?cursor:int -> ?base:int -> Binstream.t -> t
+val of_binstream :
+  ?endianness:Machine.endianness -> ?cursor:int -> ?base:int -> Binstream.t -> t
 
 (** {7 Pretty-printer} *)
 
@@ -49,27 +52,38 @@ val rewind : t -> int -> unit
 val advance : t -> int -> unit
 (** [advance r n] moves the cursor the cursor [n] bytes. *)
 
-val set_endianness: t -> Machine.endianness -> unit
+val set_endianness : t -> Machine.endianness -> unit
 (** [set_endianness e r] sets reader to report value w.r.t to endianness r *)
 
 (** {6 Read functions } *)
 
 module type Accessor = sig
   type t
+
   (* read an unsigned int *)
-  val u8  : t -> int
+  val u8 : t -> int
+
   val u16 : t -> int
+
   val u32 : t -> int
+
   val u64 : t -> int
+
   (* read a signed int *)
-  val i8  : t -> int
+  val i8 : t -> int
+
   val i16 : t -> int
+
   val i32 : t -> int
+
   (* u64 is incorrect because the sign bit is ignored; no i64 *)
-  val bv8: t -> Bitvector.t
-  val bv16: t -> Bitvector.t
-  val bv32: t -> Bitvector.t
-  val bv64: t -> Bitvector.t
+  val bv8 : t -> Bitvector.t
+
+  val bv16 : t -> Bitvector.t
+
+  val bv32 : t -> Bitvector.t
+
+  val bv64 : t -> Bitvector.t
 end
 
 module Read : Accessor with type t := t
@@ -79,12 +93,11 @@ module Read : Accessor with type t := t
 
 (** [Peek] is like [Read] but does not advance *)
 module Peek : sig
-  include Accessor with type t:=t
+  include Accessor with type t := t
 
   val peek : t -> int -> Bitvector.t
   (** [peek loader n] peeks at the next [n] bytes of loader [loader] *)
 end
-
 
 val get_slice : t -> int -> int -> int list
 (** [get_slice addr_start addr_end] returns the list of bytes contained in the

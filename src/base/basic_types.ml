@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,86 +27,85 @@ module Constants = struct
   let bytesize = Natural.create 8
 end
 
-
-module MapSetMaker(C:Sigs.COMPARABLE) = struct
+module MapSetMaker (C : Sigs.COMPARABLE) = struct
   module Map = struct
-    include Map.Make(C)
+    include Map.Make (C)
 
     let pop m =
-      let (k, _) as elt = choose m in
-      elt, remove k m
+      let ((k, _) as elt) = choose m in
+      (elt, remove k m)
 
-    let keys m =
-     fold (fun k _ acc -> k :: acc) m [] |> List.rev
+    let keys m = fold (fun k _ acc -> k :: acc) m [] |> List.rev
 
-    let values m =
-      fold (fun _ v acc -> v :: acc) m [] |> List.rev
+    let values m = fold (fun _ v acc -> v :: acc) m [] |> List.rev
   end
 
   module Set = struct
-    include Set.Make(C)
+    include Set.Make (C)
 
     let pop set =
       let a = choose set in
-      a, remove a set
-
-    let add_list elts set =
-      List.fold_left (fun set e -> add e set) set elts
+      (a, remove a set)
   end
+
   include C
 end
 
-
 module Collection_make = struct
-  module Default(C:Sigs.COMPARABLE) = struct
+  module Default (C : Sigs.COMPARABLE) = struct
     module H = struct
       include C
+
       let equal x y = compare x y = 0
+
       let hash = Hashtbl.hash
     end
-    include MapSetMaker(C)
-    module Hamt = Hashamt.Make(H)
+
+    include MapSetMaker (C)
+    module Hamt = Hashamt.Make (H)
+
     module Htbl = struct
-      include Hashtbl.Make(H)
+      include Hashtbl.Make (H)
+
       let filter p h =
         let h' = create (length h) in
         iter (fun k v -> if p k v then add h' k v) h;
         h'
-      ;;
 
-      let bindings h = fold (fun k v acc -> (k, v) :: acc) h [] ;;
+      let bindings h = fold (fun k v acc -> (k, v) :: acc) h []
     end
   end
 
-  module Hashed(C:Sigs.HASHABLE) = struct
+  module Hashed (C : Sigs.HASHABLE) = struct
     module H = struct
       include C
+
       let equal x y = compare x y = 0
     end
-    include MapSetMaker(C)
-    module Hamt = Hashamt.Make(H)
+
+    include MapSetMaker (C)
+    module Hamt = Hashamt.Make (H)
+
     module Htbl = struct
-      include Hashtbl.Make(H)
+      include Hashtbl.Make (H)
 
       let filter p h =
         let h' = create (length h) in
         iter (fun k v -> if p k v then add h' k v) h;
         h'
 
-      let bindings h = fold (fun k v acc -> (k, v) :: acc) h [] ;;
+      let bindings h = fold (fun k v acc -> (k, v) :: acc) h []
     end
   end
 end
 
-module Float =
-  Collection_make.Default(
-      struct
-        type t = float
-        let compare = Pervasives.compare
-      end)
+module Float = Collection_make.Default (struct
+  type t = float
 
-module String = Collection_make.Default(String)
+  let compare = compare
+end)
 
+module String = Collection_make.Default (String)
 
 module Int64 = struct
   let max n1 n2 = if Int64.compare n1 n2 <= 0 then n2 else n1
@@ -117,54 +116,46 @@ module Int64 = struct
     let min_int_int64 = Int64.of_int min_int in
     fun n -> min_int_int64 <= n && max_int_int64 >= n
 
-  include Collection_make.Default(Int64)
+  include Collection_make.Default (Int64)
 end
 
 module Addr64 = Int64
 
-module Int =
-  Collection_make.Default(struct type t = int let compare = compare end)
+module Int = Collection_make.Default (struct
+  type t = int
 
-module OrderedBigInt =
-struct
-  type t = Bigint.t
-  let compare = Bigint.compare_big_int
+  let compare = compare
+end)
+
+module OrderedBigInt = struct
+  type t = Z.t
+
+  let compare = Z.compare
 end
 
-module BigInt = Collection_make.Default(OrderedBigInt)
+module BigInt = Collection_make.Default (OrderedBigInt)
 
 module Ternary = struct
-  type t =
-    | True
-    | False
-    | Unknown
+  type t = True | False | Unknown
 
+  let of_bool = function true -> True | false -> False
 
-  let of_bool = function
-    | true -> True
-    | false -> False
-
-  let to_bool ?(unknown=false) = function
+  let to_bool ?(unknown = false) = function
     | True -> true
     | False -> false
     | Unknown -> unknown
 
-  let lognot = function
-    | True -> False
-    | False -> True
-    | Unknown -> Unknown
+  let lognot = function True -> False | False -> True | Unknown -> Unknown
 
   let logand t1 t2 =
-    match t1, t2 with
+    match (t1, t2) with
     | True, True -> True
-    | _, False
-    | False, _ -> False
+    | _, False | False, _ -> False
     | _, _ -> Unknown
 
   let logor t1 t2 =
-    match t1, t2 with
+    match (t1, t2) with
     | False, False -> False
-    | True, _
-    | _, True -> True
+    | True, _ | _, True -> True
     | _, _ -> Unknown
 end

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -40,15 +40,16 @@ val last : 'a list -> 'a
     Raise [Failure "last"] if the list is empty
 *)
 
-val init : 'a list -> 'a list
-(** [init l] returns [l] without its last element q*)
+val drop_last : 'a list -> 'a list
+(** [drop_last l] returns list [l] without its last element.
+    Raise [Failure "drop_last"] if the list is empty
+*)
 
 val rev_flatten : 'a list list -> 'a list
 (** [rev_flatten l] reverses and flatten the list of list [l] at the same time.
     It is the same as doing [List.flatten l |> List.rev] but tail-recursive and
     more efficient.
  **)
-
 
 val flat_map : ('a -> 'b list) -> 'a list -> 'b list
 (** [flat_map f l] is like [List.map f l |> List.flatten] but tail-recusrive
@@ -64,28 +65,26 @@ val pop : 'a list -> 'a * 'a list
     @raise Failure "pop" if [l] is empty
 *)
 
-
 val make : int -> 'a -> 'a list
 (** [make n x] returns a list of x of length n.
     @assumes n >= 0
 *)
 
-
-val map_if: ('a -> bool) -> ('a -> 'b) -> 'a list -> 'b list
+val map_if : ('a -> bool) -> ('a -> 'b) -> 'a list -> 'b list
 (** [map_if p f l] behaves like [map f l] but applied only on elements of
     [l] verifying [p].
 
     Tail recursive.
 *)
 
-val filter_map: ('b -> bool) -> ('a -> 'b) -> 'a list -> 'b list
+val filter_map : ('b -> bool) -> ('a -> 'b) -> 'a list -> 'b list
 (** [filter_map p f l] behaves like [map f l] but applied only on elements [e]
     of [l] verifying [p (f e)].
 
     Tail recursive.
 *)
 
-val eq_length: 'a list -> 'b list -> bool
+val eq_length : 'a list -> 'b list -> bool
 (** [eq_lenght l1 l2] returns [true] if [l1] and [l2] have the same length,
  ** independently of what their cells contain *)
 

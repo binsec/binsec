@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -26,15 +26,9 @@ module Display_statistics : Cli.BOOLEAN
 (** Defaults to [false] *)
 
 type pmap =
-  (Dba.Instr.t * Instruction.Generic.t option)
-    Dba_types.Caddress.Map.t
+  (Dba.Instr.t * Instruction.Generic.t option) Dba_types.Caddress.Map.t
 
-
-
-type specifics =
-  | All
-  | NoInline
-  | NoSummaries
+type specifics = All | NoInline | NoSummaries
 
 type simplification =
   | No_simplification

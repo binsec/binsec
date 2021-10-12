@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -30,6 +30,11 @@ val findi : ('a -> bool) -> 'a array -> int
 (** [find p a] returns the index of the first element of the array [a] that
                satisfies the predicate [p].
     @raise Not_found if there is no value that satisfies [p] in the array [a]
+*)
+
+val find_opt : ('a -> bool) -> 'a array -> 'a option
+(** [find p a] returns the first element of the array [a] that satisfies
+    the predicate [p] or None.
 *)
 
 val fold_lefti : (int -> 'a -> 'b -> 'a) -> 'a -> 'b array -> 'a

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -26,19 +26,27 @@ let create n =
   n
 
 let add_int n i = create (n + i)
+
 let add n1 n2 = add_int n1 n2
+
 let sub_int n i = create (n - i)
+
 let sub n1 n2 = sub_int n1 n2
 
 let mul n1 n2 = n1 * n2
-let div = (/)
 
-let eq = (=)
-let gt = (>)
-let ge = (>=)
+let div = ( / )
+
+let eq = ( = )
+
+let gt = ( > )
+
+let ge = ( >= )
 
 let is_zero = eq 0
+
 let pred n = create (n - 1)
+
 let to_int n = n
 
 let pp ppf = Format.fprintf ppf "%d"

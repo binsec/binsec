@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2019                                               */
+/*  Copyright (C) 2016-2021                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -56,7 +56,7 @@
 %token RETURNFLAG BEGIN END PERMISSIONS
 %token FLAG TEMPORARY REGISTER VAR TEMPTAG FLAGTAG
 %token ENUMERATE REACH CUT CONSEQUENT ALTERNATIVE ALTERNATE UNCONTROLLED
-%token EOF
+%token UNIMPLEMENTED UNDEFINED EOF
 
 %token <string> INT
 %token <string> IDENT
@@ -91,7 +91,7 @@
 %type <Dba.Instr.t> instruction_eof
 
 %start dhunk_substitutions_eof
-%type <(Virtual_address.t * Dhunk.t) list> dhunk_substitutions_eof
+%type <(Loader_utils.Binary_loc.t * Dhunk.t) list> dhunk_substitutions_eof
 
 %start body
 %type <(Dba_types.Caddress.Map.key * Dba.Instr.t) list> body
@@ -143,12 +143,23 @@ kv:
 
 decoder_base:
 | opcode=kv; mnemonic=kv; address=kv; size = kv;
-  { [opcode; mnemonic; address; size;]  (* Actually the order is not important *) }
+    { [opcode; mnemonic; address; size;]  (* Actually the order is not important *) }
+| address=kv; LPAR UNDEFINED RPAR EOF
+    { [ address ] }
 ;
 
 decoder_msg:
 | base=decoder_base; instructions=body;
-  { base, instructions }
+    { base, instructions }
+| base=decoder_base; LPAR UNIMPLEMENTED RPAR EOF
+    { base,
+      match base with
+      | [ _, Parse_helpers.Message.Value.Hex addr; _; _;
+	  _, Parse_helpers.Message.Value.Str mnemonic ] ->
+	 [ Dba_types.Caddress.block_start_of_int addr,
+	   Dba.Instr.stop (Some (Dba.Unsupported mnemonic)) ]
+      | _ -> assert false }
+
 ;
 
 body:
@@ -175,21 +186,21 @@ entry:
 
 
 %inline specific_declaration_kwd:
-| TEMPORARY { mk_declaration VarTag.temp }
-| FLAG      { mk_declaration (VarTag.flag Flag.unspecified) }
-| REGISTER  { mk_declaration VarTag.empty }
+| TEMPORARY { mk_declaration VarTag.Temp }
+| FLAG      { mk_declaration VarTag.Flag }
+| REGISTER  { mk_declaration VarTag.Empty }
 ;
 
 declaration:
 | VAR id=IDENT; COLON size=INT; tags=option(tags);
-  { mk_declaration (match tags with None -> VarTag.empty | Some t -> t)  id (int_of_string size) }
+  { mk_declaration (match tags with None -> VarTag.Empty | Some t -> t)  id (int_of_string size) }
 | apply=specific_declaration_kwd; id=IDENT; COLON; size=INT;
   { apply id (int_of_string size) }
 ;
 
 %inline tags:
- | TEMPTAG { VarTag.temp }
- | FLAGTAG { VarTag.flag Flag.unspecified }
+ | TEMPTAG { VarTag.Temp }
+ | FLAGTAG { VarTag.Flag }
 ;
 
 permission_block:
@@ -300,7 +311,7 @@ jump_target:
   { sj }
 | e=expr; tag=option(jump_annotation);
   { match e with
-    | Dba.Expr.Cst (`Constant, bv) ->
+    | Dba.Expr.Cst bv ->
        let vaddr = Virtual_address.of_bitvector bv in
        let caddr = Dba_types.Caddress.block_start vaddr in
        let target = Dba.Jump_target.outer caddr in
@@ -362,7 +373,9 @@ initialization_assignment:
 
 initialization_directive:
 | uncontrolled=boption(UNCONTROLLED); init=initialization_assignment;
-  { Initialization.set_control (not uncontrolled) init }
+    { Initialization.set_control (not uncontrolled) init }
+| ASSUME e=expr;
+    { Initialization.assume e }
 ;
 
 initialization:
@@ -415,8 +428,8 @@ dhunk_eof:
 ;
 
 dhunk_substitution:
-| addr=HEXA; ARROW; dh=dhunk
-  { (Virtual_address.of_bitvector @@ Bitvector.of_string addr, dh)}
+| addr=binary_loc; ARROW; dh=dhunk
+  { (addr, dh)}
 ;
 
 dhunk_substitutions_eof:
@@ -459,7 +472,7 @@ lvalue:
 
 constant:
 | value=INT; size=size_annot;
-  { Bitvector.create (Bigint.big_int_of_string value) size }
+  { Bitvector.create (Z.of_string value) size }
 | value=HEXA;
 | value=BIN;
   { Bitvector.of_string value }
@@ -488,8 +501,8 @@ expr:
 
 | e=expr;  offs=offsets;
   { let lo, hi = offs in Dba.Expr.restrict lo hi e }
-| LPAR region=region; cst=preceded(COMMA,constant); RPAR
-  { Dba.Expr.constant cst ~region }
+| LPAR cst=preceded(COMMA,constant); RPAR
+  { Dba.Expr.constant cst }
 
 | AT
   LBRACKET e=expr; end_opt=ioption(preceded(COMMA, store_annotation));
@@ -549,7 +562,7 @@ expr:
 address:
    /* | LPAR INT INFER INT SUPER COMMA INT RPAR {
      let size = int_of_string $4 in
-     let bigint = Bigint.big_int_of_string $2 in
+     let bigint = Z.of_string $2 in
      let id = int_of_string $7 in
      if size = Dba_types.address_size then ((bigint, Dba_types.address_size), id)
      else
@@ -604,16 +617,18 @@ patchmap:
 
 /* Directives for analyses: SE, interpretation  */
 directive:
- | REACH times=integer_argument;
-   { let n = Utils.get_opt_or_default 1 times in Directive.reach ~n }
+ | REACH times=integer_argument; guard=option(preceded(IF,expr));
+    { let n = Utils.get_opt_or_default 1 times in
+      Directive.reach ~n ?guard ~actions:[Directive.Action.Print_model]}
  | REACH STAR
-   { Directive.reach_all }
+    { Directive.reach_all ~guard:Dba.Expr.one
+			  ~actions:[Directive.Action.Print_model] }
  | ENUMERATE   e=expr; times=integer_argument;
    { let n = Utils.get_opt_or_default 1 times in Directive.enumerate ~n e }
  | ASSUME e=expr;
    { Directive.assume e }
- | CUT
-   { Directive.cut }
+ | CUT guard=option(preceded(IF,expr));
+   { Directive.cut ?guard }
  | consequent alternate=boption(ALTERNATE);
    { Directive.choose_consequent ~alternate }
  | alternative alternate=boption(ALTERNATE);
@@ -635,8 +650,8 @@ binary_loc:
 ;
 
 located_directive:
- | loc=binary_loc; g=directive;
-   { g loc }
+ | loc=expr; g=directive;
+   { g ~loc () }
 ;
 
 directives:

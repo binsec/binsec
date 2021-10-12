@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,6 +22,5 @@
 (** Interface for X86 instructions *)
 
 include Instruction.Basic with type mnemonic = X86Types.instruction_kind
-
 
 val to_generic_instruction : t -> Instruction.Generic.t

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,13 +20,13 @@
 (**************************************************************************)
 
 open Format
-type t =
-  | Unknown
-  | Unsupported of string option
-  | Supported of string
+
+type t = Unknown | Unsupported of string option | Supported of string
 
 let unknown = Unknown
+
 let unsupported ?mnemonic_hint () = Unsupported mnemonic_hint
+
 let supported v pp = Supported (asprintf "%a" pp v)
 
 let pp ppf = function

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,58 +21,63 @@
 
 (** Logging/output facilities *)
 
-
 module type S = sig
-
   (** {2 Channels} *)
 
   type channel
 
-  val fatal_channel   : channel
-  val error_channel   : channel
-  val result_channel  : channel
+  val fatal_channel : channel
+
+  val error_channel : channel
+
+  val result_channel : channel
+
   val warning_channel : channel
-  val info_channel    : channel
-  val debug_channel   : channel
+
+  val info_channel : channel
+
+  val debug_channel : channel
   (** These predefined channels are flushed after each call and a newline
       character is inserted. *)
 
-
-  val fatal: ?e:exn -> ('a, Format.formatter, unit, 'b) format4 -> 'a
+  val fatal : ?e:exn -> ('a, Format.formatter, unit, 'b) format4 -> 'a
   (** For messages that show a fatal failure, In this case, you should not be
       able to continue and exit [code] should follow the emission.
       Use [error] otherwise. *)
 
-  val error: ('a, Format.formatter, unit) format -> 'a
+  val error : ('a, Format.formatter, unit) format -> 'a
   (** For error messages only. *)
 
-  val result: ('a, Format.formatter, unit) format -> 'a
+  val result : ('a, Format.formatter, unit) format -> 'a
   (** For important results that will be displayed *)
 
-  val warning: ?level:int -> ('a, Format.formatter, unit) format -> 'a
+  val warning : ?level:int -> ('a, Format.formatter, unit) format -> 'a
   (** For warning messages. *)
 
   val set_warning_level : int -> unit
+
   val get_warning_level : unit -> int
 
-  val info: ?level:int -> ('a, Format.formatter,unit) format -> 'a
+  val info : ?level:int -> ('a, Format.formatter, unit) format -> 'a
   (** Any info that should be displayed *)
 
   val set_info_level : int -> unit
+
   val get_info_level : unit -> int
 
-  val debug: ?level:int -> ('a, Format.formatter, unit) format -> 'a
+  val debug : ?level:int -> ('a, Format.formatter, unit) format -> 'a
   (** [debug ~level:n msg] will be displayed if at least level n + 1 debug is
       activated *)
 
-  val fdebug: ?level:int ->
-              (unit -> (unit, Format.formatter, unit) format) -> unit
+  val fdebug :
+    ?level:int -> (unit -> (unit, Format.formatter, unit) format) -> unit
   (** [fdebug ~level f] acts like like [debug ~level msg] where [msg = f ()] but
       lazily evaluates its argument. Use [fdebug] instead of [debug] if you need
       to print values that might be hard to compute (and that you therefore
       compute inside the closure). *)
 
   val set_debug_level : int -> unit
+
   val get_debug_level : unit -> int
 
   val set_tagged_entry : bool -> unit
@@ -82,7 +87,6 @@ module type S = sig
 
       If might not be necessary if you use colors for example.
   *)
-
 
   val set_log_level : string -> unit
   (** Set logger to display only messages from that channel and those with
@@ -94,8 +98,8 @@ module type S = sig
       You cannot turn off [fatal_channel] or [result_channel].
   *)
 
-
   val cli_handler : Arg.spec
+
   val quiet : unit -> unit
 
   val channel_set_color : bool -> channel -> unit
@@ -149,7 +153,6 @@ module type S = sig
 
       If [b] is false, formatters are reset to default initial values.
    *)
-
 end
 
 (* {2 Functors} *)
@@ -158,12 +161,9 @@ module type ChannelGroup = sig
   val name : string
 end
 
-module Make(G: ChannelGroup): S
-
+module Make (G : ChannelGroup) : S
 
 (* {2 Generic utilites} *)
-
-
 
 val with_tags_on : Format.formatter -> ('a, Format.formatter, unit) format -> 'a
 (** [with_tags_on ppf fmt] pretty-prints [fmt] on the pretty-printing formatter

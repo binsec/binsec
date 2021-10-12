@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,9 +20,13 @@
 (**************************************************************************)
 
 include Cli.S
-module Output_smt : Cli.STRING_OPT
-module Output_llvm : Cli.STRING_OPT                      
-module Trace_file : Cli.STRING_OPT
-module Concretize_regs : Cli.CHECKABLE with type t = [`All | `Stack | `Register of string] list
-module Concretize_mem : Cli.GENERIC with type t = [`No | `Exact | `Approximate of int]
 
+module Output_smt : Cli.STRING_OPT
+
+module Trace_file : Cli.STRING_OPT
+
+module Concretize_regs :
+  Cli.CHECKABLE with type t = [ `All | `Stack | `Register of string ] list
+
+module Concretize_mem :
+  Cli.GENERIC with type t = [ `No | `Exact | `Approximate of int ]

@@ -1,0 +1,12 @@
+(include_subdirs no)
+
+(library
+ (package binsec)
+ (optional)
+ (name amd64decoder)
+ (modules (:standard))
+ (library_flags
+  (:standard -linkall))
+ (flags
+  (:standard -w -3 -open Binsec))
+ (libraries binsec unisim_archisec.amd64dba))

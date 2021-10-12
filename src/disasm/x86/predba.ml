@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,7 +22,7 @@
 (* The DBA types without their successors.
  * That will be added at instruction chaining (see chain_insns)
  * For static jumps. Tags may indicate a probable call / return instruction
-*)
+ *)
 
 open X86_options
 
@@ -36,20 +36,15 @@ type 'a t =
   | Nondet of Dba.LValue.t * Dba.region
   | Stop of Dba.state
 
-
 let assign lval e =
-  Logger.debug ~level:5
-    "@[<hov 0>Assigning %a (%d) with %a (%d)@]"
-    Dba_printer.Ascii.pp_lhs lval
-    (Dba.LValue.size_of lval)
-    Dba_printer.Ascii.pp_bl_term e
-    (Dba.Expr.size_of e)
-  ;
+  Logger.debug ~level:5 "@[<hov 0>Assigning %a (%d) with %a (%d)@]"
+    Dba_printer.Ascii.pp_lhs lval (Dba.LValue.size_of lval)
+    Dba_printer.Ascii.pp_bl_term e (Dba.Expr.size_of e);
 
   assert (Dba.LValue.size_of lval = Dba.Expr.size_of e);
   Assign (lval, e)
 
-let (<<-) = assign
+let ( <<- ) = assign
 
 let static_jump ?tag jt = SJump (jt, tag)
 
@@ -66,18 +61,13 @@ let non_deterministic lval r = Nondet (lval, r)
 let stop s = Stop s
 
 let needs_termination = function
-  | Dba.Instr.DJump _
-  | Dba.Instr.SJump (Dba.JOuter _, _)
-  | Dba.Instr.Stop _ -> false
-  | Dba.Instr.Assume _ | Dba.Instr.Assert _
-  | Dba.Instr.NondetAssume _ | Dba.Instr.Malloc _
-  | Dba.Instr.Free _ | Dba.Instr.Print _
-  | Dba.Instr.Assign _
-  | Dba.Instr.Undef _
-  | Dba.Instr.If _
-  | Dba.Instr.Nondet _
-  | Dba.Instr.SJump _ -> true
-
+  | Dba.Instr.DJump _ | Dba.Instr.SJump (Dba.JOuter _, _) | Dba.Instr.Stop _ ->
+      false
+  | Dba.Instr.Assume _ | Dba.Instr.Assert _ | Dba.Instr.NondetAssume _
+  | Dba.Instr.Malloc _ | Dba.Instr.Free _ | Dba.Instr.Print _
+  | Dba.Instr.Assign _ | Dba.Instr.Undef _ | Dba.Instr.If _ | Dba.Instr.Nondet _
+  | Dba.Instr.SJump _ ->
+      true
 
 let to_dba_instruction next_id = function
   | Assert cond -> Dba.Instr._assert cond next_id
@@ -97,15 +87,14 @@ let blockify next_addr instructions =
   let end_jump = Dba.Instr.static_jump (Dba.JOuter next_addr) in
   (* The chained list is constructed in reverse order in acc *)
   let rec aux n acc = function
-    | [] ->
-      begin
+    | [] -> (
         match acc with
-        | [] -> [end_jump]
-        | instr :: _ ->
-          if needs_termination instr then end_jump :: acc else acc
-      end
+        | [] -> [ end_jump ]
+        | instr :: _ -> if needs_termination instr then end_jump :: acc else acc
+        )
     | instr :: instructions ->
-      let id = n + 1 in
-      let dba_instr = to_dba_instruction id instr in
-      aux id (dba_instr :: acc) instructions
-  in aux 0 [] instructions |> List.rev |> Dhunk.of_list
+        let id = n + 1 in
+        let dba_instr = to_dba_instruction id instr in
+        aux id (dba_instr :: acc) instructions
+  in
+  aux 0 [] instructions |> List.rev |> Dhunk.of_list

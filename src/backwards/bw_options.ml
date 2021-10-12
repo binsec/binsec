@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,42 +19,34 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Cli.Make(
-struct
+include Cli.Make (struct
   let shortname = "bw"
+
   let name = "Backwards reasoners"
-end
-)
+end)
 
-module Opaque_predicates =
-  Builder.False(
-      struct
-        let name = "opaque"
-        let doc = "Check all predicates from entry point section for opacity"
-      end
-    )
+module Opaque_predicates = Builder.False (struct
+  let name = "opaque"
 
-module Opaque_addresses =
-  Builder.Integer_list(
-      struct
-        let name = "opaque-at"
-        let doc = "Check address list for opaque predicates"
-      end
-    )
+  let doc = "Check all predicates from entry point section for opacity"
+end)
 
-module Opaque_sections =
-  Builder.String_list (
-      struct
-        let name = "opaque-sections"
-        let doc  = "Check predicates of section list for opacity"
-      end
-    )
+module Opaque_addresses = Builder.Integer_list (struct
+  let name = "opaque-at"
 
-module K =
-  Builder.Integer(
-      struct
-        let name = "k"
-        let doc = "Set size of backward trace"
-        let default = 16
-      end
-  )
+  let doc = "Check address list for opaque predicates"
+end)
+
+module Opaque_sections = Builder.String_list (struct
+  let name = "opaque-sections"
+
+  let doc = "Check predicates of section list for opacity"
+end)
+
+module K = Builder.Integer (struct
+  let name = "k"
+
+  let doc = "Set size of backward trace"
+
+  let default = 16
+end)

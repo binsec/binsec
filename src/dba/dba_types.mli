@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,7 +25,7 @@ open Sigs
 
 module Logger : Logger.S
 
-type instruction_sequence = (Dba.address *  Dba.Instr.t) list
+type instruction_sequence = (Dba.address * Dba.Instr.t) list
 
 module Call_stack : COMPARABLE with type t = (Dba.address * Dba.address) list
 
@@ -33,9 +33,9 @@ module Region : sig
   include Collection with type t = Dba.region
 
   val malloc : int -> t
+
   include PRINTABLE with type t := Dba.region
 end
-
 
 (** {2 Dba address / Code address } *)
 
@@ -49,16 +49,20 @@ module Caddress : sig
   include Sigs.Collection with type t := t
 
   val default_init : t ref
+
   val create : Virtual_address.t -> int -> t
+
   val block_start : Virtual_address.t -> t
   (** [block_start bv] i [create bv 0] *)
 
   val block_start_of_int : int -> t
 
   val rebase : t -> Virtual_address.t -> t
+
   val reid : t -> int -> t
 
   val equal : t -> t -> bool
+
   val pp_base : Format.formatter -> t -> unit
   (** [pp_base caddr] only print the base address of the DBA code address as
       hexadecimal, thus ignoring the [id] part
@@ -72,24 +76,30 @@ module Caddress : sig
   val base_value : t -> Virtual_address.t
 
   val of_virtual_address : Virtual_address.t -> t
+
   val to_virtual_address : t -> Virtual_address.t
+
   include COMPARABLE with type t := t
 end
 
-
 module AddressStack : sig
-  type t =  Dba.address * Call_stack.t * int
+  type t = Dba.address * Call_stack.t * int
+
   val pp : Format.formatter -> t -> unit
+
   include Collection with type t := t
 end
 
-
 module Rights : sig
   type action = R | W | X
+
   include Map.S with type key = action * Dba.region
-  val find_read_right   : Dba.region -> 'a t -> 'a
-  val find_write_right  : Dba.region -> 'a t -> 'a
-  val find_exec_right   : Dba.region -> 'a t -> 'a
+
+  val find_read_right : Dba.region -> 'a t -> 'a
+
+  val find_write_right : Dba.region -> 'a t -> 'a
+
+  val find_exec_right : Dba.region -> 'a t -> 'a
 end
 
 (** {2 DBA AST modules} *)
@@ -99,8 +109,8 @@ module Expr : sig
 
   include PRINTABLE with type t := t
 
-  (** {6 Constructors } *)
   val var : string -> Size.Bit.t -> Dba.VarTag.t -> t
+  (** {6 Constructors } *)
 
   val flag : ?bits:Size.Bit.t -> string -> t
   (** [flag ~bits flagname] constructs a variable named [flagname] tagged as a
@@ -113,22 +123,23 @@ module Expr : sig
       flagged as a temporary *)
 
   val sext : t -> Size.Bit.t -> t
+
   val uext : t -> Size.Bit.t -> t
 
   val bool_false : t
+
   val bool_true : t
   (** Encoding of booleans as DBA expressions *)
 
-  val temp: Size.Bit.t -> t
+  val temp : Size.Bit.t -> t
   (** [temp n] creates an expression representing a temporary of size [n] with name
       [Format.sprintf "temp%d" n]. *)
 
   val of_lvalue : Dba.LValue.t -> t
   (** {6 Operations } *)
 
-
-  (** {6 Predicates } *)
   val is_symbolic : t -> bool
+  (** {6 Predicates } *)
 
   val is_zero : t -> bool
   (** [is_zero e] is [true] if [e]'s value is equal to 0 whatever its length is *)
@@ -139,12 +150,11 @@ module Expr : sig
   val is_max : t -> bool
   (** [is_max e] is [true] if [e] is a constant representing the maximum value for
    ** its size *)
-
-
 end
 
 module LValue : sig
   type t = Dba.LValue.t
+
   module Map : Map.S with type key = t
 
   val name_of : t -> string option
@@ -156,30 +166,32 @@ module LValue : sig
   val unsafe_bitsize : t -> int
 
   val is_temporary : t -> bool
+
   val is_flag : t -> bool
 end
-
-
 
 module Jump_target : sig
   val outer_jumps : 'a Dba.Jump_target.t -> Virtual_address.Set.t
 end
 
-type ('a, 'b) defuse = {
-  defs: 'a;
-  uses: 'b;
-}
-
+type ('a, 'b) defuse = { defs : 'a; uses : 'b }
 
 module Instruction : sig
   type t = Dba.Instr.t
 
-  (** {7 Modificators} *)
   val set_successor : t -> int -> t
+  (** {7 Modificators} *)
+
   val reset_successor : src_id:int -> dst_id:int -> t -> t
 
-  (** {7 Properties and computations} *)
+  val reloc :
+    ?outer:(Dba.id Dba.Jump_target.t -> Dba.id Dba.Jump_target.t) ->
+    ?inner:(Dba.id -> Dba.id) ->
+    t ->
+    t
+
   val successors : t -> Dba.id Dba.jump_target list
+  (** {7 Properties and computations} *)
 
   val variables :
     t -> (Basic_types.String.Set.t, Basic_types.String.Set.t) defuse
@@ -209,16 +221,13 @@ module Instruction : sig
 
   val is_return : t -> bool
 
-
-  val generic_reset_successors:
+  val generic_reset_successors :
     p:(Dba.id -> bool) -> f:(Dba.id -> Dba.id) -> Dba.Instr.t -> Dba.Instr.t
-    (** [generic_reset_successors ~p ~f i]
+  (** [generic_reset_successors ~p ~f i]
         applies the transformation [f] on the successor index of [i]
         if predicate [p] is [true]
     *)
-
 end
-
 
 module Declarations : sig
   type t = (Dba.size * Dba.VarTag.t) Basic_types.String.Map.t
@@ -227,38 +236,38 @@ module Declarations : sig
   val of_list : (string * Dba.size * Dba.VarTag.t) list -> t
 end
 
-
 module Statement : sig
-  type t = private {
-    location : Caddress.t;
-    instruction : Dba.Instr.t
-  }
+  type t = private { location : Caddress.t; instruction : Dba.Instr.t }
 
   include PRINTABLE with type t := t
 
   val create : Caddress.t -> Dba.Instr.t -> t
+
   val location : t -> Caddress.t
+
   val instruction : t -> Dba.Instr.t
 
   val set_instruction : t -> Dba.Instr.t -> t
+
   val set_location : t -> Caddress.t -> t
 end
-
-
 
 val malloc_id : int ref
 
 type 'a dbainstrmap = (Dba.Instr.t * 'a option) Caddress.Map.t
 
 type read_perm = Read of bool
+
 type write_perm = Write of bool
-type exec_perm =  Exec of bool
+
+type exec_perm = Exec of bool
+
 type permissions = Dba.Expr.t * (read_perm * write_perm * exec_perm)
 
 type 'a program = {
   start_address : Dba.address;
   declarations : Declarations.t;
-  permissions: permissions list Region.Map.t * Dba.Expr.t Rights.t;
+  permissions : permissions list Region.Map.t * Dba.Expr.t Rights.t;
   initializations : Dba.Instr.t list;
   instructions : 'a dbainstrmap;
 }

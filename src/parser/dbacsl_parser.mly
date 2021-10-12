@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2019                                               */
+/*  Copyright (C) 2016-2021                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -44,10 +44,10 @@
       else
         if sz1 <> sz2 then
           match left, right with
-          | (_,Dba.Expr.Cst(`Constant, bv)) ->
+          | (_,Dba.Expr.Cst bv) ->
              binary op left
                     (constant (Bitvector.create (Bitvector.value_of bv) sz1))
-          | (Dba.Expr.Cst(`Constant, bv),_) ->
+          | (Dba.Expr.Cst bv,_) ->
              binary op
                     (constant (Bitvector.create (Bitvector.value_of bv) sz2)) right
           | _ -> Printf.printf "Cannot infer size (mismatch remaining"; default ()
@@ -100,17 +100,17 @@ term:
 expr:
   | INT INFER INT SUPER {
     let size = int_of_string $3 in
-    let bigint = (Bigint.big_int_of_string $1) in
+    let bigint = (Z.of_string $1) in
     let bv = Bitvector.create bigint size in
     Dba.Expr.constant bv
   }
   | INT {
-    let bigint = Bigint.big_int_of_string $1 in
+    let bigint = Z.of_string $1 in
     Expr.constant (Bitvector.create bigint 0)
   }
   | HEXA {
     let s, size = $1 in
-    let bigint = Bigint.big_int_of_string s in
+    let bigint = Z.of_string s in
     let bv = Bitvector.create bigint size in
     Expr.constant bv
   }

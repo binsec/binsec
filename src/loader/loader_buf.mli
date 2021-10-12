@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,120 +25,144 @@
 
 open Loader_types
 
-(** Minimal support for error reporting. *)
 exception Invalid_format of string
+(** Minimal support for error reporting. *)
+
 val invalid_format : string -> 'a
+
 val assert_format : bool -> string -> unit
 
-module type S =
-sig
+module type S = sig
   type t
 
-  (** Size of the buffer. *)
   val dim : t -> int
+  (** Size of the buffer. *)
 
-  (** A mutable cursor, pointing to an arbitrary position of a buffer. *)
   type cursor = private {
-    buffer: t;
-    endian: Machine.endianness;
-    mutable position: int;
+    buffer : t;
+    endian : Machine.endianness;
+    mutable position : int;
   }
+  (** A mutable cursor, pointing to an arbitrary position of a buffer. *)
 
-  val cursor  : ?at:int -> Machine.endianness -> t -> cursor
-  val seek    : cursor -> int -> unit
-  val ensure  : cursor -> int -> string -> unit
+  val cursor : ?at:int -> Machine.endianness -> t -> cursor
+
+  val seek : cursor -> int -> unit
+
+  val ensure : cursor -> int -> string -> unit
+
   val advance : cursor -> int -> unit
-  val at_end  : cursor -> bool
+
+  val at_end : cursor -> bool
 
   module Peek : sig
-    val u8  : cursor -> u8
+    val u8 : cursor -> u8
+
     val u16 : cursor -> u16
+
     val u32 : cursor -> u32
+
     val u64 : cursor -> u64
 
-    val s8  : cursor -> s8
+    val s8 : cursor -> s8
+
     val s16 : cursor -> s16
+
     val s32 : cursor -> s32
+
     val s64 : cursor -> s64
 
     val uleb128 : cursor -> u64
+
     val sleb128 : cursor -> s64
 
-
-    (** [fixed_string t len] peeks a string of exactly [len] bytes from [t] *)
     val fixed_string : cursor -> int -> string
+    (** [fixed_string t len] peeks a string of exactly [len] bytes from [t] *)
 
+    val zero_string : string -> cursor -> ?maxlen:int -> unit -> string
     (** [zero_string msg t ?maxlen ()] peeks a zero-terminated string from [t],
       * stopping at the first zero or when [maxlen] is reached, if it was
       * provided. *)
-    val zero_string : string -> cursor -> ?maxlen:int -> unit -> string
   end
 
   module Read : sig
-    val u8  : cursor -> u8
+    val u8 : cursor -> u8
+
     val u16 : cursor -> u16
+
     val u32 : cursor -> u32
+
     val u64 : cursor -> u64
 
-    val s8  : cursor -> s8
+    val s8 : cursor -> s8
+
     val s16 : cursor -> s16
+
     val s32 : cursor -> s32
+
     val s64 : cursor -> s64
 
     val uleb128 : cursor -> u64
+
     val sleb128 : cursor -> s64
 
-    (** [fixed_string t len] reads a string of exactly [len] bytes from [t] *)
     val fixed_string : cursor -> int -> string
+    (** [fixed_string t len] reads a string of exactly [len] bytes from [t] *)
 
+    val zero_string : string -> cursor -> ?maxlen:int -> unit -> string
     (** [zero_string msg t ?maxlen ()] reads a zero-terminated string from [t],
       * stopping at the first zero or when [maxlen] is reached, if it was
       * provided. *)
-    val zero_string : string -> cursor -> ?maxlen:int -> unit -> string
   end
 end
 
-module type Bufferable =
-sig
+module type Bufferable = sig
   type t
 
   val get : t -> int -> int
+
   val dim : t -> int
 end
 
-module Make (B: Bufferable) : S with type t = B.t
+module Make (B : Bufferable) : S with type t = B.t
 
-module type W =
-sig
+module type W = sig
   include S
 
   module Write : sig
-    val u8  : cursor -> u8 -> unit
+    val u8 : cursor -> u8 -> unit
+
     val u16 : cursor -> u16 -> unit
+
     val u32 : cursor -> u32 -> unit
+
     val u64 : cursor -> u64 -> unit
 
-    val s8  : cursor -> s8 -> unit
+    val s8 : cursor -> s8 -> unit
+
     val s16 : cursor -> s16 -> unit
+
     val s32 : cursor -> s32 -> unit
+
     val s64 : cursor -> s64 -> unit
   end
 end
 
-module type Writable =
-sig
+module type Writable = sig
   include Bufferable
 
   val set : t -> int -> u8 -> unit
 end
 
-module Wake (W: Writable) : W with type t = W.t
+module Wake (W : Writable) : W with type t = W.t
 
-include W with type t = (int, Bigarray.int8_unsigned_elt,
-                         Bigarray.c_layout) Bigarray.Array1.t
+include
+  W
+    with type t =
+          (int, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
 
+val sub : cursor -> int -> cursor
 (** [sub t len] returns a fresh cursor pointing to the beginning of a sub-buffer
   * of size [len] starting from [t], and advances [t] by [len]. *)
-val sub : cursor -> int -> cursor
 
-val read : ?signed:bool -> [ `x32 | `x64 ] -> (cursor -> int)
+val read : ?signed:bool -> [ `x32 | `x64 ] -> cursor -> int

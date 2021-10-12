@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,38 +25,38 @@
 
 module type S = sig
   type key
+
   type 'a t
 
-  val empty     : 'a t
+  val empty : 'a t
 
-  val is_empty  : 'a t -> bool
+  val is_empty : 'a t -> bool
 
-  val singleton : key  -> 'a   -> 'a t
+  val singleton : key -> 'a -> 'a t
 
-  val add       : key  -> 'a   -> 'a t -> 'a t
+  val add : key -> 'a -> 'a t -> 'a t
 
-  val remove    : key  -> 'a t -> 'a t
+  val remove : key -> 'a t -> 'a t
 
-  val mem       : key  -> 'a t -> bool
+  val mem : key -> 'a t -> bool
 
-  val find      : key  -> 'a t -> 'a
+  val find : key -> 'a t -> 'a
 
-  val union     : (key -> 'a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
+  val union : (key -> 'a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
 
-  val join      : (key -> 'a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
+  val join : (key -> 'a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
 
-  val fold      : (key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
+  val fold : (key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
 
-  val iter      : (key -> 'a -> unit) -> 'a t -> unit
+  val iter : (key -> 'a -> unit) -> 'a t -> unit
 
-  val map       : ('a -> 'b) -> 'a t -> 'b t
+  val map : ('a -> 'b) -> 'a t -> 'b t
 
-  val mapi      : (key -> 'a -> 'b) -> 'a t -> 'b t
+  val mapi : (key -> 'a -> 'b) -> 'a t -> 'b t
 
-  val cardinal  : 'a t -> int
+  val cardinal : 'a t -> int
 
-  val bindings  : 'a t -> (key * 'a) list
+  val bindings : 'a t -> (key * 'a) list
 end
 
-
-module Make(H : Hashtbl.HashedType) : S with type key = H.t
+module Make (H : Hashtbl.HashedType) : S with type key = H.t

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,7 +20,6 @@
 (**************************************************************************)
 
 open Ida_options
-
 module IO = Ida_options
 module ICG = Ida_cg
 module IC = Ida_cfg.C
@@ -30,35 +29,30 @@ let callgraph_dot_file = "callgraph.dot"
 
 let parse_cg () =
   let time, cg =
-    Utils.time
-      (fun () ->
+    Utils.time (fun () ->
         let cg_file = Filename.concat (Sys.getcwd ()) callgraph_dot_file in
-        ICG.Parse.build_cg ~cg_file) in
+        ICG.Parse.build_cg ~cg_file)
+  in
   Logger.result "Parsing CG #nodes: %d, #edges: %d, time: %.2f (s)"
     (ICG.nb_vertex cg) (ICG.nb_edges cg) time;
   cg
-;;
-
 
 (* Produces dot files *)
 let parse_cfg ~simple ~ida_file =
   let time, (g, cfg) =
     Utils.time (fun () ->
         let g = Ida_cfg.do_cfg ~simple ~ida_file in
-        g, IG.graph g) in
+        (g, IG.graph g))
+  in
   Logger.result "Parsing CFG #nodes: %d, #edges: %d, time: %.2f (s)"
     (IC.nb_vertex cfg) (IC.nb_edges cfg) time;
   g
-;;
 
 let run () =
-  if IO.is_enabled () then
+  if IO.is_enabled () then (
     let simple = IO.IdaSimpleCfg.get () in
     let ida_file = IO.IdaOutputFile.get () in
     ignore @@ parse_cg ();
-    ignore @@ parse_cfg ~simple ~ida_file;
-;;
+    ignore @@ parse_cfg ~simple ~ida_file)
 
-let _ =
-  Cli.Boot.enlist ~name:"IDA + disassembly" ~f:run;
-;;
+let _ = Cli.Boot.enlist ~name:"IDA + disassembly" ~f:run

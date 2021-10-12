@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,30 +22,45 @@
 open Formula
 
 val rename_bl_var : (string -> string) -> bl_var -> bl_var
+
 val rename_bv_var : (string -> string) -> bv_var -> bv_var
+
 val rename_ax_var : (string -> string) -> ax_var -> ax_var
 
 val rename_bl_term : (string -> string) -> bl_term -> bl_term
+
 val rename_bv_term : (string -> string) -> bv_term -> bv_term
+
 val rename_ax_term : (string -> string) -> ax_term -> ax_term
 
 val replace_bl_term : def -> bl_term -> bl_term
+
 val replace_bv_term : def -> bv_term -> bv_term
+
 val replace_ax_term : def -> ax_term -> ax_term
 
 val constant_propagation : ?keep:VarSet.t -> formula -> formula
-val prune_and_inline     : ?keep:VarSet.t -> formula -> formula
+
+val prune_and_inline : ?keep:VarSet.t -> formula -> formula
+
 val read_over_write : ?lst:int -> ?rbs:bool -> ?itv:bool -> formula -> formula
+
 val static_single_assignment : formula -> formula
 
 val taint : (var -> bool) -> formula -> formula
 
 val optimize :
   ?keep:VarSet.t ->
-  ?lst:int -> ?cst:bool -> ?itv:bool -> ?prn:bool -> ?rbs:bool -> ?row:bool ->
+  ?lst:int ->
+  ?cst:bool ->
+  ?itv:bool ->
+  ?prn:bool ->
+  ?rbs:bool ->
+  ?row:bool ->
   ?ssa:bool ->
   ?is_controlled:(VarSet.elt -> bool) ->
-  formula -> formula
+  formula ->
+  formula
 
 val optimize_from_options :
   ?keep:VarSet.t -> ?is_controlled:(VarSet.elt -> bool) -> formula -> formula

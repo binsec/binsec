@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2019                                               */
+/*  Copyright (C) 2016-2021                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -355,7 +355,7 @@ address :
  | HEXADDRESS {
    let s, size = $1 in
    let s = String.sub s 1 (String.length s - 1) in
-   let bigint = Bigint.big_int_of_string s in
+   let bigint = Z.of_string s in
    let bv = Bitvector.create bigint size in
    let vaddr = Virtual_address.of_bitvector bv in
    Dba_types.Caddress.block_start vaddr
@@ -388,7 +388,7 @@ inst:
  | lhs ASSIGN expr SEMICOLON { Assign ($1, $3, 0) }
  | lhs ASSIGN UNDEF SEMICOLON { Undef ($1, 0) }
  | lhs ASSIGN MALLOC LPAR expr RPAR SEMICOLON {
-   (* let size = Bigint.big_int_of_string $5 in *)
+   (* let size = Z.of_string $5 in *)
    Malloc ($1, $5, 0)
  }
  | FREE LPAR expr RPAR SEMICOLON { Free ($3, 0) }
@@ -466,30 +466,30 @@ endianness:
 expr:
  | INT INFER INT SUPER {
    let size = int_of_string $3 in
-   let bigint = (Bigint.big_int_of_string $1) in
+   let bigint = (Z.of_string $1) in
    let bv = Bitvector.create bigint size in
    Dba.Expr.constant bv
  }
 
  | HEXA {
    let s, size = $1 in
-   let bigint = (Bigint.big_int_of_string s) in
+   let bigint = (Z.of_string s) in
    let bv = Bitvector.create bigint size in
    Dba.Expr.constant bv
  }
 
- | LPAR region=region; COMMA INT INFER INT SUPER RPAR {
-   let bigint = Bigint.big_int_of_string $4 in
+ | LPAR _region=region; COMMA INT INFER INT SUPER RPAR {
+   let bigint = Z.of_string $4 in
    let size = int_of_string $6 in
    let bv = Bitvector.create bigint size in
-   Dba.Expr.constant ~region bv
+   Dba.Expr.constant bv
  }
 
- | LPAR region=region; COMMA HEXA RPAR {
+ | LPAR _region=region; COMMA HEXA RPAR {
    let s, size = $4 in
-   let bigint = (Bigint.big_int_of_string s) in
+   let bigint = (Z.of_string s) in
    let bv = Bitvector.create bigint size in
-   Dba.Expr.constant ~region bv
+   Dba.Expr.constant bv
  }
 
  | IDENT { Dba.Expr.var $1 32 }

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,16 +23,13 @@
 
 type size = int
 
-type malloc_size = Bigint.t
+type malloc_size = Z.t
 
 type id = int
 (** An [id] is a local identifier which characterizes an atomic instruction
     inside a Dba.block *)
 
-type address = {
-  base : Virtual_address.t;
-  id : id;
-}
+type address = { base : Virtual_address.t; id : id }
 (** A DBA [address] is the association of a DBA block address represented by
     [base] and a unique [id].
     The first element of a block has [id] [0]. *)
@@ -40,24 +37,22 @@ type address = {
 type addresses = address list
 
 type 'a jump_target =
-  | JInner of 'a      (** Jump inside the same block, to a label *)
-  | JOuter of address (** Jump outside the block to its first element *)
+  | JInner of 'a  (** Jump inside the same block, to a label *)
+  | JOuter of address  (** Jump outside the block to its first element *)
 
-type tag =
-  | Call of address
-  | Return (** For call address of return site *)
+type tag = Call of address | Return  (** For call address of return site *)
 
 type state =
   | OK
   | KO
-  | Undefined of string
-  | Unsupported of string
+  | Undecoded of string  (** Stop because of unanticipated string of bytes **)
+  | Unsupported of string  (** Stop because instr is not supported by Binsec **)
 
 module Unary_op : sig
   type t =
     | UMinus
     | Not
-    | Sext of size
+    | Sext of size  (** result has size `size` **)
     | Uext of size
     | Restrict of int Interval.t
 end
@@ -67,10 +62,10 @@ module Binary_op : sig
     | Plus
     | Minus
     | Mult
-    | DivU                      (* Corresponds to *)
-    | DivS                      (* the truncated division *)
-    | ModU                      (* of C99 and most *)
-    | ModS                      (* processors *)
+    | DivU (* Corresponds to *)
+    | DivS (* the truncated division *)
+    | ModU (* of C99 and most *)
+    | ModS (* processors *)
     | Or
     | And
     | Xor
@@ -100,33 +95,43 @@ module Binary_op : sig
 end
 
 type malloc_status = Freed | Freeable
-type restricted_region =
-  [ `Stack
-  | `Malloc of (int * address) * Bigint.t ]
+
+type restricted_region = [ `Stack | `Malloc of (int * address) * Z.t ]
 
 type region = [ `Constant | restricted_region ]
 
-type 'a var = { name: string; size: size; info: 'a }
+type 'a var = { name : string; size : size; info : 'a }
 
-module rec Expr : sig
+module VarTag : sig
+  type attribute = Value | Size | Last
+
+  type t = Flag | Temp | Register | Symbol of attribute | Empty
+end
+
+module Expr : sig
   type t = private
-    | Var of VarTag.t var  (* size: bits *)
+    | Var of VarTag.t var (* size: bits *)
     | Load of size * Machine.endianness * t (* size: bytes *)
-    | Cst of region * Bitvector.t
+    | Cst of Bitvector.t
     | Unary of Unary_op.t * t
     | Binary of Binary_op.t * t * t
-    | Ite of t *  t *  t (* sugar operator *)
+    | Ite of t * t * t
+  (* sugar operator *)
 
   val size_of : t -> int
+
   val is_equal : t -> t -> bool
 
   val is_constant : t -> bool
 
-  (** {2 Constructors} *)
   val var : ?tag:VarTag.t -> string -> int -> t
-  val v: VarTag.t var -> t
+  (** {2 Constructors} *)
+
+  val v : VarTag.t var -> t
+
   val temporary : size:int -> string -> t
-  val constant : ?region:region -> Bitvector.t -> t
+
+  val constant : Bitvector.t -> t
   (** [constant ~region bv] creates a constant expression from the bitvector
       [bv] from region [region].
       Default region is [`Constant].
@@ -142,27 +147,38 @@ module rec Expr : sig
       I.e.; it has (n - 1) zeros in binary.
    *)
 
-  val one    : t
-  val zero   : t
+  val one : t
 
-  val _true  : t
+  val zero : t
+
+  val _true : t
+
   val _false : t
 
+  val binary : Binary_op.t -> t -> t -> t
   (** {3 Binary expressions} *)
-  val binary          : Binary_op.t -> t -> t -> t
-  val add                : t -> t -> t
-  val sub                : t -> t -> t
-  val mul                : t -> t -> t
-  val smod               : t -> t -> t
-  val umod               : t -> t -> t
-  val udiv               : t -> t -> t
-  val sdiv               : t -> t -> t
-  val append             : t -> t -> t
+
+  val add : t -> t -> t
+
+  val sub : t -> t -> t
+
+  val mul : t -> t -> t
+
+  val smod : t -> t -> t
+
+  val umod : t -> t -> t
+
+  val udiv : t -> t -> t
+
+  val sdiv : t -> t -> t
+
+  val append : t -> t -> t
 
   include Sigs.Comparisons with type t := t and type boolean = t
 
-  val unary              : Unary_op.t -> t -> t
-  val uminus             : t -> t
+  val unary : Unary_op.t -> t -> t
+
+  val uminus : t -> t
 
   include Sigs.EXTENDED_LOGICAL with type t := t
 
@@ -172,14 +188,16 @@ module rec Expr : sig
   val uext : int -> t -> t
   (** [uext sz e] performs an unsigned extension expression [e] to size [sz] *)
 
+  val shift_left : t -> t -> t
 
-  val shift_left  : t -> t -> t
   val shift_right : t -> t -> t
+
   val shift_right_signed : t -> t -> t
   (** [shift_(left|right) e q] shifts expression [e] by quantity [q], padding
       with zeroes *)
 
-  val rotate_left  : t -> t -> t
+  val rotate_left : t -> t -> t
+
   val rotate_right : t -> t -> t
   (** [rotate_(left|right) e q] rotates expression [e] by quantity [q] *)
 
@@ -203,45 +221,33 @@ module rec Expr : sig
       - the maximum unsigned representable for the size of this expression *)
 end
 
-and Flag : sig
-  type t = private
-    | Cmp of Expr.t * Expr.t
-    | Sub of Expr.t * Expr.t
-    | Test of Expr.t * Expr.t
-    | Unspecified
-
-  val comparison  : Expr.t -> Expr.t -> t
-  val subtraction : Expr.t -> Expr.t -> t
-  val test        : Expr.t -> Expr.t -> t
-  val unspecified : t
-end
-
-and VarTag : sig
-  type t = private
-    | Flag of Flag.t
-    | Temp
-    | Register
-    | Empty
-
-  val flag : Flag.t -> t
-  val temp : t
-  val empty: t
-  val register: t
-end
-
-
 type exprs = Expr.t list
 
-type printable =
-  | Exp of Expr.t
-  | Str of string
+module Var : sig
+  type t = VarTag.t var
+
+  val create : string -> bitsize:Size.Bit.t -> tag:VarTag.t -> t
+
+  val flag : ?bitsize:Size.Bit.t -> string -> t
+  (** [flag ~size fname] creates a flag variable.
+      - [size] defaults to 1
+  *)
+
+  val temporary : string -> Size.Bit.t -> t
+
+  val temp : Size.Bit.t -> t
+  (** [temp n] creates a lvalue representing a temporary of size [n] with name
+      [Format.sprintf "temp%d" n]. *)
+end
+
+type printable = Exp of Expr.t | Str of string
 
 module LValue : sig
-
   type t = private
     | Var of VarTag.t var (* size in bits *)
     | Restrict of VarTag.t var * int Interval.t
-    | Store of size * Machine.endianness * Expr.t  (* size in bytes *)
+    | Store of size * Machine.endianness * Expr.t
+  (* size in bytes *)
 
   include Sigs.Eq with type t := t
 
@@ -251,36 +257,35 @@ module LValue : sig
   val var : ?tag:VarTag.t -> bitsize:Size.Bit.t -> string -> t
   (** [var tag name ~size] creates a DBA lvalue for a variable *)
 
-  val v: VarTag.t var -> t
+  val v : VarTag.t var -> t
 
-  val flag : ?bitsize:Size.Bit.t -> ?flag_t:Flag.t -> string -> t
-  (** [flag ~size ~flag_t fname] creates a variable whose flag is of the
-      subtype [flag_t].
+  val flag : ?bitsize:Size.Bit.t -> string -> t
+  (** [flag ~size fname] creates a flag variable.
       - [size] defaults to 1
-      - [flag_t] defaults to [Flag.Unspecified]
   *)
 
   val temporary : string -> Size.Bit.t -> t
 
   val _restrict : string -> Size.Bit.t -> int -> int -> t
+
   val _bit_restrict : string -> Size.Bit.t -> int -> t
   (** [_restrict] and [_bit_restrict] are deprecated. Use the other forms
    ** below.
    *)
 
   val restrict : VarTag.t var -> int -> int -> t
+
   val bit_restrict : VarTag.t var -> int -> t
 
   val store : Size.Byte.t -> Machine.endianness -> Expr.t -> t
 
-  val temp: Size.Bit.t -> t
+  val temp : Size.Bit.t -> t
   (** [temp n] creates a lvalue representing a temporary of size [n] with name
       [Format.sprintf "temp%d" n]. *)
 
   val is_expr_translatable : Expr.t -> bool
   (** [is_expr_translatable e] returns true is the expression can have a valid
       lvalue translation *)
-
 
   val of_expr : Expr.t -> t
   (** [of_expr e] translates an expression to its lvalue equivalent if possible.
@@ -303,9 +308,9 @@ module LValue : sig
   *)
 end
 
-
 module Tag : sig
   type t = tag
+
   include Sigs.Eq with type t := t
 end
 
@@ -313,15 +318,17 @@ module Jump_target : sig
   type 'a t = 'a jump_target
 
   val outer : address -> 'a t
+
   val inner : 'a -> 'a t
 
   val is_inner : 'a t -> bool
+
   val is_outer : 'a t -> bool
 end
 
 module Instr : sig
   type t = private
-    | Assign of LValue.t * Expr.t *  id
+    | Assign of LValue.t * Expr.t * id
     | SJump of id jump_target * tag option
     | DJump of Expr.t * tag option
     | If of Expr.t * id jump_target * id
@@ -331,6 +338,8 @@ module Instr : sig
     | NondetAssume of LValue.t list * Expr.t * id
     | Nondet of LValue.t * region * id
     | Undef of LValue.t * id
+        (** value of lval is undefined
+                              ** e.g. AF flag for And instruction in x86 **)
     | Malloc of LValue.t * Expr.t * id
     | Free of Expr.t * id
     | Print of printable list * id
@@ -342,21 +351,30 @@ module Instr : sig
       l-value [lv], going to DBA instruction successor [id] *)
 
   val ite : Expr.t -> id Jump_target.t -> int -> t
+
   val undefined : LValue.t -> int -> t
+
   val non_deterministic : ?region:region -> LValue.t -> int -> t
+
   val static_jump : ?tag:Tag.t -> id Jump_target.t -> t
+
   val static_inner_jump : ?tag:Tag.t -> int -> t
+
   val call : return_address:address -> id Jump_target.t -> t
+
   val dynamic_jump : ?tag:Tag.t -> Expr.t -> t
 
   val malloc : LValue.t -> Expr.t -> int -> t
+
   val free : Expr.t -> int -> t
 
   val _assert : Expr.t -> int -> t
-  val assume  : Expr.t -> int -> t
+
+  val assume : Expr.t -> int -> t
+
   val non_deterministic_assume : LValue.t list -> Expr.t -> int -> t
+
   val stop : state option -> t
 
   val print : printable list -> int -> t
-
 end

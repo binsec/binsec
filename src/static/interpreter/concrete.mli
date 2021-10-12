@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,31 +21,35 @@
 
 (** Represent the concrete state of a running program. *)
 module Env : sig
-
   type t
+
   exception Ox8BADF00D of Dba.Expr.t
 
   val empty : t
+
   val load_memory_file : t -> string -> t
+
   val load_init_file : t -> string -> t
 
   val eval : t -> Dba.Expr.t -> Bitvector.t
 
   val assign : t -> Dba.LValue.t -> Bitvector.t -> t
+
   val kill : t -> Dba.LValue.t -> t
 end
 
 module type Program = sig
-
   type t
+
   exception Ox8BADF00D of Dba.address
 
   val fetch : t -> Dba.address -> Dba.Instr.t
 end
 
 (** **)
-module Interpreter (P: Program) : sig
+module Interpreter (P : Program) : sig
   exception AssertFailure of Dba.address
+
   exception EndOfTrace of Env.t
 
   val step : Env.t -> Dba.address -> Dba.Instr.t -> Env.t * Dba.address
@@ -59,5 +63,6 @@ module Dba_program : Program with type t = Dba.id Dba_types.program
 
 module Instr_list : sig
   include Program
+
   val init : Dba.Instr.t list -> t
 end

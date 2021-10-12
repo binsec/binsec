@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,27 +19,28 @@
 (*                                                                        *)
 (**************************************************************************)
 
-
-
 module type S = sig
   include Cfg.S
 
-  val ordered_iter_vertex:
+  val ordered_iter_vertex :
     compare:(vertex -> vertex -> int) -> (vertex -> unit) -> t -> unit
 
   val iter_vertex_by_address : (vertex -> unit) -> t -> unit
 
-  val output_graph : Pervasives.out_channel ->
-                     t -> entry:vertex -> Virtual_address.t list -> unit
+  val output_graph :
+    out_channel -> t -> entry:vertex -> Virtual_address.t list -> unit
 
   val dump : filename:string -> t -> unit
 end
 
+module Make (H : Hashtbl.HashedType) :
+  S
+    with type addr = Virtual_address.t
+     and type inst = Instruction.t
+     and type symb = H.t
 
-module Make(H:Hashtbl.HashedType): S with type addr = Virtual_address.t
-                                      and type inst = Instruction.t
-                                      and type symb = H.t
-
-include S with type addr = Virtual_address.t
-           and type inst = Instruction.t
-           and type symb = string
+include
+  S
+    with type addr = Virtual_address.t
+     and type inst = Instruction.t
+     and type symb = string

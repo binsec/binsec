@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,13 +21,16 @@
 
 (** Extra pretty-printing functions *)
 
-type sformat = (unit,Format.formatter,unit) Pervasives.format
+type sformat = (unit, Format.formatter, unit) format
 
 type 'a formatter = Format.formatter -> 'a -> unit
 
 val pp_list :
-  ?pre:sformat -> ?post:sformat -> ?sep:sformat ->
-  'a formatter -> 'a list formatter
+  ?pre:sformat ->
+  ?post:sformat ->
+  ?sep:sformat ->
+  'a formatter ->
+  'a list formatter
 (** [pp_list ~pre ~post ~sep pp_e ppf l] pretty-prints list [l] between opening
     formatting indication [pre] and closing formatting indication [post] using
     pretty-printer [pp_e] to print its elements, separating by formatting
@@ -57,5 +60,4 @@ val pp_byte : ?prefixed:bool -> int formatter
     This function assumes that [by] is between 0 ad 255.
 *)
 
-val pp_to_file :
-  filename:string -> 'a formatter -> 'a -> unit
+val pp_to_file : filename:string -> 'a formatter -> 'a -> unit

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -90,7 +90,7 @@ let get_stored_string () =
   s
 
 (* To store the position of the beginning of a string and comment *)
-let string_start_loc = ref Locations.none;;
+let string_start_loc = ref Location.none;;
 
 let update_loc lexbuf file line absolute chars =
   let pos = lexbuf.lex_curr_p in
@@ -140,7 +140,7 @@ rule token = parse
   | "\""
       { reset_string_buffer();
         let string_start = lexbuf.lex_start_p in
-        string_start_loc := Locations.none;
+        string_start_loc := Location.none;
         string lexbuf;
         lexbuf.lex_start_p <- string_start;
         STRING (get_stored_string()) }

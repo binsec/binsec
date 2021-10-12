@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,27 +19,35 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Core functionalities for disassembly *)
 exception Decode_error of string
+(** Core functionalities for disassembly *)
 
+val register_decoder :
+  Machine.isa ->
+  (Lreader.t -> Virtual_address.t -> 'a * Dhunk.t) ->
+  ('a -> Instruction.Generic.t) ->
+  unit
 
 (** {2 Worklist definition for disassembly } *)
 
 module W : sig
   include Worklist.S with type elt = Virtual_address.t
-  include Sigs.PRINTABLE with type t:= t
 
-  val of_list  : Virtual_address.t list -> t
+  include Sigs.PRINTABLE with type t := t
+
+  val of_list : Virtual_address.t list -> t
+
   val add_list : t -> Virtual_address.t list -> t
 
   val add_set : t -> Virtual_address.Set.t -> t
-  val of_set  : Virtual_address.Set.t -> t
+
+  val of_set : Virtual_address.Set.t -> t
 
   val add_filtered_set :
-    (Virtual_address.t -> bool) -> t -> Virtual_address.Set.t ->t
+    (Virtual_address.t -> bool) -> t -> Virtual_address.Set.t -> t
 
   val of_filtered_set :
-    (Virtual_address.t -> bool) -> Virtual_address.Set.t ->t
+    (Virtual_address.t -> bool) -> Virtual_address.Set.t -> t
 
   val singleton : Virtual_address.t -> t
 end
@@ -47,25 +55,29 @@ end
 (** {2 Basic successors definition } *)
 
 module Successors : sig
-  val recursive : Instruction.t ->  Virtual_address.Set.t
+  val recursive : Instruction.t -> Virtual_address.Set.t
 
-  val linear : Instruction.t ->  Virtual_address.Set.t
+  val linear : Instruction.t -> Virtual_address.Set.t
 
-  val linear_bytewise : Instruction.t ->  Virtual_address.Set.t
+  val linear_bytewise : Instruction.t -> Virtual_address.Set.t
 end
+
+val get_decode_replacement : unit -> Dhunk.t Virtual_address.Map.t
+
+val add_replacement : Virtual_address.t -> Dhunk.t -> unit
 
 val decode : Virtual_address.t -> Instruction.t * Virtual_address.t option
 (** [decode addr] decodes the contents of address [addr]
     @return the contents of this address and its linear successor (if applicable)
 *)
 
-
 (** {2 Iterators} *)
 
 val fold :
-  ('a -> W.t ->
-   Instruction.t -> Virtual_address.Set.t -> 'a * W.t ) ->
-  'a -> W.t -> 'a
+  ('a -> W.t -> Instruction.t -> Virtual_address.Set.t -> 'a * W.t) ->
+  'a ->
+  W.t ->
+  'a
 (** [fold f wl v] starts disassembly from worklist [wl] (i.e. an initial
     state) using function [f] to guide its choices to compute a value intialized
     to [v].
@@ -86,15 +98,12 @@ val fold :
 
 *)
 
-
-val iter:
-  (W.t -> Instruction.t -> Virtual_address.Set.t -> W.t) -> W.t -> unit
+val iter : (W.t -> Instruction.t -> Virtual_address.Set.t -> W.t) -> W.t -> unit
 (** [iter f worklist] iterates disassembles an executable with function [f].
 
     Given the signature of the function, all computations, except worklist
     management, must take place as imperative side-effects.
 *)
-
 
 (** {2 Functors } *)
 
@@ -102,20 +111,19 @@ module type Iterable = sig
   val successors : Instruction.t -> Virtual_address.Set.t
 end
 
-module Make (I:Iterable) : sig
+module Make (I : Iterable) : sig
   val fold :
-    ('a -> W.t ->
-     Instruction.t -> Virtual_address.Set.t -> 'a * W.t ) ->
-    'a -> W.t -> 'a
+    ('a -> W.t -> Instruction.t -> Virtual_address.Set.t -> 'a * W.t) ->
+    'a ->
+    W.t ->
+    'a
 
-  val iter:
+  val iter :
     (W.t -> Instruction.t -> Virtual_address.Set.t -> W.t) -> W.t -> unit
 end
 
 val decode_binstream :
-  ?base:int ->
-  Binstream.t ->
-  Instruction.t * Virtual_address.t option
+  ?base:int -> Binstream.t -> Instruction.t * Virtual_address.t option
 (** [decode_binstream b] decodes stream [b] and returns
     a tuple of the first instruction contained in [b] and its possible
     linear successor.

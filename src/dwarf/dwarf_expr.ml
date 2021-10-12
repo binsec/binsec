@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,61 +21,82 @@
 
 module I386 = struct
   let eax = Dba.Expr.var "eax" 32
+
   let ecx = Dba.Expr.var "ecx" 32
+
   let edx = Dba.Expr.var "edx" 32
+
   let ebx = Dba.Expr.var "ebx" 32
+
   let esp = Dba.Expr.var "esp" 32
+
   let ebp = Dba.Expr.var "ebp" 32
+
   let esi = Dba.Expr.var "esi" 32
+
   let edi = Dba.Expr.var "edi" 32
+
   let eip = Dba.Expr.var "eip" 32
 
   let stx = Array.init 8 (fun x -> Dba.Expr.var (Format.sprintf "st%d" x) 80)
+
   let mmx = Array.init 8 (fun x -> Dba.Expr.var (Format.sprintf "mm%d" x) 64)
+
   let xmmx = Array.init 8 (fun x -> Dba.Expr.var (Format.sprintf "xmm%d" x) 128)
 
   let es = Dba.Expr.var "es" 16
+
   let cs = Dba.Expr.var "cs" 16
+
   let ss = Dba.Expr.var "ss" 16
+
   let ds = Dba.Expr.var "ds" 16
+
   let fs = Dba.Expr.var "fs" 16
+
   let gs = Dba.Expr.var "gs" 16
 
   let map = function
-    |  0 -> eax
-    |  1 -> ecx
-    |  2 -> edx
-    |  3 -> ebx
-    |  4 -> esp
-    |  5 -> ebp
-    |  6 -> esi
-    |  7 -> edi
-    |  8 -> eip
-    | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 as x -> stx.(x - 11)
-    | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 as x -> xmmx.(x - 21)
-    | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 as x -> mmx.(x - 29)
+    | 0 -> eax
+    | 1 -> ecx
+    | 2 -> edx
+    | 3 -> ebx
+    | 4 -> esp
+    | 5 -> ebp
+    | 6 -> esi
+    | 7 -> edi
+    | 8 -> eip
+    | (11 | 12 | 13 | 14 | 15 | 16 | 17 | 18) as x -> stx.(x - 11)
+    | (21 | 22 | 23 | 24 | 25 | 26 | 27 | 28) as x -> xmmx.(x - 21)
+    | (29 | 30 | 31 | 32 | 33 | 34 | 35 | 36) as x -> mmx.(x - 29)
     | 40 -> es
     | 41 -> cs
     | 42 -> ss
     | 43 -> ds
     | 44 -> fs
     | 45 -> gs
-    | x    ->
-       Dwarf_options.Logger.fatal
-         "unable to map integer %d to a known expression" x
+    | x ->
+        Dwarf_options.Logger.fatal
+          "unable to map integer %d to a known expression" x
 end
 
 module ARMv7 = struct
   let rx = Array.init 10 (fun x -> Dba.Expr.var (Format.sprintf "r%d" x) 32)
+
   let sl = Dba.Expr.var "sl" 32
+
   let fp = Dba.Expr.var "fp" 32
+
   let ip = Dba.Expr.var "ip" 32
+
   let sp = Dba.Expr.var "sp" 32
+
   let lr = Dba.Expr.var "lr" 32
+
   let pc = Dba.Expr.var "pc" 32
 
   let map = function
-    | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 as x -> rx.(x)
+    | (0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9) as x -> rx.(x)
     | 10 -> sl
     | 11 -> fp
     | 12 -> ip
@@ -83,16 +104,16 @@ module ARMv7 = struct
     | 14 -> lr
     | 15 -> pc
     | x ->
-       Dwarf_options.Logger.fatal
-         "unable to map integer %d to a known expression" x
+        Dwarf_options.Logger.fatal
+          "unable to map integer %d to a known expression" x
 end
 
-let map x = match Kernel_options.Machine.get () with
-  | Machine.X86 { bits=`x32 } -> I386.map x
-  | Machine.ARM { rev=`v7; _ } -> ARMv7.map x
+let map x =
+  match Kernel_options.Machine.get () with
+  | Machine.X86 { bits = `x32 } -> I386.map x
+  | Machine.ARM { rev = `v7; _ } -> ARMv7.map x
   | mach ->
-     Dwarf_options.Logger.fatal
-       "unsuported architecture %a" Machine.pp mach
+      Dwarf_options.Logger.fatal "unsuported architecture %a" Machine.pp mach
 
 open Loader_buf
 
@@ -157,127 +178,127 @@ module Operator = struct
     | Reinterpret of int
 
   let pp ppf = function
-    | Addr a              -> Format.fprintf ppf "DW_OP_addr (%d)" a
-    | Deref               -> Format.fprintf ppf "DW_OP_deref"
-    | Const c           -> Format.fprintf ppf "DW_OP_const (%d)" c
-    | Dup                 -> Format.fprintf ppf "DW_OP_dup"
-    | Drop                -> Format.fprintf ppf "DW_OP_drop"
-    | Over                -> Format.fprintf ppf "DW_OP_over"
-    | Pick o              -> Format.fprintf ppf "DW_OP_pick (%d)" o
-    | Swap                -> Format.fprintf ppf "DW_OP_swap"
-    | Rot                 -> Format.fprintf ppf "DW_OP_rot"
-    | Xderef              -> Format.fprintf ppf "DW_OP_xderef"
-    | Abs                 -> Format.fprintf ppf "DW_OP_abs"
-    | And                 -> Format.fprintf ppf "DW_OP_and"
-    | Div                 -> Format.fprintf ppf "DW_OP_div"
-    | Minus               -> Format.fprintf ppf "DW_OP_minus"
-    | Mod                 -> Format.fprintf ppf "DW_OP_mod"
-    | Mul                 -> Format.fprintf ppf "DW_OP_mul"
-    | Neg                 -> Format.fprintf ppf "DW_OP_neg"
-    | Not                 -> Format.fprintf ppf "DW_OP_not"
-    | Or                  -> Format.fprintf ppf "DW_OP_or"
-    | Plus                -> Format.fprintf ppf "DW_OP_plus"
-    | Plus_uconst a       -> Format.fprintf ppf "DW_OP_plus_uconst (%d)" a
-    | Shl                 -> Format.fprintf ppf "DW_OP_shl"
-    | Shr                 -> Format.fprintf ppf "DW_OP_shr"
-    | Shra                -> Format.fprintf ppf "DW_OP_shra"
-    | Xor                 -> Format.fprintf ppf "DW_OP_xor"
-    | Bra o               -> Format.fprintf ppf "DW_OP_bra (%d)" o
-    | Eq                  -> Format.fprintf ppf "DW_OP_eq"
-    | Ge                  -> Format.fprintf ppf "DW_OP_ge"
-    | Gt                  -> Format.fprintf ppf "DW_OP_gt"
-    | Le                  -> Format.fprintf ppf "DW_OP_le"
-    | Lt                  -> Format.fprintf ppf "DW_OP_lt"
-    | Ne                  -> Format.fprintf ppf "DW_OP_ne"
-    | Skip o              -> Format.fprintf ppf "DW_OP_skip (%d)" o
-    | Regx 0              -> Format.fprintf ppf "DW_OP_reg0"
-    | Regx 1              -> Format.fprintf ppf "DW_OP_reg1"
-    | Regx 2              -> Format.fprintf ppf "DW_OP_reg2"
-    | Regx 3              -> Format.fprintf ppf "DW_OP_reg3"
-    | Regx 4              -> Format.fprintf ppf "DW_OP_reg4"
-    | Regx 5              -> Format.fprintf ppf "DW_OP_reg5"
-    | Regx 6              -> Format.fprintf ppf "DW_OP_reg6"
-    | Regx 7              -> Format.fprintf ppf "DW_OP_reg7"
-    | Regx 8              -> Format.fprintf ppf "DW_OP_reg8"
-    | Regx 9              -> Format.fprintf ppf "DW_OP_reg9"
-    | Regx 10             -> Format.fprintf ppf "DW_OP_reg10"
-    | Regx 11             -> Format.fprintf ppf "DW_OP_reg11"
-    | Regx 12             -> Format.fprintf ppf "DW_OP_reg12"
-    | Regx 13             -> Format.fprintf ppf "DW_OP_reg13"
-    | Regx 14             -> Format.fprintf ppf "DW_OP_reg14"
-    | Regx 15             -> Format.fprintf ppf "DW_OP_reg15"
-    | Regx 16             -> Format.fprintf ppf "DW_OP_reg16"
-    | Regx 17             -> Format.fprintf ppf "DW_OP_reg17"
-    | Regx 18             -> Format.fprintf ppf "DW_OP_reg18"
-    | Regx 19             -> Format.fprintf ppf "DW_OP_reg19"
-    | Regx 20             -> Format.fprintf ppf "DW_OP_reg20"
-    | Regx 21             -> Format.fprintf ppf "DW_OP_reg21"
-    | Regx 22             -> Format.fprintf ppf "DW_OP_reg22"
-    | Regx 23             -> Format.fprintf ppf "DW_OP_reg23"
-    | Regx 24             -> Format.fprintf ppf "DW_OP_reg24"
-    | Regx 25             -> Format.fprintf ppf "DW_OP_reg25"
-    | Regx 26             -> Format.fprintf ppf "DW_OP_reg26"
-    | Regx 27             -> Format.fprintf ppf "DW_OP_reg27"
-    | Regx 28             -> Format.fprintf ppf "DW_OP_reg28"
-    | Regx 29             -> Format.fprintf ppf "DW_OP_reg29"
-    | Regx 30             -> Format.fprintf ppf "DW_OP_reg30"
-    | Regx 31             -> Format.fprintf ppf "DW_OP_reg31"
-    | Bregx (0, a)        -> Format.fprintf ppf "DW_OP_breg0 (%d)" a
-    | Bregx (1, a)        -> Format.fprintf ppf "DW_OP_breg1 (%d)" a
-    | Bregx (2, a)        -> Format.fprintf ppf "DW_OP_breg2 (%d)" a
-    | Bregx (3, a)        -> Format.fprintf ppf "DW_OP_breg3 (%d)" a
-    | Bregx (4, a)        -> Format.fprintf ppf "DW_OP_breg4 (%d)" a
-    | Bregx (5, a)        -> Format.fprintf ppf "DW_OP_breg5 (%d)" a
-    | Bregx (6, a)        -> Format.fprintf ppf "DW_OP_breg6 (%d)" a
-    | Bregx (7, a)        -> Format.fprintf ppf "DW_OP_breg7 (%d)" a
-    | Bregx (8, a)        -> Format.fprintf ppf "DW_OP_breg8 (%d)" a
-    | Bregx (9, a)        -> Format.fprintf ppf "DW_OP_breg9 (%d)" a
-    | Bregx (10, a)       -> Format.fprintf ppf "DW_OP_breg10 (%d)" a
-    | Bregx (11, a)       -> Format.fprintf ppf "DW_OP_breg11 (%d)" a
-    | Bregx (12, a)       -> Format.fprintf ppf "DW_OP_breg12 (%d)" a
-    | Bregx (13, a)       -> Format.fprintf ppf "DW_OP_breg13 (%d)" a
-    | Bregx (14, a)       -> Format.fprintf ppf "DW_OP_breg14 (%d)" a
-    | Bregx (15, a)       -> Format.fprintf ppf "DW_OP_breg15 (%d)" a
-    | Bregx (16, a)       -> Format.fprintf ppf "DW_OP_breg16 (%d)" a
-    | Bregx (17, a)       -> Format.fprintf ppf "DW_OP_breg17 (%d)" a
-    | Bregx (18, a)       -> Format.fprintf ppf "DW_OP_breg18 (%d)" a
-    | Bregx (19, a)       -> Format.fprintf ppf "DW_OP_breg19 (%d)" a
-    | Bregx (20, a)       -> Format.fprintf ppf "DW_OP_breg20 (%d)" a
-    | Bregx (21, a)       -> Format.fprintf ppf "DW_OP_breg21 (%d)" a
-    | Bregx (22, a)       -> Format.fprintf ppf "DW_OP_breg22 (%d)" a
-    | Bregx (23, a)       -> Format.fprintf ppf "DW_OP_breg23 (%d)" a
-    | Bregx (24, a)       -> Format.fprintf ppf "DW_OP_breg24 (%d)" a
-    | Bregx (25, a)       -> Format.fprintf ppf "DW_OP_breg25 (%d)" a
-    | Bregx (26, a)       -> Format.fprintf ppf "DW_OP_breg26 (%d)" a
-    | Bregx (27, a)       -> Format.fprintf ppf "DW_OP_breg27 (%d)" a
-    | Bregx (28, a)       -> Format.fprintf ppf "DW_OP_breg28 (%d)" a
-    | Bregx (29, a)       -> Format.fprintf ppf "DW_OP_breg29 (%d)" a
-    | Bregx (30, a)       -> Format.fprintf ppf "DW_OP_breg30 (%d)" a
-    | Bregx (31, a)       -> Format.fprintf ppf "DW_OP_breg31 (%d)" a
-    | Regx n              -> Format.fprintf ppf "DW_OP_regx (%d)" n
-    | Fbreg a             -> Format.fprintf ppf "DW_OP_fbreg (%d)" a
-    | Bregx (r, a)        -> Format.fprintf ppf "DW_OP_bregx (%d:%d)" r a
-    | Piece _             -> Format.fprintf ppf "DW_OP_piece"
-    | Deref_size _        -> Format.fprintf ppf "DW_OP_deref_size"
-    | Xderef_size _       -> Format.fprintf ppf "DW_OP_xderef_size"
-    | Nop                 -> Format.fprintf ppf "DW_OP_nop"
+    | Addr a -> Format.fprintf ppf "DW_OP_addr (%d)" a
+    | Deref -> Format.fprintf ppf "DW_OP_deref"
+    | Const c -> Format.fprintf ppf "DW_OP_const (%d)" c
+    | Dup -> Format.fprintf ppf "DW_OP_dup"
+    | Drop -> Format.fprintf ppf "DW_OP_drop"
+    | Over -> Format.fprintf ppf "DW_OP_over"
+    | Pick o -> Format.fprintf ppf "DW_OP_pick (%d)" o
+    | Swap -> Format.fprintf ppf "DW_OP_swap"
+    | Rot -> Format.fprintf ppf "DW_OP_rot"
+    | Xderef -> Format.fprintf ppf "DW_OP_xderef"
+    | Abs -> Format.fprintf ppf "DW_OP_abs"
+    | And -> Format.fprintf ppf "DW_OP_and"
+    | Div -> Format.fprintf ppf "DW_OP_div"
+    | Minus -> Format.fprintf ppf "DW_OP_minus"
+    | Mod -> Format.fprintf ppf "DW_OP_mod"
+    | Mul -> Format.fprintf ppf "DW_OP_mul"
+    | Neg -> Format.fprintf ppf "DW_OP_neg"
+    | Not -> Format.fprintf ppf "DW_OP_not"
+    | Or -> Format.fprintf ppf "DW_OP_or"
+    | Plus -> Format.fprintf ppf "DW_OP_plus"
+    | Plus_uconst a -> Format.fprintf ppf "DW_OP_plus_uconst (%d)" a
+    | Shl -> Format.fprintf ppf "DW_OP_shl"
+    | Shr -> Format.fprintf ppf "DW_OP_shr"
+    | Shra -> Format.fprintf ppf "DW_OP_shra"
+    | Xor -> Format.fprintf ppf "DW_OP_xor"
+    | Bra o -> Format.fprintf ppf "DW_OP_bra (%d)" o
+    | Eq -> Format.fprintf ppf "DW_OP_eq"
+    | Ge -> Format.fprintf ppf "DW_OP_ge"
+    | Gt -> Format.fprintf ppf "DW_OP_gt"
+    | Le -> Format.fprintf ppf "DW_OP_le"
+    | Lt -> Format.fprintf ppf "DW_OP_lt"
+    | Ne -> Format.fprintf ppf "DW_OP_ne"
+    | Skip o -> Format.fprintf ppf "DW_OP_skip (%d)" o
+    | Regx 0 -> Format.fprintf ppf "DW_OP_reg0"
+    | Regx 1 -> Format.fprintf ppf "DW_OP_reg1"
+    | Regx 2 -> Format.fprintf ppf "DW_OP_reg2"
+    | Regx 3 -> Format.fprintf ppf "DW_OP_reg3"
+    | Regx 4 -> Format.fprintf ppf "DW_OP_reg4"
+    | Regx 5 -> Format.fprintf ppf "DW_OP_reg5"
+    | Regx 6 -> Format.fprintf ppf "DW_OP_reg6"
+    | Regx 7 -> Format.fprintf ppf "DW_OP_reg7"
+    | Regx 8 -> Format.fprintf ppf "DW_OP_reg8"
+    | Regx 9 -> Format.fprintf ppf "DW_OP_reg9"
+    | Regx 10 -> Format.fprintf ppf "DW_OP_reg10"
+    | Regx 11 -> Format.fprintf ppf "DW_OP_reg11"
+    | Regx 12 -> Format.fprintf ppf "DW_OP_reg12"
+    | Regx 13 -> Format.fprintf ppf "DW_OP_reg13"
+    | Regx 14 -> Format.fprintf ppf "DW_OP_reg14"
+    | Regx 15 -> Format.fprintf ppf "DW_OP_reg15"
+    | Regx 16 -> Format.fprintf ppf "DW_OP_reg16"
+    | Regx 17 -> Format.fprintf ppf "DW_OP_reg17"
+    | Regx 18 -> Format.fprintf ppf "DW_OP_reg18"
+    | Regx 19 -> Format.fprintf ppf "DW_OP_reg19"
+    | Regx 20 -> Format.fprintf ppf "DW_OP_reg20"
+    | Regx 21 -> Format.fprintf ppf "DW_OP_reg21"
+    | Regx 22 -> Format.fprintf ppf "DW_OP_reg22"
+    | Regx 23 -> Format.fprintf ppf "DW_OP_reg23"
+    | Regx 24 -> Format.fprintf ppf "DW_OP_reg24"
+    | Regx 25 -> Format.fprintf ppf "DW_OP_reg25"
+    | Regx 26 -> Format.fprintf ppf "DW_OP_reg26"
+    | Regx 27 -> Format.fprintf ppf "DW_OP_reg27"
+    | Regx 28 -> Format.fprintf ppf "DW_OP_reg28"
+    | Regx 29 -> Format.fprintf ppf "DW_OP_reg29"
+    | Regx 30 -> Format.fprintf ppf "DW_OP_reg30"
+    | Regx 31 -> Format.fprintf ppf "DW_OP_reg31"
+    | Bregx (0, a) -> Format.fprintf ppf "DW_OP_breg0 (%d)" a
+    | Bregx (1, a) -> Format.fprintf ppf "DW_OP_breg1 (%d)" a
+    | Bregx (2, a) -> Format.fprintf ppf "DW_OP_breg2 (%d)" a
+    | Bregx (3, a) -> Format.fprintf ppf "DW_OP_breg3 (%d)" a
+    | Bregx (4, a) -> Format.fprintf ppf "DW_OP_breg4 (%d)" a
+    | Bregx (5, a) -> Format.fprintf ppf "DW_OP_breg5 (%d)" a
+    | Bregx (6, a) -> Format.fprintf ppf "DW_OP_breg6 (%d)" a
+    | Bregx (7, a) -> Format.fprintf ppf "DW_OP_breg7 (%d)" a
+    | Bregx (8, a) -> Format.fprintf ppf "DW_OP_breg8 (%d)" a
+    | Bregx (9, a) -> Format.fprintf ppf "DW_OP_breg9 (%d)" a
+    | Bregx (10, a) -> Format.fprintf ppf "DW_OP_breg10 (%d)" a
+    | Bregx (11, a) -> Format.fprintf ppf "DW_OP_breg11 (%d)" a
+    | Bregx (12, a) -> Format.fprintf ppf "DW_OP_breg12 (%d)" a
+    | Bregx (13, a) -> Format.fprintf ppf "DW_OP_breg13 (%d)" a
+    | Bregx (14, a) -> Format.fprintf ppf "DW_OP_breg14 (%d)" a
+    | Bregx (15, a) -> Format.fprintf ppf "DW_OP_breg15 (%d)" a
+    | Bregx (16, a) -> Format.fprintf ppf "DW_OP_breg16 (%d)" a
+    | Bregx (17, a) -> Format.fprintf ppf "DW_OP_breg17 (%d)" a
+    | Bregx (18, a) -> Format.fprintf ppf "DW_OP_breg18 (%d)" a
+    | Bregx (19, a) -> Format.fprintf ppf "DW_OP_breg19 (%d)" a
+    | Bregx (20, a) -> Format.fprintf ppf "DW_OP_breg20 (%d)" a
+    | Bregx (21, a) -> Format.fprintf ppf "DW_OP_breg21 (%d)" a
+    | Bregx (22, a) -> Format.fprintf ppf "DW_OP_breg22 (%d)" a
+    | Bregx (23, a) -> Format.fprintf ppf "DW_OP_breg23 (%d)" a
+    | Bregx (24, a) -> Format.fprintf ppf "DW_OP_breg24 (%d)" a
+    | Bregx (25, a) -> Format.fprintf ppf "DW_OP_breg25 (%d)" a
+    | Bregx (26, a) -> Format.fprintf ppf "DW_OP_breg26 (%d)" a
+    | Bregx (27, a) -> Format.fprintf ppf "DW_OP_breg27 (%d)" a
+    | Bregx (28, a) -> Format.fprintf ppf "DW_OP_breg28 (%d)" a
+    | Bregx (29, a) -> Format.fprintf ppf "DW_OP_breg29 (%d)" a
+    | Bregx (30, a) -> Format.fprintf ppf "DW_OP_breg30 (%d)" a
+    | Bregx (31, a) -> Format.fprintf ppf "DW_OP_breg31 (%d)" a
+    | Regx n -> Format.fprintf ppf "DW_OP_regx (%d)" n
+    | Fbreg a -> Format.fprintf ppf "DW_OP_fbreg (%d)" a
+    | Bregx (r, a) -> Format.fprintf ppf "DW_OP_bregx (%d:%d)" r a
+    | Piece _ -> Format.fprintf ppf "DW_OP_piece"
+    | Deref_size _ -> Format.fprintf ppf "DW_OP_deref_size"
+    | Xderef_size _ -> Format.fprintf ppf "DW_OP_xderef_size"
+    | Nop -> Format.fprintf ppf "DW_OP_nop"
     | Push_object_address -> Format.fprintf ppf "DW_OP_push_object_address"
-    | Call2 _             -> Format.fprintf ppf "DW_OP_call2"
-    | Call4 _             -> Format.fprintf ppf "DW_OP_call4"
-    | Call_ref _          -> Format.fprintf ppf "DW_OP_call_ref"
-    | Form_tls_address    -> Format.fprintf ppf "DW_OP_form_tls_address"
-    | Call_frame_cfa      -> Format.fprintf ppf "DW_OP_call_frame_cfa"
-    | Bit_piece _         -> Format.fprintf ppf "DW_OP_bit_piece"
-    | Implicit_value _    -> Format.fprintf ppf "DW_OP_implicit_value"
-    | Stack_value         -> Format.fprintf ppf "DW_OP_stack_value"
-    | Implicit_pointer _  -> Format.fprintf ppf "DW_OP_implicit_pointer"
-    | Entry_value _       -> Format.fprintf ppf "DW_OP_entry_value"
-    | Const_type _        -> Format.fprintf ppf "DW_OP_const_type"
-    | Regval_type _       -> Format.fprintf ppf "DW_OP_regval_type"
-    | Deref_type _        -> Format.fprintf ppf "DW_OP_deref_type"
-    | Xderef_type _       -> Format.fprintf ppf "DW_OP_xderef_type"
-    | Convert _           -> Format.fprintf ppf "DW_OP_convert"
-    | Reinterpret _       -> Format.fprintf ppf "DW_OP_reinterpret"
+    | Call2 _ -> Format.fprintf ppf "DW_OP_call2"
+    | Call4 _ -> Format.fprintf ppf "DW_OP_call4"
+    | Call_ref _ -> Format.fprintf ppf "DW_OP_call_ref"
+    | Form_tls_address -> Format.fprintf ppf "DW_OP_form_tls_address"
+    | Call_frame_cfa -> Format.fprintf ppf "DW_OP_call_frame_cfa"
+    | Bit_piece _ -> Format.fprintf ppf "DW_OP_bit_piece"
+    | Implicit_value _ -> Format.fprintf ppf "DW_OP_implicit_value"
+    | Stack_value -> Format.fprintf ppf "DW_OP_stack_value"
+    | Implicit_pointer _ -> Format.fprintf ppf "DW_OP_implicit_pointer"
+    | Entry_value _ -> Format.fprintf ppf "DW_OP_entry_value"
+    | Const_type _ -> Format.fprintf ppf "DW_OP_const_type"
+    | Regval_type _ -> Format.fprintf ppf "DW_OP_regval_type"
+    | Deref_type _ -> Format.fprintf ppf "DW_OP_deref_type"
+    | Xderef_type _ -> Format.fprintf ppf "DW_OP_xderef_type"
+    | Convert _ -> Format.fprintf ppf "DW_OP_convert"
+    | Reinterpret _ -> Format.fprintf ppf "DW_OP_reinterpret"
 
   let load format cursor : t =
     match Read.u8 cursor with
@@ -422,9 +443,9 @@ module Operator = struct
     | 0x90 -> Regx (Read.uleb128 cursor)
     | 0x91 -> Fbreg (Read.sleb128 cursor)
     | 0x92 ->
-       let r = Read.uleb128 cursor in
-       let o = Read.sleb128 cursor in
-       Bregx (r, o)
+        let r = Read.uleb128 cursor in
+        let o = Read.sleb128 cursor in
+        Bregx (r, o)
     | 0x93 -> Piece (Read.uleb128 cursor)
     | 0x94 -> Deref_size (Read.u8 cursor)
     | 0x95 -> Xderef_size (Read.u8 cursor)
@@ -436,43 +457,48 @@ module Operator = struct
     | 0x9b -> Form_tls_address
     | 0x9c -> Call_frame_cfa
     | 0x9d ->
-       let x = Read.uleb128 cursor in
-       let y = Read.uleb128 cursor in
-       Bit_piece (x, y)
+        let x = Read.uleb128 cursor in
+        let y = Read.uleb128 cursor in
+        Bit_piece (x, y)
     | 0x9e ->
-      let size = Read.uleb128 cursor in
-      let block = String.init size (fun _ -> Char.chr (Read.u8 cursor)) in
-      Implicit_value (size, block)
+        let size = Read.uleb128 cursor in
+        let block = String.init size (fun _ -> Char.chr (Read.u8 cursor)) in
+        Implicit_value (size, block)
     | 0x9f -> Stack_value
     | 0xa0 ->
-       let x = read format cursor in
-       Implicit_pointer (x, Read.sleb128 cursor)
+        let x = read format cursor in
+        Implicit_pointer (x, Read.sleb128 cursor)
     | 0xa1 -> Addr (Read.uleb128 cursor)
     | 0xa2 -> Const (Read.uleb128 cursor)
     | 0xa3 ->
-      let size = Read.uleb128 cursor in
-      let block = String.init size (fun _ -> Char.chr (Read.u8 cursor)) in
-      Entry_value (size, block)
+        let size = Read.uleb128 cursor in
+        let block = String.init size (fun _ -> Char.chr (Read.u8 cursor)) in
+        Entry_value (size, block)
     | 0xa4 ->
-      let offset = Read.uleb128 cursor in
-      let size = Read.u8 cursor in
-      let block = String.init size (fun _ -> Char.chr (Read.u8 cursor)) in
-      Const_type (offset, size, block)
+        let offset = Read.uleb128 cursor in
+        let size = Read.u8 cursor in
+        let block = String.init size (fun _ -> Char.chr (Read.u8 cursor)) in
+        Const_type (offset, size, block)
     | 0xa5 -> Regval_type (Read.uleb128 cursor, Read.uleb128 cursor)
     | 0xa6 -> Deref_type (Read.u8 cursor, Read.uleb128 cursor)
     | 0xa7 -> Xderef_type (Read.u8 cursor, Read.uleb128 cursor)
     | 0xa8 -> Convert (Read.uleb128 cursor)
     | 0xa9 -> Reinterpret (Read.uleb128 cursor)
-    | x    -> raise @@ Errors.not_yet_implemented @@
-      Format.sprintf "Non supported operator 0x%x" x
+    | x ->
+        raise @@ Errors.not_yet_implemented
+        @@ Format.sprintf "Non supported operator 0x%x" x
 
-  let loc stack frame op = match op, stack with
+  let loc stack frame op =
+    match (op, stack) with
     | Addr a, _ | Const a, _ ->
-       let size = Dba.Expr.size_of (map 0) in
-       Dba.Expr.constant (Bitvector.of_int ~size a) :: stack
+        let size = Dba.Expr.size_of (map 0) in
+        Dba.Expr.constant (Bitvector.of_int ~size a) :: stack
     | Deref, a :: stack ->
-       Dba.Expr.load Size.(Byte.of_bitsize (Bit.create (Dba.Expr.size_of a)))
-                   (Kernel_options.Machine.endianness ()) a :: stack
+        Dba.Expr.load
+          Size.(Byte.of_bitsize (Bit.create (Dba.Expr.size_of a)))
+          (Kernel_options.Machine.endianness ())
+          a
+        :: stack
     | Dup, x :: _ -> x :: stack
     | Drop, _ :: stack -> stack
     | Over, _ :: x :: _ -> x :: stack
@@ -480,7 +506,7 @@ module Operator = struct
     | Swap, x :: y :: stack -> y :: x :: stack
     | Rot, x :: y :: z :: stack -> y :: z :: x :: stack
     | Abs, x :: stack ->
-       Dba.Expr.(ite (slt x (zeros (size_of x))) (uminus x) x) :: stack
+        Dba.Expr.(ite (slt x (zeros (size_of x))) (uminus x) x) :: stack
     | And, x :: y :: stack -> Dba.Expr.logand y x :: stack
     | Minus, x :: y :: stack -> Dba.Expr.sub y x :: stack
     | Mul, x :: y :: stack -> Dba.Expr.mul y x :: stack
@@ -489,8 +515,8 @@ module Operator = struct
     | Or, x :: y :: stack -> Dba.Expr.logor y x :: stack
     | Plus, x :: y :: stack -> Dba.Expr.add y x :: stack
     | Plus_uconst a, x :: stack ->
-       let size = Dba.Expr.size_of x in
-       Dba.Expr.(add x (constant (Bitvector.of_int ~size a))) :: stack
+        let size = Dba.Expr.size_of x in
+        Dba.Expr.(add x (constant (Bitvector.of_int ~size a))) :: stack
     | Shl, x :: y :: stack -> Dba.Expr.shift_left y x :: stack
     | Shr, x :: y :: stack -> Dba.Expr.shift_right y x :: stack
     | Shra, x :: y :: stack -> Dba.Expr.shift_right_signed y x :: stack
@@ -502,14 +528,14 @@ module Operator = struct
     | Lt, x :: y :: stack -> Dba.Expr.(uext (size_of y) (slt y x)) :: stack
     | Ne, x :: y :: stack -> Dba.Expr.(uext (size_of y) (diff y x)) :: stack
     | Regx x, _ -> map x :: stack
-    | Fbreg o, _  ->
-       let frame = Utils.unsafe_get_opt frame in
-       let size = Dba.Expr.size_of frame in
-       Dba.Expr.(add frame (constant (Bitvector.of_int ~size o))) :: stack
+    | Fbreg o, _ ->
+        let frame = Utils.unsafe_get_opt frame in
+        let size = Dba.Expr.size_of frame in
+        Dba.Expr.(add frame (constant (Bitvector.of_int ~size o))) :: stack
     | Bregx (r, a), _ ->
-       let reg = map r in
-       let size = Dba.Expr.size_of reg in
-       Dba.Expr.(add reg (constant (Bitvector.of_int ~size a))) :: stack
+        let reg = map r in
+        let size = Dba.Expr.size_of reg in
+        Dba.Expr.(add reg (constant (Bitvector.of_int ~size a))) :: stack
     | Nop, _ -> stack
     | Call_frame_cfa, _ -> Utils.unsafe_get_opt frame :: stack
     | _ -> raise (Errors.not_yet_implemented "Non compliant operator")
@@ -521,14 +547,12 @@ let load format cursor : t =
   let block = sub cursor (Read.uleb128 cursor) in
   let rec loop ops =
     if at_end block then List.rev ops
-    else loop (Operator.load format block :: ops) in
-    loop []
+    else loop (Operator.load format block :: ops)
+  in
+  loop []
 
-let loc ?cfa expr : Dba.Expr.t = List.hd (
-    List.fold_left
-      (fun stack op -> Operator.loc stack cfa op)
-      []
-      expr)
+let loc ?cfa expr : Dba.Expr.t =
+  List.hd (List.fold_left (fun stack op -> Operator.loc stack cfa op) [] expr)
 
-let pp ppf ops = List.iter
-    (fun op -> Format.fprintf ppf "%a " Operator.pp op) ops
+let pp ppf ops =
+  List.iter (fun op -> Format.fprintf ppf "%a " Operator.pp op) ops

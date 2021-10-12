@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -35,19 +35,19 @@ module String : Sigs.Collection with type t = string
 
 module Int : Sigs.Collection with type t = int
 
-module BigInt : Sigs.Collection with type t = Bigint.t
+module BigInt : Sigs.Collection with type t = Z.t
 
 module Float : Sigs.Collection with type t = float
 
 module Int64 : sig
   include Sigs.Collection with type t = Int64.t
+
   val max : t -> t -> t
 
-  val is_int_int64: t -> bool
+  val is_int_int64 : t -> bool
   (** [is_int_int64 n] returns [true] if the value of [n] is also representable
       as an OCaml [int] on your machine
   *)
-
 end
 
 module Addr64 = Int64
@@ -55,12 +55,12 @@ module Addr64 = Int64
 (** {2 Functors } *)
 
 module Collection_make : sig
- module Default(C:Sigs.COMPARABLE) : Sigs.Collection with type t = C.t
- module Hashed(C: Sigs.HASHABLE) : Sigs.Collection with type t = C.t
+  module Default (C : Sigs.COMPARABLE) : Sigs.Collection with type t = C.t
+
+  module Hashed (C : Sigs.HASHABLE) : Sigs.Collection with type t = C.t
 end
 
 (** {2 Specific modules & types} *)
-
 
 module Constants : sig
   val bytesize : Natural.t
@@ -68,10 +68,7 @@ end
 
 (** {2 Ternary logic} *)
 module Ternary : sig
-  type t =
-    | True
-    | False
-    | Unknown
+  type t = True | False | Unknown
 
   val of_bool : bool -> t
 

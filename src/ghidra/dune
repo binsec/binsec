@@ -1,0 +1,5 @@
+(menhir
+ (modules parser_ghidra))
+
+(ocamllex
+ (modules lexer_ghidra))

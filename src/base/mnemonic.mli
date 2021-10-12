@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,13 +22,17 @@
 (** {1 Mnemonic } *)
 
 type t = private
-  | Unknown (** Opcodes which do not have a valid mnemonic translation *)
-  | Unsupported  of string option (** Opcodes which have a valid mnemonic but do not have a handled mnemonic translation *)
+  | Unknown  (** Opcodes which do not have a valid mnemonic translation *)
+  | Unsupported of string option
+      (** Opcodes which have a valid mnemonic but do not have a handled mnemonic translation *)
   | Supported of string
 
+val supported : 'a -> (Format.formatter -> 'a -> unit) -> t
 
-val supported   : 'a -> (Format.formatter -> 'a -> unit) -> t
 val unsupported : ?mnemonic_hint:string -> unit -> t
-val unknown     : t
+
+val unknown : t
+
 val pp : Format.formatter -> t -> unit
+
 val to_string : t -> string

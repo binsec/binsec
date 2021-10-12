@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,3 +20,7 @@
 (**************************************************************************)
 
 module Logger : Logger.S
+
+type supported_modes = Both | Thumb | Arm
+
+module SupportedModes : Cli.GENERIC with type t = supported_modes

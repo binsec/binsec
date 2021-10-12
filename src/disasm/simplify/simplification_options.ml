@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,31 +19,22 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Cli.Make(
-struct
+include Cli.Make (struct
   let name = "DBA simplifications"
-  let shortname = "dba-simp"
-end
-)
 
-module Display_statistics =
-  Builder.False(
-  struct
-    let name = "show-stats"
-    let doc =
-      "Display statistical information regarding DBA simplifications"
-  end
-  )
+  let shortname = "dba-simp"
+end)
+
+module Display_statistics = Builder.False (struct
+  let name = "show-stats"
+
+  let doc = "Display statistical information regarding DBA simplifications"
+end)
 
 type pmap =
-  (Dba.Instr.t * Instruction.Generic.t option)
-    Dba_types.Caddress.Map.t
+  (Dba.Instr.t * Instruction.Generic.t option) Dba_types.Caddress.Map.t
 
-
-type specifics =
-  | All
-  | NoInline
-  | NoSummaries
+type specifics = All | NoInline | NoSummaries
 
 type simplification =
   | No_simplification
@@ -51,23 +42,24 @@ type simplification =
   | Function of specifics
   | Sequence of specifics
 
-module Simplification = Builder.Variant_choice_assoc(
-struct
+module Simplification = Builder.Variant_choice_assoc (struct
   type t = simplification
 
-  let assoc_map = [
-      "prog", Program;
-      "fun", Function All;
-      "seq", Sequence All;
-      "fun-no-inline", Function NoInline;
-      "seq-no-inline", Function NoInline;
-      "fun-no-sum", Function NoSummaries;
-      "seq-no-sum", Function NoSummaries;
-      "none", No_simplification;
+  let assoc_map =
+    [
+      ("prog", Program);
+      ("fun", Function All);
+      ("seq", Sequence All);
+      ("fun-no-inline", Function NoInline);
+      ("seq-no-inline", Function NoInline);
+      ("fun-no-sum", Function NoSummaries);
+      ("seq-no-sum", Function NoSummaries);
+      ("none", No_simplification);
     ]
 
   let default = No_simplification
+
   let name = "simplify"
+
   let doc = " Activate DBA simplification on given level"
-end
-)
+end)

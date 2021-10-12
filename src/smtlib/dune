@@ -1,0 +1,5 @@
+(menhir
+ (modules smtlib_parser))
+
+(ocamllex
+ (modules smtlib_lexer))

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,28 +21,38 @@
 
 (** Shelter for functions over DBA *)
 
-
-
 module Expr : sig
   exception Fold_const_failed
+
   val fold_expr : Dba.Expr.t -> Bitvector.t
+
+  val of_vaddr : Virtual_address.t -> Dba.Expr.t
+
+  val eval_from_img : Loader.Img.t -> Dba.Expr.t -> Virtual_address.t
+
+  val complement :
+    Dba.Expr.t -> lo:int -> hi:int -> Dba.VarTag.t Dba.var -> Dba.Expr.t
+  (* [complement e lo hi v]
+     return the expression e' such as v{hi .. lo} := e <=> v := e' *)
 end
 
 val checksize_address : Dba.address -> bool
+
 val checksize_dbacond : Dba.Expr.t -> bool
+
 val checksize_instruction : Dba.Instr.t -> bool
+
 (* basic typing *)
 val computesize_dbalhs : Dba.LValue.t -> int
+
 val computesize_dbaexpr : Dba.Expr.t -> int
 
 val contains_lhs : Dba.LValue.t -> Dba.LValue.t -> bool
 
-val globalize_address :
-  Dba.address -> Dba.id Dba.jump_target -> Dba.address
+val globalize_address : Dba.address -> Dba.id Dba.jump_target -> Dba.address
 (** [globalize_address root addr] generates a global address from [addr],
  *   rooting it at [root] if it is local.
 *)
-
 
 val eval_alternatives : ('a -> 'b) -> ('b -> 'b -> bool) -> 'a list -> 'b
 (* [eval_alternatives eval eq exprs]
@@ -52,4 +62,4 @@ val eval_alternatives : ('a -> 'b) -> ('b -> 'b -> bool) -> 'a list -> 'b
    Raise [Failure "eval_alternatives"] if the list is empty
 *)
 
-val substitute_dba_expr: Dba.Expr.t -> Dba.Expr.t -> Dba.Expr.t -> Dba.Expr.t
+val substitute_dba_expr : Dba.Expr.t -> Dba.Expr.t -> Dba.Expr.t -> Dba.Expr.t

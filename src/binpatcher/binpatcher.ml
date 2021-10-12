@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,7 +22,6 @@
 open Binpatcher_options
 
 module PatchMap = struct
-
   type t = Loader_types.u8 Virtual_address.Map.t
 
   let add_bytes vbase bytes vmap =
@@ -31,11 +30,12 @@ module PatchMap = struct
       if i < len then
         let byte = Binstream.get_byte_exn bytes i in
         let map' =
-          Virtual_address.Map.add
-            (Virtual_address.add_int i vbase) byte map in
+          Virtual_address.Map.add (Virtual_address.add_int i vbase) byte map
+        in
         aux map' (succ i)
       else map
-    in aux vmap 0
+    in
+    aux vmap 0
 
   let of_list l =
     List.fold_left
@@ -44,43 +44,39 @@ module PatchMap = struct
 
   let load_file filename =
     let map =
-      let parser = Parser.patchmap
-      and lexer = Lexer.token in
-      Parse_utils.read_file ~parser ~lexer ~filename in
+      let parser = Parser.patchmap and lexer = Lexer.token in
+      Parse_utils.read_file ~parser ~lexer ~filename
+    in
     let open! Virtual_address in
     Map.fold add_bytes map Map.empty
 
   let empty = Virtual_address.Map.empty
 end
 
-
 module WritableLoader = struct
   open Loader_types
-  type t = {
-    img : Loader.Img.t;
-    patches : int Basic_types.Int.Map.t;
-  }
 
-  let create img patches = { img; patches; }
+  type t = { img : Loader.Img.t; patches : int Basic_types.Int.Map.t }
 
+  let create img patches = { img; patches }
 
   let get_offset img address =
     match Loader_utils.find_section_by_address img ~address with
     | Some section ->
-      let p = Loader.Section.pos section in
-      let offset = address - p.virt in
-      Some (p.raw + offset)
+        let p = Loader.Section.pos section in
+        let offset = address - p.virt in
+        Some (p.raw + offset)
     | None ->
-      Logger.debug "Concrete offset not found for address %x" address;
-      None
+        Logger.debug "Concrete offset not found for address %x" address;
+        None
 
   let offset img vmap =
     Virtual_address.Map.fold
       (fun vaddr byte cmap ->
-         match get_offset img (vaddr:>int) with
-         | Some caddr -> Basic_types.Int.Map.add caddr byte cmap
-         | None -> cmap
-      ) vmap Basic_types.Int.Map.empty
+        match get_offset img (vaddr :> int) with
+        | Some caddr -> Basic_types.Int.Map.add caddr byte cmap
+        | None -> cmap)
+      vmap Basic_types.Int.Map.empty
 
   let create img patchmap = create img (patchmap |> offset img)
 
@@ -92,8 +88,8 @@ module WritableLoader = struct
   let get_int i t =
     match Basic_types.Int.Map.find i t.patches with
     | c ->
-      Logger.debug "Patching address %x with byte %x" i c;
-      c
+        Logger.debug "Patching address %x with byte %x" i c;
+        c
     | exception Not_found -> Loader.read_offset t.img i
 
   let dim t = Loader.Offset.dim t.img
@@ -111,18 +107,14 @@ module WritableLoader = struct
   let get i t = get_int i t
 end
 
-
 let run ~executable =
   let patch_file = Binpatcher_options.PatchFile.get () in
   let wloader = WritableLoader.create_from_files ~executable ~patch_file () in
   let dst = Binpatcher_options.PatchOutFile.get () in
   WritableLoader.pp_to_file ~filename:dst wloader
 
-
 let run_default () =
-  if Kernel_options.ExecFile.is_set ()
-     && Binpatcher_options.PatchFile.is_set () then
-     run ~executable:(Kernel_options.ExecFile.get ())
+  if Kernel_options.ExecFile.is_set () && Binpatcher_options.PatchFile.is_set ()
+  then run ~executable:(Kernel_options.ExecFile.get ())
 
-let _ =
-  Cli.Boot.enlist ~name:"binpatcher" ~f:run_default
+let _ = Cli.Boot.enlist ~name:"binpatcher" ~f:run_default

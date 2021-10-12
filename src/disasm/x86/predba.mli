@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -32,7 +32,8 @@ type 'a t = private
   | Stop of Dba.state
 
 val assign : Dba.LValue.t -> Dba.Expr.t -> 'a t
-val (<<-) : Dba.LValue.t -> Dba.Expr.t -> 'a t
+
+val ( <<- ) : Dba.LValue.t -> Dba.Expr.t -> 'a t
 
 val static_jump : ?tag:Dba.tag -> 'a Dba.jump_target -> 'a t
 
