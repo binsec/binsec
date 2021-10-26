@@ -19,4 +19,4 @@ Then, have a look at [user documentation](doc) for command examples.
 # Contributing
 
 Found a bug or want to make a suggestion,
-check [how to contribute](./CONTRIBUTING.md) improving **BINSEC** platform.
+check [how to contribute](./CONTRIBUTING.md) improving **BINSEC**.
