@@ -376,7 +376,7 @@ let of_hexstring = of_string
 let of_bool b = if b then one else zero
 
 let to_bool x =
-  if size_of x <> 1 then raise Z.Overflow else Z.equal (value_of x) Z.zero
+  if size_of x <> 1 then raise Z.Overflow else Z.equal (value_of x) Z.one
 
 let of_char c = create (Z.of_int (Char.code c)) 8
 

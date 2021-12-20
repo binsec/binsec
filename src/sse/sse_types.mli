@@ -37,14 +37,16 @@ module C :
      and type inst = Instruction.t
      and type symb = Basic_types.Int.t
 
-module Path_state : sig
+module Path_state (S : Smt_solver.Solver) : sig
   type t
+
+  module State : module type of Senv.State (S)
 
   val create :
     ?depth:int ->
     ?address_counters:Sse_options.Address_counter.t Virtual_address.Map.t ->
     ?block_index:int ->
-    Senv.t ->
+    State.t ->
     Instruction.t ->
     t
 
@@ -60,7 +62,7 @@ module Path_state : sig
 
   val location : t -> Dba_types.Caddress.t
 
-  val symbolic_state : t -> Senv.t
+  val symbolic_state : t -> State.t
 
   val block_index : t -> int
 
@@ -89,7 +91,7 @@ module Path_state : sig
   val set_instruction : Instruction.t -> t -> t
   (** increase depth and extend path *)
 
-  val set_symbolic_state : Senv.t -> t -> t
+  val set_symbolic_state : State.t -> t -> t
 
   val incr_solver_calls : t -> t
 
@@ -110,13 +112,15 @@ module Path_state : sig
 end
 
 module type WORKLIST = sig
+  type elt
+
   type t
 
-  val push : Path_state.t -> t -> t
+  val push : elt -> t -> t
 
-  val pop : t -> Path_state.t * t
+  val pop : t -> elt * t
 
-  val singleton : Path_state.t -> t
+  val singleton : elt -> t
 
   val length : t -> int
 
@@ -125,9 +129,11 @@ module type WORKLIST = sig
   val empty : t
 end
 
-module Dfs : WORKLIST
+module type WORKLIST_FACTORY = functor (E : Sigs.ANY) ->
+  WORKLIST with type elt := E.t
 
-module Bfs : WORKLIST
+module Dfs : WORKLIST_FACTORY
 
-module Nurs : WORKLIST
-(** Non uniformed randomized search heuristics *)
+module Bfs : WORKLIST_FACTORY
+
+module Nurs : WORKLIST_FACTORY

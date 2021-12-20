@@ -26,10 +26,10 @@
 %token EOF
 
 %start instructions
-%type <(Virtual_address.t * Virtual_address.t list * string * string) list> instructions
+%type <(Virtual_address.t * int * string * string * Virtual_address.t list) list> instructions
 
 %start instruction
-%type <Virtual_address.t * Virtual_address.t list * string * string> instruction
+%type <Virtual_address.t * int * string * string * Virtual_address.t list> instruction
 
 %%
 
@@ -38,14 +38,17 @@ let instructions := ~=list(instruction); EOF; <>
 let instruction :=
   addr=log(kv(ADDRESS, NUMERIC));
   log(kv(OPCODE, NUMERIC));
-  log(kv(SIZE, NUMERIC));
-  mnemonic = log(kv(MNEMONIC, STRING));
+  size=log(kv(SIZE, NUMERIC));
+  mnemonic=log(kv(MNEMONIC, STRING));
   kind = log(kv(KIND, STRING));
   successors=log(kv(SUCCESSORS, list(NUMERIC)));
-    { Virtual_address.of_bigint addr,
-      List.map Virtual_address.of_bigint successors,
+    {
+      Virtual_address.of_bigint addr,
+      Z.to_int size,
+      String.lowercase mnemonic,
       kind,
-    mnemonic}
+      List.map Virtual_address.of_bigint successors
+    }
 
 let kv (key, value) := LPAR; key; DOT; ~=value; RPAR; <>
 

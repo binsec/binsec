@@ -92,7 +92,7 @@ let find key kvs =
 (* Some conversion functions from parsed categorized value to the expected types
    in Instruction.Generic.create *)
 let to_hex_opcode = function
-  | Parse_helpers.Message.Value.Hex h -> Format.sprintf "%02x" h
+  | Parse_helpers.Message.Value.Int h -> Z.format "%02x" h
   | _ -> assert false
 
 let to_mnemonic = function
@@ -101,7 +101,7 @@ let to_mnemonic = function
   | _ -> assert false
 
 let just_integer = function
-  | Parse_helpers.Message.Value.Int n -> n
+  | Parse_helpers.Message.Value.Int n -> Z.to_int n
   | _ -> assert false
 
 let compare_labeled_instruction (caddr1, _i1) (caddr2, _i2) =
@@ -178,22 +178,22 @@ let parse_result s =
 
 let decode addr bytes = Aarch64dba.decode ~addr bytes |> parse_result
 
-let decode_from_reader addr reader =
-  if addr mod 4 <> 0 then Error empty_instruction
+let decode_from_reader (addr : Virtual_address.t) reader =
+  if (addr :> int) mod 4 <> 0 then Error empty_instruction
   else
     match Lreader.Peek.u32 reader with
     | exception _ ->
         Statistics.incr_invalid_size stats;
         Error empty_instruction
-    | bytes -> decode (Int64.of_int addr) (Int32.of_int bytes)
+    | bytes -> decode (Virtual_address.to_int64 addr) (Int32.of_int bytes)
 
 let unwrap_result = function Error i -> i | Ok x -> x
 
 let decode_from_reader addr reader =
   decode_from_reader addr reader |> unwrap_result
 
-let decode reader (addr : Virtual_address.t) =
-  let res = decode_from_reader (addr :> int) reader in
+let decode reader addr =
+  let res = decode_from_reader addr reader in
   Aarch64_options.Logger.debug ~level:5 "@[%a@]" Dhunk.pp (snd res);
   Aarch64_options.Logger.debug ~level:3 "@[%a@]" show_stats ();
   res

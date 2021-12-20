@@ -19,7 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Sse_options
+open Smt_options
 
 let byte_size = Natural.to_int Basic_types.Constants.bytesize
 

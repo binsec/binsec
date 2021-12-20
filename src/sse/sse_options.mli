@@ -29,10 +29,6 @@ module JumpEnumDepth : Cli.INTEGER
 
 module Randomize : Cli.BOOLEAN
 
-module KeepGoing : Cli.BOOLEAN
-
-module SMT_dir : Cli.STRING_OPT
-
 module AddressTraceFile : Cli.STRING_OPT
 
 module AvoidAddresses : Cli.STRING_SET
@@ -74,5 +70,3 @@ module Seed : Cli.INTEGER_OPT
 module Directives : Cli.GENERIC with type t = Directive.t list
 
 module Dot_filename_out : Cli.STRING_OPT
-
-module SMT_log_directory : Cli.STRING

@@ -41,22 +41,10 @@ module JumpEnumDepth = Builder.Integer (struct
   let doc = "Set maximum number of jump targets to retrieve for dynamic jumps"
 end)
 
-module KeepGoing = Builder.False (struct
-  let name = "keep-going"
-
-  let doc = "Ignore errors returned by the SMT solver. Default is to abort."
-end)
-
 module Randomize = Builder.False (struct
   let name = "randomize"
 
   let doc = "randomize path selection"
-end)
-
-module SMT_dir = Builder.String_option (struct
-  let name = "smt-dir"
-
-  let doc = "set directory to cache smt scripts"
 end)
 
 module AddressTraceFile = Builder.String_option (struct
@@ -192,12 +180,4 @@ module Dot_filename_out = Builder.String_option (struct
   let name = "cfg-o"
 
   let doc = "Output CFG in this file"
-end)
-
-module SMT_log_directory = Builder.String (struct
-  let name = "smt-dump-dir"
-
-  let doc = "Set directory where unsolved SMT scripts are dumped"
-
-  let default = "binsec_smtdump"
 end)

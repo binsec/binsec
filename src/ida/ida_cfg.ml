@@ -238,10 +238,7 @@ module G = struct
     | Some inst ->
         let opcode = Instruction.opcode inst in
         let mnemonic = Instruction.mnemonic inst in
-        let inst', next =
-          let base = VA.to_int addr in
-          Disasm_core.decode_binstream ~base opcode
-        in
+        let inst', next = Disasm_core.decode_binstream ~base:addr opcode in
         let dhunk = Instruction.hunk inst' in
         let mnemonic' = IU.to_supported addr mnemonic in
         Logger.debug "@[<hov 2>@[<h>%a %a %a @]@ %a@]" VA.pp addr Binstream.pp

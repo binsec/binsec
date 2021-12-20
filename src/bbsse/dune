@@ -1,3 +1,14 @@
+(include_subdirs no)
+
+(library
+ (name bbsse)
+ (modules :standard)
+ (flags
+  (:standard -open Binsec -open Smt -open Se))
+ (library_flags
+  (:standard -linkall))
+ (libraries binsec smt se))
+
 (menhir
  (modules bbsse_parser))
 

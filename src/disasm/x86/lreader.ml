@@ -47,53 +47,53 @@ module type Accessor = sig
   val bv64 : t -> Bitvector.t
 end
 
-type bytestream = LoaderImg of Loader.Img.t | BinStream of int * Binstream.t
+type bytestream = LoaderImg of Loader.Img.t | BinStream of Binstream.t
 
 type t = {
   content : bytestream;
-  mutable cursor : int;
+  base : Virtual_address.t;
+  mutable offset : int;
   mutable endianness : Machine.endianness;
 }
 
 (* Default value for endianness *)
 let little = Machine.LittleEndian
 
-let of_img ?(endianness = little) ?(cursor = 0) img =
-  { content = LoaderImg img; cursor; endianness }
+let of_img ?(endianness = little) ?(base = Virtual_address.create 0)
+    ?(offset = 0) img =
+  { content = LoaderImg img; base; offset; endianness }
 
-let of_binstream ?(endianness = little) ?(cursor = 0) ?(base = 0) hstr =
-  { content = BinStream (base, hstr); cursor; endianness }
+let of_binstream ?(endianness = little) ?(base = Virtual_address.create 0)
+    ?(offset = 0) hstr =
+  { content = BinStream hstr; base; offset; endianness }
 
-let of_nibbles ?(endianness = little) ?(cursor = 0) ?(base = 0) str =
+let of_nibbles ?(endianness = little) ?(base = Virtual_address.create 0)
+    ?(offset = 0) str =
   Logger.debug "lreader of nibbles %s" str;
   let hstr = Binstream.of_nibbles str in
-  of_binstream ~endianness ~cursor ~base hstr
+  of_binstream ~endianness ~offset ~base hstr
 
-let of_bytes ?(endianness = little) ?(cursor = 0) ?(base = 0) str =
+let of_bytes ?(endianness = little) ?(base = Virtual_address.create 0)
+    ?(offset = 0) str =
   Logger.debug "%s" str;
   let hstr = Binstream.of_bytes str in
-  of_binstream ~endianness ~cursor ~base hstr
+  of_binstream ~endianness ~offset ~base hstr
 
-let pp ppf r = Format.fprintf ppf "%@%x" r.cursor
+let pp ppf r = Format.fprintf ppf "%@%x" r.offset
 
 let set_endianness t e = t.endianness <- e
 
-let set_virtual_cursor r addr =
-  match r with
-  | { content = LoaderImg _; _ } -> r.cursor <- addr
-  | { content = BinStream (base, _); _ } -> r.cursor <- addr - base
+let set_virtual_cursor r addr = r.offset <- Virtual_address.diff addr r.base
 
-let get_virtual_cursor = function
-  | { content = LoaderImg _; cursor; _ } -> cursor
-  | { content = BinStream (base, _); cursor; _ } -> base + cursor
+let get_virtual_cursor r = Virtual_address.add_int r.offset r.base
 
 let rewind r n =
   assert (n >= 0);
-  r.cursor <- r.cursor - n
+  r.offset <- r.offset - n
 
 let advance r n =
   assert (n >= 0);
-  r.cursor <- r.cursor + n
+  r.offset <- r.offset + n
 
 type bigendian = int
 
@@ -121,8 +121,9 @@ let to_bv e bytes =
 
 let read_cell r =
   match r.content with
-  | LoaderImg img -> Loader.read_address img r.cursor
-  | BinStream (_, hstr) -> Binstream.get_byte_exn hstr r.cursor
+  | LoaderImg img ->
+      Loader.read_address img Virtual_address.(to_int (add_int r.offset r.base))
+  | BinStream hstr -> Binstream.get_byte_exn hstr r.offset
 
 module Read = struct
   (* [read r n] reads [n] bytes from reader [r].
@@ -130,9 +131,9 @@ module Read = struct
      the list.
   *)
   let read r n : bigendian list =
-    let limit = r.cursor + n - 1 in
+    let limit = r.offset + n - 1 in
     let rec loop acc =
-      if r.cursor > limit then acc (* ? *)
+      if r.offset > limit then acc (* ? *)
       else
         let acc = read_cell r :: acc in
         advance r 1;

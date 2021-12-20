@@ -88,7 +88,7 @@ let select_reader = function
 (* A 32 bits displacement.
    We must be careful to stay inside bounds. *)
 let displacement lr rel =
-  let vcursor = Lreader.get_virtual_cursor lr in
+  let vcursor = (Lreader.get_virtual_cursor lr :> int) in
   Logger.debug ~level:4 "displacement from %x of %x" vcursor rel;
   (vcursor + rel) land 0xffffffff
 
@@ -1526,10 +1526,12 @@ let read lr =
     Lreader.get_slice lr initial_position (Lreader.get_virtual_cursor lr)
     |> bytes_to_opcode_string
   in
-  Logger.debug ~level:3 "@[<v 0>Opcode %s %@ [%x, %x[:@ %a@]" opcode
-    initial_position
+  Logger.debug ~level:3 "@[<v 0>Opcode %s %@ [%a, %a[:@ %a@]" opcode
+    Virtual_address.pp initial_position Virtual_address.pp
     (Lreader.get_virtual_cursor lr)
     X86pp.pp_instr mnemonic;
-  let size = Lreader.get_virtual_cursor lr - initial_position in
+  let size =
+    Virtual_address.diff (Lreader.get_virtual_cursor lr) initial_position
+  in
   let instruction = X86Instruction.create size opcode mnemonic in
   (instruction, !sreg)

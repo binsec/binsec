@@ -19,19 +19,36 @@
 /*                                                                        */
 /**************************************************************************/
 
+%token EXPECT IS SKIP PROCESS CALL AT
+%token CLEAR OPAQUE BRANCH FALLTHROUGH UNREACHABLE
 %token <Z.t> ADDRESS
 %token EOF
 
-%start addresses
-%type <Virtual_address.t  list> addresses
+%start directives
+%type <Bbsse_types.Directive.t  list> directives
 
-%start address
-%type <Virtual_address.t > address
 
 %%
 
-let addresses := ~=list(address); EOF; <>
+let directives := ~=list(directive); EOF; <>
 
-let address :=
-  addr=ADDRESS;
-    { Virtual_address.of_bigint addr}
+let directive :=
+  | EXPECT; ~=address; IS; ~=status;
+    { Bbsse_types.Directive.ExpectAt (address, status) }
+  | SKIP; ~=address;
+    { Bbsse_types.Directive.SkipJump address }
+  | PROCESS; CALL; AT; ~=address;
+    { Bbsse_types.Directive.ProcessCall address }
+
+let address == addr=ADDRESS;
+    { Virtual_address.of_bigint addr }
+
+let status ==
+  | OPAQUE; BRANCH;
+    { Bbsse_types.Status.Opaque true }
+  | OPAQUE; FALLTHROUGH;
+    { Bbsse_types.Status.Opaque false }
+  | UNREACHABLE;
+    { Bbsse_types.Status.Unreachable }
+  | CLEAR;
+    { Bbsse_types.Status.Clear }

@@ -44,7 +44,6 @@ rule token = parse
   | "("             { LPAR }
   | '.'             { DOT }
   | ")"             { RPAR }
-  | "0xEXTERNAL:" alpha_num+    { token lexbuf }
   | ('"' (([^'>''"']|'>'[^'>''"'])* as st) '"')
                     { STRING st }
   | (hex | bin | digit+)  as s

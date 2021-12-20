@@ -1,4 +1,4 @@
-# Tutorial 2: Solving simple CTF with BINSEC SSE
+# SSE Tutorial 2: Solving simple CTF with BINSEC SSE
 
 In this post, we will exercise the **S**tatic **S**ymbolic **E**xecution engine of **BINSEC** over the first 2015 [FLARE On](https://flare-on.com/) challenge.  
 We will do so with the additionnal difficulty of not looking at a single line of code disassembly -- we still reserve the right to use good tools to extract meta-data. This way, we will have to focus on the interaction between the program and its environment (for instance, a user typing in a console) in a *quasi*-black box manner.
@@ -102,7 +102,7 @@ $ r2 i_am_happy_you_are_to_playing_the_flareon_challenge.exe
 ```
 Here we are fixed, this program is calling the standard C functions [`GetStdHandle`](https://docs.microsoft.com/en-us/windows/console/getstdhandle), [`WriteFile`](https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-writefile) and [`ReadFile`](https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-readfile).
 
-It is just an educated guess, but genuin usage scenario suggests:
+It is just an educated guess, but genuine usage scenario suggests:
 - `WriteFile` arguments:
   - `hFile` is the console returned by `GetStdHandle(STD_OUTPUT_HANDLE)`;
   - `lpBuffer` points to one of the string `Let's start out easy`, `Enter the password>`, `You are success` or `You are failure`;
@@ -119,7 +119,7 @@ It is just an educated guess, but genuin usage scenario suggests:
 We have some idea of what these functions are supposed to do.  
 Yet we still ignore at which place they are called.
 
-In fact, for **PE** binaries, the dynamic functions are handled with an `Inport Address Table` that contains the place where
+In fact, for **PE** binaries, the dynamic functions are handled with an `Import Address Table` that contains the place where
 the dynamic loader has put the functions at runtime. The tool `readpe` can help us to figure out how to mimic this behavior.
 ```console
 $ readpe -di i_am_happy_you_are_to_playing_the_flareon_challenge.exe

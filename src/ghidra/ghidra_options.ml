@@ -19,15 +19,20 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Cli.S
+include Cli.Make (struct
+  let shortname = "ghidra"
 
-module Opaque_predicates : Cli.BOOLEAN
+  let name = "Ghidra CFG import"
+end)
 
-module Opaque_addresses : Cli.INTEGER_LIST
+module Runner = Builder.String_option (struct
+  let name = "analyzeHeadless"
 
-module Opaque_sections : Cli.STRING_LIST
+  let doc = "Path to the analyzeHeadless script"
+end)
 
-module K : Cli.INTEGER
-(** Number of instructions that the backward slice should contain.
-    Default is [16].
- *)
+module Cache = Builder.String_option (struct
+  let name = "cache"
+
+  let doc = "Path to the file to load or save"
+end)

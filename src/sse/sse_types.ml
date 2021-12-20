@@ -43,7 +43,9 @@ module C = struct
   end)
 end
 
-module Path_state = struct
+module Path_state (S : Smt_solver.Solver) = struct
+  module State = Senv.State (S)
+
   type t = {
     id : int;
     (* Unique identifier for the path *)
@@ -52,7 +54,7 @@ module Path_state = struct
     solver_calls : int;
     path : Virtual_address.t list;
     (* Sequence of virtual addresses for this path *)
-    symbolic_state : Senv.t;
+    symbolic_state : State.t;
     (* Current symbolic state *)
     instruction : Instruction.t;
     (* Current instruction *)
@@ -125,7 +127,7 @@ module Path_state = struct
       let value = Bitvector.value_of addr in
       let bvsize = Kernel_options.Machine.word_size () in
       let addr = Bitvector.create value bvsize in
-      Senv.load_from ~addr size path_state.symbolic_state
+      State.load_from ~addr size path_state.symbolic_state
     in
     { path_state with symbolic_state }
 
@@ -193,13 +195,15 @@ end
 *)
 
 module type WORKLIST = sig
+  type elt
+
   type t
 
-  val push : Path_state.t -> t -> t
+  val push : elt -> t -> t
 
-  val pop : t -> Path_state.t * t
+  val pop : t -> elt * t
 
-  val singleton : Path_state.t -> t
+  val singleton : elt -> t
 
   val length : t -> int
 
@@ -208,10 +212,27 @@ module type WORKLIST = sig
   val empty : t
 end
 
-module W_stack : WORKLIST = Fstack.Make (Path_state)
+module type WORKLIST_FACTORY = functor (E : Sigs.ANY) ->
+  WORKLIST with type elt := E.t
 
-module W_queue : WORKLIST = struct
-  type t = Path_state.t Sequence.t
+module Dfs (E : Sigs.ANY) : WORKLIST with type elt := E.t = struct
+  type t = E.t list
+
+  let empty = []
+
+  let is_empty = function [] -> true | _ -> false
+
+  let push e w = e :: w
+
+  let singleton e = [ e ]
+
+  let pop = function e :: w -> (e, w) | [] -> raise Not_found
+
+  let length = List.length
+end
+
+module Bfs (E : Sigs.ANY) : WORKLIST with type elt := E.t = struct
+  type t = E.t Sequence.t
 
   let length = Sequence.length
 
@@ -232,13 +253,13 @@ module W_queue : WORKLIST = struct
   let singleton p = push p empty
 end
 
-module Random_heap : WORKLIST = struct
+module Nurs (E : Sigs.ANY) : WORKLIST with type elt := E.t = struct
   (* This is actually a fairly classical heap.
      The priority added to the date is just generated at random.
   *)
 
   module T = struct
-    type t = { priority : int; state : Path_state.t }
+    type t = { priority : int; state : E.t }
 
     let compare t1 t2 = compare t1.priority t2.priority
 
@@ -267,9 +288,3 @@ module Random_heap : WORKLIST = struct
 
   let singleton p = push p empty
 end
-
-module Dfs : WORKLIST = W_stack
-
-module Bfs : WORKLIST = W_queue
-
-module Nurs : WORKLIST = Random_heap

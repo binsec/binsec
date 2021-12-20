@@ -1,19 +1,18 @@
 # Installing BINSEC from sources
 
 The latest public revision of `binsec` is available on GitHub:
-https://github.com/binsec/binsec.  
-The latest public revision of `unisim_archisec` is available on GitHub:
-https://github.com/binsec/unisim_archisec.
-
-A convenient way to build `unisim_archisec` together with `binsec` is to
-put `unisim_archisec` directory inside the `binsec` directory.
- ```console
-$ git clone https://github.com/binsec/binsec.git
-$ cd binsec
-$ git clone https://github.com/binsec/unisim_archisec.git
- ```
+https://github.com/binsec/binsec.
 
 #### Dependencies
+
+Dependencies can be automatically installed via
+[*opam*](https://opam.ocaml.org/doc/Install.html).  
+```bash
+$ opam depext -i zarith
+$ opam install dune menhir ocamlgraph
+$ opam install bitwuzla # optional -- for native SMT solver binding
+$ opam install unisim_archisec # optional -- for x86-64, ARMv7 and ARMv8
+```
 
 ##### System
 
@@ -27,6 +26,7 @@ $ git clone https://github.com/binsec/unisim_archisec.git
 - [ocamlgraph >= 1.8.5](https://github.com/backtracking/ocamlgraph)
 - [zarith >= 1.4](https://github.com/ocaml/Zarith)
 - *[unisim_archisec](https://github.com/binsec/unisim_archisec) (optional)*
+- *[bitwuzla](https://github.com/bitwuzla/ocaml-bitwuzla) (optional)*
 - [odoc](https://github.com/ocaml/odoc) (*documentation*)
 - [qcheck](https://github.com/c-cube/qcheck) (*test*)
 - [ounit2](https://github.com/gildor478/ounit) (*test*)
@@ -42,7 +42,7 @@ When `opam` is available, using the command `make` will automatically install th
 :information_source: **Local opam switch**  
 If `opam` is available, using the following command will create a new OCaml switch inside the BINSEC tree.
 ```bash
-OCAML_COMPILER=4.08.0 make switch
+OCAML_COMPILER=4.08.1 make switch
 ```
 A local switch makes the installation of dependencies, including ocaml supported version, not impacting the system wide ocaml configuration.  
 *Doing so, everything installed will be readily available but only inside the BINSEC directory.*
@@ -60,16 +60,7 @@ make install
 
 #### With `dune`
 
-Make sure the above dependencies are available.  
-Dependencies can still be automatically installed via
-[*opam*](https://opam.ocaml.org/doc/Install.html).  
-```bash
-opam pin add -n .                             # read the package definition
-opam depext binsec                            # install system dependencies
-opam install --deps-only binsec               # install OCaml dependencies
-opam install --deps-only --with-doc binsec    # optional, for documentation
-opam install --deps-only --with-test binsec   # optional, for tests
-```
+Make sure the above dependencies are available.
 
 Run the following in order to build `binsec` executable:
 ```bash

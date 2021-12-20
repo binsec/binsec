@@ -63,13 +63,9 @@ end
 
 module Message : sig
   module Value : sig
-    type t = Hex of int | Bin of int | Int of int | Str of string
+    type t = Int of Z.t | Str of string
 
     val vstr : string -> t
-
-    val vhex : string -> t
-
-    val vbin : string -> t
 
     val vint : string -> t
   end

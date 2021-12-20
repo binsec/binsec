@@ -1,0 +1,16 @@
+(include_subdirs no)
+
+(library
+ (name smt)
+ (modules :standard)
+ (flags
+  (:standard -open Binsec))
+ (library_flags
+  (:standard -linkall))
+ (libraries
+  binsec
+  (select
+   smt_bitwuzla.ml
+   from
+   (bitwuzla -> smt_bitwuzla.enabled.ml)
+   (!bitwuzla -> smt_bitwuzla.stubs.ml))))

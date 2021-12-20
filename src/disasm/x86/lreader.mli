@@ -27,16 +27,33 @@ type t
 
 (** {7 Constructors} *)
 
-val of_img : ?endianness:Machine.endianness -> ?cursor:int -> Loader.Img.t -> t
+val of_img :
+  ?endianness:Machine.endianness ->
+  ?base:Virtual_address.t ->
+  ?offset:int ->
+  Loader.Img.t ->
+  t
 
 val of_nibbles :
-  ?endianness:Machine.endianness -> ?cursor:int -> ?base:int -> string -> t
+  ?endianness:Machine.endianness ->
+  ?base:Virtual_address.t ->
+  ?offset:int ->
+  string ->
+  t
 
 val of_bytes :
-  ?endianness:Machine.endianness -> ?cursor:int -> ?base:int -> string -> t
+  ?endianness:Machine.endianness ->
+  ?base:Virtual_address.t ->
+  ?offset:int ->
+  string ->
+  t
 
 val of_binstream :
-  ?endianness:Machine.endianness -> ?cursor:int -> ?base:int -> Binstream.t -> t
+  ?endianness:Machine.endianness ->
+  ?base:Virtual_address.t ->
+  ?offset:int ->
+  Binstream.t ->
+  t
 
 (** {7 Pretty-printer} *)
 
@@ -44,7 +61,7 @@ val pp : Format.formatter -> t -> unit
 
 (** {7 Generic manipulation functions} *)
 
-val get_virtual_cursor : t -> int
+val get_virtual_cursor : t -> Virtual_address.t
 
 val rewind : t -> int -> unit
 (** [rewind r n] moves back the cursor [n] bytes. *)
@@ -99,7 +116,7 @@ module Peek : sig
   (** [peek loader n] peeks at the next [n] bytes of loader [loader] *)
 end
 
-val get_slice : t -> int -> int -> int list
+val get_slice : t -> Virtual_address.t -> Virtual_address.t -> int list
 (** [get_slice addr_start addr_end] returns the list of bytes contained in the
     interval from [addr_start] included to [addr_end] excluded.
     @assert addr_start < addr_end

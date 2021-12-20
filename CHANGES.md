@@ -1,3 +1,19 @@
+## 0.4.1 (2021-12-20)
+
+** Features
+
+   - Reworked Backward Bounded Symbolic Execution
+     (together with some [documentation](doc/bbsse/))
+
+** Misc
+
+   - Support native OCaml
+     [bitwuzla binding](https://github.com/bitwuzla/ocaml-bitwuzla)
+
+** Bug
+
+   - Fix an issue with 64-bit kernel virtual addresses
+
 ## 0.4.0 (2021-10-12)
 
 ** Features

@@ -55,6 +55,6 @@ module Decode_replacement : Cli.STRING_OPT
 
 module CFG_graph : Cli.BOOLEAN
 
-module Disasm_at : Cli.INTEGER
+module Disasm_at : Cli.STRING
 
 module Cache_decoder : Cli.BOOLEAN

@@ -61,15 +61,15 @@ let keywords = [
   "from"          , FROM;
   "file"          , FILE;
   "from_file"     , FROMFILE;
-  "big"           , BIG ;
-  "little"        , LITTLE;
+  (* "big"           , BIG ; *)
+  (* "little"        , LITTLE; *)
   "permissions"   , PERMISSIONS;
   "flag"          , FLAG;
   "temporary"     , TEMPORARY;
   "register"      , REGISTER;
   "entry_point"   , ENTRYPOINT;
   "word_size"     , WORDSIZE ;
-  "endianness"    , ENDIANNESS;
+  (* "endianness"    , ENDIANNESS; *)
   "unimplemented" , UNIMPLEMENTED;
   "undefined"     , UNDEFINED;
   "cut"           , CUT;
@@ -155,7 +155,7 @@ rule token = parse
   | "<FLAG>"        { FLAGTAG }
   | "\\addr"        { WORDSIZE }
   | "\\entry_point" { ENTRYPOINT }
-  | "\\endianness"  { ENDIANNESS }
+  (* | "\\endianness"  { ENDIANNESS } *)
   | 'R'             { READ }
   | "!R"            { NREAD }
   | 'W'             { WRITE }

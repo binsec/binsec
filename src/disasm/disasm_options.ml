@@ -125,8 +125,8 @@ module CFG_graph = Builder.False (struct
   let doc = "Print control-flow graph"
 end)
 
-module Disasm_at = Builder.Integer (struct
-  let default = 0
+module Disasm_at = Builder.String (struct
+  let default = "0"
 
   let name = "at"
 

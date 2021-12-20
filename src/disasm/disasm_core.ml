@@ -163,9 +163,7 @@ let add_replacement addr dhunk =
 
 let decode (vaddress : Virtual_address.t) =
   let decoder = decoder_of_machine () in
-  let reader =
-    Lreader.of_img (Kernel_functions.get_img ()) ~cursor:(vaddress :> int)
-  in
+  let reader = Lreader.of_img (Kernel_functions.get_img ()) ~base:vaddress in
   let instr, next = decode_at_address decoder reader vaddress in
   try
     let repl = get_decode_replacement () in
@@ -179,7 +177,7 @@ let decode (vaddress : Virtual_address.t) =
 let decode_from_reader lreader =
   let decoder = decoder_of_machine () in
   let vaddress = Lreader.get_virtual_cursor lreader in
-  decode_at_address decoder lreader (Virtual_address.create vaddress)
+  decode_at_address decoder lreader vaddress
 
 let decode_binstream ?base bs =
   try Lreader.of_binstream ?base bs |> decode_from_reader

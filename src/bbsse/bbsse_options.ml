@@ -25,83 +25,39 @@ include Cli.Make (struct
   let name = "Backward Bounded Static Symbolic Execution"
 end)
 
-module MaxCondition = Builder.Integer_option (struct
-  let name = "max_condition"
+module MaxBB = Builder.Integer_list (struct
+  let name = "max-basic-blocks"
 
-  let doc = "Set maximal number of conditions to meet"
+  let doc = "Set the maximal number of basic blocks to process backward"
 end)
 
-module MaxConditionCycle = Builder.Integer_option (struct
-  let name = "max_condition_cycle"
+module Consolidate = Builder.False (struct
+  let name = "consolidate"
 
-  let doc = "Set maximal number of conditions to go backwards to prevent cycles"
+  let doc = "Use previous opaque predicate knowledge to cut paths early"
 end)
 
-module GenGroundTruth = Builder.False (struct
-  let name = "gen-ground-truth"
-
-  let doc = "Give all jumps that are opaque"
-end)
-
-module ProcessAllJumps = Builder.False (struct
-  let name = "process-all-jumps"
-
-  let doc = "Process all jumps or not"
-end)
-
-module FindJumps = Builder.False (struct
+module FindJumpsBetween = Builder.Integer_list (struct
   let name = "find-jumps"
 
-  let doc = "Find automatically jumps and run BB-SSE on each"
+  let doc = "Automatically find conditional jumps between these two addresses"
 end)
 
-module Address_counter = struct
-  type t = { address : Virtual_address.t; counter : int }
+module FindAllJumps = Builder.False (struct
+  let name = "process-all-jumps"
 
-  let of_string s =
-    match String.split_on_char ':' s with
-    | [ address; counter ] ->
-        {
-          address = Virtual_address.of_string address;
-          counter = int_of_string counter;
-        }
-    | _ -> assert false
+  let doc = "Automatically find all conditional jumps in the executable"
+end)
 
-  let decr c = { c with counter = c.counter - 1 }
-
-  let init addr c = { address = addr; counter = c }
-
-  let check_and_decr c = if c.counter > 0 then Some (decr c) else None
-end
-
-module Visit_address_counter = Builder.Variant_list (struct
-  include Address_counter
-
-  let name = "visit-until"
+module CallsToProceed = Builder.Integer_set (struct
+  let name = "calls-to-proceed"
 
   let doc =
-    "Specify a the maximum number of times [n] an address [vaddr] is visited \
-     by SE (format: <vaddr>:<n>)"
+    "List of call site that will not be automatically skipped by the analysis"
 end)
 
-module OPFile = Builder.String_option (struct
-  let name = "op-file"
+module Directives = Builder.String_option (struct
+  let name = "directives"
 
-  let doc =
-    "file containing opaque predicates returned by the ground truth for a \
-     program"
-end)
-
-module IgnoreAddr = Builder.String_option (struct
-  let name = "ignore-addr"
-
-  let doc = "addresses to ignore (take next)"
-end)
-
-module MaxDepth = Builder.Integer (struct
-  let name = "depth"
-
-  let default = 1000
-
-  let doc = "Set exploration maximal depth"
+  let doc = "Path to a script file"
 end)

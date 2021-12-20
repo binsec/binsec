@@ -123,7 +123,9 @@ module Make (I : Iterable) : sig
 end
 
 val decode_binstream :
-  ?base:int -> Binstream.t -> Instruction.t * Virtual_address.t option
+  ?base:Virtual_address.t ->
+  Binstream.t ->
+  Instruction.t * Virtual_address.t option
 (** [decode_binstream b] decodes stream [b] and returns
     a tuple of the first instruction contained in [b] and its possible
     linear successor.

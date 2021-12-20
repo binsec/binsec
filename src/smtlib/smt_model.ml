@@ -66,6 +66,16 @@ module Memory = struct
 
   let addresses t = H.fold (fun k _ l -> k :: l) t.map []
 
+  let bindings t =
+    let ar = Array.make (H.length t.map) (Bitvector.zero, Bitvector.zero)
+    and i = ref 0 in
+    H.iter
+      (fun k v ->
+        Array.set ar !i (k, v);
+        incr i)
+      t.map;
+    ar
+
   let is_empty t = H.length t.map = 0 && t.default = None
 
   let _length t =
@@ -154,6 +164,8 @@ let find_address_content _ _ _ _ = assert false
 let is_memory_set t = Memory.has_value t.memory
 
 let memory_addresses t = Memory.addresses t.memory
+
+let memory_bindings t = Memory.bindings t.memory
 
 let variables t =
   Basic_types.String.Htbl.fold (fun k _ l -> k :: l) t.variables []

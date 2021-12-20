@@ -19,23 +19,23 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Bw_options
+(** Definition of command-line & programmatic options for SSE *)
 
-let run_opaque_predicates () =
-  if is_enabled () && Opaque_predicates.get () then
-    ignore @@ Opaque.Check.all ()
+include Cli.S
 
-let run_opaque_addresses () =
-  if is_enabled () && Opaque_addresses.is_set () then
-    ignore @@ Opaque.Check.subset ()
+type solver =
+  | Best  (** try to use the best SMT solver available; in order *)
+  | Bitwuzla_native  (** bitwuzla native ocaml binding *)
+  | Bitwuzla_smtlib  (** bitwuzla external process *)
+  | Boolector_smtlib  (** boolector external process *)
+  | Z3_smtlib  (** z3 external process *)
+  | CVC4_smtlib  (** cvc4 external process *)
+  | Yices_smtlib  (** yices external process *)
 
-let run_opaque_sections () =
-  if is_enabled () && Opaque_sections.is_set () then
-    let sections = Basic_types.String.Set.of_list @@ Opaque_sections.get () in
-    ignore @@ Opaque.Check.sections sections
+module SMTSolver : Cli.GENERIC with type t = solver
 
-let _ =
-  Cli.Boot.enlist ~name:"opaque predicates" ~f:run_opaque_predicates;
-  Cli.Boot.enlist ~name:"opaque predicates (specified addresses)"
-    ~f:run_opaque_addresses;
-  Cli.Boot.enlist ~name:"opaque predicates (sections)" ~f:run_opaque_sections
+module KeepGoing : Cli.BOOLEAN
+
+module SMT_dir : Cli.STRING_OPT
+
+module SMT_log_directory : Cli.STRING

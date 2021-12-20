@@ -19,16 +19,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-val temp_file : unit -> string
-(** [temp_file ()] create a new temporary file in
-    [Sse_options.SMT_dir]
- *)
-
-val dump_file : unit -> string
-(** [dump_file ()] create a new temporary file in
-    [Sse_options.SMT_log_directory]
- *)
-
 val mk_var_name : string -> int -> string
 (** [mk_var_name basename idx] *)
 

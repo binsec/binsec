@@ -51,7 +51,8 @@ module type SSE_RUNNER = sig
   val start : unit -> unit
 end
 
-module Env_make (W : WORKLIST) : SSE_RUNNER = struct
+module Env_make (S : Smt_solver.Solver) (WF : WORKLIST_FACTORY) : SSE_RUNNER =
+struct
   module Stats = struct
     type t = {
       paths : int;
@@ -127,9 +128,13 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
     include R
   end
 
+  module Path_state = Path_state (S)
+  module State = Path_state.State
+  module W = WF (Path_state)
+
   let assertion_failure session ps =
-    Sse_options.Logger.error "@[<v 2> Assertion failed %@ %a@ %a@]"
-      Path_state.pp_loc ps Senv.pp session;
+    Logger.error "@[<v 2> Assertion failed %@ %a@ %a@]" Path_state.pp_loc ps
+      State.pp session;
     Stats.add_assert_failed ()
 
   module Env = struct
@@ -268,7 +273,7 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
           match Virtual_address.Htbl.find e.choice at with
           | exception Not_found ->
               let first, second =
-                if Sse_options.Randomize.get () && Random.bool () then
+                if Randomize.get () && Random.bool () then
                   (alternative, consequent)
                 else (consequent, alternative)
               in
@@ -295,8 +300,8 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
        %a@]@[<h>visited instructions (static)    %d@]@,\
        @]"
       Senv.Query_stats.pp () Stats.pp () (C.nb_vertex e.Env.cfg);
-    if Sse_options.Dot_filename_out.is_set () then (
-      let filename = Sse_options.Dot_filename_out.get () in
+    if Dot_filename_out.is_set () then (
+      let filename = Dot_filename_out.get () in
       Logger.info "Outputting CFG in %s" filename;
       let oc = open_out_bin filename in
       let cfg = e.Env.cfg in
@@ -328,10 +333,12 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
 
     let assign ~lvalue ~rvalue ss =
       match lvalue with
-      | Dba.LValue.Var { name; _ } -> Senv.assign name rvalue ss
+      | Dba.LValue.Var { name; _ } -> State.assign name rvalue ss
       | Dba.LValue.Restrict (var, { lo; hi }) ->
-          Senv.assign var.name (Dba_utils.Expr.complement rvalue ~hi ~lo var) ss
-      | Dba.LValue.Store (_, dir, addr) -> Senv.write ~addr rvalue dir ss
+          State.assign var.name
+            (Dba_utils.Expr.complement rvalue ~hi ~lo var)
+            ss
+      | Dba.LValue.Store (_, dir, addr) -> State.write ~addr rvalue dir ss
 
     (* lvalue <- e *)
     let assignment ~lvalue ~rvalue ps =
@@ -344,16 +351,16 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
 
     let havoc ~lvalue ss =
       match lvalue with
-      | Dba.LValue.Var { name; size; _ } -> Senv.fresh name size ss
+      | Dba.LValue.Var { name; size; _ } -> State.fresh name size ss
       | Dba.LValue.Restrict (var, { lo; hi }) ->
           let size = hi - lo + 1 in
           let nondet = Dba.Expr.var "bs_unknown" size in
-          Senv.assign var.name
+          State.assign var.name
             (Dba_utils.Expr.complement nondet ~hi ~lo var)
-            (Senv.fresh "bs_unknown" size ss)
+            (State.fresh "bs_unknown" size ss)
       | Dba.LValue.Store (size, dir, addr) ->
           let nondet = Dba.Expr.var "bs_unknown" (8 * size) in
-          Senv.write ~addr nondet dir (Senv.fresh "bs_unknown" size ss)
+          State.write ~addr nondet dir (State.fresh "bs_unknown" size ss)
 
     let nondet ~lvalue ps =
       (* generate the logical constraint, add it to the path predicate,
@@ -366,7 +373,7 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
     let ite ~condition ~jump_target ~local_target e ps =
       Stats.add_branch ();
       let addr = Path_state.virtual_address ps in
-      match Senv.split_on condition ~n:2 (Path_state.symbolic_state ps) with
+      match State.split_on condition ~n:2 (Path_state.symbolic_state ps) with
       | [ (bv, symbolic_state) ] when Bitvector.is_one bv ->
           let consequent =
             static_jump ~jump_target
@@ -401,8 +408,8 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
 
     let dynamic_jump ~jump_expr e ps =
       Stats.add_branch ();
-      let n = Sse_options.JumpEnumDepth.get () in
-      match Senv.split_on jump_expr ~n (Path_state.symbolic_state ps) with
+      let n = JumpEnumDepth.get () in
+      match State.split_on jump_expr ~n (Path_state.symbolic_state ps) with
       | [] ->
           Stats.add_unknown_path ();
           Env.pick_path e
@@ -429,7 +436,7 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
       Path_state.set_block_index idx ps
 
     let assertion cond idx e ps =
-      match Senv.split_on cond ~n:2 (Path_state.symbolic_state ps) with
+      match State.split_on cond ~n:2 (Path_state.symbolic_state ps) with
       | [ (bv, symbolic_state) ] when Bitvector.is_one bv ->
           Path_state.set_block_index idx
             (Path_state.set_symbolic_state symbolic_state ps)
@@ -448,7 +455,7 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
       | _ -> assert false
 
     let assumption cond idx e ps =
-      match Senv.assume cond (Path_state.symbolic_state ps) with
+      match State.assume cond (Path_state.symbolic_state ps) with
       | None ->
           Logger.info "@[<h>Unsatifiable assumption %@ %a@]" Path_state.pp_loc
             ps;
@@ -531,7 +538,7 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
           in
           Logger.debug "Assume %a %@ %a" Dba_printer.Ascii.pp_bl_term assumption
             Virtual_address.pp vaddr;
-          match Senv.assume assumption (Path_state.symbolic_state ps) with
+          match State.assume assumption (Path_state.symbolic_state ps) with
           | None ->
               Logger.result
                 "@[<h>Directive :: unsatifiable assumption for path %d %@ %a@]"
@@ -552,7 +559,7 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
           Logger.debug "Assert %a %@ %a" Dba_printer.Ascii.pp_bl_term assertions
             Virtual_address.pp vaddr;
           match
-            Senv.split_on assertions ~n:2 (Path_state.symbolic_state ps)
+            State.split_on assertions ~n:2 (Path_state.symbolic_state ps)
           with
           | [ (bv, symbolic_state) ] when Bitvector.is_one bv ->
               Some (Path_state.set_symbolic_state symbolic_state ps)
@@ -576,7 +583,7 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
           Queue.iter
             (fun ((k, guard, actions) as r) ->
               Logger.debug "Reach";
-              match Senv.assume guard (Path_state.symbolic_state ps) with
+              match State.assume guard (Path_state.symbolic_state ps) with
               | None ->
                   Logger.debug
                     "@[<h>Directive :: path %d reached address %a with unsat \
@@ -604,22 +611,23 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
                                       Format.pp_print_space ppf ();
                                       Format.pp_print_string ppf n)
                                     l)
-                            slice Virtual_address.pp vaddr (Senv.pp_smt ?slice)
+                            slice Virtual_address.pp vaddr (State.pp_smt ?slice)
                             symbolic_state
                       | Directive.Action.Print_model ->
                           Logger.result "@[<v 0>Model %@ %a@ %a@]"
-                            Virtual_address.pp vaddr Senv.pp symbolic_state
+                            Virtual_address.pp vaddr State.pp symbolic_state
                       | Directive.Action.Print_value (format, expr) ->
                           let bv =
                             fst
-                              (List.hd (Senv.split_on ~n:1 expr symbolic_state))
+                              (List.hd
+                                 (State.split_on ~n:1 expr symbolic_state))
                           in
                           Logger.result "@[<v 0>Value %a : %a@]"
                             Dba_printer.Ascii.pp_bl_term expr
                             (pp_value_as format) bv
                       | Directive.Action.Print_stream name ->
                           Logger.result "@[<v 0>Ascii stream %s : %S@]" name
-                            (Senv.as_ascii name symbolic_state))
+                            (State.as_ascii name symbolic_state))
                     actions;
                   match k' with
                   | Directive.Count.Count 0 -> ()
@@ -644,7 +652,7 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
               in
               let n = List.length bvs in
               let bvs' =
-                Senv.split_on x ~n:k ~except:bvs (Path_state.symbolic_state ps)
+                State.split_on x ~n:k ~except:bvs (Path_state.symbolic_state ps)
               in
               let n' = List.length bvs' in
               let bvs =
@@ -681,7 +689,7 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
                  (fun e g -> Dba.Expr.logor e g)
                  (List.hd cuts) (List.tl cuts))
           in
-          match Senv.assume guard (Path_state.symbolic_state ps) with
+          match State.assume guard (Path_state.symbolic_state ps) with
           | None ->
               Logger.result "@[<h>Directive :: cut path %d %@ %a@]"
                 (Path_state.id ps) Virtual_address.pp vaddr;
@@ -764,7 +772,7 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
                   (Loader.Section.pos section).virt
               and size = (Loader.Section.size section).virt in
               Logger.info "Load section %s" name;
-              Senv.load_from ~addr size state)
+              State.load_from ~addr size state)
             else state)
           state
         @@ Loader.Img.sections img
@@ -773,12 +781,12 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
       let open Parse_helpers.Initialization in
       match init.operation with
       | Mem_load (addr, size) -> (
-          match Senv.split_on addr ~n:2 state with
+          match State.split_on addr ~n:2 state with
           | [ (bv, _) ] ->
               Logger.debug ~level:40
                 "the memory initializer address %a resolves to %a"
                 Dba_printer.Ascii.pp_bl_term addr Bitvector.pp bv;
-              Senv.load_from ~addr:bv size state
+              State.load_from ~addr:bv size state
           | _ ->
               Logger.fatal
                 "the memory initializer address %a does not resolve to a \
@@ -788,15 +796,15 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
           match Dba_types.LValue.name_of lval with
           | Some name ->
               let size = Dba.LValue.size_of lval in
-              Senv.fresh name size state
+              State.fresh name size state
           | None -> state)
-      | Assumption cond -> Option.get (Senv.assume cond state)
+      | Assumption cond -> Option.get (State.assume cond state)
       | Assignment (lval, rval, name_opt) -> (
           match (rval, name_opt) with
           | Nondet, Some name ->
               let size = Dba.LValue.size_of lval in
               let evar = Dba.Expr.var name size in
-              let state = Senv.fresh name size state in
+              let state = State.fresh name size state in
               Eval.assign ~lvalue:lval ~rvalue:evar state
           | Nondet, None -> Eval.havoc ~lvalue:lval state
           | Singleton rv, Some name ->
@@ -809,18 +817,18 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
           | x, Some name ->
               let size = Dba.LValue.size_of lval in
               let evar = Dba.Expr.var name size in
-              let state = Senv.fresh name size state in
+              let state = State.fresh name size state in
               let state = Eval.assign ~lvalue:lval ~rvalue:evar state in
               let cond = interval_or_set_to_cond evar x in
-              Option.get (Senv.assume cond state)
+              Option.get (State.assume cond state)
           | x, None ->
               let state = Eval.havoc ~lvalue:lval state in
               let e = Dba.LValue.to_expr lval in
               let cond = interval_or_set_to_cond e x in
-              Option.get (Senv.assume cond state))
+              Option.get (State.assume cond state))
     in
     let state =
-      match Sse_options.MemoryFile.get_opt () with
+      match MemoryFile.get_opt () with
       | None -> state
       | Some filename ->
           if not (Sys.file_exists filename) then
@@ -872,7 +880,7 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
                   | Script.Init i -> set state i
                   | Script.Goal g -> (
                       let loc = Directive.loc g in
-                      match Senv.split_on loc ~n:2 state with
+                      match State.split_on loc ~n:2 state with
                       | [ (bv, _) ] ->
                           Logger.debug ~level:40
                             "the directive address %a resolves to %a"
@@ -889,7 +897,7 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
                   | Script.Stub (a, b) ->
                       List.iter
                         (fun a ->
-                          match Senv.split_on a ~n:2 state with
+                          match State.split_on a ~n:2 state with
                           | [ (bv, _) ] ->
                               Logger.debug ~level:40
                                 "the stub address %a resolves to %a"
@@ -908,7 +916,7 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
                         a;
                       state
                   | Script.Pragma (Start_from a) -> (
-                      match Senv.split_on a ~n:2 state with
+                      match State.split_on a ~n:2 state with
                       | [ (bv, _) ] ->
                           Logger.debug ~level:40
                             "the entrypoint address %a resolves to %a"
@@ -932,7 +940,7 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
                           and size = (Loader.Section.size section).virt in
                           Logger.info "Load section %s (%a, %d)" name
                             Bitvector.pp_hex_or_bin addr size;
-                          Senv.load_from ~addr size ss)
+                          State.load_from ~addr size ss)
                         state names)
                 state script)
             state files
@@ -949,7 +957,7 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
     Env.update_from_cli e;
     Logger.debug ~level "Driver set ...";
     Logger.debug ~level "Creating symbolic store ...";
-    let ss = initialize_state e (Senv.empty ()) in
+    let ss = initialize_state e (State.empty ()) in
     let ps = Path_state.create ss (Env.decode e e.entrypoint) in
     let ps =
       let cli_counters = Visit_address_counter.get () in
@@ -973,26 +981,28 @@ module Env_make (W : WORKLIST) : SSE_RUNNER = struct
     do_sse ~filename
 end
 
+let get_worklist () =
+  match Search_heuristics.get () with
+  | Dfs -> (module Dfs : WORKLIST_FACTORY)
+  | Bfs -> (module Bfs : WORKLIST_FACTORY)
+  | Nurs ->
+      let seed =
+        match Seed.get_opt () with
+        | Some s -> s
+        | None ->
+            let v = Utils.random_max_int () in
+            Logger.info "Random search seed is %d" v;
+            Seed.set v;
+            v
+      in
+      Random.init seed;
+      (module Nurs : WORKLIST_FACTORY)
+
 let run () =
-  if Sse_options.is_enabled () && Kernel_options.ExecFile.is_set () then
-    let (module W) =
-      match Search_heuristics.get () with
-      | Dfs -> (module Dfs : WORKLIST)
-      | Bfs -> (module Bfs : WORKLIST)
-      | Nurs ->
-          let seed =
-            match Seed.get_opt () with
-            | Some s -> s
-            | None ->
-                let v = Utils.random_max_int () in
-                Logger.info "Random search seed is %d" v;
-                Seed.set v;
-                v
-          in
-          Random.init seed;
-          (module Nurs : WORKLIST)
-    in
-    let module S = Env_make (W) in
+  if is_enabled () && Kernel_options.ExecFile.is_set () then
+    let module S = (val Smt_solver.get_solver () : Smt_solver.Solver) in
+    let module WF = (val get_worklist () : WORKLIST_FACTORY) in
+    let module S = Env_make (S) (WF) in
     S.start ()
 
 let _ = Cli.Boot.enlist ~name:"SSE" ~f:run

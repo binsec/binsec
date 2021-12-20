@@ -1446,9 +1446,8 @@ let decode reader vaddr =
        If so, just read 16 bits and decode the compressed opcode.
        Otherwise, the opcode is 32 bits long. Decode an uncompressed opcode.
     *)
-    let vaddr = Virtual_address.to_int vaddr in
     let c = Lreader.get_virtual_cursor reader in
-    let displ = vaddr - c in
+    let displ = Virtual_address.diff vaddr c in
     if displ >= 0 then Lreader.advance reader displ
     else Lreader.rewind reader (-displ);
 

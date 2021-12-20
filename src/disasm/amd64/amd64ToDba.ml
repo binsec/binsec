@@ -87,9 +87,8 @@ let find key kvs =
 (* Some conversion functions from parsed categorized value to the expected types
    in Instruction.Generic.create *)
 let to_hex_opcode = function
-  | Parse_helpers.Message.Value.Hex h -> Format.sprintf "%x" h
+  | Parse_helpers.Message.Value.Int h -> Z.format "%x" h
   | Parse_helpers.Message.Value.Str s -> s
-  | _ -> assert false
 
 let to_mnemonic = function
   | Parse_helpers.Message.Value.Str s ->
@@ -97,7 +96,7 @@ let to_mnemonic = function
   | _ -> assert false
 
 let just_integer = function
-  | Parse_helpers.Message.Value.Int n -> n
+  | Parse_helpers.Message.Value.Int n -> Z.to_int n
   | _ -> assert false
 
 let compare_labeled_instruction (caddr1, _i1) (caddr2, _i2) =
@@ -203,7 +202,7 @@ let decode_from_reader addr reader =
       i
 
 let decode reader (addr : Virtual_address.t) =
-  let res = decode_from_reader (Int64.of_int (addr :> int)) reader in
+  let res = decode_from_reader (Virtual_address.to_int64 addr) reader in
   Amd64_options.Logger.debug ~level:3 "@[%a@]" show_stats ();
   res
 

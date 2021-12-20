@@ -18,33 +18,3 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
 (*                                                                        *)
 (**************************************************************************)
-
-(** Simple functional stack *)
-
-module type Typed = sig
-  type t
-end
-
-module Make (X : Typed) : sig
-  type elem = X.t
-
-  type t
-
-  val empty : t
-
-  val singleton : elem -> t
-
-  val push : elem -> t -> t
-
-  val pop : t -> elem * t
-
-  val top : t -> elem
-
-  val is_empty : t -> bool
-
-  val length : t -> int
-
-  val iter : (elem -> unit) -> t -> unit
-
-  val fold : ('a -> elem -> 'a) -> 'a -> t -> 'a
-end

@@ -19,30 +19,61 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module Opacity_status : sig
+module type Solver = sig
   type t
 
-  val is_clear : t -> bool
+  val open_session : unit -> t
 
-  val pp : Format.formatter -> t -> unit
+  val put : t -> Formula.entry -> unit
+
+  val check_sat : t -> Formula.status
+
+  val get_bv_value : t -> Formula.bv_term -> Bitvector.t
+
+  val get_ax_values : t -> Formula.ax_term -> (Bitvector.t * Bitvector.t) array
+
+  val close_session : t -> unit
+
+  val check_sat_and_close : t -> Formula.status
+
+  val query_stat : unit -> int
+
+  val time_stat : unit -> float
 end
 
-module Check : sig
-  type t = Opacity_status.t Virtual_address.Map.t
+let solvers =
+  let open Formula_options in
+  [ Bitwuzla; Boolector; Z3; CVC4; Yices ]
 
-  val vertex : cfg:Instr_cfg.t -> Instr_cfg.V.t -> Opacity_status.t option
+let map =
+  let open Formula_options in
+  let open Smt_options in
+  function
+  | Best | Bitwuzla_native -> assert false
+  | Bitwuzla_smtlib -> Bitwuzla
+  | Boolector_smtlib -> Boolector
+  | Z3_smtlib -> Z3
+  | CVC4_smtlib -> CVC4
+  | Yices_smtlib -> Yices
 
-  val vertices : cfg:Instr_cfg.t -> Instr_cfg.V.t list -> t
-
-  val addresses : cfg:Instr_cfg.t -> Virtual_address.t list -> t
-
-  val graph : cfg:Instr_cfg.t -> t
-
-  val file : filename:string -> t
-
-  val subset : unit -> t
-
-  val sections : Basic_types.String.Set.t -> t
-
-  val all : unit -> t
-end
+let get_solver () =
+  let open Formula_options in
+  let open Smt_options in
+  match SMTSolver.get () with
+  | (Best | Bitwuzla_native) when Smt_bitwuzla.available ->
+      (module Smt_bitwuzla : Solver)
+  | Best -> (
+      try
+        let solver = List.find Prover.ping solvers in
+        Logger.info "Found %a in the path." Prover.pp solver;
+        Solver.set solver;
+        (module Smt_external.Solver : Solver)
+      with Not_found -> Logger.fatal "No SMT solver found.")
+  | Bitwuzla_native ->
+      Logger.fatal "Native bitwuzla binding is required but not available."
+  | solver when Prover.ping (map solver) ->
+      Solver.set (map solver);
+      (module Smt_external.Solver : Solver)
+  | solver ->
+      Logger.fatal "%a is required but not available in path." Prover.pp
+        (map solver)

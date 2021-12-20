@@ -23,29 +23,14 @@
 
 include Cli.S
 
-module MaxCondition : Cli.INTEGER_OPT
+module MaxBB : Cli.INTEGER_LIST
 
-module MaxConditionCycle : Cli.INTEGER_OPT
+module Consolidate : Cli.BOOLEAN
 
-module ProcessAllJumps : Cli.BOOLEAN
+module FindJumpsBetween : Cli.INTEGER_LIST
 
-module GenGroundTruth : Cli.BOOLEAN
+module FindAllJumps : Cli.BOOLEAN
 
-module FindJumps : Cli.BOOLEAN
+module CallsToProceed : Cli.INTEGER_SET
 
-module OPFile : Cli.STRING_OPT
-
-module IgnoreAddr : Cli.STRING_OPT
-
-module MaxDepth : Cli.INTEGER
-
-module Address_counter : sig
-  type t = private { address : Virtual_address.t; counter : int }
-
-  val check_and_decr : t -> t option
-
-  val init : Virtual_address.t -> int -> t
-end
-
-module Visit_address_counter :
-  Cli.CHECKABLE with type t = Address_counter.t list
+module Directives : Cli.STRING_OPT

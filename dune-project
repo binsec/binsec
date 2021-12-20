@@ -4,7 +4,7 @@
 (generate_opam_files true)
 
 (name binsec)
-(version "0.4.0")
+(version "0.4.1")
 (maintainers "BINSEC <binsec@saxifrage.saclay.cea.fr>")
 (authors
   "Adel Djoudi"
@@ -55,7 +55,9 @@ An overview of some BINSEC features can be found in our SSPREW'17 tutorial.")
   (ounit2 (and :with-test (>= 2)))
   (qcheck (and :with-test (>= 0.7))))
  (depopts
-  unisim_archisec)
+  (llvm (and (>= 6.0.0) (< 13.0.0)))
+  unisim_archisec
+  (bitwuzla (>= 1.0.1)))
  (tags
   ("binary code analysis"
     "symbolic execution"

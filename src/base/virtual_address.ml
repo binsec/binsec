@@ -19,6 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+exception Non_canonical_form
+
 module V_comparable = struct
   type t = int
 
@@ -37,31 +39,41 @@ let create n = n
 
 let to_int n = n
 
-let to_int64 = Int64.of_int
+let to_int64 x = Int64.(shift_right (shift_left (of_int x) 1) 1)
 
 let of_int64 n64 =
-  assert (Basic_types.Int64.is_int_int64 n64);
-  Int64.to_int n64
+  if Int64.(shift_right (shift_left n64 1) 1) <> n64 then
+    raise Non_canonical_form
+  else Int64.to_int n64
 
 let of_bigint b =
-  assert (Z.fits_int b);
-  Z.to_int b
+  if Z.fits_int b then Z.to_int b
+  else if Z.numbits b = 64 && Z.testbit b 62 then
+    Z.to_int (Z.signed_extract b 0 63)
+  else raise Non_canonical_form
 
-let of_string s = create @@ int_of_string s
+let of_string s = of_bigint @@ Z.of_string s
 
-let to_bigint = Z.of_int
+let to_bigint v = Z.extract (Z.signed_extract (Z.of_int v) 0 63) 0 64
 
 let of_bitvector bv = Bitvector.value_of bv |> of_bigint
 
+(* FIXME: we may want to check for overflow? *)
 let add_int n t = create (t + n)
 
 let succ = add_int 1
 
-let pred t =
-  assert (t > 0);
-  add_int (-1) t
+let pred t = add_int (-1) t
 
-let pp ppf = Format.fprintf ppf "%08x"
+(* FIXME: hope that t and t' are close enough *)
+let diff t t' = t - t'
+
+let pp ppf v =
+  if v < 0 then
+    Format.fprintf ppf "0x%x%014x"
+      ((v asr 56) land 0xff)
+      (v land 0xffffffffffffff)
+  else Format.fprintf ppf "0x%08x" v
 
 let pp_set ppf vs =
   let open Format in

@@ -19,8 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Sse_options
-module S = Bitvector.Collection.Set
+open Smt_options
 
 module Translate = struct
   open Dba
@@ -94,11 +93,11 @@ module Translate = struct
     let open Dba.Expr in
     match e with
     | Var { name; size; _ } ->
-        Sse_symbolic.State.get_bv name (Size.Bit.create size) symbolic_state
+        Smt_symbolic.State.get_bv name (Size.Bit.create size) symbolic_state
     | Cst bv -> (Formula.mk_bv_cst bv, symbolic_state)
     | Load (bytes, _endianness, e) ->
         let smt_e, st = expr symbolic_state e in
-        let mem = Sse_symbolic.State.get_memory st in
+        let mem = Smt_symbolic.State.get_memory st in
         (Formula.mk_select bytes mem smt_e, st)
     | Binary (bop, lop, rop) as e ->
         Logger.debug ~level:6 "Translating binary %a"
@@ -118,7 +117,7 @@ module Translate = struct
         in
         (v, st'')
 
-  open Sse_symbolic
+  open Smt_symbolic
 
   let lvalue_with_rval_update symbolic_state logical_rval = function
     | LValue.Var { name; size = bitsize; _ } ->
@@ -171,5 +170,141 @@ module Translate = struct
     let name, var_type, logical_rval, st' =
       lvalue_with_rval_update st logical_rval_base lval
     in
-    Sse_symbolic.State.assign ~wild name var_type logical_rval st'
+    Smt_symbolic.State.assign ~wild name var_type logical_rval st'
+
+  let gen_unknown =
+    let count = ref 0 in
+    fun ?naming_hint () ->
+      match naming_hint with
+      | None ->
+          incr count;
+          "bs_unknown" ^ string_of_int !count
+      | Some name -> name
+
+  let havoc ?naming_hint ?(wild = false) lvalue ss =
+    let size = LValue.size_of lvalue in
+    let name = gen_unknown ?naming_hint () in
+    let symstate =
+      Smt_symbolic.State.declare ~wild name (Formula.BvSort size) ss
+    in
+    let logical_rval_base, st =
+      Smt_symbolic.State.get_bv name (Size.Bit.create size) symstate
+    in
+    let name, var_type, logical_rval, st' =
+      lvalue_with_rval_update st logical_rval_base lvalue
+    in
+    Smt_symbolic.State.assign name var_type logical_rval st'
+
+  let assume cond state =
+    assert (Expr.size_of cond = 1);
+    let c, state = expr state cond in
+    Smt_symbolic.State.constrain Formula.(mk_bv_equal c mk_bv_one) state
+end
+
+module Utils = struct
+  let sse_dirname = "binsec_sse"
+
+  let mk_file ~dir =
+    let n = ref 0 in
+    fun () ->
+      incr n;
+      let temp_dir = dir () in
+      if not (Sys.file_exists temp_dir) then (
+        Logger.debug ~level:6 "Creating directory %s" temp_dir;
+        Unix.mkdir temp_dir 0o700);
+      let filename =
+        Filename.concat temp_dir @@ Printf.sprintf "sse_%d.smt2" !n
+      in
+      Logger.debug ~level:5 "Creating temporary %s" filename;
+      filename
+
+  let temp_file =
+    let dir () =
+      let tmpdir = SMT_dir.get () in
+      Filename.concat tmpdir sse_dirname
+    in
+    mk_file ~dir
+end
+
+module Solver = struct
+  let queries = ref 0
+
+  type time = { mutable sec : float }
+
+  let cumulated_time = { sec = 0. }
+
+  let query_stat () = !queries
+
+  let time_stat () = cumulated_time.sec
+
+  type t = Solver.Session.t * float
+
+  let open_session () =
+    let timeout = Formula_options.Solver.Timeout.get () in
+    let file =
+      if SMT_dir.is_set () then (
+        let filename = Utils.temp_file () in
+        Logger.debug ~level:3 "@[<h>Using SMT script file %s@]" filename;
+        Some filename)
+      else None
+    in
+    let solver = Formula_options.Solver.get () in
+    let t = Unix.gettimeofday () in
+    (Solver.Session.create ?file ~timeout solver, t)
+
+  let put (solver, _) entry = Solver.Session.put_entry solver entry
+
+  let check_sat (solver, _) =
+    try Solver.Session.check_sat solver with
+    | Failure msg ->
+        Logger.warning "SMT solver failed on %s" msg;
+        Solver.Session.destroy solver;
+        if not (KeepGoing.get ()) then (
+          Logger.error
+            "@[<v 0>@[SMT solver failed with message:@].@ @[%s@]@ @[Aborting. \
+             Use -keep-going to ignore@]@]"
+            msg;
+          failwith msg);
+        Formula.UNKNOWN
+    | e ->
+        Solver.Session.destroy solver;
+        Logger.warning "Destroyed session";
+        raise e
+
+  let value_of_constant cst =
+    let open Smtlib in
+    match cst with
+    | CstHexadecimal s -> Bitvector.of_hexstring ("0x" ^ s)
+    | CstBinary s -> Bitvector.of_string ("0b" ^ s)
+    | CstDecimalSize (value, size) ->
+        Bitvector.create (Z.of_string value) (int_of_string size)
+    | CstNumeral _ | CstString _ | CstBool _ | CstDecimal _ ->
+        Logger.error
+          "Model construction: unexpected constant %a as bitvector value"
+          Smtlib_pp.pp_spec_constant cst;
+        exit 2
+
+  let extract_bv terms =
+    let open Smtlib in
+    match terms with
+    | [ (_, { term_desc = TermSpecConstant cst; _ }) ] -> value_of_constant cst
+    | _ -> assert false
+
+  let get_bv_value (solver, _) e =
+    extract_bv (Solver.Session.get_value solver (Formula.mk_bv_term e))
+
+  let get_ax_values (solver, _) e =
+    let model = Smt_model.create () in
+    Smt_model.add_memory_term model
+      (Solver.Session.get_value solver (Formula.mk_ax_term e));
+    Smt_model.memory_bindings model
+
+  let close_session (solver, t) =
+    Solver.Session.destroy solver;
+    cumulated_time.sec <- cumulated_time.sec +. Unix.gettimeofday () -. t
+
+  let check_sat_and_close solver =
+    let res = check_sat solver in
+    close_session solver;
+    res
 end

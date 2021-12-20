@@ -1,3 +1,14 @@
+(include_subdirs no)
+
+(library
+ (name se)
+ (modules :standard)
+ (flags
+  (:standard -open Binsec -open Smt))
+ (library_flags
+  (:standard -linkall))
+ (libraries binsec smt))
+
 (rule
  (copy ../dba/dba_expr_parser.mly dba_expr_parser.mly))
 

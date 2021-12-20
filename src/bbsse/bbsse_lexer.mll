@@ -32,7 +32,18 @@ let hex = '0' ['x']['0'-'9''A'-'F''a'-'f']+
 let bin = '0' ['b']['0''1']+
 
 
-rule token = parse
+rule token = parse 
+  | "expect"        { EXPECT }
+  | "is"            { IS }
+  | "opaque"        { OPAQUE }
+  | "branch"        { BRANCH }
+  | "fallthrough"   { FALLTHROUGH }
+  | "unreachable"   { UNREACHABLE }
+  | "clear"         { CLEAR }
+  | "skip"          { SKIP }
+  | "process"       { PROCESS }
+  | "call"          { CALL }
+  | "at"            { AT }
   | hex as s        { ADDRESS (Z.of_string s)}
   | space+          { token lexbuf }
   | '#' [^'\n']* '\n'

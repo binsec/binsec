@@ -19,6 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Entry point for backwards analyses.  *)
+include Cli.S
 
-(* Empty on purpose. *)
+module Runner : Cli.STRING_OPT
+
+module Cache : Cli.STRING_OPT

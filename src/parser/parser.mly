@@ -41,7 +41,7 @@
 %token MODU MODS UNDEF SOK SKO PRINT ASSERT FROMFILE FROM FILE
 %token ASSUME NONDET NONDETASSUME AT
 %token CONSTANT STACK MALLOC FREE NREAD READ NWRITE WRITE
-%token NEXEC EXEC ENTRYPOINT ENDIANNESS BIG LITTLE
+%token NEXEC EXEC ENTRYPOINT /* ENDIANNESS BIG LITTLE */
 %token AND OR XOR NOT
 %token CONCAT COLON SEMICOLON COMMA DOT DOTDOT
 %token LSHIFT RSHIFTU RSHIFTS LROTATE RROTATE
@@ -131,8 +131,8 @@ dba:
 ;
 
 value:
-| HEXA     { Message.Value.vhex $1}
-| BIN      { Message.Value.vbin $1}
+| HEXA     { Message.Value.vint $1}
+| BIN      { Message.Value.vint $1}
 | STRING   { Message.Value.vstr $1}
 | INT      { Message.Value.vint $1}
 ;
@@ -154,9 +154,10 @@ decoder_msg:
 | base=decoder_base; LPAR UNIMPLEMENTED RPAR EOF
     { base,
       match base with
-      | [ _, Parse_helpers.Message.Value.Hex addr; _; _;
+      | [ _, Parse_helpers.Message.Value.Int addr; _; _;
 	  _, Parse_helpers.Message.Value.Str mnemonic ] ->
-	 [ Dba_types.Caddress.block_start_of_int addr,
+	 [ Dba_types.Caddress.of_virtual_address
+	     (Virtual_address.of_bigint addr),
 	   Dba.Instr.stop (Some (Dba.Unsupported mnemonic)) ]
       | _ -> assert false }
 

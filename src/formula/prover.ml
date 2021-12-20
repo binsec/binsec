@@ -61,6 +61,16 @@ let executable = function
 
 let name_of = executable
 
+let ping solver =
+  match
+    Unix.close_process_full
+      (Unix.open_process_full
+         (Printf.sprintf "%s --version" (executable solver))
+         [||])
+  with
+  | WEXITED 0 -> true
+  | _ -> false
+
 let default_arguments = function
   | Boolector | Bitwuzla -> [ "-m"; "-x" ]
   | CVC4 -> [ "--lang=smt2"; "--produce-models" ]

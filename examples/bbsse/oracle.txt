@@ -1,0 +1,126 @@
+##########################################################################
+#                                                                        #
+# Predicate 1 / 9                                                        #
+#                                                                        #
+# 8048055:       8b 34 24                mov    (%esp),%esi              #
+# 8048058:       4e                      dec    %esi                     #
+# 8048059:       74 45                   je     0x80480a0                #
+#                                                                        #
+# legitimately test if argc is equal to 1.                               #
+#                                                                        #
+##########################################################################
+expect 0x8048059 is clear
+
+##########################################################################
+#                                                                        #
+# Predicate 2 / 9                                                        #
+#                                                                        #
+# 8048061:	8d 44 24 fc          	lea    -0x4(%esp),%eax           #
+# 8048065:	f7 e0                	mul    %eax                      #
+# 8048067:	8d 5c c0 ff          	lea    -0x1(%eax,%eax,8),%ebx    #
+# 804806b:	29 c3                	sub    %eax,%ebx                 #
+# 804806d:	0f b6 07             	movzbl (%edi),%eax               #
+# 8048070:	f7 e0                	mul    %eax                      #
+# 8048072:	39 c3                	cmp    %eax,%ebx                 #
+# 8048074:	75 0b                	jne    0x8048081                 #
+#                                                                        #
+# let x = %esp - 4 and y = (%edi)                                        #
+# the equation 8x² - 1 = y² is mathematically impossible.                #
+#                                                                        #
+##########################################################################
+expect 0x8048074 is opaque branch
+
+##########################################################################
+#                                                                        #
+# Predicate 3 / 9                                                        #
+#                                                                        #
+# 8048079:	85 ed                	test   %ebp,%ebp                 #
+# 804807b:	72 f9                	jb     0x8048076                 #
+#                                                                        #
+# the instruction 'test' always clear the carry flag.                    #
+#                                                                        #
+##########################################################################
+expect 0x804807b is opaque fallthrough
+
+##########################################################################
+#                                                                        #
+# Predicate 4 / 9                                                        #
+#                                                                        #
+# 8048081:       31 c0                   xor    %eax,%eax                #
+# 8048083:       75 fe                   jne    0x8048083                #
+#                                                                        #
+# the zero flag is always set.                                           #
+#                                                                        #
+##########################################################################
+expect 0x8048083 is opaque fallthrough
+
+##########################################################################
+#                                                                        #
+# Predicate 5 / 9                                                        #
+#                                                                        #
+# 8048085:       e8 4a 00 00 00          call   0x80480d4                #
+# 804808a:       85 c9                   test   %ecx,%ecx                #
+# 804808c:       79 4b                   jns    0x80480d9                #
+#                                                                        #
+# the function at 0x80480d4 always returns -1 in %ecx.                   #
+# require to process call at 0x80480d4 to avoid misclassification.       # 
+#                                                                        #
+##########################################################################
+process call at 0x8048085
+expect 0x804808c is opaque fallthrough
+
+##########################################################################
+#                                                                        #
+# Predicate 6 / 9                                                        #
+#                                                                        #
+# 8048092:       31 db                   xor    %ebx,%ebx                #
+# 8048094:       e8 2c 00 00 00          call   0x80480c5                #
+# 8048099:       85 db                   test   %ebx,%ebx                #
+# 804809b:       74 21                   je     0x80480be                #
+#                                                                        #
+# %ebx is part of the callee saved registers.                            #
+# however, the function at 0x80480c5 sets %ebx to 1.                     #
+# require to process call at 0x80480c5 to avoid a false positive.        #
+# lead to a false negative because of 'int' unsupported instruction.     #
+#                                                                        #
+##########################################################################
+process call at 0x8048094
+expect 0x804809b is opaque fallthrough
+
+##########################################################################
+#                                                                        #
+# Predicate 7 / 9                                                        #
+#                                                                        #
+# 804809d:       4e                      dec    %esi                     #
+# 804809e:       75 d6                   jne    0x8048076                #
+#                                                                        #
+# legitimately test if all argv has been proceeded.                      #
+#                                                                        #
+##########################################################################
+expect 0x804809e is clear
+
+##########################################################################
+#                                                                        #
+# Predicate 8 / 9                                                        #
+#                                                                        #
+# 80480a4:	31 db                	xor    %ebx,%ebx                 #
+# 80480a6:	43                   	inc    %ebx                      #
+# 80480a7:	8d 44 7f ff          	lea    -0x1(%edi,%edi,2),%eax    #
+# 80480ab:	f7 e7                	mul    %edi                      #
+# 80480ad:	85 d8                	test   %ebx,%eax                 #
+# 80480af:	75 23                	jne    0x80480d4                 #
+#                                                                        #
+# let x = %edi                                                           #
+# the expression (3x - 1) * x can not be odd.                            #
+#                                                                        #
+##########################################################################
+expect 0x80480af is opaque fallthrough
+
+##########################################################################
+#                                                                        #
+# Predicate 9 / 9                                                        #
+#                                                                        #
+# its predecessor at 0x0804808c can not jump to it.                      #
+#                                                                        #
+##########################################################################
+expect 0x80480d9 is unreachable

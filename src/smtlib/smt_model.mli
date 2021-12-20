@@ -96,6 +96,9 @@ val memory_addresses : t -> address list
 (** [get_register model] gets the list of addresses with specific values of this
     model *)
 
+val memory_bindings : t -> (address * Bitvector.t) array
+(** [get_register model] gets the list of pair address/value of this model *)
+
 val is_memory_set : t -> address -> bool
 (** [is_memory_set model address] checks if the given address is present in the
     memory of this model

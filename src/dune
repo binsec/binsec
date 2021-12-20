@@ -9,6 +9,8 @@
   (:standard -open Binsec))
  (libraries
   binsec
+  se
+  bbsse
   (select
    amd64.manifest
    from
@@ -39,7 +41,17 @@
   (:standard -linkall))
  (flags
   (:standard -w -3))
- (libraries str bigarray ocamlgraph zarith dune-site)
+ (libraries
+  str
+  bigarray
+  ocamlgraph
+  zarith
+  dune-site
+  (select
+   llvm_decoder.ml
+   from
+   (llvm -> llvm_decoder.llvm.ml)
+   (!llvm -> llvm_decoder.stubs.ml)))
  (foreign_stubs
   (language c)
   (names :standard)))

@@ -263,15 +263,11 @@ let rec patch_expr_size e sz =
 
 module Message = struct
   module Value = struct
-    type t = Hex of int | Bin of int | Int of int | Str of string
+    type t = Int of Z.t | Str of string
 
     let vstr v = Str v
 
-    let vhex v = Hex (int_of_string v)
-
-    let vbin v = Bin (int_of_string v)
-
-    let vint v = Int (int_of_string v)
+    let vint v = Int (Z.of_string v)
   end
 end
 

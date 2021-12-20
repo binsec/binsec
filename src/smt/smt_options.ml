@@ -20,33 +20,63 @@
 (**************************************************************************)
 
 include Cli.Make (struct
-  let shortname = "bw"
+  let shortname = "smt"
 
-  let name = "Backwards reasoners"
+  let name = "Static Symbolic Execution"
 end)
 
-module Opaque_predicates = Builder.False (struct
-  let name = "opaque"
+type solver =
+  | Best (* try to use the best SMT solver available; in order *)
+  | Bitwuzla_native (* bitwuzla native ocaml binding *)
+  | Bitwuzla_smtlib (* bitwuzla external process *)
+  | Boolector_smtlib (* boolector external process *)
+  | Z3_smtlib (* z3 external process *)
+  | CVC4_smtlib (* cvc4 external process *)
+  | Yices_smtlib
+(* yices external process *)
 
-  let doc = "Check all predicates from entry point section for opacity"
+module SMTSolver = Builder.Variant_choice_assoc (struct
+  type t = solver
+
+  let assoc_map =
+    [
+      ("best", Best);
+      ("bitwuzla", Bitwuzla_smtlib);
+      ("bitwuzla:native", Bitwuzla_native);
+      ("bitwuzla:smtlib", Bitwuzla_smtlib);
+      ("boolector", Boolector_smtlib);
+      ("boolector:smtlib", Boolector_smtlib);
+      ("z3", Z3_smtlib);
+      ("z3:smtlib", Z3_smtlib);
+      ("cvc4", CVC4_smtlib);
+      ("cvc4:smtlib", CVC4_smtlib);
+      ("yices", Yices_smtlib);
+      ("yices:smtlib", Yices_smtlib);
+    ]
+
+  let default = Best
+
+  let name = "solver"
+
+  let doc = "Manually set the SMT solver to use."
 end)
 
-module Opaque_addresses = Builder.Integer_list (struct
-  let name = "opaque-at"
+module KeepGoing = Builder.False (struct
+  let name = "keep-going"
 
-  let doc = "Check address list for opaque predicates"
+  let doc = "Ignore errors returned by the SMT solver. Default is to abort."
 end)
 
-module Opaque_sections = Builder.String_list (struct
-  let name = "opaque-sections"
+module SMT_dir = Builder.String_option (struct
+  let name = "smt-dir"
 
-  let doc = "Check predicates of section list for opacity"
+  let doc = "set directory to cache smt scripts"
 end)
 
-module K = Builder.Integer (struct
-  let name = "k"
+module SMT_log_directory = Builder.String (struct
+  let name = "smt-dump-dir"
 
-  let doc = "Set size of backward trace"
+  let doc = "Set directory where unsolved SMT scripts are dumped"
 
-  let default = 16
+  let default = "binsec_smtdump"
 end)

@@ -25,6 +25,8 @@
     physical (virtual) address of the underlying machine.
 *)
 
+exception Non_canonical_form
+
 type t = private int
 
 val create : int -> t
@@ -50,6 +52,8 @@ val add_int : int -> t -> t
 val succ : t -> t
 
 val pred : t -> t
+
+val diff : t -> t -> int
 
 include Sigs.PRINTABLE with type t := t
 

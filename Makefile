@@ -32,7 +32,7 @@ OCAML_COMPILER ?= $(shell opam switch list | grep -m 1 -oe "ocaml-system[^ ]*")
 
 _opam:
 	opam switch create . $(OCAML_COMPILER) --no-install
-	opam install tuareg merlin ocp-indent user-setup -y
+	opam install tuareg merlin ocamlformat user-setup -y
 	opam user-setup install
 	opam pin add . -n
 	opam install binsec --deps-only --with-test --with-doc -y
@@ -60,10 +60,19 @@ endef
 
 endif
 
+ifneq (, $(shell which ocamlformat 2> /dev/null))
+
+define apply_ocamlformat
+	$(shell dune build @fmt --auto-promote)
+endef
+
+endif
+
 .PHONY: default switch install uninstall binsec test doc clean
 
 binsec:
 	$(call check_dune)
+	$(call apply_ocamlformat)
 	$(call install_deps,@install)
 	dune build @install
 

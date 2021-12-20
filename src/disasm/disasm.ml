@@ -809,7 +809,7 @@ let inst_of_raw ?base raw =
 
 let decode raw =
   try
-    let base = Disasm_at.get () in
+    let base = Virtual_address.of_string (Disasm_at.get ()) in
     let i = inst_of_raw ~base raw in
     Logger.result "%a" Instruction.pp i
   with X86toDba.InstructionUnhandled s ->

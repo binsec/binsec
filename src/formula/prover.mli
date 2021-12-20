@@ -33,6 +33,9 @@ val is_boolector : t -> bool
 
 val is_yices : t -> bool
 
+val ping : t -> bool
+(** [ping solver] return true if the command was found in the path. *)
+
 val name_of : t -> string
 (** {2 Accessors} *)
 

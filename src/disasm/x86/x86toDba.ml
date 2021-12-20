@@ -2973,8 +2973,8 @@ let aux_decode ins nextaddr sreg opcode =
 let decaux basic_instr addr sreg =
   let open X86Instruction in
   let nextaddr =
-    addr + Size.Byte.to_int basic_instr.size
-    |> Dba_types.Caddress.block_start_of_int
+    Virtual_address.add_int (Size.Byte.to_int basic_instr.size) addr
+    |> Dba_types.Caddress.of_virtual_address
   in
   aux_decode basic_instr.mnemonic nextaddr sreg basic_instr.opcode
 
@@ -2985,23 +2985,20 @@ let x86lift_from_reader addr reader =
   (* convert x86 IR -> DBA *)
   let insts = decaux binstr addr sreg in
   let nextaddr =
-    addr + Size.Byte.to_int binstr.X86Instruction.size
-    |> Dba_types.Caddress.block_start_of_int
+    Virtual_address.add_int (Size.Byte.to_int binstr.X86Instruction.size) addr
+    |> Dba_types.Caddress.of_virtual_address
   in
   let block = Predba.blockify nextaddr insts in
   assert (Dhunk.Check.has_inbound_inner_jumps block);
   assert (Dhunk.Check.no_temporary_leak block);
   (binstr, block)
 
-let decode reader (addr : Virtual_address.t) =
-  x86lift_from_reader (addr :> int) reader
+let decode reader (addr : Virtual_address.t) = x86lift_from_reader addr reader
 
 (* addr_size in Bytes *)
 (* A base address of 0 is used here by default.
 *)
 let decode_binstream ?(base_addr : Virtual_address.t = Virtual_address.create 0)
     hopc =
-  try
-    let base = (base_addr :> int) in
-    Lreader.of_binstream ~base hopc |> x86lift_from_reader base
+  try Lreader.of_binstream ~base:base_addr hopc |> x86lift_from_reader base_addr
   with Failure s -> raise (InstructionUnhandled s)
