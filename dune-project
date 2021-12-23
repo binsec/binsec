@@ -47,7 +47,7 @@ BINSEC is developed at CEA List in scientfic collaboration with Verimag and LORI
 
 An overview of some BINSEC features can be found in our SSPREW'17 tutorial.")
  (depends
-  (ocaml (and (>= 4.08) (< 4.14)))
+  (ocaml (>= 4.08))
   (menhir (and :build (>= 20181113)))
   (ocamlgraph (>= 1.8.5))
   (zarith (>= 1.4))
@@ -55,9 +55,13 @@ An overview of some BINSEC features can be found in our SSPREW'17 tutorial.")
   (ounit2 (and :with-test (>= 2)))
   (qcheck (and :with-test (>= 0.7))))
  (depopts
-  (llvm (and (>= 6.0.0) (< 13.0.0)))
+  llvm
   unisim_archisec
-  (bitwuzla (>= 1.0.1)))
+  bitwuzla)
+ (conflicts
+  (llvm (< 6.0.0))
+  (llvm (>= 13.0.0))
+  (bitwuzla (< 1.0.1)))
  (tags
   ("binary code analysis"
     "symbolic execution"
