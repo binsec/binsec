@@ -21,7 +21,7 @@
 
 default: binsec
 
-ifneq (, $(shell which opam 2> /dev/null))
+ifneq (, $(shell command -v opam 2> /dev/null))
 
 define install_deps
 	$(shell dune external-lib-deps --missing $(1) 2>&1 \
@@ -46,7 +46,7 @@ switch:
 
 endif
 
-ifeq (, $(shell which dune 2> /dev/null))
+ifeq (, $(shell command -v dune 2> /dev/null))
 
 define check_dune
 	$(error "Please install dune or run 'make switch'.")
@@ -60,7 +60,7 @@ endef
 
 endif
 
-ifneq (, $(shell which ocamlformat 2> /dev/null))
+ifneq (, $(shell command -v ocamlformat 2> /dev/null))
 
 define apply_ocamlformat
 	$(shell dune build @fmt --auto-promote)

@@ -59,7 +59,7 @@ end
 
 module Image : Program with type t = unit
 
-module Dba_program : Program with type t = Dba.id Dba_types.program
+module Dba_program : Program with type t = Dba_types.program
 
 module Instr_list : sig
   include Program

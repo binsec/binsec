@@ -321,12 +321,12 @@ module Image = struct
 end
 
 module Dba_program = struct
-  type t = Dba.id Dba_types.program
+  type t = Dba_types.program
 
   exception Ox8BADF00D of Dba.address
 
   let fetch t c =
-    try Caddr.Map.find c t.Dba_types.instructions |> fst
+    try Caddr.Map.find c t.Dba_types.instructions
     with Not_found -> raise @@ Ox8BADF00D c
 end
 

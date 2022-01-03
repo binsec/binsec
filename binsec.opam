@@ -62,11 +62,7 @@ depends: [
   "qcheck" {with-test & >= "0.7"}
   "odoc" {with-doc}
 ]
-depopts: [
-  "llvm"
-  "unisim_archisec"
-  "bitwuzla"
-]
+depopts: ["llvm" "unisim_archisec" "bitwuzla"]
 conflicts: [
   "llvm" {< "6.0.0"}
   "llvm" {>= "13.0.0"}

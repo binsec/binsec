@@ -82,7 +82,7 @@
 %type <Dba.Expr.t> expr_eof
 
 %start dba
-%type <'a Dba_types.program> dba
+%type <Dba_types.program> dba
 
 %start dhunk_eof
 %type <Dhunk.t> dhunk_eof

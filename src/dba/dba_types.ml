@@ -320,7 +320,7 @@ module AddressStack = struct
       Dba_printer.Ascii.pp_code_address caddr Call_stack.pp call_stack n
 end
 
-type 'a dbainstrmap = (Dba.Instr.t * 'a option) Caddress.Map.t
+type dbainstrmap = Dba.Instr.t Caddress.Map.t
 
 module Declarations = struct
   type t = (Dba.size * Dba.VarTag.t) Basic_types.String.Map.t
@@ -518,10 +518,10 @@ type exec_perm = Exec of bool
 
 type permissions = Dba.Expr.t * (read_perm * write_perm * exec_perm)
 
-type 'a program = {
+type program = {
   start_address : Dba.address;
   declarations : Declarations.t;
   permissions : permissions list Region.Map.t * Dba.Expr.t Rights.t;
   initializations : Dba.Instr.t list;
-  instructions : 'a dbainstrmap;
+  instructions : dbainstrmap;
 }
