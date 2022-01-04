@@ -10,7 +10,8 @@ To run to completion we will need:
 - a **Linux** environment, preferably on a **x86** machine;
 - the **strings**, **objdump** and **readelf** utilities (part of the **binutils** package);
 - the **BINSEC** tool (see [install instructions](../../INSTALL.md));
-- the SMT solver **Z3**.
+- a SMT solver, preferably [**ocaml-bitwuzla**](../../INSTALL.md#Dependencies)
+  (but would work with **bitwuzla**, **boolector**, **Z3**, etc.).
 
 Some knowledge about **x86** assembly and reverse-engineering could also help. 
 

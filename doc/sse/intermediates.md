@@ -12,7 +12,8 @@ To run to completion we will need:
 - the **wget**, **unzip** and **wine**  utilities in order to setup the challenge;
 - the **strings**, **readpe** (part of the **pev** package) and **radare2** utilities for reverse-engineering;
 - the **BINSEC** tool (see [install instructions](../../INSTALL.md));
-- a SMT solver, preferably [**bitwuzla**](https://bitwuzla.github.io/) (but would work with **Z3**).
+- a SMT solver, preferably [**ocaml-bitwuzla**](../../INSTALL.md#Dependencies)
+  (but would work with **bitwuzla**, **boolector**, **Z3**, etc.).
 
 Some knowledge about Windows DLL and reverse-engineering could also help. 
 
