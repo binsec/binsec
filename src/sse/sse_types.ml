@@ -21,8 +21,50 @@
 
 open Format
 
+exception Unknown
+
+type 'a test = True of 'a | False of 'a | Both of { t : 'a; f : 'a }
+
+module type STATE = sig
+  type t
+  (** Symbolic state *)
+
+  val empty : unit -> t
+
+  val assume : Dba.Expr.t -> t -> t option
+
+  val test : Dba.Expr.t -> t -> t test
+
+  val split_on :
+    Dba.Expr.t ->
+    ?n:int ->
+    ?except:Bitvector.t list ->
+    t ->
+    (Bitvector.t * t) list
+
+  val fresh : string -> int -> t -> t
+
+  val assign : string -> Dba.Expr.t -> t -> t
+
+  val write : addr:Dba.Expr.t -> Dba.Expr.t -> Machine.endianness -> t -> t
+
+  val memcpy : addr:Bitvector.t -> int -> Loader_buf.t -> t -> t
+
+  val pp : Format.formatter -> t -> unit
+
+  val pp_smt :
+    ?slice:(Dba.Expr.t * string) list -> Format.formatter -> t -> unit
+
+  val as_ascii : string -> t -> string
+
+  val pp_stats : Format.formatter -> unit -> unit
+end
+
 module Pragma = struct
-  type t = Start_from of Dba.Expr.t | Load_sections of string list
+  type t =
+    | Start_from of Dba.Expr.t * Dhunk.t
+    | Start_from_core of Dhunk.t
+    | Load_sections of string list
 end
 
 module Script = struct
@@ -43,9 +85,7 @@ module C = struct
   end)
 end
 
-module Path_state (S : Smt_solver.Solver) = struct
-  module State = Senv.State (S)
-
+module Path_state (S : STATE) = struct
   type t = {
     id : int;
     (* Unique identifier for the path *)
@@ -54,7 +94,7 @@ module Path_state (S : Smt_solver.Solver) = struct
     solver_calls : int;
     path : Virtual_address.t list;
     (* Sequence of virtual addresses for this path *)
-    symbolic_state : State.t;
+    symbolic_state : S.t;
     (* Current symbolic state *)
     instruction : Instruction.t;
     (* Current instruction *)
@@ -121,15 +161,6 @@ module Path_state (S : Smt_solver.Solver) = struct
   let set_symbolic_state symbolic_state st = { st with symbolic_state }
 
   let set_address_counters address_counters st = { st with address_counters }
-
-  let with_init_mem_at ~addr ~size path_state =
-    let symbolic_state =
-      let value = Bitvector.value_of addr in
-      let bvsize = Kernel_options.Machine.word_size () in
-      let addr = Bitvector.create value bvsize in
-      State.load_from ~addr size path_state.symbolic_state
-    in
-    { path_state with symbolic_state }
 
   let virtual_address st =
     let open Instruction in

@@ -19,10 +19,14 @@
 /*                                                                        */
 /**************************************************************************/
 
-%token STARTING FROM FILE LOAD SECTION SECTIONS
+%{
+    let entrypoint = Dba.Expr.var "$ENTRYPOINT" E.wordsize
+%}
+
+%token STARTING FROM FILE CORE LOAD SECTION SECTIONS
 %token REACH CUT ENUMERATE
 %token TIMES SUCH THAT PRINT FORMULA MODEL STREAM BIN DEC HEXA ASCII
-%token REPLACE BY TAND
+%token REPLACE BY WITH TAND
 %token EOF
 
 %start <Sse_types.Script.t list> script
@@ -103,7 +107,20 @@ let stub :=
 
 let pragma :=
   | STARTING; FROM; ~=address;
-    { Sse_types.Script.Pragma (Sse_types.Pragma.Start_from address) }
+    stmts=loption(delimited(WITH,flatten(nonempty_list(stmt)), END));
+    {
+      let stmts =
+	List.append stmts [ [], Terminator (Dba.Instr.dynamic_jump address) ] in
+      Sse_types.Script.Pragma
+	(Sse_types.Pragma.Start_from (address, dhunk_of_list stmts)) }
+  | STARTING; FROM; CORE;
+    stmts=loption(delimited(WITH,flatten(nonempty_list(stmt)), END));
+    {
+      let stmts = List.append
+		    stmts
+		    [ [], Terminator (Dba.Instr.dynamic_jump entrypoint) ] in
+      Sse_types.Script.Pragma
+	(Sse_types.Pragma.Start_from_core (dhunk_of_list stmts)) }
   | LOAD; SECTION; ~=section; FROM; FILE;
     { Sse_types.Script.Pragma (Sse_types.Pragma.Load_sections [ section ]) }
   | LOAD; SECTIONS; sections=separated_nonempty_list(COMMA, section);

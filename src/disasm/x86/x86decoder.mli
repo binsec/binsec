@@ -21,4 +21,7 @@
 
 (** Decode a function from a reader *)
 
-val read : Lreader.t -> X86Instruction.t * X86Types.segment_reg option
+val read :
+  Virtual_address.t ->
+  Lreader.t ->
+  X86Instruction.t * X86Types.segment_reg option

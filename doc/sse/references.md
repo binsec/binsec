@@ -207,7 +207,9 @@
 
 ```
 <script> ::= (<assign> | <pragma> | <goal>) ..
-<pragma> ::= "starting" "from" <e> | "assume" <e> 
+<pragma> ::= "starting" "from" <e> ["with" <chunk> "end"]
+           | "starting" "from" "core" ["with" <chunk> "end"]
+           | "assume" <e> 
            | "load" <mem> "from" "file" | "load" <section> "from" "file" | "replace" <e> "by" <chunk> 
   <goal> ::= "reach" <e> [<n> "times"] ["such" "that" <e>] ["then" <action> ["and" <action> ..]]
            | "cut" "at" <e> ["if" <e>]

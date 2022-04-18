@@ -532,6 +532,9 @@ module Img = struct
   let cursor ?(at = 0) (_, _, _, b) =
     Loader_buf.cursor ~at Machine.LittleEndian b
 
+  let content (_, _, _, b) (_, s) =
+    Bigarray.Array1.sub b s.pointer_to_raw_data s.size_of_raw_data
+
   let pp_header ppf img =
     Format.fprintf ppf "@[<v 2># Header@ %a@ %a@]" pp_arch (arch img) pp_ep
       (entry img)

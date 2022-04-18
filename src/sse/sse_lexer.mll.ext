@@ -22,6 +22,7 @@
   | "starting"  { STARTING }
   | "from"      { FROM }
   | "file"      { FILE }
+  | "core"	{ CORE }
   | "load" 	{ LOAD }
   | "section"   { SECTION }
   | "sections"  { SECTIONS }
@@ -41,4 +42,5 @@
   | "ascii"     { ASCII }
   | "replace"   { REPLACE }
   | "by"        { BY }
+  | "with"	{ WITH }
   | "and"       { TAND }

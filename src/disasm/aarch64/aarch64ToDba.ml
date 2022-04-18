@@ -181,11 +181,11 @@ let decode addr bytes = Aarch64dba.decode ~addr bytes |> parse_result
 let decode_from_reader (addr : Virtual_address.t) reader =
   if (addr :> int) mod 4 <> 0 then Error empty_instruction
   else
-    match Lreader.Peek.u32 reader with
+    match Lreader.Peek.i32 reader with
     | exception _ ->
         Statistics.incr_invalid_size stats;
         Error empty_instruction
-    | bytes -> decode (Virtual_address.to_int64 addr) (Int32.of_int bytes)
+    | bytes -> decode (Virtual_address.to_int64 addr) bytes
 
 let unwrap_result = function Error i -> i | Ok x -> x
 

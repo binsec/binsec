@@ -624,15 +624,21 @@ let read_sib_byte byte =
     scale = (byte lsr 6) land mask2;
   }
 
-let mk_address ?(address_mode = A32) ?(address_base = None)
+let mk_address_64 ?(address_mode = A32) ?(address_base = None)
     ?(address_index = None) disp =
   Address
     {
       addrMode = address_mode;
-      addrDisp = Int64.of_int disp;
+      addrDisp = disp;
       addrBase = address_base;
       addrIndex = address_index;
     }
+
+let mk_address_32 ?address_mode ?address_base ?address_index disp =
+  mk_address_64 ?address_mode ?address_base ?address_index (Int64.of_int32 disp)
+
+let mk_address ?address_mode ?address_base ?address_index disp =
+  mk_address_64 ?address_mode ?address_base ?address_index (Int64.of_int disp)
 
 let read_rm16_with_spare int_to_reg lr =
   let byte = Lreader.Read.u8 lr in
@@ -679,16 +685,16 @@ let read_rm32_with_spare int_to_reg lr =
   match modrm_byte with
   | { modb = 0; rm = 5; reg } ->
       let disp = Lreader.Read.i32 lr in
-      (mk_address disp, reg)
+      (mk_address_32 disp, reg)
   | { modb = 3; rm; reg } -> (Reg (int_to_reg rm), reg)
   | { modb; rm = 4; reg } ->
       let byte = Lreader.Read.u8 lr in
       let sib_byte = read_sib_byte byte in
       let disp =
         match modb with
-        | 0 -> 0
-        | 1 -> Lreader.Read.i8 lr (* read_uint32_extend bits 8 *)
-        | 2 -> Lreader.Read.i32 lr
+        | 0 -> Int64.zero
+        | 1 -> Int64.of_int (Lreader.Read.i8 lr) (* read_uint32_extend bits 8 *)
+        | 2 -> Int64.of_int32 (Lreader.Read.i32 lr)
         | 3 -> failwith "Impossible: matched above."
         | _ ->
             let msg =
@@ -706,11 +712,11 @@ let read_rm32_with_spare int_to_reg lr =
         (* TODO : modb = 1, modb = 2 *)
         let disp = Lreader.Read.i32 lr in
         (* TODO : size := size + size + 4 *)
-        (mk_address disp ~address_index, reg)
+        (mk_address_32 disp ~address_index, reg)
       else
         let base = int_to_reg32 sib_byte.base in
         let addr =
-          mk_address ~address_mode:A32 disp ~address_base:(Some base)
+          mk_address_64 ~address_mode:A32 disp ~address_base:(Some base)
             ~address_index
         in
         (addr, reg)
@@ -724,7 +730,7 @@ let read_rm32_with_spare int_to_reg lr =
   | { modb = 2; rm; reg } ->
       let base = int_to_reg32 rm in
       let disp = Lreader.Read.i32 lr in
-      (mk_address ~address_mode:A32 disp ~address_base:(Some base), reg)
+      (mk_address_32 ~address_mode:A32 disp ~address_base:(Some base), reg)
   | _ -> failwith "Unexpected ModR/M byte"
 
 let read_modrm address_mode lr =

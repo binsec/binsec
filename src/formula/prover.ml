@@ -66,7 +66,7 @@ let ping solver =
     Unix.close_process_full
       (Unix.open_process_full
          (Printf.sprintf "%s --version" (executable solver))
-         [||])
+         (Unix.environment ()))
   with
   | WEXITED 0 -> true
   | _ -> false

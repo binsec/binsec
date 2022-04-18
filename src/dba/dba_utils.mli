@@ -28,7 +28,9 @@ module Expr : sig
 
   val of_vaddr : Virtual_address.t -> Dba.Expr.t
 
-  val eval_from_img : Loader.Img.t -> Dba.Expr.t -> Virtual_address.t
+  val eval_from_img : Loader.Img.t -> Dba.Expr.t -> Bitvector.t
+
+  val eval_addr_from_img : Loader.Img.t -> Dba.Expr.t -> Virtual_address.t
 
   val complement :
     Dba.Expr.t -> lo:int -> hi:int -> Dba.VarTag.t Dba.var -> Dba.Expr.t

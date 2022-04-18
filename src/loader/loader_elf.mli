@@ -190,3 +190,23 @@ include
      and type Img.header = Ehdr.t
 
 val program_headers : Img.t -> Phdr.t array
+
+module Rel : sig
+  type t = { offset : int; kind : int; symbol : Sym.t; addend : int option }
+
+  val read : Img.t -> Shdr.t -> t array
+end
+
+module Note : sig
+  type t = { name : string; kind : int; offset : int; size : int }
+end
+
+val notes : Img.t -> Note.t array
+
+type fmap = private {
+  addresses : Virtual_address.t Interval.t;
+  offset : int;
+  mutable name : string;
+}
+
+val files : Img.t -> fmap array

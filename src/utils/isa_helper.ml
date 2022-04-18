@@ -20,34 +20,73 @@
 (**************************************************************************)
 
 module X86 = struct
+  let info = Dba.VarTag.Register
+
+  let eax = { Dba.name = "eax"; size = 32; info }
+
+  and ebx = { Dba.name = "ebx"; size = 32; info }
+
+  and ecx = { Dba.name = "ecx"; size = 32; info }
+
+  and edx = { Dba.name = "edx"; size = 32; info }
+
+  and edi = { Dba.name = "edi"; size = 32; info }
+
+  and esi = { Dba.name = "esi"; size = 32; info }
+
+  and esp = { Dba.name = "esp"; size = 32; info }
+
+  and ebp = { Dba.name = "ebp"; size = 32; info }
+
+  let cs = { Dba.name = "cs"; size = 16; info }
+
+  and ds = { Dba.name = "ds"; size = 16; info }
+
+  and es = { Dba.name = "es"; size = 16; info }
+
+  and fs = { Dba.name = "fs"; size = 16; info }
+
+  and gs = { Dba.name = "gs"; size = 16; info }
+
+  and ss = { Dba.name = "ss"; size = 16; info }
+
+  let info = Dba.VarTag.Flag
+
+  let cf = { Dba.name = "CF"; size = 1; info }
+
+  and pf = { Dba.name = "PF"; size = 1; info }
+
+  and af = { Dba.name = "AF"; size = 1; info }
+
+  and zf = { Dba.name = "ZF"; size = 1; info }
+
+  and sf = { Dba.name = "SF"; size = 1; info }
+
+  and tf = { Dba.name = "TF"; size = 1; info }
+
+  and if' = { Dba.name = "IF"; size = 1; info }
+
+  and df = { Dba.name = "DF"; size = 1; info }
+
+  and of' = { Dba.name = "OF"; size = 1; info }
+
+  and iopl = { Dba.name = "IOPL"; size = 2; info }
+
+  and nt = { Dba.name = "NT"; size = 1; info }
+
+  and rf = { Dba.name = "RF"; size = 1; info }
+
+  and vm = { Dba.name = "VM"; size = 1; info }
+
+  and ac = { Dba.name = "AC"; size = 1; info }
+
+  and vif = { Dba.name = "VIF"; size = 1; info }
+
+  and vip = { Dba.name = "VIP"; size = 1; info }
+
+  and id = { Dba.name = "ID"; size = 1; info }
+
   let defs =
-    let info = Dba.VarTag.Register in
-    let eax = { Dba.name = "eax"; size = 32; info }
-    and ebx = { Dba.name = "ebx"; size = 32; info }
-    and ecx = { Dba.name = "ecx"; size = 32; info }
-    and edx = { Dba.name = "edx"; size = 32; info }
-    and edi = { Dba.name = "edi"; size = 32; info }
-    and esi = { Dba.name = "esi"; size = 32; info }
-    and esp = { Dba.name = "esp"; size = 32; info }
-    and ebp = { Dba.name = "ebp"; size = 32; info } in
-    let info = Dba.VarTag.Flag in
-    let cf = { Dba.name = "CF"; size = 1; info }
-    and pf = { Dba.name = "PF"; size = 1; info }
-    and af = { Dba.name = "AF"; size = 1; info }
-    and zf = { Dba.name = "ZF"; size = 1; info }
-    and sf = { Dba.name = "SF"; size = 1; info }
-    and tf = { Dba.name = "TF"; size = 1; info }
-    and if' = { Dba.name = "IF"; size = 1; info }
-    and df = { Dba.name = "DF"; size = 1; info }
-    and of' = { Dba.name = "OF"; size = 1; info }
-    and iopl = { Dba.name = "IOPL"; size = 2; info }
-    and nt = { Dba.name = "NT"; size = 1; info }
-    and rf = { Dba.name = "RF"; size = 1; info }
-    and vm = { Dba.name = "VM"; size = 1; info }
-    and ac = { Dba.name = "AC"; size = 1; info }
-    and vif = { Dba.name = "VIF"; size = 1; info }
-    and vip = { Dba.name = "VIP"; size = 1; info }
-    and id = { Dba.name = "ID"; size = 1; info } in
     [
       ("eax", Dba.LValue.v eax);
       ("ebx", Dba.LValue.v ebx);
@@ -87,51 +126,285 @@ module X86 = struct
       ("VIP", Dba.LValue.v vip);
       ("ID", Dba.LValue.v id);
     ]
+
+  let notes img =
+    Array.fold_left
+      (fun result -> function
+        | { Loader_elf.Note.name = "CORE"; kind = 1; offset = at; _ } ->
+            let cursor = Loader_elf.Img.cursor ~at img in
+            Loader_buf.advance cursor 0x48;
+            let rebx =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:32 (Loader_buf.Read.u32 cursor))
+            in
+            let recx =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:32 (Loader_buf.Read.u32 cursor))
+            in
+            let redx =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:32 (Loader_buf.Read.u32 cursor))
+            in
+            let resi =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:32 (Loader_buf.Read.u32 cursor))
+            in
+            let redi =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:32 (Loader_buf.Read.u32 cursor))
+            in
+            let rebp =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:32 (Loader_buf.Read.u32 cursor))
+            in
+            let reax =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:32 (Loader_buf.Read.u32 cursor))
+            in
+            let rds =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:16 (Loader_buf.Read.u32 cursor))
+            in
+            let res =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:16 (Loader_buf.Read.u32 cursor))
+            in
+            let rfs =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:16 (Loader_buf.Read.u32 cursor))
+            in
+            let rgs =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:16 (Loader_buf.Read.u32 cursor))
+            in
+            Loader_buf.advance cursor 4;
+            let entrypoint =
+              Virtual_address.create (Loader_buf.Read.u32 cursor)
+            in
+            let rcs =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:16 (Loader_buf.Read.u32 cursor))
+            in
+            let eflags = Loader_buf.Read.u32 cursor in
+            let rcf =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((eflags lsr 0) land 0b1))
+            and rpf =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((eflags lsr 2) land 0b1))
+            and raf =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((eflags lsr 4) land 0b1))
+            and rzf =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((eflags lsr 6) land 0b1))
+            and rsf =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((eflags lsr 7) land 0b1))
+            and rtf =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((eflags lsr 8) land 0b1))
+            and rif =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((eflags lsr 9) land 0b1))
+            and rdf =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((eflags lsr 10) land 0b1))
+            and rof =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((eflags lsr 11) land 0b1))
+            and riopl =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((eflags lsr 12) land 0b11))
+            and rnt =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((eflags lsr 14) land 0b1))
+            and rrf =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((eflags lsr 16) land 0b1))
+            and rvm =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((eflags lsr 17) land 0b1))
+            and rac =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((eflags lsr 18) land 0b1))
+            and rvif =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((eflags lsr 19) land 0b1))
+            and rvip =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((eflags lsr 20) land 0b1))
+            and rid =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((eflags lsr 21) land 0b1))
+            in
+            let resp =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:32 (Loader_buf.Read.u32 cursor))
+            in
+            let rss =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:16 (Loader_buf.Read.u32 cursor))
+            in
+            ( entrypoint,
+              [
+                (ebx, rebx);
+                (ecx, recx);
+                (edx, redx);
+                (esi, resi);
+                (edi, redi);
+                (ebp, rebp);
+                (eax, reax);
+                (esp, resp);
+                (ds, rds);
+                (es, res);
+                (fs, rfs);
+                (gs, rgs);
+                (cs, rcs);
+                (ss, rss);
+                (cf, rcf);
+                (pf, rpf);
+                (af, raf);
+                (zf, rzf);
+                (sf, rsf);
+                (tf, rtf);
+                (if', rif);
+                (df, rdf);
+                (of', rof);
+                (iopl, riopl);
+                (nt, rnt);
+                (rf, rrf);
+                (vm, rvm);
+                (ac, rac);
+                (vif, rvif);
+                (vip, rvip);
+                (id, rid);
+              ] )
+        | _ -> result)
+      (Virtual_address.create 0, [])
+      (Loader_elf.notes img)
 end
 
 module AMD64 = struct
+  let info = Dba.VarTag.Register
+
+  let rax = { Dba.name = "rax"; size = 64; info }
+
+  and rbx = { Dba.name = "rbx"; size = 64; info }
+
+  and rcx = { Dba.name = "rcx"; size = 64; info }
+
+  and rdx = { Dba.name = "rdx"; size = 64; info }
+
+  and rdi = { Dba.name = "rdi"; size = 64; info }
+
+  and rsi = { Dba.name = "rsi"; size = 64; info }
+
+  and rsp = { Dba.name = "rsp"; size = 64; info }
+
+  and rbp = { Dba.name = "rbp"; size = 64; info }
+
+  and r8 = { Dba.name = "r8"; size = 64; info }
+
+  and r9 = { Dba.name = "r9"; size = 64; info }
+
+  and r10 = { Dba.name = "r10"; size = 64; info }
+
+  and r11 = { Dba.name = "r11"; size = 64; info }
+
+  and r12 = { Dba.name = "r12"; size = 64; info }
+
+  and r13 = { Dba.name = "r13"; size = 64; info }
+
+  and r14 = { Dba.name = "r14"; size = 64; info }
+
+  and r15 = { Dba.name = "r15"; size = 64; info }
+
+  let cs = { Dba.name = "cs"; size = 16; info }
+
+  and ds = { Dba.name = "ds"; size = 16; info }
+
+  and es = { Dba.name = "es"; size = 16; info }
+
+  and fs = { Dba.name = "fs"; size = 16; info }
+
+  and gs = { Dba.name = "gs"; size = 16; info }
+
+  and ss = { Dba.name = "ss"; size = 16; info }
+
+  and fs_base = { Dba.name = "fs_base"; size = 64; info }
+
+  and gs_base = { Dba.name = "gs_base"; size = 64; info }
+
+  let ymm0 = { Dba.name = "ymm0"; size = 256; info }
+
+  and ymm1 = { Dba.name = "ymm1"; size = 256; info }
+
+  and ymm2 = { Dba.name = "ymm2"; size = 256; info }
+
+  and ymm3 = { Dba.name = "ymm3"; size = 256; info }
+
+  and ymm4 = { Dba.name = "ymm4"; size = 256; info }
+
+  and ymm5 = { Dba.name = "ymm5"; size = 256; info }
+
+  and ymm6 = { Dba.name = "ymm6"; size = 256; info }
+
+  and ymm7 = { Dba.name = "ymm7"; size = 256; info }
+
+  and ymm8 = { Dba.name = "ymm8"; size = 256; info }
+
+  and ymm9 = { Dba.name = "ymm9"; size = 256; info }
+
+  and ymm10 = { Dba.name = "ymm10"; size = 256; info }
+
+  and ymm11 = { Dba.name = "ymm11"; size = 256; info }
+
+  and ymm12 = { Dba.name = "ymm12"; size = 256; info }
+
+  and ymm13 = { Dba.name = "ymm13"; size = 256; info }
+
+  and ymm14 = { Dba.name = "ymm14"; size = 256; info }
+
+  and ymm15 = { Dba.name = "ymm15"; size = 256; info }
+
+  let info = Dba.VarTag.Flag
+
+  let cf = { Dba.name = "CF"; size = 1; info }
+
+  and pf = { Dba.name = "PF"; size = 1; info }
+
+  and af = { Dba.name = "AF"; size = 1; info }
+
+  and zf = { Dba.name = "ZF"; size = 1; info }
+
+  and sf = { Dba.name = "SF"; size = 1; info }
+
+  and tf = { Dba.name = "TF"; size = 1; info }
+
+  and if' = { Dba.name = "IF"; size = 1; info }
+
+  and df = { Dba.name = "DF"; size = 1; info }
+
+  and of' = { Dba.name = "OF"; size = 1; info }
+
+  and iopl = { Dba.name = "IOPL"; size = 2; info }
+
+  and nt = { Dba.name = "NT"; size = 1; info }
+
+  and rf = { Dba.name = "RF"; size = 1; info }
+
+  and vm = { Dba.name = "VM"; size = 1; info }
+
+  and ac = { Dba.name = "AC"; size = 1; info }
+
+  and vif' = { Dba.name = "VIF"; size = 1; info }
+
+  and vip = { Dba.name = "VIP"; size = 1; info }
+
+  and id = { Dba.name = "ID"; size = 1; info }
+
   let defs =
-    let info = Dba.VarTag.Register in
-    let rax = { Dba.name = "rax"; size = 64; info }
-    and rbx = { Dba.name = "rbx"; size = 64; info }
-    and rcx = { Dba.name = "rcx"; size = 64; info }
-    and rdx = { Dba.name = "rdx"; size = 64; info }
-    and rdi = { Dba.name = "rdi"; size = 64; info }
-    and rsi = { Dba.name = "rsi"; size = 64; info }
-    and rsp = { Dba.name = "rsp"; size = 64; info }
-    and rbp = { Dba.name = "rbp"; size = 64; info }
-    and r8 = { Dba.name = "r8"; size = 64; info }
-    and r9 = { Dba.name = "r9"; size = 64; info }
-    and r10 = { Dba.name = "r10"; size = 64; info }
-    and r11 = { Dba.name = "r11"; size = 64; info }
-    and r12 = { Dba.name = "r12"; size = 64; info }
-    and r13 = { Dba.name = "r13"; size = 64; info }
-    and r14 = { Dba.name = "r14"; size = 64; info }
-    and r15 = { Dba.name = "r15"; size = 64; info } in
-    let cs = { Dba.name = "cs"; size = 16; info }
-    and ds = { Dba.name = "ds"; size = 16; info }
-    and es = { Dba.name = "es"; size = 16; info }
-    and fs = { Dba.name = "fs"; size = 16; info }
-    and gs = { Dba.name = "gs"; size = 16; info }
-    and ss = { Dba.name = "ss"; size = 16; info } in
-    let info = Dba.VarTag.Flag in
-    let cf = { Dba.name = "CF"; size = 1; info }
-    and pf = { Dba.name = "PF"; size = 1; info }
-    and af = { Dba.name = "AF"; size = 1; info }
-    and zf = { Dba.name = "ZF"; size = 1; info }
-    and sf = { Dba.name = "SF"; size = 1; info }
-    and tf = { Dba.name = "TF"; size = 1; info }
-    and if' = { Dba.name = "IF"; size = 1; info }
-    and df = { Dba.name = "DF"; size = 1; info }
-    and of' = { Dba.name = "OF"; size = 1; info }
-    and iopl = { Dba.name = "IOPL"; size = 2; info }
-    and nt = { Dba.name = "NT"; size = 1; info }
-    and rf = { Dba.name = "RF"; size = 1; info }
-    and vm = { Dba.name = "VM"; size = 1; info }
-    and ac = { Dba.name = "AC"; size = 1; info }
-    and vif = { Dba.name = "VIF"; size = 1; info }
-    and vip = { Dba.name = "VIP"; size = 1; info }
-    and id = { Dba.name = "ID"; size = 1; info } in
     [
       ("rax", Dba.LValue.v rax);
       ("rbx", Dba.LValue.v rbx);
@@ -175,6 +448,40 @@ module AMD64 = struct
       ("fs", Dba.LValue.v fs);
       ("gs", Dba.LValue.v gs);
       ("ss", Dba.LValue.v ss);
+      ("fs_base", Dba.LValue.v fs_base);
+      ("gs_base", Dba.LValue.v gs_base);
+      ("ymm0", Dba.LValue.v ymm0);
+      ("ymm1", Dba.LValue.v ymm1);
+      ("ymm2", Dba.LValue.v ymm2);
+      ("ymm3", Dba.LValue.v ymm3);
+      ("ymm4", Dba.LValue.v ymm4);
+      ("ymm5", Dba.LValue.v ymm5);
+      ("ymm6", Dba.LValue.v ymm6);
+      ("ymm7", Dba.LValue.v ymm7);
+      ("ymm8", Dba.LValue.v ymm8);
+      ("ymm9", Dba.LValue.v ymm9);
+      ("ymm10", Dba.LValue.v ymm10);
+      ("ymm11", Dba.LValue.v ymm11);
+      ("ymm12", Dba.LValue.v ymm12);
+      ("ymm13", Dba.LValue.v ymm13);
+      ("ymm14", Dba.LValue.v ymm14);
+      ("ymm15", Dba.LValue.v ymm15);
+      ("xmm0", Dba.LValue.restrict ymm0 0 128);
+      ("xmm1", Dba.LValue.restrict ymm1 0 128);
+      ("xmm2", Dba.LValue.restrict ymm2 0 128);
+      ("xmm3", Dba.LValue.restrict ymm3 0 128);
+      ("xmm4", Dba.LValue.restrict ymm4 0 128);
+      ("xmm5", Dba.LValue.restrict ymm5 0 128);
+      ("xmm6", Dba.LValue.restrict ymm6 0 128);
+      ("xmm7", Dba.LValue.restrict ymm7 0 128);
+      ("xmm8", Dba.LValue.restrict ymm8 0 128);
+      ("xmm9", Dba.LValue.restrict ymm9 0 128);
+      ("xmm10", Dba.LValue.restrict ymm10 0 128);
+      ("xmm11", Dba.LValue.restrict ymm11 0 128);
+      ("xmm12", Dba.LValue.restrict ymm12 0 128);
+      ("xmm13", Dba.LValue.restrict ymm13 0 128);
+      ("xmm14", Dba.LValue.restrict ymm14 0 128);
+      ("xmm15", Dba.LValue.restrict ymm15 0 128);
       ("CF", Dba.LValue.v cf);
       ("PF", Dba.LValue.v pf);
       ("AF", Dba.LValue.v af);
@@ -189,10 +496,171 @@ module AMD64 = struct
       ("RF", Dba.LValue.v rf);
       ("VM", Dba.LValue.v vm);
       ("AC", Dba.LValue.v ac);
-      ("VIF", Dba.LValue.v vif);
+      ("VIF", Dba.LValue.v vif');
       ("VIP", Dba.LValue.v vip);
       ("ID", Dba.LValue.v id);
     ]
+
+  let notes img =
+    Array.fold_left
+      (fun result -> function
+        | { Loader_elf.Note.name = "CORE"; kind = 1; offset = at; _ } ->
+            let cursor = Lreader.create ~at Loader_elf.read_offset img in
+            Lreader.advance cursor 0x70;
+            let vr15 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vr14 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vr13 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vr12 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vrbp = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vrbx = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vr11 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vr10 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vr9 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vr8 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vrax = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vrcx = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vrdx = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vrsi = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vrdi = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            Lreader.advance cursor 8;
+            let vrip =
+              Virtual_address.of_bitvector (Lreader.Read.bv64 cursor)
+            in
+            let vcs =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:16 (Lreader.Read.u16 cursor))
+            in
+            Lreader.advance cursor 6;
+            let rflags_15_0 = Lreader.Read.u16 cursor in
+            let rflags_31_16 = Lreader.Read.u16 cursor in
+            Lreader.advance cursor 4;
+            let vrsp = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vss =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:16 (Lreader.Read.u16 cursor))
+            in
+            Lreader.advance cursor 6;
+            let vfs_base = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vgs_base = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vds =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:16 (Lreader.Read.u16 cursor))
+            in
+            Lreader.advance cursor 6;
+            let ves =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:16 (Lreader.Read.u16 cursor))
+            in
+            Lreader.advance cursor 6;
+            let vfs =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:16 (Lreader.Read.u16 cursor))
+            in
+            Lreader.advance cursor 6;
+            let vgs =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:16 (Lreader.Read.u16 cursor))
+            in
+            Lreader.advance cursor 6;
+            let vcf =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 0) land 0b1))
+            and vpf =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 2) land 0b1))
+            and vaf =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 4) land 0b1))
+            and vzf =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 6) land 0b1))
+            and vsf =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 7) land 0b1))
+            and vtf =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 8) land 0b1))
+            and vif =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 9) land 0b1))
+            and vdf =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 10) land 0b1))
+            and vof =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 11) land 0b1))
+            and viopl =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 12) land 0b11))
+            and vnt =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 14) land 0b1))
+            and vrf =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((rflags_31_16 lsr 0) land 0b1))
+            and vvm =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((rflags_31_16 lsr 1) land 0b1))
+            and vac =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((rflags_31_16 lsr 2) land 0b1))
+            and vvif =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((rflags_31_16 lsr 3) land 0b1))
+            and vvip =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((rflags_31_16 lsr 4) land 0b1))
+            and vid =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((rflags_31_16 lsr 5) land 0b1))
+            in
+            ( vrip,
+              [
+                (r15, vr15);
+                (r14, vr14);
+                (r13, vr13);
+                (r12, vr12);
+                (r11, vr11);
+                (r10, vr10);
+                (r9, vr9);
+                (r8, vr8);
+                (rbx, vrbx);
+                (rcx, vrcx);
+                (rdx, vrdx);
+                (rsi, vrsi);
+                (rdi, vrdi);
+                (rbp, vrbp);
+                (rax, vrax);
+                (rsp, vrsp);
+                (ds, vds);
+                (es, ves);
+                (fs, vfs);
+                (gs, vgs);
+                (cs, vcs);
+                (ss, vss);
+                (fs_base, vfs_base);
+                (gs_base, vgs_base);
+                (cf, vcf);
+                (pf, vpf);
+                (af, vaf);
+                (zf, vzf);
+                (sf, vsf);
+                (tf, vtf);
+                (if', vif);
+                (df, vdf);
+                (of', vof);
+                (iopl, viopl);
+                (nt, vnt);
+                (rf, vrf);
+                (vm, vvm);
+                (ac, vac);
+                (vif', vvif);
+                (vip, vvip);
+                (id, vid);
+              ] )
+        | _ -> result)
+      (Virtual_address.create 0, [])
+      (Loader_elf.notes img)
 end
 
 module ARM = struct
@@ -369,6 +837,22 @@ let get_defs () =
   | X86 { bits = `x64 } -> AMD64.defs
   | ARM { rev = `v7; _ } -> ARM.defs
   | ARM { rev = `v8; _ } -> AARCH64.defs
+  | _ ->
+      (* TODO *)
+      raise (Errors.not_yet_implemented "incomplete architecture definition")
+
+let core img =
+  match Kernel_options.Machine.isa () with
+  | X86 { bits = `x32 } -> X86.notes img
+  | X86 { bits = `x64 } -> AMD64.notes img
+  | _ -> raise (Errors.not_yet_implemented "core dump")
+(* TODO *)
+
+let max_instruction_len () =
+  let b4 = Size.Byte.create 4 and b15 = Size.Byte.create 15 in
+  match Kernel_options.Machine.isa () with
+  | X86 _ -> b15
+  | ARM _ -> b4
   | _ ->
       (* TODO *)
       raise (Errors.not_yet_implemented "incomplete architecture definition")

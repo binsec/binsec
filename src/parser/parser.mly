@@ -47,6 +47,7 @@
 %token LSHIFT RSHIFTU RSHIFTS LROTATE RROTATE
 %token EXTU EXTS
 %token INFER SUPER
+%token MIN MAX
 %token EQUAL NEQ LEU LES LTU LTS GEU GES GTU GTS
 %token LBRACE RBRACE LPAR RPAR LBRACKET RBRACKET RBRACKETS RBRACKETU
 %token ARROW ARROWINV STOP
@@ -59,7 +60,7 @@
 %token UNIMPLEMENTED UNDEFINED EOF
 
 %token <string> INT
-%token <string> IDENT
+%token <string> IDENT TMP
 %token <string> HEXA
 %token <string> BIN
 %token <string> STRING
@@ -468,6 +469,13 @@ lvalue:
 | id=IDENT; sz_opt=option(size_annot); offs=offsets;
   { let bitsize = Utils.get_opt_or_default 1 sz_opt |> Size.Bit.create in
     let lo, hi = offs in Dba.LValue._restrict id bitsize lo hi }
+| id=TMP; sz_opt=option(size_annot);
+  { let bitsize = Utils.get_opt_or_default 1 sz_opt |> Size.Bit.create in
+    Dba.LValue.temporary id bitsize }
+| id=TMP; sz_opt=option(size_annot); offs=offsets;
+    { let bitsize = Utils.get_opt_or_default 1 sz_opt |> Size.Bit.create in
+      let var = Dba.Var.temporary id bitsize in
+    let lo, hi = offs in Dba.LValue.restrict var lo hi }
 | v=address_lvalue { v };
 ;
 
@@ -497,6 +505,10 @@ expr:
   { let sz = Utils.get_opt_or_default 1 sz_opt in
     Dba.Expr.var id sz }
 
+| id=TMP; sz_opt=ioption(size_annot);
+  { let sz = Utils.get_opt_or_default 1 sz_opt in
+    Dba.Expr.temporary id ~size:sz }
+
 | cst=constant;
   { Dba.Expr.constant cst }
 
@@ -520,7 +532,11 @@ expr:
  | IF c=expr; THEN  then_e=expr; ELSE else_e=expr;
    { Dba.Expr.ite c then_e else_e }
  | le=expr; bop=bin_op; re=expr;
-   { Dba.Expr.binary bop le re }
+    { Dba.Expr.binary bop le re }
+ | MIN LPAR e1=expr; COMMA e2=expr; RPAR
+    { Dba.Expr.ite (Dba.Expr.ult e1 e2) e1 e2 }
+ | MAX LPAR e1=expr; COMMA e2=expr; RPAR
+    { Dba.Expr.ite (Dba.Expr.ult e1 e2) e2 e1 }
 ;
 
 %inline bin_op:

@@ -82,30 +82,34 @@ let read_byte_as_int64 lr = Lreader.Read.u8 lr |> sign_extend |> Int64.of_int
 let select_reader = function
   | 8 -> Lreader.Read.u8
   | 16 -> Lreader.Read.u16
-  | 32 -> Lreader.Read.u32
+  | 32 ->
+      fun c -> Int32.to_int (Lreader.Read.i32 c) land 0xffffffff
+      (* TODO: unsafe on 32bit *)
   | _ -> assert false
 
 (* A 32 bits displacement.
    We must be careful to stay inside bounds. *)
-let displacement lr rel =
-  let vcursor = (Lreader.get_virtual_cursor lr :> int) in
+let displacement addr lr rel =
+  let vcursor = addr + Lreader.get_pos lr in
   Logger.debug ~level:4 "displacement from %x of %x" vcursor rel;
   (vcursor + rel) land 0xffffffff
 
-let signed_displacement lr rel = displacement lr (sign_extend rel)
+let signed_displacement addr lr rel = displacement addr lr (sign_extend rel)
 
-let bytes_to_opcode_string bytes =
-  let b = Buffer.create (3 * List.length bytes) in
-  let rec loop = function
-    | [] -> assert false
-    | [ by ] ->
-        Buffer.add_string b (Format.sprintf "%02x" by);
-        Buffer.contents b
-    | by :: bytes ->
-        Buffer.add_string b (Format.sprintf "%02x " by);
-        loop bytes
-  in
-  loop bytes
+let bytes_to_opcode_string =
+  let lookup = "0123456789abcdef" in
+  fun bytes ->
+    let size = Bytes.length bytes in
+    let b = Bytes.create ((3 * size) - 1) in
+    Bytes.iteri
+      (fun i c ->
+        let c = Char.code c in
+        let hi = c lsr 4 and lo = c land 0x0f in
+        Bytes.set b (3 * i) (String.get lookup hi);
+        Bytes.set b ((3 * i) + 1) (String.get lookup lo);
+        if i + 1 != size then Bytes.set b ((3 * i) + 2) ' ')
+      bytes;
+    Bytes.unsafe_to_string b
 
 let shift_or_rotate_from_spare ~shift ~rotate spare =
   match spare with
@@ -322,7 +326,7 @@ let decode_load_far mode x r gop =
   | Address addr -> LoadFarPointer (mode, seg, int_to_reg32 r, addr)
   | _ -> abort ()
 
-let read_2bytes_opcode mode address_mode prefix lr =
+let read_2bytes_opcode addr mode address_mode prefix lr =
   let byte = Lreader.Read.u8 lr in
   assert (byte = 0x0f);
   let on_xmm_simd = with_xmm_simd mode in
@@ -630,8 +634,11 @@ let read_2bytes_opcode mode address_mode prefix lr =
          double-word.
          CHECK: if it corresponds to [mode] argument.
       *)
-      let rel = Lreader.Read.u32 lr in
-      Jcc (int_to_cc (b2 - 0x80), Int64.of_int (displacement lr rel))
+      let rel =
+        Int32.to_int (Lreader.Read.i32 lr) land 0xffffffff
+        (* TODO: unsafe on 32bit *)
+      in
+      Jcc (int_to_cc (b2 - 0x80), Int64.of_int (displacement addr lr rel))
   | b2 when b2 >= 0x90 && b2 < 0x90 + nCcs ->
       let dst, _spare = read_rm8_with_spare lr in
       SetCc (int_to_cc (b2 - 0x90), dst)
@@ -950,18 +957,21 @@ let read_2bytes_opcode mode address_mode prefix lr =
           Padd (xmm, simd, Reg (int_to_xmm_reg spare), src, 32))
   | _byte -> abort ()
 
-let read lr =
+let read addr lr =
   (* lr is a cursor *)
   (*  Logger.debug "@[EIP %x,%d(%x) : %a@]" (fst eip) (snd eip) (snd eip / 8)
    *  Bits.pp bits; *)
-  Logger.debug ~level:4 "[x86 decode] %a" Lreader.pp lr;
+  Logger.debug ~level:4 "[x86 decode] %a (%a)" Virtual_address.pp addr
+    Lreader.pp lr;
+  let lo = Lreader.get_pos lr in
+  let addr = Virtual_address.to_int addr - lo in
   let sreg = ref None in
 
   (*   let succ_eip (bv_addr, off_addr) = succ bv_addr, succ off_addr in *)
   let rec aux_read_instr mode address_mode prefix lr =
     let byte = Lreader.Peek.u8 lr in
     (*    let byte, bits = Bits.read_uint bits 8 in *)
-    if byte = 0x0f then read_2bytes_opcode mode address_mode prefix lr
+    if byte = 0x0f then read_2bytes_opcode addr mode address_mode prefix lr
     else
       let arith_to_rm aop =
         let dst, spare = read_modrm address_mode lr in
@@ -1190,7 +1200,7 @@ let read lr =
       | 0x6f -> unsupported "outs/outsw/outsd"
       | byte when byte >= 0x70 && byte < 0x70 + nCcs ->
           let rel8 = Lreader.Read.u8 lr in
-          let v = Int64.of_int (signed_displacement lr rel8) in
+          let v = Int64.of_int (signed_displacement addr lr rel8) in
           Jcc (int_to_cc (byte - 0x70), v)
       | 0x80 -> (
           let dst, spare = read_modrm address_mode lr in
@@ -1410,19 +1420,19 @@ let read lr =
           unsupported_modrm "float op" address_mode lr
       | 0xe0 ->
           let rel8 = Lreader.Read.u8 lr in
-          let v = signed_displacement lr rel8 |> Int64.of_int in
+          let v = signed_displacement addr lr rel8 |> Int64.of_int in
           Loopnz (mode, address_mode, v)
       | 0xe1 ->
           let rel8 = Lreader.Read.u8 lr in
-          let v = signed_displacement lr rel8 |> Int64.of_int in
+          let v = signed_displacement addr lr rel8 |> Int64.of_int in
           Loopz (mode, address_mode, v)
       | 0xe2 ->
           let rel8 = Lreader.Read.u8 lr in
-          let v = signed_displacement lr rel8 |> Int64.of_int in
+          let v = signed_displacement addr lr rel8 |> Int64.of_int in
           Loop (mode, address_mode, v)
       | 0xe3 ->
           let rel8 = Lreader.Read.u8 lr in
-          let v = signed_displacement lr rel8 |> Int64.of_int in
+          let v = signed_displacement addr lr rel8 |> Int64.of_int in
           Jcxz (of_mode mode, v)
       | 0xe4 -> unsupported_imm "in al imm8" 1 lr
       | 0xe5 -> unsupported_imm "in eax imm8" 1 lr
@@ -1431,13 +1441,19 @@ let read lr =
           OutPortImm imm8
       | 0xe7 -> unsupported_imm "out imm8 eax" 1 lr
       | 0xe8 ->
-          let rel32 = Lreader.Read.u32 lr in
-          let v = displacement lr rel32 |> Int64.of_int in
+          let rel32 =
+            Int32.to_int (Lreader.Read.i32 lr) land 0xffffffff
+            (* TODO: unsafe on 32bit *)
+          in
+          let v = displacement addr lr rel32 |> Int64.of_int in
           Call v
       | 0xe9 ->
           (* FIXME: Can be 16/32 bits 3-333 *)
-          let rel32 = Lreader.Read.u32 lr in
-          let v = displacement lr rel32 |> Int64.of_int in
+          let rel32 =
+            Int32.to_int (Lreader.Read.i32 lr) land 0xffffffff
+            (* TODO: unsafe on 32bit *)
+          in
+          let v = displacement addr lr rel32 |> Int64.of_int in
           Jmp v
       | 0xea ->
           let addr = select_reader (imode mode) lr |> Int64.of_int in
@@ -1445,7 +1461,7 @@ let read lr =
           Jmpf (segment_selector, addr)
       | 0xeb ->
           let rel8 = Lreader.Read.u8 lr in
-          let v = signed_displacement lr rel8 |> Int64.of_int in
+          let v = signed_displacement addr lr rel8 |> Int64.of_int in
           Jmp v
       | 0xec -> unsupported "in al dx"
       | 0xed -> unsupported "in eax dx"
@@ -1513,7 +1529,6 @@ let read lr =
           | _ -> abort ())
       | _byte -> abort ()
   in
-  let initial_position = Lreader.get_virtual_cursor lr in
   (* TODO: mode & address_mode should be settable by caller *)
   let mode = `M32 in
   let address_mode = A32 in
@@ -1522,16 +1537,11 @@ let read lr =
     | m -> m
     | exception Decode_abort -> Undecoded
   in
-  let opcode =
-    Lreader.get_slice lr initial_position (Lreader.get_virtual_cursor lr)
-    |> bytes_to_opcode_string
-  in
-  Logger.debug ~level:3 "@[<v 0>Opcode %s %@ [%a, %a[:@ %a@]" opcode
-    Virtual_address.pp initial_position Virtual_address.pp
-    (Lreader.get_virtual_cursor lr)
-    X86pp.pp_instr mnemonic;
-  let size =
-    Virtual_address.diff (Lreader.get_virtual_cursor lr) initial_position
-  in
+  let hi = Lreader.get_pos lr - 1 in
+  let opcode = bytes_to_opcode_string (Lreader.get_slice lr ~lo ~hi) in
+
+  let size = hi - lo + 1 in
+  Logger.debug ~level:3 "@[<v 0>Opcode %s (%d) %@ [%08x, %08x[:@ %a@]" opcode
+    size addr (addr + size) X86pp.pp_instr mnemonic;
   let instruction = X86Instruction.create size opcode mnemonic in
   (instruction, !sreg)

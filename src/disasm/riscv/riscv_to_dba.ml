@@ -1440,17 +1440,19 @@ let lift st bits =
 
 let decode reader vaddr =
   let size, bits =
+    (* TODO: will break if I am wrong -- cursor is always well positioned *)
+
     (* First we position the cursor at the right address.
        Then we peek a 16 bits value to check out if the opcode is compressed or
        not.
        If so, just read 16 bits and decode the compressed opcode.
        Otherwise, the opcode is 32 bits long. Decode an uncompressed opcode.
     *)
-    let c = Lreader.get_virtual_cursor reader in
-    let displ = Virtual_address.diff vaddr c in
-    if displ >= 0 then Lreader.advance reader displ
-    else Lreader.rewind reader (-displ);
-
+    (* let vaddr = Virtual_address.to_int vaddr in
+     * let c = Lreader.get_pos reader in
+     * let displ = vaddr - c in
+     * if displ >= 0 then Lreader.advance reader displ
+     * else Lreader.rewind reader (-displ); *)
     let bits = Lreader.Peek.bv16 reader in
     L.debug "RISC-V peeked bits %a" Bv.pp_hex bits;
     if is_compressed bits then (2, Lreader.Read.bv16 reader)

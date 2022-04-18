@@ -29,6 +29,8 @@ exception Non_canonical_form
 
 type t = private int
 
+val zero : t
+
 val create : int -> t
 
 val to_int : t -> int

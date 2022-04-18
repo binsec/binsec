@@ -93,7 +93,7 @@ let byte_size = Natural.to_int Basic_types.Constants.bytesize
 
 module S = Basic_types.String.Map
 
-module State (Solver : Smt_solver.Solver) = struct
+module State (Solver : Smt_solver.Solver) : Sse_types.STATE = struct
   type t = {
     formula : Formula.formula;
     (* SMT2 formula *)
@@ -185,17 +185,9 @@ module State (Solver : Smt_solver.Solver) = struct
     in
     { state with formula; vmemory; fid }
 
-  let load_from ~addr size state =
-    let img = Kernel_functions.get_img () in
-    let at = Bitvector.to_uint addr in
-    let bytes = Bytes.create size in
-    for i = 0 to size - 1 do
-      Bytes.set bytes i @@ Char.unsafe_chr @@ Loader.read_address img @@ (at + i)
-    done;
-    let chunk =
-      byte_size * size
-      |> Bitvector.create @@ Z.of_bits @@ Bytes.unsafe_to_string bytes
-    in
+  let memcpy ~addr size img state =
+    let reader = Lreader.of_zero_extend_buffer img in
+    let chunk = Lreader.Read.read reader size in
     let addr_size = Bitvector.size_of addr in
     let layer =
       Formula.ax_var
@@ -281,25 +273,10 @@ module State (Solver : Smt_solver.Solver) = struct
       | LeftRotate -> rotate_left
       | RightRotate -> rotate_right
 
-    let get_attr img attr name =
-      match attr with
-      | Dba.VarTag.Value ->
-          Option.get
-          @@ Loader_utils.address_of_symbol_or_section_by_name ~name img
-      | Dba.VarTag.Size ->
-          Option.get @@ Loader_utils.size_of_symbol_or_section_by_name ~name img
-      | Dba.VarTag.Last ->
-          Int.pred @@ Virtual_address.to_int @@ snd @@ Option.get
-          @@ Loader_utils.interval_of_symbol_or_section_by_name ~name img
-
     let rec expr state e =
       let smt_unary = unary and smt_binary = binary in
       let open Expr in
       match e with
-      | Var { name; size; info = Symbol attr } ->
-          ( Formula.mk_bv_cst @@ Bitvector.of_int ~size
-            @@ get_attr (Kernel_functions.get_img ()) attr name,
-            state )
       | Var { name; size; _ } -> lookup name size state
       | Cst bv -> (Formula.mk_bv_cst bv, state)
       | Load (bytes, _endianness, e) ->
@@ -342,60 +319,53 @@ module State (Solver : Smt_solver.Solver) = struct
     let with_solver formula f =
       let session = Solver.open_session () in
       Formula.iter_forward (Solver.put session) formula;
-      let v = Utils.time (fun () -> f session) in
+      let time, r = Utils.time (fun () -> f session) in
       Solver.close_session session;
-      v
-
-    let check_satistifiability formula vars memory =
-      let time, r =
-        with_solver formula (fun session ->
-            match Solver.check_sat session with
-            | Formula.SAT ->
-                incr Query_stats.SMT.sat;
-                Logger.debug ~level:4 "SMT query resulted in SAT";
-                Some (extract_model session vars memory)
-            | Formula.UNSAT ->
-                incr Query_stats.SMT.unsat;
-                Logger.debug ~level:4 "SMT query resulted in UNSAT";
-                None
-            | Formula.UNKNOWN | Formula.TIMEOUT ->
-                incr Query_stats.SMT.err;
-                Logger.warning ~level:0 "SMT query resulted in UNKNOWN";
-                failwith "unknown assertion")
-      in
       Query_stats.SMT.add_time time;
       r
 
+    let check_satistifiability formula vars memory =
+      with_solver formula (fun session ->
+          match Solver.check_sat session with
+          | Formula.SAT ->
+              incr Query_stats.SMT.sat;
+              Logger.debug ~level:4 "SMT query resulted in SAT";
+              Some (extract_model session vars memory)
+          | Formula.UNSAT ->
+              incr Query_stats.SMT.unsat;
+              Logger.debug ~level:4 "SMT query resulted in UNSAT";
+              None
+          | Formula.UNKNOWN | Formula.TIMEOUT ->
+              incr Query_stats.SMT.err;
+              Logger.warning ~level:0 "SMT query resulted in UNKNOWN";
+              raise Sse_types.Unknown)
+
     let enumerate e ?(n = 1 lsl Formula_utils.bv_size e) formula vars memory =
-      let time, values =
-        with_solver formula (fun session ->
-            let rec loop e' n enum =
-              if n = 0 then enum
-              else
-                match Solver.check_sat session with
-                | Formula.SAT ->
-                    incr Query_stats.SMT.sat;
-                    let bv = Solver.get_bv_value session e' in
-                    Logger.debug ~level:5
-                      "Solver returned %a ; %d solutions still to be found"
-                      Bitvector.pp_hex bv (n - 1);
-                    let model = extract_model session vars memory in
-                    Solver.put session @@ Formula.mk_assert
-                    @@ Formula.mk_bv_distinct e (Formula.mk_bv_cst bv);
-                    loop e' (n - 1) ((bv, model) :: enum)
-                | Formula.UNSAT ->
-                    incr Query_stats.SMT.unsat;
-                    Logger.debug ~level:4 "Solver returned UNSAT";
-                    enum
-                | Formula.UNKNOWN | Formula.TIMEOUT ->
-                    incr Query_stats.SMT.err;
-                    Logger.warning ~level:0 "SMT query resulted in UNKNOWN";
-                    failwith "unknown enumeration"
-            in
-            loop e n [])
-      in
-      Query_stats.SMT.add_time time;
-      values
+      with_solver formula (fun session ->
+          let rec loop e' n enum =
+            if n = 0 then enum
+            else
+              match Solver.check_sat session with
+              | Formula.SAT ->
+                  incr Query_stats.SMT.sat;
+                  let bv = Solver.get_bv_value session e' in
+                  Logger.debug ~level:5
+                    "Solver returned %a ; %d solutions still to be found"
+                    Bitvector.pp_hex bv (n - 1);
+                  let model = extract_model session vars memory in
+                  Solver.put session @@ Formula.mk_assert
+                  @@ Formula.mk_bv_distinct e (Formula.mk_bv_cst bv);
+                  loop e' (n - 1) ((bv, model) :: enum)
+              | Formula.UNSAT ->
+                  incr Query_stats.SMT.unsat;
+                  Logger.debug ~level:4 "Solver returned UNSAT";
+                  enum
+              | Formula.UNKNOWN | Formula.TIMEOUT ->
+                  incr Query_stats.SMT.err;
+                  Logger.warning ~level:0 "SMT query resulted in UNKNOWN";
+                  raise Sse_types.Unknown
+          in
+          loop e n [])
   end
 
   let keep state =
@@ -465,6 +435,66 @@ module State (Solver : Smt_solver.Solver) = struct
         with
         | Some model -> Some { state with formula; fid; model }
         | None -> None)
+
+  let test e state =
+    let var = Formula.bl_var (Printf.sprintf "__assume_%d" state.fid) in
+    let fid = state.fid + 1 in
+    let formula =
+      state.formula |> Formula.push_front_define @@ Formula.mk_bl_def var [] e
+    in
+    let keep = Formula.VarSet.add (Formula.BlVar var) @@ keep state in
+    let formula = do_optimization ~keep formula in
+    match Formula.peek_front formula with
+    | Some
+        {
+          entry_desc =
+            Formula.Define
+              {
+                def_desc =
+                  Formula.BlDef (v, _, { bl_term_desc = Formula.BlTrue; _ });
+                _;
+              };
+          _;
+        } ->
+        assert (v = var);
+        incr Query_stats.Preprocess.sat;
+        Sse_types.True { state with formula; fid }
+    | Some
+        {
+          entry_desc =
+            Formula.Define
+              {
+                def_desc =
+                  Formula.BlDef (v, _, { bl_term_desc = Formula.BlFalse; _ });
+                _;
+              };
+          _;
+        } ->
+        assert (v = var);
+        incr Query_stats.Preprocess.unsat;
+        Sse_types.False { state with formula; fid }
+    | _ -> (
+        let formula = Formula.push_front_assert (Formula.mk_bl_var var) formula
+        and formula' =
+          Formula.push_front_assert
+            (Formula.mk_bl_not (Formula.mk_bl_var var))
+            formula
+        in
+        match
+          ( Solver.check_satistifiability formula state.fvariables state.fmemory,
+            Solver.check_satistifiability formula' state.fvariables
+              state.fmemory )
+        with
+        | Some model, Some model' ->
+            Both
+              {
+                t = { state with formula; fid; model };
+                f = { state with formula = formula'; fid; model = model' };
+              }
+        | Some model, None -> True { state with formula; fid; model }
+        | None, Some model' ->
+            False { state with formula = formula'; fid; model = model' }
+        | None, None -> raise Sse_types.Unknown)
 
   let split_on e ?n ?(except = []) state =
     let size = Formula_utils.bv_size e in
@@ -543,6 +573,10 @@ module State (Solver : Smt_solver.Solver) = struct
     let e, state = Translate.expr state e in
     assume (Formula.mk_bv_equal e Formula.mk_bv_one) state
 
+  let test e state =
+    let e, state = Translate.expr state e in
+    test (Formula.mk_bv_equal e Formula.mk_bv_one) state
+
   let split_on e ?n ?except state =
     let e, state = Translate.expr state e in
     split_on e ?n ?except state
@@ -592,4 +626,6 @@ module State (Solver : Smt_solver.Solver) = struct
     @@ List.rev
     @@ S.find name state.fvariables;
     Buffer.contents buf
+
+  let pp_stats = Query_stats.pp
 end

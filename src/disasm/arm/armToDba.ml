@@ -181,11 +181,11 @@ let decode_arm addr bytes =
 let decode_from_reader_arm addr reader =
   if addr mod 4 <> 0 then Error empty_instruction
   else
-    match Lreader.Peek.u32 reader with
+    match Lreader.Peek.i32 reader with
     | exception _ ->
         Statistics.incr_invalid_size stats;
         Error empty_instruction
-    | bytes -> decode_arm (Int32.of_int addr) (Int32.of_int bytes)
+    | bytes -> decode_arm (Int32.of_int addr) bytes
 
 let merge_itblock addr itblock =
   let n = Array.length itblock in
@@ -242,12 +242,13 @@ let decode_from_reader_thumb addr reader =
       addr - 1)
     else addr
   in
-  match try Lreader.Peek.u32 reader with _ -> Lreader.Peek.u16 reader with
+  match Lreader.Peek.u16 reader with
   | exception _ ->
       Statistics.incr_invalid_size stats;
       Error empty_instruction
   | bytes when not @@ isitw bytes ->
-      decode_thumb 0 (Int32.of_int addr) (Int32.of_int bytes)
+      let bytes = try Lreader.Peek.i32 reader with _ -> Int32.of_int bytes in
+      decode_thumb 0 (Int32.of_int addr) bytes
   | word -> (
       (* it block *)
       let n =
@@ -265,15 +266,15 @@ let decode_from_reader_thumb addr reader =
         if i = n then offset
         else
           match
-            try Lreader.Peek.peek reader 4
-            with _ -> Lreader.Peek.peek reader 2
+            try Lreader.Peek.i32 reader
+            with _ -> Int32.of_int (Lreader.Peek.u16 reader)
           with
           | exception _ -> raise @@ Failure ""
           | bytes -> (
               match
                 decode_thumb (itstate word i)
                   (Int32.of_int (addr + offset))
-                  (Int32.of_int (Bitvector.to_int bytes))
+                  bytes
               with
               | Error _ -> raise @@ Failure ""
               | Ok (instr, dhunk) ->
@@ -286,7 +287,7 @@ let decode_from_reader_thumb addr reader =
       try
         let size = init 0 0 in
         Lreader.rewind reader size;
-        let bytes = Lreader.Peek.peek reader size in
+        let bytes = Lreader.Peek.read reader size in
         let opcode = Format.asprintf "%a" pp_opcode bytes in
         let mnemonic =
           Mnemonic.supported itblock (fun ppf it ->

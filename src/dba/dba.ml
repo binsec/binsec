@@ -968,6 +968,9 @@ module Instr = struct
 
   let static_inner_jump ?tag n = static_jump (Jump_target.inner n) ?tag
 
+  let static_outer_jump ?tag base =
+    static_jump (Jump_target.outer { base; id = 0 }) ?tag
+
   let call ~return_address jt =
     let tag = Some (Call return_address) in
     static_jump ?tag jt

@@ -891,9 +891,8 @@ let affect_flags_ptest xmm size op1 op2 sreg =
   let e1 = disas_expr_xmm op1 xmm size sreg in
   let e2 = disas_expr_xmm op2 xmm size sreg in
   let v = constant (Bitvector.zeros 128) in
-  let and_e1 = logand e1 in
-  let c1 = equal (and_e1 e2) v in
-  let c2 = equal (and_e1 (lognot e2)) v in
+  let c1 = equal (logand e1 e2) v in
+  let c2 = equal (logand (lognot e1) e2) v in
   [ clear_flag OF; clear_flag SF; assign_flag ZF c1; assign_flag CF c2 ]
 
 let affect_flags_aad res =
@@ -1691,7 +1690,7 @@ let lift_bsf mode dst src sreg =
       (Dba.JInner 11);
     Predba.assign temp_lhs (Expr.shift_right temp_exp (cst_of_int 1 sz));
     Predba.assign cpt_lhs (Expr.add cpt_exp (cst_of_int 1 sz));
-    Predba.static_jump (Dba.JInner 6);
+    Predba.static_jump (Dba.JInner 7);
     Predba.assign dst_lhs cpt_exp;
   ]
   @ undef_flags [ CF; OF; SF ]
@@ -2981,7 +2980,7 @@ let decaux basic_instr addr sreg =
 let x86decode = X86decoder.read
 
 let x86lift_from_reader addr reader =
-  let binstr, sreg = x86decode reader in
+  let binstr, sreg = x86decode addr reader in
   (* convert x86 IR -> DBA *)
   let insts = decaux binstr addr sreg in
   let nextaddr =
@@ -2998,7 +2997,7 @@ let decode reader (addr : Virtual_address.t) = x86lift_from_reader addr reader
 (* addr_size in Bytes *)
 (* A base address of 0 is used here by default.
 *)
-let decode_binstream ?(base_addr : Virtual_address.t = Virtual_address.create 0)
+let decode_binstream ?(base_addr : Virtual_address.t = Virtual_address.zero)
     hopc =
-  try Lreader.of_binstream ~base:base_addr hopc |> x86lift_from_reader base_addr
+  try Lreader.of_binstream hopc |> x86lift_from_reader base_addr
   with Failure s -> raise (InstructionUnhandled s)

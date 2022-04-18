@@ -157,13 +157,14 @@ let parse_result s =
     Ok i
   with
   | Errors.Mismatched_instruction_size _ -> dummy_parse ~etype:ESize s
-  | Failure _ -> dummy_parse s
-  | Parser.Error ->
+  | Failure _ | Parser.Error ->
       let pos = lexeme_start_p lexbuf in
       Amd64_options.Logger.error
         "@[<v 0>Probable parse error at line %d, column %d@ Lexeme was: %s@ \
          Entry was: %s@ Getting basic infos only ... @]"
-        pos.pos_lnum pos.pos_cnum (Lexing.lexeme lexbuf) s;
+        pos.pos_lnum
+        (pos.pos_cnum - pos.pos_bol)
+        (Lexing.lexeme lexbuf) s;
       dummy_parse s
 
 let decode addr bytes = Amd64dba.decode ~m64:true ~addr bytes |> parse_result

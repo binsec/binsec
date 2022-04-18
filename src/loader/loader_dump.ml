@@ -78,6 +78,8 @@ module Img = struct
 
   let cursor ?at:_ _ = assert false
 
+  let content _ _ = assert false
+
   let pp _ _ = assert false
 end
 

@@ -36,6 +36,24 @@
 
     let incr e =
       Dba.Expr.add e @@ Dba.Expr.ones @@ Dba.Expr.size_of e
+
+    let dhunk_of_list stmts =
+      let block = Array.of_list stmts in
+      let module H = Basic_types.String.Htbl in
+      let binding = H.create 128 in
+      Array.iteri (fun i (labels, _) ->
+		    List.iter (fun label -> H.add binding label i) labels)
+		  block;
+      Dhunk.init (Array.length block)
+		 (fun i ->
+		   match Array.get block i |> snd with
+		   | Fallthrough f -> f @@ i + 1
+		   | Terminator i -> i
+		   | Goto l -> Dba.Instr.static_inner_jump @@ H.find binding l
+		   | It (c, l) ->
+		      i + 1 |> Dba.Instr.ite c
+			       @@ Dba.Jump_target.inner
+			       @@ H.find binding l)
 %}
 
 %token WHILE DO
@@ -51,26 +69,26 @@
 %public
 let chunk :=
   | stmts=append(flatten(list(stmt)), iterminator);
-    { let block = Array.of_list stmts in
-      let module H = Basic_types.String.Htbl in
-      let binding = H.create 128 in
-      Array.iteri (fun i (labels, _) ->
-		    List.iter (fun label -> H.add binding label i) labels)
-		  block;
-      Dhunk.init (Array.length block)
-		 (fun i ->
-		   match Array.get block i |> snd with
-		   | Fallthrough f -> f @@ i + 1
-		   | Terminator i -> i
-		   | Goto l -> Dba.Instr.static_inner_jump @@ H.find binding l
-		   | It (c, l) ->
-		      i + 1 |> Dba.Instr.ite c
-			       @@ Dba.Jump_target.inner
-			       @@ H.find binding l) }
+    { dhunk_of_list stmts }
 
+%public
 let stmt :=
-  | l=ioption(label); ~=single; option(SEMICOLON);
-    { [ Option.to_list l, single ] }
+  | ~=label; SEMICOLON;
+    { [ [ label ], Fallthrough (Dba.Instr.static_inner_jump ?tag:None) ] }
+  | l=ioption(label); ~=loc; ASSIGN; ~=iexpr; AS; id=IDENT;
+    { let size = Dba.LValue.size_of loc in
+      let expr = match iexpr with
+	| Right e -> e
+	| Left i -> Dba.Expr.constant (Bitvector.create i size) in
+      let name, size = match id with
+	| name, -1 -> name, size
+	| name, size' -> assert (size = size'); name, size in
+      let var = E.lookup name size in
+      let evar =
+	if Dba.LValue.size_of var <> size then Dba.Expr.var name size
+	else Dba.LValue.to_expr var in
+      [ Option.to_list l, Fallthrough (Dba.Instr.assign var expr);
+	[], Fallthrough (Dba.Instr.assign loc evar) ] }
   | l=ioption(label); ~=loc; ASSIGN; NONDET; AS; id=IDENT;
     { let size = Dba.LValue.size_of loc in
       let name, size = match id with
@@ -82,6 +100,8 @@ let stmt :=
 	else Dba.LValue.to_expr var in
       [ Option.to_list l, Fallthrough (Dba.Instr.non_deterministic var);
 	[], Fallthrough (Dba.Instr.assign loc evar) ] }
+  | l=ioption(label); ~=single; option(SEMICOLON);
+    { [ Option.to_list l, single ] }
   | l=ioption(label); ~=block; END;
     { Option.fold ~none:block ~some:(set_label block) l }
 

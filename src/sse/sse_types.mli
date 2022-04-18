@@ -19,8 +19,50 @@
 (*                                                                        *)
 (**************************************************************************)
 
+exception Unknown
+
+type 'a test = True of 'a | False of 'a | Both of { t : 'a; f : 'a }
+
+module type STATE = sig
+  type t
+  (** Symbolic state *)
+
+  val empty : unit -> t
+
+  val assume : Dba.Expr.t -> t -> t option
+
+  val test : Dba.Expr.t -> t -> t test
+
+  val split_on :
+    Dba.Expr.t ->
+    ?n:int ->
+    ?except:Bitvector.t list ->
+    t ->
+    (Bitvector.t * t) list
+
+  val fresh : string -> int -> t -> t
+
+  val assign : string -> Dba.Expr.t -> t -> t
+
+  val write : addr:Dba.Expr.t -> Dba.Expr.t -> Machine.endianness -> t -> t
+
+  val memcpy : addr:Bitvector.t -> int -> Loader_buf.t -> t -> t
+
+  val pp : Format.formatter -> t -> unit
+
+  val pp_smt :
+    ?slice:(Dba.Expr.t * string) list -> Format.formatter -> t -> unit
+
+  val as_ascii : string -> t -> string
+
+  val pp_stats : Format.formatter -> unit -> unit
+end
+
 module Pragma : sig
-  type t = Start_from of Dba.Expr.t | Load_sections of string list
+  type t =
+    | Start_from of Dba.Expr.t * Dhunk.t
+    | Start_from_core of Dhunk.t
+    | Load_sections of string list
 end
 
 module Script : sig
@@ -37,16 +79,14 @@ module C :
      and type inst = Instruction.t
      and type symb = Basic_types.Int.t
 
-module Path_state (S : Smt_solver.Solver) : sig
+module Path_state (S : STATE) : sig
   type t
-
-  module State : module type of Senv.State (S)
 
   val create :
     ?depth:int ->
     ?address_counters:Sse_options.Address_counter.t Virtual_address.Map.t ->
     ?block_index:int ->
-    State.t ->
+    S.t ->
     Instruction.t ->
     t
 
@@ -62,7 +102,7 @@ module Path_state (S : Smt_solver.Solver) : sig
 
   val location : t -> Dba_types.Caddress.t
 
-  val symbolic_state : t -> State.t
+  val symbolic_state : t -> S.t
 
   val block_index : t -> int
 
@@ -91,7 +131,7 @@ module Path_state (S : Smt_solver.Solver) : sig
   val set_instruction : Instruction.t -> t -> t
   (** increase depth and extend path *)
 
-  val set_symbolic_state : State.t -> t -> t
+  val set_symbolic_state : S.t -> t -> t
 
   val incr_solver_calls : t -> t
 
@@ -101,8 +141,6 @@ module Path_state (S : Smt_solver.Solver) : sig
     Sse_options.Address_counter.t Virtual_address.Map.t -> t -> t
 
   val set_next_address : Virtual_address.t -> t -> t
-
-  val with_init_mem_at : addr:Bitvector.t -> size:int -> t -> t
 
   (** {2 Printers} *)
 

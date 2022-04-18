@@ -25,12 +25,26 @@ include Cli.Make (struct
   let name = "Static Symbolic Execution"
 end)
 
+module AlternativeEngine = Builder.False (struct
+  let name = "alternative-engine"
+
+  let doc = "Enable the experimental engine"
+end)
+
 module MaxDepth = Builder.Integer (struct
   let name = "depth"
 
   let default = 1000
 
   let doc = "Set exploration maximal depth"
+end)
+
+module TransientEnum = Builder.Integer (struct
+  let name = "self-written-enum"
+
+  let default = 0
+
+  let doc = "Set maximum number of forks for symbolic instruction opcodes"
 end)
 
 module JumpEnumDepth = Builder.Integer (struct

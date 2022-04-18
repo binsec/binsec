@@ -1,3 +1,27 @@
+## 0.5.0 (2022-04-18)
+
+** Features
+
+   - Alternative experimental SSE engine
+     (enabled with `-sse-alternative-engine`)
+   - Core dump support in SSE initialization
+   - Self-modifying code support in SSE
+     (enabled with `-sse-self-written-enum N`)
+	 
+** Examples
+
+   - Add SSE FlareOn 2021 challenge 2
+   - Add SSE `gugus` challenge from
+     [crackmes.one](https://crackmes.one/user/bueb810)
+   - Add SSE `hidden_password` challenge from
+     [crackmes.one](https://crackmes.one/user/pjenik@seznam.cz)
+	 with dedicated [write-up](doc/sse/advanced_users.md)
+   - Add SSE `license_checker_3` challenge from
+     [crackmes.one](https://crackmes.one/user/NomanProdhan)
+   - Add SSE `trycrackme` challenge from
+	 [crackmes.one](https://crackmes.one/user/MrEmpy)
+	 with dedicated [write-up](doc/sse/intermediates_2.md)
+
 ## 0.4.1 (2021-12-20)
 
 ** Features

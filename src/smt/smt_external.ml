@@ -255,6 +255,7 @@ module Solver = struct
   let put (solver, _) entry = Solver.Session.put_entry solver entry
 
   let check_sat (solver, _) =
+    incr queries;
     try Solver.Session.check_sat solver with
     | Failure msg ->
         Logger.warning "SMT solver failed on %s" msg;

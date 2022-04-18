@@ -360,6 +360,8 @@ module Instr : sig
 
   val static_inner_jump : ?tag:Tag.t -> int -> t
 
+  val static_outer_jump : ?tag:Tag.t -> Virtual_address.t -> t
+
   val call : return_address:address -> id Jump_target.t -> t
 
   val dynamic_jump : ?tag:Tag.t -> Expr.t -> t

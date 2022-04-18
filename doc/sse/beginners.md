@@ -1,4 +1,4 @@
-# SSE Tutorial 1: First steps with BINSEC SSE
+# SSE Tutorial \#1: First steps with BINSEC SSE
 
 In this post, we will exercise the **S**tatic **S**ymbolic **E**xecution engine of **BINSEC** over the small *CTF* puzzle named [**magic**](../../examples/sse/quickstart/magic).
 

@@ -1,4 +1,4 @@
-# SSE Tutorial 2: Solving simple CTF with BINSEC SSE
+# SSE Tutorial \#2: Solving simple CTF with BINSEC SSE
 
 In this post, we will exercise the **S**tatic **S**ymbolic **E**xecution engine of **BINSEC** over the first 2015 [FLARE On](https://flare-on.com/) challenge.  
 We will do so with the additionnal difficulty of not looking at a single line of code disassembly -- we still reserve the right to use good tools to extract meta-data. This way, we will have to focus on the interaction between the program and its environment (for instance, a user typing in a console) in a *quasi*-black box manner.

@@ -161,9 +161,9 @@ let add_replacement addr dhunk =
   let map = get_decode_replacement () in
   decode_replacement := Some (Virtual_address.Map.add addr dhunk map)
 
-let decode (vaddress : Virtual_address.t) =
+let decode ?(img = Kernel_functions.get_img ()) (vaddress : Virtual_address.t) =
   let decoder = decoder_of_machine () in
-  let reader = Lreader.of_img (Kernel_functions.get_img ()) ~base:vaddress in
+  let reader = Lreader.of_img img ~at:(vaddress :> int) in
   let instr, next = decode_at_address decoder reader vaddress in
   try
     let repl = get_decode_replacement () in
@@ -174,13 +174,23 @@ let decode (vaddress : Virtual_address.t) =
       next )
   with Not_found -> (instr, next)
 
-let decode_from_reader lreader =
+let decode_from reader (at : Virtual_address.t) =
   let decoder = decoder_of_machine () in
-  let vaddress = Lreader.get_virtual_cursor lreader in
-  decode_at_address decoder lreader vaddress
+  let instr, next = decode_at_address decoder reader at in
+  try
+    let repl = get_decode_replacement () in
+    let subst = Virtual_address.Map.find at repl in
+    let open Instruction in
+    ( Instruction.create instr.address instr.size instr.opcode instr.mnemonic
+        subst,
+      next )
+  with Not_found -> (instr, next)
 
-let decode_binstream ?base bs =
-  try Lreader.of_binstream ?base bs |> decode_from_reader
+let decode_binstream ?(base = Virtual_address.zero) bs =
+  try
+    let decoder = decoder_of_machine () in
+    let lreader = Lreader.of_binstream bs in
+    decode_at_address decoder lreader base
   with Not_found ->
     Logger.error
       "@[<v 0>Could not decode opcode %a.@,\

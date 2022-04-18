@@ -35,6 +35,8 @@ let equal = V_comparable.equal
 
 include Basic_types.Collection_make.Hashed (V_comparable)
 
+let zero = 0
+
 let create n = n
 
 let to_int n = n

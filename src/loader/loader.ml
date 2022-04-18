@@ -134,6 +134,13 @@ module Img = struct
     | PE pe -> Loader_pe.Img.cursor ?at pe
     | Dump dump -> Loader_dump.Img.cursor ?at dump
 
+  let content t s =
+    match (t, s) with
+    | ELF t, ELF s -> Loader_elf.Img.content t s
+    | PE t, PE s -> Loader_pe.Img.content t s
+    | Dump t, Dump s -> Loader_dump.Img.content t s
+    | _ -> assert false
+
   let pp ppf = function
     | ELF elf -> Loader_elf.Img.pp ppf elf
     | PE pe -> Loader_pe.Img.pp ppf pe
@@ -194,3 +201,31 @@ module Address = Loader_buf.Make (struct
     | PE pe -> Loader_pe.Address.dim pe
     | Dump d -> Loader_dump.Offset.dim d
 end)
+
+module View = struct
+  type t = {
+    base : Virtual_address.t;
+    size : int;
+    buffer :
+      (int, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t;
+  }
+
+  let create vaddr img section =
+    let { Loader_types.virt; _ } = Section.pos section in
+    let base = Virtual_address.add_int virt vaddr in
+    let { Loader_types.virt = size; _ } = Section.size section in
+    let buffer = Img.content img section in
+    { base; size; buffer }
+
+  let zero_extend_get buffer offset =
+    if Bigarray.Array1.dim buffer < offset then 0
+    else Bigarray.Array1.get buffer offset
+
+  let unsafe_get { base; buffer; _ } addr =
+    zero_extend_get buffer (Virtual_address.diff addr base)
+
+  let get { base; size; buffer } addr =
+    let offset = Virtual_address.diff addr base in
+    if offset < 0 || size < offset then raise Not_found
+    else zero_extend_get buffer offset
+end

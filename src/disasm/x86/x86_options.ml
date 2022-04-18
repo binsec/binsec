@@ -31,6 +31,8 @@ module HandleSegments = Builder.String_set (struct
   let doc = "Activate set of segments"
 end)
 
+let () = HandleSegments.set (Basic_types.String.Set.of_list [ "fs"; "gs" ])
+
 module ProtectedMode = Builder.False (struct
   let name = "protected-mode"
 

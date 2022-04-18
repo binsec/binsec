@@ -50,6 +50,9 @@ val init : int -> (int -> Dba.Instr.t) -> t
 
 val singleton : Dba.Instr.t -> t
 
+val goto : Virtual_address.t -> t
+(** A simple dhunk of one instruction jumping to the virtual address. *)
+
 val length : t -> int
 
 val node : t -> int -> Node.t option

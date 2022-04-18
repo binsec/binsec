@@ -87,15 +87,19 @@ module Expr = struct
 
   let eval_from_img =
     let get_attr img attr name =
-      match attr with
-      | Dba.VarTag.Value ->
-          Option.get
-          @@ Loader_utils.address_of_symbol_or_section_by_name ~name img
-      | Dba.VarTag.Size ->
-          Option.get @@ Loader_utils.size_of_symbol_or_section_by_name ~name img
-      | Dba.VarTag.Last ->
-          Int.pred @@ Virtual_address.to_int @@ snd @@ Option.get
-          @@ Loader_utils.interval_of_symbol_or_section_by_name ~name img
+      try
+        match attr with
+        | Dba.VarTag.Value ->
+            Option.get
+            @@ Loader_utils.address_of_symbol_or_section_by_name ~name img
+        | Dba.VarTag.Size ->
+            Option.get
+            @@ Loader_utils.size_of_symbol_or_section_by_name ~name img
+        | Dba.VarTag.Last ->
+            Int.pred @@ Virtual_address.to_int @@ snd @@ Option.get
+            @@ Loader_utils.interval_of_symbol_or_section_by_name ~name img
+      with Invalid_argument _ ->
+        Kernel_options.Logger.fatal "Can not resolve symbol %S" name
     in
     let rec fold img = function
       | Dba.Expr.Cst _ as e -> e
@@ -110,10 +114,11 @@ module Expr = struct
           Dba.Expr.ite (fold img c) (fold img t) (fold img e)
     in
     fun img e ->
-      match fold img e with
-      | Dba.Expr.Cst bv -> Virtual_address.of_bitvector bv
-      | _ -> assert false
+      match fold img e with Dba.Expr.Cst bv -> bv | _ -> assert false
   (* TODO *)
+
+  let eval_addr_from_img img e =
+    Virtual_address.of_bitvector (eval_from_img img e)
 
   let complement e ~lo ~hi var =
     let size = var.size and evar = Dba.Expr.v var in

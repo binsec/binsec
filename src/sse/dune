@@ -1,13 +1,19 @@
-(include_subdirs no)
+(include_subdirs unqualified)
 
 (library
  (name se)
  (modules :standard)
+  (modules_without_implementation solver_sig)
  (flags
   (:standard -open Binsec -open Smt))
  (library_flags
   (:standard -linkall))
- (libraries binsec smt))
+ (libraries binsec smt
+  (select
+    native_solver.ml
+    from
+    (bitwuzla -> native_solver.enabled.ml)
+    (!bitwuzla -> native_solver.stubs.ml))))
 
 (rule
  (copy ../dba/dba_expr_parser.mly dba_expr_parser.mly))

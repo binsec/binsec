@@ -66,8 +66,17 @@ val get_decode_replacement : unit -> Dhunk.t Virtual_address.Map.t
 
 val add_replacement : Virtual_address.t -> Dhunk.t -> unit
 
-val decode : Virtual_address.t -> Instruction.t * Virtual_address.t option
+val decode :
+  ?img:Loader.Img.t ->
+  Virtual_address.t ->
+  Instruction.t * Virtual_address.t option
 (** [decode addr] decodes the contents of address [addr]
+    @return the contents of this address and its linear successor (if applicable)
+*)
+
+val decode_from :
+  Lreader.t -> Virtual_address.t -> Instruction.t * Virtual_address.t option
+(** [decode_from reader addr] decodes the contents of address [addr]
     @return the contents of this address and its linear successor (if applicable)
 *)
 

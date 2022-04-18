@@ -117,6 +117,8 @@ let singleton instruction =
   add g 0 instruction;
   g
 
+let goto vaddr = singleton (Dba.Instr.static_outer_jump vaddr)
+
 let length g = C.nb_vertex g
 
 let is_empty g = length g = 0

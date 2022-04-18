@@ -351,7 +351,11 @@ let to_bitstring bv : string =
   String.init size init_fun
 
 let to_asciistring bv : string =
-  String.sub (Z.to_bits (value_of bv)) 0 ((size_of bv + 7) / 8)
+  let n = (size_of bv + 7) / 8 in
+  let v = Z.to_bits (value_of bv) in
+  let s = Bytes.make n '\x00' in
+  Bytes.blit_string v 0 s 0 (min n (String.length v));
+  Bytes.unsafe_to_string s
 
 let to_string bv =
   if size_of bv mod 4 == 0 then to_hexstring bv else to_bitstring bv

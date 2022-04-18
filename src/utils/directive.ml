@@ -125,7 +125,7 @@ let loc g = g.loc
 
 let addr g =
   let img = Kernel_functions.get_img () in
-  Dba_utils.Expr.eval_from_img img g.loc
+  Dba_utils.Expr.eval_addr_from_img img g.loc
 
 let choose ~alternate ~side = Choice (Choice.create ~alternate side)
 

@@ -69,6 +69,8 @@ module type S = sig
 
     val cursor : ?at:int -> t -> Loader_buf.cursor
 
+    val content : t -> Section.t -> Loader_buf.t
+
     include Sigs.PRINTABLE with type t := t
   end
 

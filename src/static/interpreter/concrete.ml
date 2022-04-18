@@ -239,8 +239,6 @@ module Env = struct
             let bv_off = Bitvector.of_int ~size:wsize (s - 1) in
             let addr =
               Dba_utils.Expr.eval_from_img (Kernel_functions.get_img ()) addr
-              |> Virtual_address.to_int
-              |> Bitvector.of_int ~size:(Kernel_options.Machine.word_size ())
             in
             let addr = Bitvector.add bv_off addr in
             let byte = Loader_utils.get_byte_at img addr |> Bv.of_int ~size:8 in

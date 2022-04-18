@@ -80,6 +80,8 @@ let keywords = [
   "consequent"    , CONSEQUENT;
   "alternate"     , ALTERNATE;
   "uncontrolled"  , UNCONTROLLED;
+  "min"           , MIN;
+  "max"           , MAX;
 ]
 
 let keyword_tbl =
@@ -107,23 +109,23 @@ rule token = parse
   | "+"             { PLUS }
   | "-"             { MINUS }
   | "*"             { STAR }
-  | "*u"            { STAR_U }
+  | '*' 'u'?            { STAR_U }
   | "*s"            { STAR_S }
-  | "/u?"           { SLASH_U }
+  | '/' 'u'?           { SLASH_U }
   | "/s"            { SLASH_S }
   | ">>"
-  | ">>u"           { RSHIFTU }
+  | ">>" 'u'?           { RSHIFTU }
   | ">>s"           { RSHIFTS }
   | "<<"            { LSHIFT }
   | ":"             { COLON }
   | ";"             { SEMICOLON }
   | "="             { EQUAL }
   | "<>"            { NEQ }
-  | "<=u"           { LEU }
+  | "<=" 'u'?           { LEU }
   | "<=s"           { LES }
   | "<u"            { LTU }
   | "<s"            { LTS }
-  | ">=u"           { GEU }
+  | ">=" 'u'?           { GEU }
   | ">=s"           { GES }
   | ">u"            { GTU }
   | ">s"            { GTS }
@@ -168,6 +170,7 @@ rule token = parse
   | ('"' (([^'>''"']|'>'[^'>''"'])* as st) '"')
                     { STRING st }
   | ident as s      { kwd_or_ident s }
+  | '%' '%' digit+ as s { TMP s }
   | hex as s        { HEXA s }
   | bin as s        { BIN s }
   | digit+ as s     { INT s }

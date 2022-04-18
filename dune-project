@@ -1,10 +1,10 @@
-(lang dune 2.8)
+(lang dune 3.0)
 (using menhir 2.0)
 (using dune_site 0.1)
 (generate_opam_files true)
 
 (name binsec)
-(version "0.4.1")
+(version "0.5.0")
 (maintainers "BINSEC <binsec@saxifrage.saclay.cea.fr>")
 (authors
   "Adel Djoudi"

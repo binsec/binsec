@@ -21,39 +21,25 @@
 
 (** Basic stream reader *)
 
-type bytestream
+type byte = int
 
 type t
 
 (** {7 Constructors} *)
 
-val of_img :
-  ?endianness:Machine.endianness ->
-  ?base:Virtual_address.t ->
-  ?offset:int ->
-  Loader.Img.t ->
-  t
+val create :
+  ?endianness:Machine.endianness -> ?at:int -> ('a -> int -> byte) -> 'a -> t
 
-val of_nibbles :
-  ?endianness:Machine.endianness ->
-  ?base:Virtual_address.t ->
-  ?offset:int ->
-  string ->
-  t
+val of_img : ?endianness:Machine.endianness -> ?at:int -> Loader.Img.t -> t
 
-val of_bytes :
-  ?endianness:Machine.endianness ->
-  ?base:Virtual_address.t ->
-  ?offset:int ->
-  string ->
-  t
+val of_zero_extend_buffer :
+  ?endianness:Machine.endianness -> ?at:int -> Loader_buf.t -> t
 
-val of_binstream :
-  ?endianness:Machine.endianness ->
-  ?base:Virtual_address.t ->
-  ?offset:int ->
-  Binstream.t ->
-  t
+val of_nibbles : ?endianness:Machine.endianness -> ?at:int -> string -> t
+
+val of_bytes : ?endianness:Machine.endianness -> ?at:int -> string -> t
+
+val of_binstream : ?endianness:Machine.endianness -> ?at:int -> Binstream.t -> t
 
 (** {7 Pretty-printer} *)
 
@@ -61,7 +47,7 @@ val pp : Format.formatter -> t -> unit
 
 (** {7 Generic manipulation functions} *)
 
-val get_virtual_cursor : t -> Virtual_address.t
+val get_pos : t -> int
 
 val rewind : t -> int -> unit
 (** [rewind r n] moves back the cursor [n] bytes. *)
@@ -80,20 +66,17 @@ module type Accessor = sig
   (* read an unsigned int *)
   val u8 : t -> int
 
-  val u16 : t -> int
-
-  val u32 : t -> int
-
-  val u64 : t -> int
-
   (* read a signed int *)
   val i8 : t -> int
 
+  val u16 : t -> int
+
   val i16 : t -> int
 
-  val i32 : t -> int
+  val i32 : t -> int32
 
-  (* u64 is incorrect because the sign bit is ignored; no i64 *)
+  val i64 : t -> int64
+
   val bv8 : t -> Bitvector.t
 
   val bv16 : t -> Bitvector.t
@@ -101,6 +84,8 @@ module type Accessor = sig
   val bv32 : t -> Bitvector.t
 
   val bv64 : t -> Bitvector.t
+
+  val read : t -> int -> Bitvector.t
 end
 
 module Read : Accessor with type t := t
@@ -108,16 +93,11 @@ module Read : Accessor with type t := t
     read n=1, 2, 4, or 8 bytes and advance n bytes as well.
 *)
 
+module Peek : Accessor with type t := t
 (** [Peek] is like [Read] but does not advance *)
-module Peek : sig
-  include Accessor with type t := t
 
-  val peek : t -> int -> Bitvector.t
-  (** [peek loader n] peeks at the next [n] bytes of loader [loader] *)
-end
-
-val get_slice : t -> Virtual_address.t -> Virtual_address.t -> int list
-(** [get_slice addr_start addr_end] returns the list of bytes contained in the
-    interval from [addr_start] included to [addr_end] excluded.
-    @assert addr_start < addr_end
+val get_slice : t -> lo:int -> hi:int -> bytes
+(** [get_slice t ~lo ~hi] returns the  bytes contained in the
+    interval from \[lo, hi\].
+    @raise Invalid_argument if lo > hi
 *)

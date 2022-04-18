@@ -383,6 +383,21 @@ module Shdr = struct
     entsize : u64;
   }
 
+  let dummy =
+    {
+      idx = 0;
+      name = "";
+      kind = SHT.NULL;
+      flags = 0;
+      addr = 0;
+      offset = 0;
+      size = 0;
+      link = 0;
+      info = 0;
+      addralign = 0;
+      entsize = 0;
+    }
+
   let read_32 t =
     ensure t 40 "Section header truncated";
     let idx = Read.u32 t in
@@ -718,6 +733,18 @@ module Phdr = struct
     align : u64;
   }
 
+  let dummy =
+    {
+      kind = 0;
+      flags = 0;
+      offset = 0;
+      vaddr = 0;
+      paddr = 0;
+      filesz = 0;
+      memsz = 0;
+      align = 0;
+    }
+
   let read_32 t =
     ensure t 32 "Program header truncated";
     let kind = Read.u32 t in
@@ -791,6 +818,24 @@ module Symbol = struct
   let value s = s.Sym.value
 
   let header s = s
+end
+
+module Note = struct
+  type t = { name : string; kind : int; offset : int; size : int }
+
+  let read t =
+    let namesz = Read.u32 t in
+    let size = Read.u32 t in
+    let kind = Read.u32 t in
+    let name = Read.fixed_string t namesz in
+    seek t ((t.position + 3) land -4);
+    let offset = t.position in
+    advance t ((size + 3) land -4);
+    { name; kind; offset; size }
+
+  let rec append_all notes bound cursor =
+    if cursor.position >= bound then notes
+    else append_all (read cursor :: notes) bound cursor
 end
 
 module rec Vendor : sig
@@ -892,9 +937,12 @@ and Img : sig
     header : Ehdr.t;
     vendor : Vendor.t;
     sections : Shdr.t array;
+    mutable last_section : Shdr.t;
     symtabs : Sym.t array array;
     buf : Loader_buf.t;
     phdrs : Phdr.t array;
+    mutable last_phdr : Phdr.t;
+    notes : Note.t array;
   }
 
   type header = Ehdr.t
@@ -909,9 +957,13 @@ and Img : sig
 
   val symbols : t -> Symbol.t array
 
+  val notes : t -> Note.t array
+
   val header : t -> header
 
   val cursor : ?at:int -> t -> Loader_buf.cursor
+
+  val content : t -> Section.t -> Loader_buf.t
 
   include Sigs.PRINTABLE with type t := t
 end = struct
@@ -919,9 +971,12 @@ end = struct
     header : Ehdr.t;
     vendor : Vendor.t;
     sections : Shdr.t array;
+    mutable last_section : Shdr.t;
     symtabs : Sym.t array array;
     buf : Loader_buf.t;
     phdrs : Phdr.t array;
+    mutable last_phdr : Phdr.t;
+    notes : Note.t array;
   }
 
   type header = Ehdr.t
@@ -936,10 +991,16 @@ end = struct
 
   let symbols i = Array.concat @@ Array.to_list i.symtabs
 
+  let notes i = i.notes
+
   let header i = i.header
 
   let cursor ?(at = 0) i =
     Loader_buf.cursor ~at i.header.Ehdr.ident.E_ident.data i.buf
+
+  let content i (s : Shdr.t) =
+    Bigarray.Array1.sub i.buf s.Shdr.offset
+      (if s.kind = Shdr.SHT.NOBITS then 0 else s.size)
 
   let pp ppf t =
     let e_class = t.header.Ehdr.ident.E_ident.kind in
@@ -1028,45 +1089,46 @@ let alloc img =
         symbols)
     symtabs
 
-type rel = {
-  r_offset : int;
-  r_type : int;
-  r_symbol_idx : int;
-  r_addend : int option;
-}
+module Rel = struct
+  type t = { offset : int; kind : int; symbol : Sym.t; addend : int option }
 
-let read_rel32 t =
-  ensure t 8 "Relocation entry truncated";
-  let r_offset = Read.u32 t in
-  let r_info = Read.u32 t in
-  let r_type = r_info land 0xff in
-  let r_symbol_idx = r_info lsr 8 in
-  { r_offset; r_type; r_symbol_idx; r_addend = None }
+  let read32 t symbols =
+    ensure t 8 "Relocation entry truncated";
+    let offset = Read.u32 t in
+    let info = Read.u32 t in
+    let kind = info land 0xff in
+    let symbol_idx = info lsr 8 in
+    { offset; kind; symbol = Array.get symbols symbol_idx; addend = None }
 
-let read_rel64 t =
-  ensure t 16 "Relocation entry truncated";
-  let r_offset = Read.u64 t in
-  let r_info = Read.u64 t in
-  let r_type = r_info land 0xffffffff in
-  let r_symbol_idx = r_info lsr 32 in
-  { r_offset; r_type; r_symbol_idx; r_addend = None }
+  let read64 t symbols =
+    ensure t 16 "Relocation entry truncated";
+    let offset = Read.u64 t in
+    let info = Read.u64 t in
+    let kind = info land 0xffffffff in
+    let symbol_idx = info lsr 32 in
+    { offset; kind; symbol = Array.get symbols symbol_idx; addend = None }
 
-let read_rela32 t =
-  ensure t 12 "Relocation entry truncated";
-  { (read_rel32 t) with r_addend = Some (Read.s32 t) }
+  let reada32 t symbols =
+    ensure t 12 "Relocation entry truncated";
+    { (read32 t symbols) with addend = Some (Read.s32 t) }
 
-let read_rela64 t =
-  ensure t 24 "Relocation entry truncated";
-  { (read_rel64 t) with r_addend = Some (Read.s64 t) }
+  let reada64 t symbols =
+    ensure t 24 "Relocation entry truncated";
+    { (read64 t symbols) with addend = Some (Read.s64 t) }
 
-let read_rel t header section n =
-  seek t Shdr.(section.offset + (n * section.entsize));
-  match (header.Ehdr.ident.E_ident.kind, section.Shdr.kind) with
-  | `x32, Shdr.SHT.REL -> read_rel32 t
-  | `x32, Shdr.SHT.RELA -> read_rela32 t
-  | `x64, Shdr.SHT.REL -> read_rel64 t
-  | `x64, Shdr.SHT.RELA -> read_rela64 t
-  | _ -> invalid_format "Invalid ELF class"
+  let read (img : Img.t) (section : Shdr.t) =
+    let cursor = cursor ~at:section.offset img.header.ident.data img.buf in
+    let read =
+      match (img.header.ident.kind, section.kind) with
+      | `x32, REL -> read32
+      | `x32, RELA -> reada32
+      | `x64, REL -> read64
+      | `x64, RELA -> reada64
+      | _ -> invalid_format "Invalid ELF class"
+    in
+    let symbols = Array.get img.symtabs section.link in
+    Array.init (section.size / section.entsize) (fun _ -> read cursor symbols)
+end
 
 module R_386 = struct
   type t =
@@ -1198,13 +1260,13 @@ module R_386 = struct
 
   let pp ppf t = Format.fprintf ppf "%s" (to_string t)
 
-  let apply img section symbols rel =
-    let r_offset = section.Shdr.offset + rel.r_offset in
-    let r_symbol = symbols.(rel.r_symbol_idx) in
+  let apply img section (rel : Rel.t) =
+    let r_offset = section.Shdr.offset + rel.offset in
+    let r_symbol = rel.symbol in
     let r_symbol_val = r_symbol.Sym.value in
-    let r_type = of_u8 rel.r_type in
+    let r_type = of_u8 rel.kind in
     let cursor = cursor ~at:r_offset (Img.endian img) img.Img.buf in
-    match (r_type, rel.r_addend) with
+    match (r_type, rel.addend) with
     | NONE, _ -> ()
     | A32, Some r_addend -> Write.u32 cursor @@ (r_symbol_val + r_addend)
     | A32, None ->
@@ -1214,7 +1276,7 @@ module R_386 = struct
         Write.u32 cursor @@ (r_symbol_val + r_addend - r_offset)
     | PC32, None ->
         let r_addend = Peek.s32 cursor in
-        Write.u32 cursor @@ (r_symbol_val + r_addend - rel.r_offset)
+        Write.u32 cursor @@ (r_symbol_val + r_addend - rel.offset)
     | t, _ ->
         Elf_options.Logger.warning "non supported %a, relocation is ignored" pp
           t
@@ -1225,11 +1287,9 @@ let r_apply = function
   | isa ->
       Elf_options.Logger.warning "Relocation for %a is not supported" Machine.pp
         isa;
-      fun _ _ _ _ -> ()
+      fun _ _ _ -> ()
 
 let reloc img =
-  let cursor = cursor img.Img.header.Ehdr.ident.E_ident.data img.Img.buf in
-  let header = img.Img.header and sections = img.Img.sections in
   Array.iter
     (fun section ->
       match section.Shdr.kind with
@@ -1238,27 +1298,50 @@ let reloc img =
             "non supported relocations without symbols (Lk=0) in section %s"
             section.Shdr.name
       | Shdr.SHT.REL | Shdr.SHT.RELA ->
-          let num = section.Shdr.size / section.Shdr.entsize in
-          for i = 0 to num - 1 do
-            let rel = read_rel cursor header section i in
-            r_apply (Img.arch img) img
-              img.Img.sections.(section.Shdr.info)
-              img.Img.symtabs.(section.Shdr.link)
-              rel
-          done
+          Array.iter
+            (r_apply (Img.arch img) img img.Img.sections.(section.Shdr.info))
+            (Rel.read img section)
       | _ -> ())
-    sections
+    img.Img.sections
 
 let load buf =
   let t, e_ident = E_ident.init_cursor buf in
   let header = Ehdr.read t e_ident in
   let sections = Shdr.read_all t header in
+  let last_section =
+    if Array.length sections = 0 then Shdr.dummy else Array.get sections 0
+  in
   let phdrs = Phdr.read_all t header in
+  let last_phdr =
+    if Array.length phdrs = 0 then Phdr.dummy else Array.get phdrs 0
+  in
   let symtabs = Sym.read_all t header sections in
   let header, vendor, sections, symtabs, buf =
     Vendor.read header sections symtabs buf
   in
-  let img = { Img.header; vendor; sections; symtabs; buf; phdrs } in
+  let notes =
+    Array.fold_left
+      (fun notes s ->
+        if s.Shdr.kind = Shdr.SHT.NOTE then (
+          seek t s.Shdr.offset;
+          Note.append_all notes (s.Shdr.offset + s.Shdr.size) t)
+        else notes)
+      [] sections
+  in
+  let notes = Array.of_list notes in
+  let img =
+    {
+      Img.header;
+      vendor;
+      sections;
+      last_section;
+      symtabs;
+      buf;
+      phdrs;
+      last_phdr;
+      notes;
+    }
+  in
   if Elf_options.Alloc.get () then alloc img;
   if Elf_options.Reloc.get () then reloc img;
   img
@@ -1279,29 +1362,28 @@ let load_file path =
 
 let read_offset i offset = i.Img.buf.{offset}
 
-let find_by_addr_with_cache cache contains array addr =
-  if contains addr array.(!cache) then array.(!cache)
+let find_section_by_addr_with_cache (i : Img.t) addr =
+  if Shdr.contains addr i.last_section then i.last_section
   else
-    let i = Array_utils.findi (contains addr) array in
-    cache := i;
-    array.(i)
+    let s = Array_utils.find (Shdr.contains addr) i.sections in
+    i.last_section <- s;
+    s
 
-let find_section_by_addr_with_cache =
-  let cache = ref 0 in
-  find_by_addr_with_cache cache Shdr.contains
-
-let find_programme_header_by_addr_with_cache =
-  let cache = ref 0 in
-  find_by_addr_with_cache cache Phdr.contains
+let find_programme_header_by_addr_with_cache (i : Img.t) addr =
+  if Phdr.contains addr i.last_phdr then i.last_phdr
+  else
+    let p = Array_utils.find (Phdr.contains addr) i.phdrs in
+    i.last_phdr <- p;
+    p
 
 let read_address i addr =
   try
     if Array.length i.Img.phdrs > 0 then
-      let h = find_programme_header_by_addr_with_cache i.Img.phdrs addr in
+      let h = find_programme_header_by_addr_with_cache i addr in
       let offset = addr - h.Phdr.vaddr in
       if offset > h.Phdr.filesz then 0 else i.Img.buf.{h.Phdr.offset + offset}
     else
-      let s = find_section_by_addr_with_cache i.Img.sections addr in
+      let s = find_section_by_addr_with_cache i addr in
       if s.Shdr.kind = Shdr.SHT.NOBITS then 0
       else i.Img.buf.{addr - s.Shdr.addr + s.Shdr.offset}
   with Not_found ->
@@ -1325,3 +1407,38 @@ module Address = Loader_buf.Make (struct
 end)
 
 let program_headers i = i.Img.phdrs
+
+let notes = Img.notes
+
+type fmap = {
+  addresses : Virtual_address.t Interval.t;
+  offset : int;
+  mutable name : string;
+}
+
+let files (i : Img.t) =
+  let read =
+    match i.header.ident.kind with
+    | `x32 -> Loader_buf.Read.u32
+    | `x64 -> Loader_buf.Read.u64
+  in
+  Array.fold_left
+    (fun result -> function
+      | { Note.name = "CORE"; kind = 0x46494c45; offset = at; _ } ->
+          let cursor = Img.cursor ~at i in
+          let n = read cursor in
+          let ps = read cursor in
+          let files =
+            Array.init n (fun _ ->
+                let lo = Virtual_address.create (read cursor) in
+                let hi = Virtual_address.create (read cursor) in
+                let offset = ps * read cursor in
+                { addresses = { Interval.lo; hi }; offset; name = "" })
+          in
+          Array.iter
+            (fun fmap ->
+              fmap.name <- Loader_buf.Read.zero_string "files" cursor ())
+            files;
+          files
+      | _ -> result)
+    [||] i.notes
