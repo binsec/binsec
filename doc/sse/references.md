@@ -1,4 +1,4 @@
-# Sybolic Execution Reference Manual
+# Symbolic Execution Reference Manual
 
 ## DBA Expression
 
