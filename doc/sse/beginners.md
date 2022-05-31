@@ -306,5 +306,5 @@ Let us just recap how we proceeded:
 - initialize some values (especially the stack pointer and return address);
 - do not forget to cut unwanted paths.
 
-Now you will find [here](intermediates.md) an other example of how to use **BINSEC** symbolic execution to solve a [FLARE On](https://flare-on.com/) CTF challenge.  
+Now you will find [here](intermediates_1.md) an other example of how to use **BINSEC** symbolic execution to solve a [FLARE On](https://flare-on.com/) CTF challenge.  
 Have a nice day :-)
