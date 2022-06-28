@@ -1,3 +1,11 @@
+# Install
+
+In a nutshell.
+```console
+$ opam install bitwuzla unisim_archisec binsec
+```
+More detailed instructions on how to install the tool from sources can be found [here](../INSTALL.md).
+
 # Commands
 
 ## Utils
