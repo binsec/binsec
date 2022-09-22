@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -42,6 +42,10 @@ external is_small_int : Z.t -> bool = "%obj_is_int"
 
 external unsafe_to_int : Z.t -> int = "%identity"
 
+let limits = Array.init 128 (fun i -> Z.shift_left Z.one i)
+
+let masks = Array.map Z.pred limits
+
 let create value size =
   if size <= 0 then invalid_arg "Negative bitvector size";
   if size < Sys.int_size - 10 then
@@ -50,17 +54,31 @@ let create value size =
       lor size)
   else if
     size < 1024 && is_small_int value
-    && (unsafe_to_int value lsl 10) asr 10 = unsafe_to_int value
+    &&
+    let ival = unsafe_to_int value in
+    (ival lsl 10) asr 10 = ival
   then unsafe_of_unboxed ((unsafe_to_int value lsl 10) lor size)
   else
-    let ulimit = Z.shift_left Z.one size
-    and slimit = Z.shift_left Z.one (size - 1) in
-    let umask = Z.pred ulimit in
+    let ulimit, slimit, umask =
+      if size < 128 then
+        ( Array.unsafe_get limits size,
+          Array.unsafe_get limits (size - 1),
+          Array.unsafe_get masks size )
+      else
+        let ulimit = Z.shift_left Z.one size in
+        (ulimit, Z.shift_left Z.one (size - 1), Z.pred ulimit)
+    in
     let unsigned = Z.logand value umask in
     let signed =
-      if Z.lt unsigned slimit then unsigned else Z.sub unsigned ulimit
+      if Z.geq unsigned slimit then Z.sub unsigned ulimit else unsigned
     in
-    unsafe_of_boxed { size; unsigned; signed }
+    if
+      size < 1024 && is_small_int signed
+      &&
+      let ival = unsafe_to_int signed in
+      (ival lsl 10) asr 10 = ival
+    then unsafe_of_unboxed ((unsafe_to_int signed lsl 10) lor size)
+    else unsafe_of_boxed { size; unsigned; signed }
 
 let size_of t =
   if is_unboxed t then unsafe_to_int (unsafe_to_unboxed t) land 0x3ff

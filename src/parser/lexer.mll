@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -82,6 +82,7 @@ let keywords = [
   "uncontrolled"  , UNCONTROLLED;
   "min"           , MIN;
   "max"           , MAX;
+  "BSwp"          , BSWAP;
 ]
 
 let keyword_tbl =

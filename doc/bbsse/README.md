@@ -2,4 +2,4 @@
 
 ## Tutorials
 
-- [Tutorial 1: Automatically find opaque predicates](beginners.md)
+- [Tutorial 1: Automatically find opaque predicates (beginners)](beginners.md)

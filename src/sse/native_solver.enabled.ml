@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -180,7 +180,16 @@ module Solver () : Solver_sig.S = struct
 
   let get e = BvTbl.find ctx.bv_cons e
 
-  let add bl = assert' (visit_bv ctx bl)
+  let set_memory ~addr value =
+    let sort =
+      match Queue.top ctx.history with Select (t, _) | Store t -> Term.sort t
+    in
+    assert'
+      (Term.equal
+         (Term.Ar.select
+            (AxTbl.find ctx.ax_cons Memory.Unknown)
+            (Term.Bv.of_z sort addr))
+         (Term.Bv.of_z (visit_sort ctx byte_size) value))
 
   let neq e x = assert' (Term.distinct e (Term.Bv.of_z (Term.sort e) x))
 
@@ -192,7 +201,9 @@ module Solver () : Solver_sig.S = struct
 
   let succ = Term.Bv.succ
 
-  let check_sat () = check_sat ()
+  let timeout = Formula_options.Solver.Timeout.get ()
+
+  let check_sat () = Smt_bitwuzla_utils.watchdog ~timeout check_sat ()
 
   let close () = unsafe_close ()
 

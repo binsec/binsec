@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,6 +20,9 @@
 (**************************************************************************)
 
 (** Extra functions over strings *)
+
+val start_with : prefix:string -> string -> bool
+(** [start_with ~prefix str] check if [str] starts with [prefix] *)
 
 val replace_chars : (char -> string) -> string -> string
 (** [replace_chars f s] creates a new string where all characters [c] from [s]

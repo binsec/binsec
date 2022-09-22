@@ -4,23 +4,28 @@
 (generate_opam_files true)
 
 (name binsec)
-(version "0.5.0")
+(version "0.6.0")
 (maintainers "BINSEC <binsec@saxifrage.saclay.cea.fr>")
 (authors
   "Adel Djoudi"
   "Benjamin Farinier"
+  "Chakib Foulani"
+  "Dorian Lesbre"
   "Frédéric Recoules"
+  "Guillaume Girol"
   "Josselin Feist"
   "Lesly-Ann Daniel"
   "Manh-Dung Nguyen"
+  "Mathéo Vergnolle"
   "Mathilde Ollivier"
   "Matthieu Lemerre"
   "Olivier Nicole"
   "Richard Bonichon"
   "Robin David"
+  "Sébastien Bardin"
+  "Soline Ducousso"
   "Ta Thanh Dinh"
   "Yaëlle Vinçont"
-  "Guillaume Girol"
 )
 (license LGPL-2.1-or-later)
 (homepage "https://binsec.github.io")
@@ -47,14 +52,16 @@ BINSEC is developed at CEA List in scientfic collaboration with Verimag and LORI
 
 An overview of some BINSEC features can be found in our SSPREW'17 tutorial.")
  (depends
-  (ocaml (>= 4.08))
+  (ocaml (>= 4.13))
   (menhir (and :build (>= 20181113)))
   (ocamlgraph (>= 1.8.5))
   (zarith (>= 1.4))
   dune-site
+  toml
   (ounit2 (and :with-test (>= 2)))
   (qcheck (and :with-test (>= 0.7))))
  (depopts
+  curses
   llvm
   unisim_archisec
   bitwuzla)

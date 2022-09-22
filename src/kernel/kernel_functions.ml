@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,16 +21,6 @@
 
 module KO = Kernel_options
 
-let get_ep () =
-  match KO.Entry_point.get_opt () with
-  | None -> None
-  | Some s -> (
-      match KO.ExecFile.get () with
-      | "" -> None
-      | filename ->
-          let bloc = Loader_utils.Binary_loc.of_string s in
-          Loader_utils.Binary_loc.to_virtual_address_from_file ~filename bloc)
-
 let get_img =
   let img = ref None in
   fun () ->
@@ -47,6 +37,13 @@ let get_img =
             img := Some i;
             i)
     | Some i -> i
+
+let get_ep () =
+  match KO.Entry_point.get_opt () with
+  | None -> None
+  | Some s ->
+      let bloc = Loader_utils.Binary_loc.of_string s in
+      Loader_utils.Binary_loc.to_virtual_address ~img:(get_img ()) bloc
 
 module Loader = struct
   let set_arch img =

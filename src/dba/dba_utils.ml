@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -86,25 +86,10 @@ module Expr = struct
       (Bitvector.of_int ~size:(Kernel_options.Machine.word_size ()) (v :> int))
 
   let eval_from_img =
-    let get_attr img attr name =
-      try
-        match attr with
-        | Dba.VarTag.Value ->
-            Option.get
-            @@ Loader_utils.address_of_symbol_or_section_by_name ~name img
-        | Dba.VarTag.Size ->
-            Option.get
-            @@ Loader_utils.size_of_symbol_or_section_by_name ~name img
-        | Dba.VarTag.Last ->
-            Int.pred @@ Virtual_address.to_int @@ snd @@ Option.get
-            @@ Loader_utils.interval_of_symbol_or_section_by_name ~name img
-      with Invalid_argument _ ->
-        Kernel_options.Logger.fatal "Can not resolve symbol %S" name
-    in
     let rec fold img = function
       | Dba.Expr.Cst _ as e -> e
-      | Dba.Expr.Var { name; size; info = Dba.VarTag.Symbol attr } ->
-          Dba.Expr.constant @@ Bitvector.of_int ~size @@ get_attr img attr name
+      | Dba.Expr.Var { info = Dba.VarTag.Symbol (_, (lazy value)); _ } ->
+          Dba.Expr.constant value
       | Dba.Expr.Var _ -> assert false (* TODO *)
       | Dba.Expr.Load _ -> assert false (* TODO *)
       | Dba.Expr.Unary (op, e) -> Dba.Expr.unary op (fold img e)
@@ -130,6 +115,17 @@ module Expr = struct
       Dba.Expr.append
         (Dba.Expr.append (Dba.Expr.restrict (hi + 1) (size - 1) evar) e)
         (Dba.Expr.restrict 0 (lo - 1) evar)
+
+  let bswap =
+    let rec iter e i r =
+      if i = 0 then r
+      else
+        iter e (i - 8) (Dba.Expr.append (Dba.Expr.restrict (i - 8) (i - 1) e) r)
+    in
+    fun e ->
+      let size = Dba.Expr.size_of e in
+      assert (size mod 8 = 0);
+      iter e (size - 8) (Dba.Expr.restrict (size - 8) (size - 1) e)
 end
 
 let eval_alternatives eval_expr eq alternatives =

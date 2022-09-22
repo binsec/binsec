@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -18,5 +18,27 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
 (*                                                                        *)
 (**************************************************************************)
+
+module Printer : sig
+  type t
+
+  val create : ?word_size:int -> next_id:Suid.t -> unit -> t
+
+  val visit_bl : t -> Sexpr.Expr.t -> unit
+
+  val visit_bv : t -> Sexpr.Expr.t -> unit
+
+  val visit_ax : t -> Sexpr.Memory.t -> unit
+
+  val pp_print_decls : Format.formatter -> t -> unit
+
+  val pp_print_defs : Format.formatter -> t -> unit
+
+  val pp_print_bl : t -> Format.formatter -> Sexpr.Expr.t -> unit
+
+  val pp_print_bv : t -> Format.formatter -> Sexpr.Expr.t -> unit
+
+  val pp_print_ax : t -> Format.formatter -> Sexpr.Memory.t -> unit
+end
 
 module Solver () : Solver_sig.S

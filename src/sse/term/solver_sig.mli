@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -32,7 +32,7 @@ module type S = sig
 
   val put : Suid.t -> Expr.t list -> unit
 
-  val add : Expr.t -> unit
+  val set_memory : addr:Z.t -> Z.t -> unit
 
   val neq : term -> Z.t -> unit
 

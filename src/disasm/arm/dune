@@ -1,12 +1,17 @@
 (include_subdirs no)
 
 (library
- (package binsec)
- (optional)
+ (public_name binsec.armv7decoder)
  (name armv7decoder)
  (modules (:standard))
  (library_flags
   (:standard -linkall))
  (flags
   (:standard -w -3 -open Binsec))
- (libraries binsec unisim_archisec.arm32dba))
+ (libraries
+  binsec
+  (select
+   armToDba.ml
+   from
+   (unisim_archisec.arm32dba -> armToDba.enabled.ml)
+   (-> armToDba.disabled.ml))))

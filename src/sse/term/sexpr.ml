@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -113,7 +113,10 @@ end = struct
           if i = n then map
           else
             fold (i + 1) n value offset
-              (BiMap.add (Z.add offset (Z.of_int i)) (byte i value) map)
+              (BiMap.add
+                 (Z.add offset (Z.of_int i))
+                 (byte (n - i - 1) value)
+                 map)
         in
         (fold 0 len value offset BiMap.empty, len)
 
@@ -127,7 +130,7 @@ end = struct
     | Layer { id; addr = addr'; bytes = bytes'; pop = pop'; over = over' } -> (
         match Expr.sub addr addr' with
         | Expr.Cst bv ->
-            let offset = Bv.value_of bv in
+            let offset = Bv.signed_of bv in
             let bytes, pop = split dir value offset in
             let cnt = ref (pop' + pop) in
             let bytes =
@@ -194,7 +197,7 @@ end = struct
       | Layer { addr = addr'; bytes; over; _ } -> (
           match Expr.sub addr addr' with
           | Expr.Cst bv ->
-              let offset = Bv.value_of bv in
+              let offset = Bv.signed_of bv in
               let map = ref map and map' = ref Z.zero in
               while !map <> Z.zero do
                 let x = Z.trailing_zeros !map in

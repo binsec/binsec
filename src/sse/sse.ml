@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,6 +21,8 @@
 
 open Sse_types
 open Sse_options
+
+exception Halt
 
 module String = struct
   include String
@@ -77,45 +79,84 @@ module type SSE_RUNNER = sig
   val start : unit -> unit
 end
 
-module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
-  module Stats = struct
-    type t = {
-      paths : int;
-      completed_paths : int;
-      unknown_paths : int;
-      asserts_failed : int;
-      branches : int;
-      max_depth : int;
-      instructions : int;
-    }
+module Env_make (S : functor (QS : QUERY_STATISTICS) -> STATE)
+(WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
+  type time = { mutable sec : float }
 
-    let empty =
-      {
-        paths = 1;
-        completed_paths = 0;
-        unknown_paths = 0;
-        asserts_failed = 0;
-        branches = 0;
-        max_depth = 0;
-        instructions = 0;
-      }
+  module Exploration_stats = struct
+    let paths = ref 1
 
-    let add_path s = { s with paths = s.paths + 1 }
+    let completed_paths = ref 0
 
-    let terminate_path s = { s with completed_paths = s.completed_paths + 1 }
+    let unknown_paths = ref 0
 
-    let add_unknown_path s = { s with unknown_paths = s.unknown_paths + 1 }
+    let total_asserts = ref 0
 
-    let add_assert_failed s = { s with asserts_failed = s.asserts_failed + 1 }
+    let failed_asserts = ref 0
 
-    let add_branch s = { s with branches = s.branches + 1 }
+    let branches = ref 0
 
-    let update_depth s d =
-      if s.max_depth < d then { s with max_depth = d } else s
+    let max_depth = ref 0
 
-    let add_instruction s = { s with instructions = s.instructions + 1 }
+    let instructions = ref 0
 
-    let pp ppf s =
+    let unique_insts = ref 0
+
+    let init_time = { sec = Unix.gettimeofday () }
+
+    let _reset () =
+      paths := 1;
+      completed_paths := 0;
+      unknown_paths := 0;
+      total_asserts := 0;
+      failed_asserts := 0;
+      branches := 0;
+      max_depth := 0;
+      instructions := 0;
+      unique_insts := 0;
+      init_time.sec <- Unix.gettimeofday ()
+
+    let time () = Unix.gettimeofday () -. init_time.sec
+
+    let get_time = time
+
+    let get_paths () = !paths
+
+    let get_completed_paths () = !completed_paths
+
+    let get_unknown_paths () = !unknown_paths
+
+    let get_total_asserts () = !total_asserts
+
+    let get_failed_asserts () = !failed_asserts
+
+    let get_branches () = !branches
+
+    let get_max_depth () = !max_depth
+
+    let get_instructions () = !instructions
+
+    let get_unique_insts () = !unique_insts
+
+    let add_path () = incr paths
+
+    let terminate_path () = incr completed_paths
+
+    let interrupt_path () = incr unknown_paths
+
+    let add_assert () = incr total_asserts
+
+    let add_failed_assert () = incr failed_asserts
+
+    let add_branch () = incr branches
+
+    let update_depth d = if !max_depth < d then max_depth := d
+
+    let add_instruction () = incr instructions
+
+    let add_unique_inst () = incr unique_insts
+
+    let pp ppf () =
       Format.fprintf ppf
         "@[<v 0>@[<h>total paths                      %d@]@,\
          @[<h>completed/cut paths              %d@]@,\
@@ -126,46 +167,168 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
          @[<h>max path depth                   %d@]@,\
          @[<h>visited instructions (unrolled)  %d@]@,\
          @]"
-        s.paths s.completed_paths
-        (s.paths - s.completed_paths - s.unknown_paths)
-        s.unknown_paths s.asserts_failed s.branches s.max_depth s.instructions
+        !paths !completed_paths
+        (!paths - !completed_paths - !unknown_paths)
+        !unknown_paths !failed_asserts !branches !max_depth !instructions
 
-    module R = struct
-      let value = ref empty
-
-      let add_path () = value := add_path !value
-
-      let terminate_path () = value := terminate_path !value
-
-      let add_unknown_path () = value := add_unknown_path !value
-
-      let add_assert_failed () = value := add_assert_failed !value
-
-      let add_branch () = value := add_branch !value
-
-      let update_depth d = value := update_depth !value d
-
-      let add_instruction () = value := add_instruction !value
-
-      let pp ppf () = pp ppf !value
-    end
-
-    include R
+    let _to_toml () =
+      Toml.Min.of_key_values
+        [
+          (Toml.Min.key "paths", Toml.Types.TInt !paths);
+          (Toml.Min.key "completed_paths", Toml.Types.TInt !completed_paths);
+          (Toml.Min.key "unknown_paths", Toml.Types.TInt !unknown_paths);
+          (Toml.Min.key "total_asserts", Toml.Types.TInt !total_asserts);
+          (Toml.Min.key "failed_asserts", Toml.Types.TInt !failed_asserts);
+          (Toml.Min.key "branches", Toml.Types.TInt !branches);
+          (Toml.Min.key "max_depth", Toml.Types.TInt !max_depth);
+          (Toml.Min.key "instructions", Toml.Types.TInt !instructions);
+          (Toml.Min.key "unique_insts", Toml.Types.TInt !unique_insts);
+        ]
   end
 
-  module State = S
+  module Query_stats = struct
+    module Preprocess = struct
+      let sat = ref 0
+
+      let unsat = ref 0
+
+      let const = ref 0
+
+      let get_sat () = !sat
+
+      let get_unsat () = !unsat
+
+      let get_const () = !const
+
+      let total () = !sat + !unsat + !const
+
+      let incr_sat () = incr sat
+
+      let incr_unsat () = incr unsat
+
+      let incr_const () = incr const
+
+      let reset () =
+        sat := 0;
+        unsat := 0;
+        const := 0
+
+      let pp ppf () =
+        let open Format in
+        fprintf ppf
+          "@[<v 2>@[<h>Preprocessing simplifications@]@,\
+           @[<h>total          %d@]@,\
+           @[<h>sat            %d@]@,\
+           @[<h>unsat          %d@]@,\
+           @[<h>constant enum  %d@]@]" (total ()) !sat !unsat !const
+
+      let to_toml () =
+        Toml.Min.of_key_values
+          [
+            (Toml.Min.key "sat", Toml.Types.TInt !sat);
+            (Toml.Min.key "unsat", Toml.Types.TInt !unsat);
+            (Toml.Min.key "const", Toml.Types.TInt !const);
+          ]
+    end
+
+    module Solver = struct
+      let sat = ref 0
+
+      let unsat = ref 0
+
+      let err = ref 0
+
+      let get_sat () = !sat
+
+      let get_unsat () = !unsat
+
+      let get_err () = !err
+
+      let incr_sat () = incr sat
+
+      let incr_unsat () = incr unsat
+
+      let incr_err () = incr err
+
+      let total_time = { sec = 0. }
+
+      let timer = { sec = 0. }
+
+      let running = ref false
+
+      let reset () =
+        sat := 0;
+        unsat := 0;
+        err := 0;
+        total_time.sec <- 0.;
+        running := false
+
+      let start_timer () =
+        timer.sec <- Unix.gettimeofday ();
+        running := true
+
+      let stop_timer () =
+        running := false;
+        let elapsed = Unix.gettimeofday () -. timer.sec in
+        total_time.sec <- total_time.sec +. elapsed
+
+      let total () = !sat + !unsat + !err
+
+      let total_time () =
+        if !running then
+          let elapsed = Unix.gettimeofday () -. timer.sec in
+          total_time.sec +. elapsed
+        else total_time.sec
+
+      let get_time = total_time
+
+      let pp ppf () =
+        let open Format in
+        let time = total_time () and queries = total () in
+        fprintf ppf
+          "@[<v 2>@[<h>Satisfiability queries@]@,\
+           @[<h>total          %d@]@,\
+           @[<h>sat            %d@]@,\
+           @[<h>unsat          %d@]@,\
+           @[<h>unknown        %d@]@,\
+           @[<h>time           %.2f@]@,\
+           @[<h>average        %.2f@]@]" (total ()) !sat !unsat !err time
+          (time /. float queries)
+
+      let to_toml () =
+        Toml.Min.of_key_values
+          [
+            (Toml.Min.key "sat", Toml.Types.TInt !sat);
+            (Toml.Min.key "unsat", Toml.Types.TInt !unsat);
+            (Toml.Min.key "err", Toml.Types.TInt !err);
+            (Toml.Min.key "time", Toml.Types.TFloat (total_time ()));
+          ]
+    end
+
+    let _reset () =
+      Preprocess.reset ();
+      Solver.reset ()
+
+    let pp ppf () =
+      let open Format in
+      fprintf ppf "@[<v 0>%a@,@,%a@,@]" Preprocess.pp () Solver.pp ()
+  end
+
+  module Screen = Sse_screen.Make (Exploration_stats) (Query_stats)
+  module State = S (Query_stats)
   module Path_state = Path_state (State)
   module W = WF (Path_state)
 
   let assertion_failure session ps =
     Logger.error "@[<v 2> Assertion failed %@ %a@ %a@]" Path_state.pp_loc ps
       State.pp session;
-    Stats.add_assert_failed ()
+    Exploration_stats.add_failed_assert ()
 
   module Env = struct
     type p = RX of { base : Virtual_address.t; content : Loader_buf.t } | RWX
 
     type t = {
+      mutable client : Subprocess.t option;
       mutable xcode : p Imap.t;
       mutable entrypoint : Virtual_address.t;
       mutable prehook : Dhunk.t;
@@ -179,6 +342,7 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
       reach :
         (Directive.Count.t * Dba.Expr.t * Directive.Action.t list) Queue.t
         Virtual_address.Htbl.t;
+      mutable reach_all : bool;
       enumerate : (int * Dba.Expr.t) Queue.t Virtual_address.Htbl.t;
       enumerations : Bitvector.t list Etbl.t Virtual_address.Htbl.t;
     }
@@ -191,36 +355,46 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
           (fun (sum, xcode) s ->
             if Loader.Section.has_flag Loader_types.Exec s then
               let { Loader_types.virt = pos; _ } = Loader.Section.pos s in
-              let { Loader_types.virt; _ } = Loader.Section.size s in
-              let p =
+              let { Loader_types.virt = size; _ } = Loader.Section.size s in
+              let virt, p =
                 if Loader.Section.has_flag Loader_types.Write s then
-                  if transient then RWX
-                  else (
-                    Logger.warning
-                      "Section %S [%a, %d] has both Write and Execute flags.@ \
-                       Self-modifying code is disabled and writes will be \
-                       ignored.@ Use '-sse-self-written-enum N' to enable \
-                       symbolic reasoning up to 'N - 1' forks."
-                      (Loader.Section.name s) Virtual_address.pp
-                      (Virtual_address.create pos)
-                      virt;
+                  ( 0,
+                    if transient then (
+                      Logger.debug ~level:4
+                        "Section %S [%a, 0x%x] has both Write and Execute \
+                         flags."
+                        (Loader.Section.name s) Virtual_address.pp
+                        (Virtual_address.create pos)
+                        size;
+                      RWX)
+                    else (
+                      Logger.warning
+                        "Section %S [%a, 0x%x] has both Write and Execute \
+                         flags.@ Self-modifying code is disabled and writes \
+                         will be ignored.@ Use '-sse-self-written-enum N' to \
+                         enable symbolic reasoning up to 'N - 1' forks."
+                        (Loader.Section.name s) Virtual_address.pp
+                        (Virtual_address.create pos)
+                        size;
+                      RX
+                        {
+                          base = Virtual_address.create pos;
+                          content = Loader.Img.content img s;
+                        }) )
+                else
+                  ( size,
                     RX
                       {
                         base = Virtual_address.create pos;
                         content = Loader.Img.content img s;
-                      })
-                else
-                  RX
-                    {
-                      base = Virtual_address.create pos;
-                      content = Loader.Img.content img s;
-                    }
+                      } )
               in
-              (sum + virt, Imap.add ~base:(Z.of_int pos) virt p xcode)
+              (sum + virt, Imap.add ~base:(Z.of_int pos) size p xcode)
             else (sum, xcode))
           (0, Imap.empty) (Loader.Img.sections img)
       in
       {
+        client = None;
         xcode;
         entrypoint;
         prehook = Dhunk.goto entrypoint;
@@ -232,6 +406,7 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
         assume = Virtual_address.Htbl.create 7;
         dyn_assert = Virtual_address.Htbl.create 7;
         reach = Virtual_address.Htbl.create 7;
+        reach_all = false;
         enumerate = Virtual_address.Htbl.create 7;
         enumerations = Virtual_address.Htbl.create 7;
       }
@@ -290,7 +465,7 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
     let choose e =
       let rec pick_one w =
         match W.pop w with
-        | path_state, worklist when Path_state.may_lead_to_goal path_state ->
+        | path_state, worklist when Path_state.is_depth_ok path_state ->
             Logger.debug "Selecting path #%d (among %d)"
               (Path_state.id path_state) (W.length w);
             e.worklist <- worklist;
@@ -301,7 +476,7 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
             pick_one worklist
         | exception Not_found ->
             Logger.info "Empty path worklist: halting ...";
-            raise Not_found
+            raise Halt
       in
       pick_one e.worklist
 
@@ -338,18 +513,22 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
               do_pick ~first ~second)
 
     let add_if_good e path_state =
-      if Path_state.may_lead_to_goal path_state then add_path e path_state
-      else Logger.info "Goal unreachable from@ %a" Path_state.pp_loc path_state
+      if Path_state.is_depth_ok path_state then add_path e path_state
+      else
+        Logger.warning "@[<hov>Cut (max depth) @@ %a@]" Path_state.pp_loc
+          path_state
   end
 
-  let halt e =
+  let halt (e : Env.t) =
+    Screen.release ();
     Logger.info
       "@[<v 0>@[<v 2>SMT queries@,\
        %a@]@,\
        @[<v 2>Exploration@,\
        %a@]@[<h>visited instructions (static)    %d@]@,\
        @]"
-      State.pp_stats () Stats.pp () (C.nb_vertex e.Env.rocfg);
+      Query_stats.pp () Exploration_stats.pp ()
+      (C.nb_vertex e.rocfg + Virtual_address.Htbl.length e.wcfg);
     if Dot_filename_out.is_set () then (
       let filename = Dot_filename_out.get () in
       Logger.info "Outputting CFG in %s" filename;
@@ -408,9 +587,10 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
           State.assign var.name
             (Dba_utils.Expr.complement nondet ~hi ~lo var)
             (State.fresh "bs_unknown" size ss)
-      | Dba.LValue.Store (size, dir, addr) ->
-          let nondet = Dba.Expr.var "bs_unknown" (8 * size) in
-          State.write ~addr nondet dir (State.fresh "bs_unknown" size ss)
+      | Dba.LValue.Store (bytesize, dir, addr) ->
+          let bitsize = 8 * bytesize in
+          let nondet = Dba.Expr.var "bs_unknown" bitsize in
+          State.write ~addr nondet dir (State.fresh "bs_unknown" bitsize ss)
 
     let nondet ~lvalue ps =
       (* generate the logical constraint, add it to the path predicate,
@@ -421,11 +601,11 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
          @@ havoc ~lvalue (Path_state.symbolic_state ps)
 
     let ite ~condition ~jump_target ~local_target e ps =
-      Stats.add_branch ();
+      Exploration_stats.add_branch ();
       let addr = Path_state.virtual_address ps in
       match State.test condition (Path_state.symbolic_state ps) with
       | exception Unknown ->
-          Stats.add_unknown_path ();
+          Exploration_stats.interrupt_path ();
           Env.pick_path e
       | True symbolic_state ->
           let consequent =
@@ -449,29 +629,36 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
             Path_state.set_block_index local_target
               (Path_state.set_symbolic_state symbolic_state' ps)
           in
-          Stats.add_path ();
+          Exploration_stats.add_path ();
           Env.pick_alternative addr ?consequent ~alternative e
 
     let dynamic_jump ~jump_expr e ps =
-      Stats.add_branch ();
+      Exploration_stats.add_branch ();
       let n = JumpEnumDepth.get () in
       match State.split_on jump_expr ~n (Path_state.symbolic_state ps) with
       | [] | (exception Unknown) ->
-          Stats.add_unknown_path ();
+          Exploration_stats.interrupt_path ();
           Env.pick_path e
       | x :: bx ->
           let handle f (bv, symbolic_state) =
             Logger.debug ~level:4 "@[<hov>Dynamic jump@ %a@ could lead to@ %a@]"
               Path_state.pp_loc ps Bitvector.pp_hex bv;
-            let ps = f ps in
-            let addr = Virtual_address.of_bitvector bv in
-            Env.add_if_good e
-              (goto (Path_state.set_symbolic_state symbolic_state ps) addr)
+            try
+              let addr = Virtual_address.of_bitvector bv in
+              let ps = f ps in
+              Env.add_if_good e
+                (goto (Path_state.set_symbolic_state symbolic_state ps) addr)
+            with Virtual_address.Non_canonical_form ->
+              Logger.warning
+                "@[<hov>Jump@ %a@ could have led to invalid address %a;@ \
+                 skipping@]"
+                Path_state.pp_loc ps Bitvector.pp_hex bv
           in
+
           handle Fun.id x;
           List.iter
             (handle (fun ps ->
-                 Stats.add_path ();
+                 Exploration_stats.add_path ();
                  Path_state.branch ps))
             bx;
           Env.pick_path e
@@ -482,16 +669,17 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
       Path_state.set_block_index idx ps
 
     let assertion cond idx e ps =
+      Exploration_stats.add_assert ();
       match State.test cond (Path_state.symbolic_state ps) with
       | exception Unknown ->
-          Stats.add_unknown_path ();
+          Exploration_stats.interrupt_path ();
           Env.pick_path e
       | True symbolic_state ->
           Path_state.set_block_index idx
             (Path_state.set_symbolic_state symbolic_state ps)
       | False symbolic_state ->
           assertion_failure symbolic_state ps;
-          Stats.terminate_path ();
+          Exploration_stats.terminate_path ();
           Env.pick_path e
       | Both { t = symbolic_state; f = symbolic_state' } ->
           assertion_failure symbolic_state' ps;
@@ -501,12 +689,12 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
     let assumption cond idx e ps =
       match State.assume cond (Path_state.symbolic_state ps) with
       | exception Unknown ->
-          Stats.add_unknown_path ();
+          Exploration_stats.interrupt_path ();
           Env.pick_path e
       | None ->
           Logger.info "@[<h>Unsatifiable assumption %@ %a@]" Path_state.pp_loc
             ps;
-          Stats.terminate_path ();
+          Exploration_stats.interrupt_path ();
           Env.pick_path e
       | Some symbolic_state ->
           Path_state.set_block_index idx
@@ -525,21 +713,21 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
           match static_jump ~jump_target ps with
           | None ->
               (* This jump has been forbidden *)
-              Stats.terminate_path ();
+              Exploration_stats.interrupt_path ();
               Env.pick_path e
           | Some local -> local)
       | Dba.Instr.If (condition, jump_target, local_target) ->
           ite ~condition ~jump_target ~local_target e ps
       | Dba.Instr.DJump (je, _) -> dynamic_jump ~jump_expr:je e ps
       | Dba.Instr.Undef (_, idx) as instruction -> skip instruction idx ps
-      | Dba.Instr.Stop (Some (Dba.Unsupported _)) ->
+      | Dba.Instr.Stop (Some (Dba.Unsupported _ | Dba.KO)) ->
           (* Discard current path, choose a new one *)
-          Logger.warning "@[<hov>Cut @@ %a@]" Path_state.pp_loc ps;
-          Stats.add_unknown_path ();
+          Logger.warning "@[<hov>Cut (error) @@ %a@]" Path_state.pp_loc ps;
+          Exploration_stats.interrupt_path ();
           Env.pick_path e
       | Dba.Instr.Stop _ ->
           (* Discard current path, choose a new one *)
-          Stats.terminate_path ();
+          Exploration_stats.terminate_path ();
           Env.pick_path e
       | Dba.Instr.Assert (condition, idx) -> assertion condition idx e ps
       | Dba.Instr.Assume (condition, idx) -> assumption condition idx e ps
@@ -573,11 +761,14 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
           Logger.debug "Assume %a %@ %a" Dba_printer.Ascii.pp_bl_term assumption
             Virtual_address.pp vaddr;
           match State.assume assumption (Path_state.symbolic_state ps) with
+          | exception Unknown ->
+              Exploration_stats.interrupt_path ();
+              None
           | None ->
               Logger.result
                 "@[<h>Directive :: unsatifiable assumption for path %d %@ %a@]"
                 (Path_state.id ps) Virtual_address.pp vaddr;
-              Stats.terminate_path ();
+              Exploration_stats.interrupt_path ();
               None
           | Some symbolic_state ->
               Some (Path_state.set_symbolic_state symbolic_state ps))
@@ -585,6 +776,7 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
       match Virtual_address.Htbl.find e.Env.dyn_assert vaddr with
       | exception Not_found -> Some ps
       | assertions -> (
+          Exploration_stats.add_assert ();
           let assertions =
             List.fold_left
               (fun e a -> Dba.Expr.logand e a)
@@ -594,13 +786,13 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
             Virtual_address.pp vaddr;
           match State.test assertions (Path_state.symbolic_state ps) with
           | exception Unknown ->
-              Stats.add_unknown_path ();
+              Exploration_stats.interrupt_path ();
               None
           | True symbolic_state ->
               Some (Path_state.set_symbolic_state symbolic_state ps)
           | False symbolic_state ->
               assertion_failure symbolic_state ps;
-              Stats.terminate_path ();
+              Exploration_stats.terminate_path ();
               None
           | Both { t = symbolic_state; f = symbolic_state' } ->
               assertion_failure symbolic_state' ps;
@@ -614,6 +806,13 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
             (fun ((k, guard, actions) as r) ->
               Logger.debug "Reach";
               match State.assume guard (Path_state.symbolic_state ps) with
+              | exception Unknown ->
+                  Logger.warning
+                    "@[<h>Directive :: path %d reached address %a with unknown \
+                     condition (%a to go)@]"
+                    (Path_state.id ps) Virtual_address.pp vaddr
+                    Directive.Count.pp k;
+                  Queue.add r reachs'
               | None ->
                   Logger.debug
                     "@[<h>Directive :: path %d reached address %a with unsat \
@@ -657,7 +856,8 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
                             (pp_value_as format) bv
                       | Directive.Action.Print_stream name ->
                           Logger.result "@[<v 0>Ascii stream %s : %S@]" name
-                            (State.as_ascii name symbolic_state))
+                            (try State.as_ascii name symbolic_state
+                             with Not_found -> ""))
                     actions;
                   match k' with
                   | Directive.Count.Count 0 -> ()
@@ -720,10 +920,16 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
                  (List.hd cuts) (List.tl cuts))
           in
           match State.assume guard (Path_state.symbolic_state ps) with
+          | exception Unknown ->
+              Logger.warning
+                "@[<h>Directive :: cut %@ %a with unknown condition@]"
+                Virtual_address.pp vaddr;
+              Exploration_stats.interrupt_path ();
+              None
           | None ->
               Logger.result "@[<h>Directive :: cut path %d %@ %a@]"
                 (Path_state.id ps) Virtual_address.pp vaddr;
-              Stats.terminate_path ();
+              Exploration_stats.terminate_path ();
               None
           | Some symbolic_state ->
               Logger.debug "@[<h>Directive :: cut %@ %a with unsat condition@]"
@@ -739,7 +945,8 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
               handle_reach vaddr e ps;
               handle_enumerate vaddr e ps;
               if
-                Virtual_address.Htbl.length e.Env.reach = 0
+                (not e.Env.reach_all)
+                && Virtual_address.Htbl.length e.Env.reach = 0
                 && Virtual_address.Htbl.length e.Env.enumerate = 0
               then halt e
               else
@@ -759,7 +966,7 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
                 "@[<hov>Jump@ %a@ could have led to invalid address %a;@ \
                  skipping@]"
                 Path_state.pp_loc ps Virtual_address.pp vaddr;
-              Stats.terminate_path ();
+              Exploration_stats.interrupt_path ();
               loop_aux (Env.pick_path e)
           | RX { base; content } ->
               let reader =
@@ -768,6 +975,7 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
                   content
               in
               let i = fst (Disasm_core.decode_from reader vaddr) in
+              Exploration_stats.add_unique_inst ();
               C.add_inst e.rocfg vaddr i;
               (* C.add_edge_a e.Env.rocfg (Path_state.virtual_address ps) vaddr; *)
               let ps = Path_state.set_instruction i ps in
@@ -786,12 +994,12 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
           (Dba_utils.Expr.of_vaddr vaddr)
       in
       match State.split_on opcode ~n (Path_state.symbolic_state ps) with
-      | [] ->
-          Stats.add_unknown_path ();
+      | [] | (exception Unknown) ->
+          Exploration_stats.interrupt_path ();
           loop_aux (Env.pick_path e)
       | x :: bx ->
           let fork ps =
-            Stats.add_path ();
+            Exploration_stats.add_path ();
             Path_state.branch ps
           in
           let handle f vaddr omap (bv, symbolic_state) =
@@ -801,6 +1009,7 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
               with Not_found ->
                 let reader = Lreader.of_bytes opcode in
                 let i = fst (Disasm_core.decode_from reader vaddr) in
+                Exploration_stats.add_unique_inst ();
                 let s = (Instruction.size i :> int) in
                 let omap =
                   if s = 0 then omap
@@ -833,11 +1042,14 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
     and eval vaddr e ps =
       Logger.debug ~level:2 "%@%a %a" Virtual_address.pp vaddr Mnemonic.pp
         (Instruction.mnemonic (Path_state.inst ps));
-      Stats.add_instruction ();
-      Stats.update_depth (Path_state.depth ps);
+      Exploration_stats.add_instruction ();
+      Exploration_stats.update_depth (Path_state.depth ps);
       loop_aux (Eval.go e ps)
     in
-    try loop_aux ps with Not_found -> halt e
+    try
+      Sys.catch_break true;
+      loop_aux ps
+    with Halt | Sys.Break -> halt e
 
   let interval_or_set_to_cond expr is =
     let open Parse_helpers.Initialization in
@@ -858,162 +1070,44 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
     let to_load = LoadSections.get () and ro_load = LoadROSections.get () in
     let addr_size = Kernel_options.Machine.word_size ()
     and img = Kernel_functions.get_img () in
-    let bitsize = Size.Bit.create addr_size in
-    let symbols = Vtbl.create 100 in
-    let module Symbol = struct
-      let rec fold_expr e =
-        match e with
-        | Dba.Expr.Cst _ -> e
-        | Dba.Expr.Var ({ name; info = Dba.VarTag.Symbol _; _ } as v) -> (
-            try Vtbl.find symbols v
-            with Not_found -> Logger.fatal "Can not resolve symbol %S" name)
-        | Dba.Expr.Var _ -> e
-        | Dba.Expr.Load (sz, en, e) ->
-            Dba.Expr.load (Size.Byte.create sz) en (fold_expr e)
-        | Dba.Expr.Unary (op, e) -> Dba.Expr.unary op (fold_expr e)
-        | Dba.Expr.Binary (op, a, b) ->
-            Dba.Expr.binary op (fold_expr a) (fold_expr b)
-        | Dba.Expr.Ite (c, t, e) ->
-            Dba.Expr.ite (fold_expr c) (fold_expr t) (fold_expr e)
-
-      let fold_lval loc =
-        match loc with
-        | Dba.LValue.Var _ -> loc
-        | Dba.LValue.Restrict _ -> loc
-        | Dba.LValue.Store (sz, en, e) ->
-            Dba.LValue.store (Size.Byte.create sz) en (fold_expr e)
-
-      let fold_action (a : Directive.Action.t) =
-        match a with
-        | Print_formula None -> a
-        | Print_formula (Some l) ->
-            Print_formula (Some (List.map (fun (e, n) -> (fold_expr e, n)) l))
-        | Print_model -> a
-        | Print_value (f, e) -> Print_value (f, fold_expr e)
-        | Print_stream _ -> a
-
-      let fold_directive g =
-        let loc = fold_expr (Directive.loc g) in
-        match Directive.directive g with
-        | Reach (Unlimited, g, a) ->
-            Directive.reach_all ~guard:(fold_expr g)
-              ~actions:(List.map fold_action a) ~loc ()
-        | Reach (Count n, g, a) ->
-            Directive.reach ~n ~guard:(fold_expr g)
-              ~actions:(List.map fold_action a) ~loc ()
-        | Enumerate (n, e) -> Directive.enumerate ~n (fold_expr e) ~loc ()
-        | Cut g -> Directive.cut ~guard:(fold_expr g) ~loc ()
-        | Assume e -> Directive.assume (fold_expr e) ~loc ()
-        | Assert e -> Directive.dynamic_assert (fold_expr e) ~loc ()
-        | Choice _ -> Directive.reloc loc g
-
-      let fold_dhunk (d : Dhunk.t) =
-        let open Dba.Instr in
-        Dhunk.mapi
-          ~f:(fun _ i ->
-            match i with
-            | Assert (e, i) -> _assert (fold_expr e) i
-            | Assign (loc, e, i) -> assign (fold_lval loc) (fold_expr e) i
-            | Assume (e, i) -> assume (fold_expr e) i
-            | SJump _ -> i
-            | DJump (e, tag) -> dynamic_jump ?tag (fold_expr e)
-            | If (e, t, i) -> ite (fold_expr e) t i
-            | Stop _ -> i
-            | NondetAssume (locs, e, i) ->
-                non_deterministic_assume (List.map fold_lval locs) (fold_expr e)
-                  i
-            | Nondet (loc, region, i) ->
-                non_deterministic ~region (fold_lval loc) i
-            | Undef (loc, i) -> undefined (fold_lval loc) i
-            | Malloc (loc, e, i) -> malloc (fold_lval loc) (fold_expr e) i
-            | Free (e, i) -> free (fold_expr e) i
-            | Print (l, i) ->
-                print
-                  (List.map
-                     (let open Dba in
-                     function Exp e -> Exp (fold_expr e) | Str s -> Str s)
-                     l)
-                  i)
-          d
-    end in
+    let symbols : (Dba.VarTag.attribute * Bitvector.t) String.Htbl.t =
+      String.Htbl.create 100
+    in
     (match img with
     | ELF img ->
         let open Loader_elf in
         Array.iter
           (fun sym ->
             match Symbol.header sym with
-            | { kind = SECTION; sh = SEC { name; addr; size; _ }; _ } ->
-                let var = Dba.Var.create name ~bitsize ~tag:(Symbol Value) in
-                let value =
-                  Dba.Expr.constant (Bitvector.of_int ~size:addr_size addr)
-                in
-                Vtbl.add symbols var value;
-                let var = Dba.Var.create name ~bitsize ~tag:(Symbol Size) in
-                let value =
-                  Dba.Expr.constant (Bitvector.of_int ~size:addr_size size)
-                in
-                Vtbl.add symbols var value;
-                let var = Dba.Var.create name ~bitsize ~tag:(Symbol Last) in
-                let value =
-                  Dba.Expr.constant
-                    (Bitvector.of_int ~size:addr_size (addr + size - 1))
-                in
-                Vtbl.add symbols var value
-            | { kind = FUNC | OBJECT; sh = SEC _; name; value; size; _ } ->
-                (let var = Dba.Var.create name ~bitsize ~tag:(Symbol Value) in
-                 let value =
-                   Dba.Expr.constant (Bitvector.of_int ~size:addr_size value)
-                 in
-                 Vtbl.add symbols var value);
-                (let var = Dba.Var.create name ~bitsize ~tag:(Symbol Size) in
-                 let value =
-                   Dba.Expr.constant (Bitvector.of_int ~size:addr_size size)
-                 in
-                 Vtbl.add symbols var value);
-                let var = Dba.Var.create name ~bitsize ~tag:(Symbol Last) in
-                let value =
-                  Dba.Expr.constant
-                    (Bitvector.of_int ~size:addr_size (value + size - 1))
-                in
-                Vtbl.add symbols var value
+            | { kind = SECTION; sh = SEC { name; addr; size; _ }; _ }
+            | { sh = SEC _; name; value = addr; size; _ } ->
+                String.Htbl.add symbols name
+                  (Value, Bitvector.of_int ~size:addr_size addr);
+                String.Htbl.add symbols name
+                  (Size, Bitvector.of_int ~size:addr_size size);
+                String.Htbl.add symbols name
+                  (Last, Bitvector.of_int ~size:addr_size (addr + size - 1))
             | _ -> ())
           (Img.symbols img)
-    | PE img ->
-        let open Loader_pe in
+    | _ ->
+        let open Loader in
         Array.iter
           (fun sym ->
-            let var =
-              Dba.Var.create (Symbol.name sym) ~bitsize ~tag:(Symbol Value)
-            in
-            let value =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:addr_size (Symbol.value sym))
-            in
-            Vtbl.add symbols var value)
+            String.Htbl.add symbols (Symbol.name sym)
+              (Value, Bitvector.of_int ~size:addr_size (Symbol.value sym)))
           (Img.symbols img);
         Array.iter
           (fun sec ->
             let name = Section.name sec in
-            let var = Dba.Var.create name ~bitsize ~tag:(Symbol Value) in
             let { Loader_types.virt = addr; _ } = Section.pos sec in
-            let value =
-              Dba.Expr.constant (Bitvector.of_int ~size:addr_size addr)
-            in
-            Vtbl.add symbols var value;
+            String.Htbl.add symbols name
+              (Value, Bitvector.of_int ~size:addr_size addr);
             let { Loader_types.virt = size; _ } = Section.size sec in
-            let var = Dba.Var.create name ~bitsize ~tag:(Symbol Size) in
-            let value =
-              Dba.Expr.constant (Bitvector.of_int ~size:addr_size size)
-            in
-            Vtbl.add symbols var value;
-            let var = Dba.Var.create name ~bitsize ~tag:(Symbol Last) in
-            let value =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:addr_size (addr + size - 1))
-            in
-            Vtbl.add symbols var value)
-          (Img.sections img)
-    | _ -> ());
+            String.Htbl.add symbols name
+              (Size, Bitvector.of_int ~size:addr_size size);
+            String.Htbl.add symbols name
+              (Last, Bitvector.of_int ~size:addr_size (addr + size - 1)))
+          (Img.sections img));
     let state =
       if (not ro_load) && String.Set.is_empty to_load then state
       else
@@ -1061,30 +1155,33 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
       let open Parse_helpers.Initialization in
       match init.operation with
       | Mem_load (addr, size) -> (
-          let addr = Symbol.fold_expr addr in
           match State.split_on addr ~n:2 state with
           | [ (bv, _) ] ->
               Logger.debug ~level:40
                 "the memory initializer address %a resolves to %a"
                 Dba_printer.Ascii.pp_bl_term addr Bitvector.pp bv;
               copy_from bv size state
-          | _ ->
+          | _ | (exception Unknown) ->
               Logger.fatal
                 "the memory initializer address %a does not resolve to a \
                  unique value"
                 Dba_printer.Ascii.pp_bl_term addr)
       | Universal lval -> (
-          let lval = Symbol.fold_lval lval in
           match Dba_types.LValue.name_of lval with
           | Some name ->
               let size = Dba.LValue.size_of lval in
               State.fresh name size state
           | None -> state)
-      | Assumption cond ->
-          let cond = Symbol.fold_expr cond in
-          Option.get (State.assume cond state)
+      | Assumption cond -> (
+          match State.assume cond state with
+          | exception Unknown ->
+              Logger.fatal "the initial assumption %a is unknown"
+                Dba_printer.Ascii.pp_bl_term cond
+          | None ->
+              Logger.fatal "the initial assumption %a is false"
+                Dba_printer.Ascii.pp_bl_term cond
+          | Some state -> state)
       | Assignment (lval, rval, name_opt) -> (
-          let lval = Symbol.fold_lval lval in
           match (rval, name_opt) with
           | Nondet, Some name ->
               let size = Dba.LValue.size_of lval in
@@ -1093,15 +1190,12 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
               Eval.assign ~lvalue:lval ~rvalue:evar state
           | Nondet, None -> Eval.havoc ~lvalue:lval state
           | Singleton rv, Some name ->
-              let rv = Symbol.fold_expr rv in
               let bitsize = Size.Bit.create (Dba.LValue.size_of lval) in
               let var = Dba.LValue.var ~bitsize name in
               let evar = Dba.LValue.to_expr var in
               Eval.assign ~lvalue:var ~rvalue:rv state
               |> Eval.assign ~lvalue:lval ~rvalue:evar
-          | Singleton rv, None ->
-              let rv = Symbol.fold_expr rv in
-              Eval.assign ~lvalue:lval ~rvalue:rv state
+          | Singleton rv, None -> Eval.assign ~lvalue:lval ~rvalue:rv state
           | x, Some name ->
               let size = Dba.LValue.size_of lval in
               let evar = Dba.Expr.var name size in
@@ -1194,8 +1288,8 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
                         let base = Bitvector.value_of addr in
                         if
                           (hdr.kind = RELA || hdr.kind = REL)
-                          && Section.name (Array.get sections hdr.Shdr.info)
-                             = ".got.plt"
+                          && String_utils.start_with ~prefix:".got"
+                               (Section.name (Array.get sections hdr.Shdr.info))
                         then (
                           Array.iter
                             (fun Rel.
@@ -1206,9 +1300,6 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
                                      addend;
                                    } ->
                               let addend = Option.value ~default:0 addend in
-                              let var =
-                                Dba.Var.create name ~bitsize ~tag:(Symbol Value)
-                              in
                               let reader =
                                 Lreader.create
                                   ~at:(Z.to_int base + offset - pos)
@@ -1222,7 +1313,7 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
                               Logger.debug ~level:4 "symbol %S resolved at %a"
                                 name Virtual_address.pp
                                 (Virtual_address.of_bitvector value);
-                              Vtbl.add symbols var (Dba.Expr.constant value))
+                              String.Htbl.add symbols name (Value, value))
                             (Rel.read img hdr);
                           (vmap, xcode, state))
                         else if
@@ -1238,15 +1329,15 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
                                   if transient then Env.RWX
                                   else (
                                     Logger.warning
-                                      "Section %S [%a, %d] has both Write and \
-                                       Execute flags.@ Self-modifying code is \
-                                       disabled and writes will be ignored.@ \
-                                       Use '-sse-self-written-enum N' to \
-                                       enable symbolic reasoning up to 'N - 1' \
-                                       forks."
+                                      "Section %S [%a, 0x%x] has both Write \
+                                       and Execute flags.@ Self-modifying code \
+                                       is disabled and writes will be \
+                                       ignored.@ Use '-sse-self-written-enum \
+                                       N' to enable symbolic reasoning up to \
+                                       'N - 1' forks."
                                       (Section.name s) Virtual_address.pp
                                       (Virtual_address.create pos)
-                                      virt;
+                                      size;
                                     Env.RX
                                       {
                                         base = Virtual_address.create pos;
@@ -1301,18 +1392,37 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
             let tbl = String.Htbl.create 128;;
 
             List.iter
-              (fun (name, var) -> String.Htbl.add tbl name var)
+              (fun (name, var) ->
+                String.Htbl.add tbl (String.lowercase_ascii name) var)
               (Isa_helper.get_defs ())
 
             let lookup name size =
-              try String.Htbl.find tbl name
+              let ci_name = String.lowercase_ascii name in
+              try Basic_types.String.Htbl.find tbl ci_name
               with Not_found ->
                 if size = -1 then
                   Logger.fatal "size is missing for variable %s" name;
                 let bitsize = Size.Bit.create size in
                 let var = Dba.LValue.var ~bitsize name in
-                String.Htbl.add tbl name var;
+                String.Htbl.add tbl ci_name var;
                 var
+
+            let tbl = String.Htbl.create 128
+
+            let lookup_symbol name (attr : Dba.VarTag.attribute) =
+              try List.assoc attr (String.Htbl.find_all tbl name)
+              with Not_found ->
+                let value =
+                  lazy
+                    (try List.assoc attr (String.Htbl.find_all symbols name)
+                     with Not_found ->
+                       Logger.fatal "Can not resolve symbol <%s%a>" name
+                         Dba.VarTag.pp_attribute attr)
+                in
+                let tag = Dba.VarTag.Symbol (attr, value) in
+                let sym = Dba.Expr.var ~tag name wordsize in
+                String.Htbl.add tbl name (attr, sym);
+                sym
           end in
           let module P = Sse_parser.Make (M) in
           List.fold_left
@@ -1328,7 +1438,6 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
                 (fun state -> function
                   | Script.Init i -> set state i
                   | Script.Goal g -> (
-                      let g = Symbol.fold_directive g in
                       let loc = Directive.loc g in
                       match State.split_on loc ~n:2 state with
                       | [ (bv, _) ] ->
@@ -1339,16 +1448,14 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
                           let g = Directive.reloc addr g in
                           Env.add_directive e g;
                           state
-                      | _ ->
+                      | _ | (exception Unknown) ->
                           Logger.fatal
                             "the directive address %a does not resolve to a \
                              unique value"
                             Dba_printer.Ascii.pp_bl_term loc)
                   | Script.Stub (a, b) ->
-                      let b = Symbol.fold_dhunk b in
                       List.iter
                         (fun a ->
-                          let a = Symbol.fold_expr a in
                           match State.split_on a ~n:2 state with
                           | [ (bv, _) ] ->
                               Logger.debug ~level:40
@@ -1358,9 +1465,14 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
                                 "@[<v 2> replace address %a by@ %a@]"
                                 Dba_printer.Ascii.pp_bl_term a Dhunk.pp b;
                               let addr = Virtual_address.of_bitvector bv in
+                              let mnemonic =
+                                Mnemonic.supported a (fun ppf e ->
+                                    Format.fprintf ppf "stub for %a"
+                                      Dba_printer.Ascii.pp_bl_term e)
+                              in
                               C.add_inst e.rocfg addr
-                                (Instruction.of_dba_block addr b)
-                          | _ ->
+                                (Instruction.of_dba_block ~mnemonic addr b)
+                          | _ | (exception Unknown) ->
                               Logger.fatal
                                 "the stub address %a does not resolve to a \
                                  unique value"
@@ -1368,8 +1480,6 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
                         a;
                       state
                   | Script.Pragma (Start_from (a, prehook)) -> (
-                      let prehook = Symbol.fold_dhunk prehook in
-                      let a = Symbol.fold_expr a in
                       match State.split_on a ~n:2 state with
                       | [ (bv, _) ] ->
                           Logger.debug ~level:40
@@ -1378,13 +1488,12 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
                           e.entrypoint <- Virtual_address.of_bitvector bv;
                           e.prehook <- prehook;
                           state
-                      | _ ->
+                      | _ | (exception Unknown) ->
                           Logger.fatal
                             "the entrypoint address %a does not resolve to a \
                              unique value"
                             Dba_printer.Ascii.pp_bl_term a)
                   | Script.Pragma (Start_from_core prehook) ->
-                      let prehook = Symbol.fold_dhunk prehook in
                       from_core prehook state
                   | Script.Pragma (Load_sections names) ->
                       List.fold_left
@@ -1396,18 +1505,22 @@ module Env_make (S : STATE) (WF : WORKLIST_FACTORY) : SSE_RUNNER = struct
                             Bitvector.of_int ~size:addr_size
                               (Loader.Section.pos section).virt
                           and size = (Loader.Section.size section).virt in
-                          Logger.info "Load section %s (%a, %d)" name
+                          Logger.info "Load section %s (%a, %#x)" name
                             Bitvector.pp_hex_or_bin addr size;
                           State.memcpy ~addr size
                             (Loader.Img.content img section)
                             ss)
-                        state names)
+                        state names
+                  | Script.Pragma Reach_all ->
+                      e.Env.reach_all <- true;
+                      state)
                 state script)
             state files
     in
     state
 
   let do_sse ~filename =
+    Screen.init ();
     let level = 3 in
     Logger.debug ~level "Running SSE on %s" filename;
     let entrypoint = get_entry_point () in
@@ -1462,8 +1575,9 @@ let get_worklist () =
 
 let get_state () =
   if AlternativeEngine.get () then
-    (module Senv.State ((val Senv.get_solver_factory ())) : STATE)
-  else (module Sse_symbolic.State ((val Smt_solver.get_solver ())) : STATE)
+    (module Senv.State ((val Senv.get_solver_factory ())) : STATE_FACTORY)
+  else
+    (module Sse_symbolic.State ((val Smt_solver.get_solver ())) : STATE_FACTORY)
 
 let run () =
   if is_enabled () && Kernel_options.ExecFile.is_set () then

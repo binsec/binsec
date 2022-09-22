@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2021                                               */
+/*  Copyright (C) 2016-2022                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -47,7 +47,7 @@
 %token LSHIFT RSHIFTU RSHIFTS LROTATE RROTATE
 %token EXTU EXTS
 %token INFER SUPER
-%token MIN MAX
+%token MIN MAX BSWAP
 %token EQUAL NEQ LEU LES LTU LTS GEU GES GTU GTS
 %token LBRACE RBRACE LPAR RPAR LBRACKET RBRACKET RBRACKETS RBRACKETU
 %token ARROW ARROWINV STOP
@@ -537,6 +537,8 @@ expr:
     { Dba.Expr.ite (Dba.Expr.ult e1 e2) e1 e2 }
  | MAX LPAR e1=expr; COMMA e2=expr; RPAR
     { Dba.Expr.ite (Dba.Expr.ult e1 e2) e2 e1 }
+  | BSWAP e=expr;
+    { Dba_utils.Expr.bswap e }
 ;
 
 %inline bin_op:

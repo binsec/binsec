@@ -1,7 +1,8 @@
 # BBSSE Tutorial 1: Automatically find opaque predicates
 
 In this post, we will analyze the small binary named
-[**echo**](../../examples/bbsse/echo) in search of opaque predicates.
+[**echo**](../../examples/bbsse/echo) in search of opaque predicates.   
+The example can be found in [this directory](../../examples/bbsse).
 
 What are we looking for? In order to make reverse-engineering harder, people
 may introduce fake conditional jumps. We are especially looking for

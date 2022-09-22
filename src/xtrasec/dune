@@ -1,0 +1,17 @@
+(include_subdirs no)
+
+(library
+ (name dtrace)
+ (modules :standard)
+ (private_modules llvm_decoder)
+ (flags
+  (:standard -open Binsec))
+ (library_flags
+  (:standard -linkall))
+ (libraries
+  binsec
+  (select
+   llvm_decoder.ml
+   from
+   (llvm -> llvm_decoder.enabled.ml)
+   (!llvm -> llvm_decoder.disabled.ml))))

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,28 +19,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module type Solver = sig
-  type t
-
-  val open_session : unit -> t
-
-  val put : t -> Formula.entry -> unit
-
-  val check_sat : t -> Formula.status
-
-  val get_bv_value : t -> Formula.bv_term -> Bitvector.t
-
-  val get_ax_values : t -> Formula.ax_term -> (Bitvector.t * Bitvector.t) array
-
-  val close_session : t -> unit
-
-  val check_sat_and_close : t -> Formula.status
-
-  val query_stat : unit -> int
-
-  val time_stat : unit -> float
-end
-
 let solvers =
   let open Formula_options in
   [ Bitwuzla; Boolector; Z3; CVC4; Yices ]
@@ -49,7 +27,7 @@ let map =
   let open Formula_options in
   let open Smt_options in
   function
-  | Best | Bitwuzla_native -> assert false
+  | Auto | Bitwuzla_native -> assert false
   | Bitwuzla_smtlib -> Bitwuzla
   | Boolector_smtlib -> Boolector
   | Z3_smtlib -> Z3
@@ -60,20 +38,20 @@ let get_solver () =
   let open Formula_options in
   let open Smt_options in
   match SMTSolver.get () with
-  | (Best | Bitwuzla_native) when Smt_bitwuzla.available ->
-      (module Smt_bitwuzla : Solver)
-  | Best -> (
+  | (Auto | Bitwuzla_native) when Smt_bitwuzla.available ->
+      (module Smt_bitwuzla : Smt_sig.Solver)
+  | Auto -> (
       try
         let solver = List.find Prover.ping solvers in
         Logger.info "Found %a in the path." Prover.pp solver;
         Solver.set solver;
-        (module Smt_external.Solver : Solver)
+        (module Smt_external.Solver : Smt_sig.Solver)
       with Not_found -> Logger.fatal "No SMT solver found.")
   | Bitwuzla_native ->
       Logger.fatal "Native bitwuzla binding is required but not available."
   | solver when Prover.ping (map solver) ->
       Solver.set (map solver);
-      (module Smt_external.Solver : Solver)
+      (module Smt_external.Solver : Smt_sig.Solver)
   | solver ->
       Logger.fatal "%a is required but not available in path." Prover.pp
         (map solver)

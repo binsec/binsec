@@ -8,10 +8,10 @@ https://github.com/binsec/binsec.
 Dependencies can be automatically installed via
 [*opam*](https://opam.ocaml.org/doc/Install.html).  
 ```bash
-$ opam depext -i zarith
-$ opam install dune menhir ocamlgraph
+$ opam install dune menhir ocamlgraph zarith toml
 $ opam install bitwuzla # optional -- for native SMT solver binding
 $ opam install unisim_archisec # optional -- for x86-64, ARMv7 and ARMv8
+$ opem install curses # optional -- for real time summary window
 ```
 
 ##### System
@@ -21,12 +21,14 @@ $ opam install unisim_archisec # optional -- for x86-64, ARMv7 and ARMv8
 
 ##### OCaml
 
-- [dune >= 2.8](https://github.com/ocaml/dune)
+- [dune >= 3.0](https://github.com/ocaml/dune)
 - [menhir](https://gitlab.inria.fr/fpottier/menhir)
+- [toml](https://github.com/ocaml-toml/To.ml)
 - [ocamlgraph >= 1.8.5](https://github.com/backtracking/ocamlgraph)
 - [zarith >= 1.4](https://github.com/ocaml/Zarith)
 - *[unisim_archisec](https://github.com/binsec/unisim_archisec) (optional)*
 - *[bitwuzla](https://github.com/bitwuzla/ocaml-bitwuzla) (optional)*
+- *[curses](https://github.com/mbacarella/curses) (optional)*
 - [odoc](https://github.com/ocaml/odoc) (*documentation*)
 - [qcheck](https://github.com/c-cube/qcheck) (*test*)
 - [ounit2](https://github.com/gildor478/ounit) (*test*)

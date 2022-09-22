@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -131,8 +131,10 @@ module Mode : sig
   (** size in bits *)
 end
 
-module V32 : S
+(** Parameter for register module,
+    size is one of Mode.m32, Mode.m64 or Mode.m128 (Not yet supported) *)
+module type RegisterSize = sig
+  val size : Mode.t
+end
 
-module V64 : S
-
-module V128 : S
+module Register (M : RegisterSize) : S

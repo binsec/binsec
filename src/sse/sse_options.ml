@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -59,12 +59,6 @@ module Randomize = Builder.False (struct
   let name = "randomize"
 
   let doc = "randomize path selection"
-end)
-
-module AddressTraceFile = Builder.String_option (struct
-  let name = "address-trace-file"
-
-  let doc = "set file for adress trace export"
 end)
 
 module AvoidAddresses = Builder.String_set (struct

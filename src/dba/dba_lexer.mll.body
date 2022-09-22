@@ -104,6 +104,8 @@
     	   { INT (Z.of_string s) }
   | '{' space* (digit+ as hi) space* ".." space* (digit+ as lo) '}'
     	   { RANGE { Interval.hi=int_of_string hi; lo=int_of_string lo } }
+  | '{' space* (digit+ as b) space* '}'
+    	   { let hi = int_of_string b in RANGE { Interval.hi; lo=hi } }
   | bin | hex as s
            { INT (Z.of_string s) }
   | '"' ([^'"']* as s) '"'

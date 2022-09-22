@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -79,10 +79,9 @@ let of_generic_instruction address ginstr dba_block =
     (Binstream.of_nibbles ginstr.Generic.opcode)
     ginstr.Generic.mnemonic dba_block
 
-let of_dba_block address dba_block =
+let of_dba_block ?(mnemonic = Mnemonic.unsupported ()) address dba_block =
   let size = Size.Byte.create 0 in
   let opcode = Binstream.empty in
-  let mnemonic = Mnemonic.unsupported () in
   create address size opcode mnemonic dba_block
 
 let empty address =

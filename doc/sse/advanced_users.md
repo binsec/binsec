@@ -12,7 +12,7 @@ before you find the much-prized password.
 We first need to download the [challenge archive](https://crackmes.one/static/crackme/61ffb07c33c5d46c8bcbfc1d.zip) and extract its content.
 ```console
 $ wget  https://crackmes.one/static/crackme/61ffb07c33c5d46c8bcbfc1d.zip
-$ unzip unzip -P crackmes.one 61ffb07c33c5d46c8bcbfc1d.zip
+$ unzip -P crackmes.one 61ffb07c33c5d46c8bcbfc1d.zip
 ```
 
 ### Working with stripped binaries
@@ -26,12 +26,16 @@ set breakpoint pending on
 set env LD_BIND_NOW=1
 set env GLIBC_TUNABLES=glibc.cpu.hwcaps=-AVX2_Usable
 b __libc_start_main
-start
+run
 b *$rdi
 continue
 generate-core-file core.snapshot
 kill
 quit
+```
+Run the above script with the following command to generate core-dump:
+```
+$ gdb -x <script_name> --args ./hidden_password aaaaaaaaaaaaaaaaaaa
 ```
 
 ### `starting with` syntax

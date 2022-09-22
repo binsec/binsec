@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -125,7 +125,7 @@ module Ehdr = struct
     shstrndx : u16;
   }
 
-  let arch endianness = function
+  let arch endianness (mode : [ `x64 | `x32 ]) = function
     (* | 0x02 -> Machine.SPARC *)
     | 0x03 -> Machine.x86
     (* | 0x08 -> Machine.MIPS
@@ -140,12 +140,13 @@ module Ehdr = struct
     | 0x3e -> Machine.amd64
     | 0xb7 -> Machine.armv8 endianness
     (* | 0xcb -> Machine.XCORE *)
+    | 0xf3 -> Machine.riscv (mode :> [ `x128 | `x64 | `x32 ])
     | _ -> Machine.unknown
 
   let read_32 t ident =
     ensure t 36 "Program header truncated";
     let kind = ET.of_u16 (Read.u16 t) in
-    let machine = arch ident.E_ident.data (Read.u16 t) in
+    let machine = arch ident.E_ident.data ident.E_ident.kind (Read.u16 t) in
     let version = Read.u32 t in
     let entry = Read.u32 t in
     let phoff = Read.u32 t in
@@ -177,7 +178,7 @@ module Ehdr = struct
   let read_64 t ident =
     ensure t 48 "Program header truncated";
     let kind = ET.of_u16 (Read.u16 t) in
-    let machine = arch ident.E_ident.data (Read.u16 t) in
+    let machine = arch ident.E_ident.data ident.E_ident.kind (Read.u16 t) in
     let version = Read.u32 t in
     let entry = Read.u64 t in
     let phoff = Read.u64 t in
@@ -999,8 +1000,8 @@ end = struct
     Loader_buf.cursor ~at i.header.Ehdr.ident.E_ident.data i.buf
 
   let content i (s : Shdr.t) =
-    Bigarray.Array1.sub i.buf s.Shdr.offset
-      (if s.kind = Shdr.SHT.NOBITS then 0 else s.size)
+    if s.kind = Shdr.SHT.NOBITS then Bigarray.Array1.sub i.buf 0 0
+    else Bigarray.Array1.sub i.buf s.Shdr.offset s.size
 
   let pp ppf t =
     let e_class = t.header.Ehdr.ident.E_ident.kind in
@@ -1127,7 +1128,9 @@ module Rel = struct
       | _ -> invalid_format "Invalid ELF class"
     in
     let symbols = Array.get img.symtabs section.link in
-    Array.init (section.size / section.entsize) (fun _ -> read cursor symbols)
+    if Array.length symbols = 0 then [||]
+    else
+      Array.init (section.size / section.entsize) (fun _ -> read cursor symbols)
 end
 
 module R_386 = struct

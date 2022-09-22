@@ -1,8 +1,10 @@
 (include_subdirs no)
 
 (library
+ (public_name binsec.smt)
  (name smt)
  (modules :standard)
+ (modules_without_implementation smt_sig)
  (flags
   (:standard -open Binsec))
  (library_flags

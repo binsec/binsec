@@ -7,25 +7,7 @@
  (modules main)
  (flags
   (:standard -open Binsec))
- (libraries
-  binsec
-  se
-  bbsse
-  (select
-   amd64.manifest
-   from
-   (amd64decoder -> amd64.some.manifest)
-   (-> amd64.none.manifest))
-  (select
-   armv7.manifest
-   from
-   (armv7decoder -> armv7.some.manifest)
-   (-> armv7.none.manifest))
-  (select
-   armv8.manifest
-   from
-   (armv8decoder -> armv8.some.manifest)
-   (-> armv8.none.manifest))))
+ (libraries binsec se bbsse dtrace armv7decoder amd64decoder armv8decoder))
 
 (library
  (public_name binsec)
@@ -41,17 +23,7 @@
   (:standard -linkall))
  (flags
   (:standard -w -3))
- (libraries
-  str
-  bigarray
-  ocamlgraph
-  zarith
-  dune-site
-  (select
-   llvm_decoder.ml
-   from
-   (llvm -> llvm_decoder.llvm.ml)
-   (!llvm -> llvm_decoder.stubs.ml)))
+ (libraries str bigarray ocamlgraph zarith dune-site)
  (foreign_stubs
   (language c)
   (names :standard)))

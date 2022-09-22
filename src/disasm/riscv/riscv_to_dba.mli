@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,5 +19,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
-val decode : Lreader.t -> Virtual_address.t -> Instruction.Generic.t * Dhunk.t
-(** [decode r addr] decodes what is at address [addr] in reader [r]. *)
+val decode_32 :
+  Lreader.t -> Virtual_address.t -> Instruction.Generic.t * Dhunk.t
+(** [decode_32 r addr] decodes what is at address [addr] in reader [r]
+    using ISA RISC-V32I with standard extensions C and M *)
+
+val decode_64 :
+  Lreader.t -> Virtual_address.t -> Instruction.Generic.t * Dhunk.t
+(** [decode_64 r addr] decodes what is at address [addr] in reader [r]
+    using ISA RISC-V64I with standard extensions C and M *)

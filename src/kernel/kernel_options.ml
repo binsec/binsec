@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -99,7 +99,9 @@ module Machine = struct
         ("x86", Machine.x86);
         ("amd64", Machine.amd64);
         ("arm32", Machine.(armv7 LittleEndian));
+        ("aarch64", Machine.(armv8 LittleEndian));
         ("riscv", Machine.riscv `x32);
+        ("riscv64", Machine.riscv `x64);
         ("unknown", Machine.unknown);
       ]
 

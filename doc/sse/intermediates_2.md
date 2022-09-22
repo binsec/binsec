@@ -26,7 +26,7 @@ Using the [BINSEC docker](https://hub.docker.com/r/binsec/binsec) has two advant
 We first need to download the [challenge archive](https://crackmes.one/static/crackme/61c8deff33c5d413767ca0ea.zip) and extract its content.
 ```console
 $ wget  https://crackmes.one/static/crackme/61c8deff33c5d413767ca0ea.zip
-$ unzip unzip -P crackmes.one 61c8deff33c5d413767ca0ea.zip
+$ unzip -P crackmes.one 61c8deff33c5d413767ca0ea.zip
 ```
 
 ### (Some) reverse-engineering
@@ -187,7 +187,7 @@ It time to let GDB provide us with the actual code as if the binary was initiall
 
 ### Generate a Core Dump
 
-We will generate a core dump file with the following script.
+We will generate a core dump file with the following GDB script.
 ```
 set env LD_BIND_NOW=1
 set env GLIBC_TUNABLES=glibc.cpu.hwcaps=-AVX2_Usable
@@ -210,9 +210,9 @@ and start the program.
 Finally, we generate a core file named `core.snapshot` and quit GDB.
 Pretty easy right?
 
-We can automate this by passing the **command** file to GDB.
+We can automate this by passing the script to GDB with the following command:
 ```console
-$ gdb -x command ./trycrackme
+$ gdb -x <script_name> ./trycrackme
 ```
 
 ### Write up SSE script

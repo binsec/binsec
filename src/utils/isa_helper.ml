@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -370,39 +370,39 @@ module AMD64 = struct
 
   let info = Dba.VarTag.Flag
 
-  let cf = { Dba.name = "CF"; size = 1; info }
+  let cf = { Dba.name = "cf"; size = 1; info }
 
-  and pf = { Dba.name = "PF"; size = 1; info }
+  and pf = { Dba.name = "pf"; size = 1; info }
 
-  and af = { Dba.name = "AF"; size = 1; info }
+  and af = { Dba.name = "af"; size = 1; info }
 
-  and zf = { Dba.name = "ZF"; size = 1; info }
+  and zf = { Dba.name = "zf"; size = 1; info }
 
-  and sf = { Dba.name = "SF"; size = 1; info }
+  and sf = { Dba.name = "sf"; size = 1; info }
 
-  and tf = { Dba.name = "TF"; size = 1; info }
+  and tf = { Dba.name = "tf"; size = 1; info }
 
-  and if' = { Dba.name = "IF"; size = 1; info }
+  and if' = { Dba.name = "if"; size = 1; info }
 
-  and df = { Dba.name = "DF"; size = 1; info }
+  and df = { Dba.name = "df"; size = 1; info }
 
-  and of' = { Dba.name = "OF"; size = 1; info }
+  and of' = { Dba.name = "of"; size = 1; info }
 
-  and iopl = { Dba.name = "IOPL"; size = 2; info }
+  and iopl = { Dba.name = "iopl"; size = 2; info }
 
-  and nt = { Dba.name = "NT"; size = 1; info }
+  and nt = { Dba.name = "nt"; size = 1; info }
 
-  and rf = { Dba.name = "RF"; size = 1; info }
+  and rf = { Dba.name = "rf"; size = 1; info }
 
-  and vm = { Dba.name = "VM"; size = 1; info }
+  and vm = { Dba.name = "vm"; size = 1; info }
 
-  and ac = { Dba.name = "AC"; size = 1; info }
+  and ac = { Dba.name = "ac"; size = 1; info }
 
-  and vif' = { Dba.name = "VIF"; size = 1; info }
+  and vif' = { Dba.name = "vif"; size = 1; info }
 
-  and vip = { Dba.name = "VIP"; size = 1; info }
+  and vip = { Dba.name = "vip"; size = 1; info }
 
-  and id = { Dba.name = "ID"; size = 1; info }
+  and id = { Dba.name = "id"; size = 1; info }
 
   let defs =
     [
@@ -430,6 +430,14 @@ module AMD64 = struct
       ("esi", Dba.LValue.restrict rsi 0 31);
       ("esp", Dba.LValue.restrict rsp 0 31);
       ("ebp", Dba.LValue.restrict rbp 0 31);
+      ("r8d", Dba.LValue.restrict r8 0 31);
+      ("r9d", Dba.LValue.restrict r9 0 31);
+      ("r10d", Dba.LValue.restrict r10 0 31);
+      ("r11d", Dba.LValue.restrict r11 0 31);
+      ("r12d", Dba.LValue.restrict r12 0 31);
+      ("r13d", Dba.LValue.restrict r13 0 31);
+      ("r14d", Dba.LValue.restrict r14 0 31);
+      ("r15d", Dba.LValue.restrict r15 0 31);
       ("al", Dba.LValue.restrict rax 0 7);
       ("ah", Dba.LValue.restrict rax 8 15);
       ("ax", Dba.LValue.restrict rax 0 15);
@@ -466,39 +474,39 @@ module AMD64 = struct
       ("ymm13", Dba.LValue.v ymm13);
       ("ymm14", Dba.LValue.v ymm14);
       ("ymm15", Dba.LValue.v ymm15);
-      ("xmm0", Dba.LValue.restrict ymm0 0 128);
-      ("xmm1", Dba.LValue.restrict ymm1 0 128);
-      ("xmm2", Dba.LValue.restrict ymm2 0 128);
-      ("xmm3", Dba.LValue.restrict ymm3 0 128);
-      ("xmm4", Dba.LValue.restrict ymm4 0 128);
-      ("xmm5", Dba.LValue.restrict ymm5 0 128);
-      ("xmm6", Dba.LValue.restrict ymm6 0 128);
-      ("xmm7", Dba.LValue.restrict ymm7 0 128);
-      ("xmm8", Dba.LValue.restrict ymm8 0 128);
-      ("xmm9", Dba.LValue.restrict ymm9 0 128);
-      ("xmm10", Dba.LValue.restrict ymm10 0 128);
-      ("xmm11", Dba.LValue.restrict ymm11 0 128);
-      ("xmm12", Dba.LValue.restrict ymm12 0 128);
-      ("xmm13", Dba.LValue.restrict ymm13 0 128);
-      ("xmm14", Dba.LValue.restrict ymm14 0 128);
-      ("xmm15", Dba.LValue.restrict ymm15 0 128);
-      ("CF", Dba.LValue.v cf);
-      ("PF", Dba.LValue.v pf);
-      ("AF", Dba.LValue.v af);
-      ("ZF", Dba.LValue.v zf);
-      ("SF", Dba.LValue.v sf);
-      ("TF", Dba.LValue.v tf);
-      ("IF", Dba.LValue.v if');
-      ("DF", Dba.LValue.v df);
-      ("OF", Dba.LValue.v of');
-      ("IOPL", Dba.LValue.v iopl);
-      ("NT", Dba.LValue.v nt);
-      ("RF", Dba.LValue.v rf);
-      ("VM", Dba.LValue.v vm);
-      ("AC", Dba.LValue.v ac);
-      ("VIF", Dba.LValue.v vif');
-      ("VIP", Dba.LValue.v vip);
-      ("ID", Dba.LValue.v id);
+      ("xmm0", Dba.LValue.restrict ymm0 0 127);
+      ("xmm1", Dba.LValue.restrict ymm1 0 127);
+      ("xmm2", Dba.LValue.restrict ymm2 0 127);
+      ("xmm3", Dba.LValue.restrict ymm3 0 127);
+      ("xmm4", Dba.LValue.restrict ymm4 0 127);
+      ("xmm5", Dba.LValue.restrict ymm5 0 127);
+      ("xmm6", Dba.LValue.restrict ymm6 0 127);
+      ("xmm7", Dba.LValue.restrict ymm7 0 127);
+      ("xmm8", Dba.LValue.restrict ymm8 0 127);
+      ("xmm9", Dba.LValue.restrict ymm9 0 127);
+      ("xmm10", Dba.LValue.restrict ymm10 0 127);
+      ("xmm11", Dba.LValue.restrict ymm11 0 127);
+      ("xmm12", Dba.LValue.restrict ymm12 0 127);
+      ("xmm13", Dba.LValue.restrict ymm13 0 127);
+      ("xmm14", Dba.LValue.restrict ymm14 0 127);
+      ("xmm15", Dba.LValue.restrict ymm15 0 127);
+      ("cf", Dba.LValue.v cf);
+      ("pf", Dba.LValue.v pf);
+      ("af", Dba.LValue.v af);
+      ("zf", Dba.LValue.v zf);
+      ("sf", Dba.LValue.v sf);
+      ("tf", Dba.LValue.v tf);
+      ("if", Dba.LValue.v if');
+      ("df", Dba.LValue.v df);
+      ("of", Dba.LValue.v of');
+      ("iopl", Dba.LValue.v iopl);
+      ("nt", Dba.LValue.v nt);
+      ("rf", Dba.LValue.v rf);
+      ("vm", Dba.LValue.v vm);
+      ("ac", Dba.LValue.v ac);
+      ("vif", Dba.LValue.v vif');
+      ("vip", Dba.LValue.v vip);
+      ("id", Dba.LValue.v id);
     ]
 
   let notes img =
@@ -831,12 +839,54 @@ module AARCH64 = struct
     ]
 end
 
+module RISCV = struct
+  let defs size =
+    let info = Dba.VarTag.Register in
+    let reg name = (name, Dba.LValue.v { Dba.name; size; info }) in
+    List.map reg
+      [
+        "ra";
+        "sp";
+        "gp";
+        "tp";
+        "t0";
+        "t1";
+        "t2";
+        "s0";
+        "s1";
+        "a0";
+        "a1";
+        "a2";
+        "a3";
+        "a4";
+        "a5";
+        "a6";
+        "a7";
+        "s2";
+        "s3";
+        "s4";
+        "s5";
+        "s7";
+        "s7";
+        "s8";
+        "s9";
+        "s10";
+        "s11";
+        "t3";
+        "t4";
+        "t5";
+        "t6";
+      ]
+end
+
 let get_defs () =
   match Kernel_options.Machine.isa () with
   | X86 { bits = `x32 } -> X86.defs
   | X86 { bits = `x64 } -> AMD64.defs
   | ARM { rev = `v7; _ } -> ARM.defs
   | ARM { rev = `v8; _ } -> AARCH64.defs
+  | RISCV { bits = `x32 } -> RISCV.defs 32
+  | RISCV { bits = `x64 } -> RISCV.defs 64
   | _ ->
       (* TODO *)
       raise (Errors.not_yet_implemented "incomplete architecture definition")

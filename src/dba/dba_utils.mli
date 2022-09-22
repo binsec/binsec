@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -34,8 +34,14 @@ module Expr : sig
 
   val complement :
     Dba.Expr.t -> lo:int -> hi:int -> Dba.VarTag.t Dba.var -> Dba.Expr.t
-  (* [complement e lo hi v]
-     return the expression e' such as v{hi .. lo} := e <=> v := e' *)
+  (** [complement e lo hi v]
+     return the expression e' such as v{hi .. lo} := e <=> v := e'
+  *)
+
+  val bswap : Dba.Expr.t -> Dba.Expr.t
+  (** [bswap e]
+      reverses the byte order of e
+  *)
 end
 
 val checksize_address : Dba.address -> bool

@@ -3,8 +3,8 @@
 ## DBA Expression
 
 ```
-      <e> ::= <cst> | <lv> | <unop> <e> | <e> <binop> <e> | <e> "?" <e> ":" <e> | "(" <e> ")"
-     <lv> ::= <var> | <mem>
+      <e> ::= <cst> | <lval> | <unop> <e> | <e> <binop> <e> | <e> "?" <e> ":" <e> | "(" <e> ")"
+   <lval> ::= <var> | <mem>
     <mem> ::= "@[" <e> [["," ("<-" | "->")] "," <n>] "]"
    <unop> ::= "~" | "-" | "uext"<n> <e> | "sext"<n> <e> | <e> "{" <n> ".." <n> "}"
   <binop> ::= <boolean> | <cmp> | <arith> | <bitwize> | "::"
@@ -29,6 +29,8 @@
 
 #### Variable *ident[*`<`*bit-size*`>`*]* 
 (e.g. `eax` or `eax<32>`)
+
+Names in script file are not case-sensitive. So writing `eax` or `EAX` behaves the same.
 
 #### Memory access `@[`*address[[*`,`*endianness]*`,`*byte-size]*`]`
 
@@ -210,10 +212,13 @@
 <pragma> ::= "starting" "from" <e> ["with" <chunk> "end"]
            | "starting" "from" "core" ["with" <chunk> "end"]
            | "assume" <e> 
-           | "load" <mem> "from" "file" | "load" <section> "from" "file" | "replace" <e> "by" <chunk> 
-  <goal> ::= "reach" <e> [<n> "times"] ["such" "that" <e>] ["then" <action> ["and" <action> ..]]
+           | "load" <mem> "from" "file" 
+           | "load" "section" <section> "from" "file" 
+           | "load" "sections" <section> ["," <section> ..] "from" "file" 
+           | "replace" <e> "by" <chunk> 
+<goal> ::= "reach" <e> [<n> "times"] ["such" "that" <e>] ["then" <action> ["and" <action> ..]]
            | "cut" "at" <e> ["if" <e>]
-           | "at" <e> ("assume" | "assume") <e>
+           | "at" <e> ("assume" | "assert") <e>
            | "at" <e> enumerate <e> ["(" <n> ")"]
 <action> ::= "print" "formula" ["for" <e> ["as" <var>] ["," <e> ["as" <var>] ..]]
            | "print" "model"
@@ -225,8 +230,14 @@
 #### Set entrypoint `starting` `from` *expr*
   (e.g. `starting from 0x4000`)
   
-#### Initialize memory from section `load` *section* `from` `file`
-  (e.g. `load .data from file`)
+#### Set entrypoint `starting` `from` *Symbol name*
+  (e.g. `starting from <main>`)
+
+#### Initialize memory from section `load` `section` *section* `from` `file`
+  (e.g. `load section .data from file`)
+
+#### Initialize memory from multiple sections `load` `sections` *section*`,` *section*.. `from` `file`
+  (e.g. `load sections .data , .text from file`)
   
 #### Initialize specific memory from file `load` *memory-access* `from` `file`
   (e.g. `load @[0x4000, 256] from file`)
@@ -243,7 +254,7 @@
 ##### Print full SMT formula `print` `formula`
   (e.g. `reach 0x4000 then print formula`)
   
-##### Print SMT formula slice `print` `formula` `for` *exprs*
+##### Print SMT formula slice `print` `formula` `for` *(**name* *|* *expr* `as` *name* *)* *[*`,` .. *]*
   (e.g. `reach 0x4000 then print formula for eax`)
   
 ##### Print expression (last) value `print` *[format]* *expr*
@@ -263,6 +274,31 @@
   
 #### Enumerate possible values `at` *addr* `enumerate` *expr [*`(` *times* `)`*]*
   (e.g. `at 0x4000 enumerate eax (10)`)
+
+## `<goal>` Semantics
+
+If multiple `<goals>` are defined at the same position the execution order of the goals is the following: `assume`, `assert`, `enumerate`, `reach` then `cut`. Here is a description of the effect of these goals:
+
+#### `assume`
+
+before symbolically executing the instruction at the defined address we assume that the expression is true.
+
+### `assert`
+
+before symbolically executing the instruction at the defined address two branches are forked, one branch satisfying the given expression and the other its negation. If the latter is executable an alert message is returned to the user. Afterwards, only the branch that satisfies the specified expression is explored (i.e. it has the same effect as `assume` with the addition of the alert message if the negation of the expression is satisfy-able)
+
+#### `enumerate`
+
+if *n* is specified, we enumerate *n* distinct values of the expression specified. **BINSEC** will continue running until all *n* values are retrieved.
+
+#### `reach`
+
+if *n* is specified, we try to reach the specified position *n* times. *BINSEC* will continue running until all positions are reached as many times as specified.
+  *PS:* If no `reach` nor `enumerate` is defined **BINSEC** does not explore the program.
+
+#### `cut`
+
+the branch following the position specified at the `cut` is not explored.
   
 ## Command line option
 
@@ -274,7 +310,7 @@ Set exploration maximal depth *[default:*`1000`*]*
 Change the search heuristics *[default:*`dfs`*]*
 
 #### `-sse-jump-enum <n>` 
-Change the maximum number of jump targets computed fo dynamic jumps *[default:*`3`*]*
+Change the maximum number of jump targets computed to dynamic jumps *[default:*`3`*]*
 
 #### `-sse-keep-going`
 Ignore errors returned by the SMT solver (`stale path`) *[default:*`abort`*]*
@@ -289,10 +325,16 @@ Read script from files.
 Give a specific seed for random number generators *[default:*`0`*]*
 
 #### `-sse-timeout <n>`
-Set a global timout in second for symbolic execution *[default:*`inf`*]*
+Set a global timeout in second for symbolic execution *[default:*`inf`*]*
 
-#### `-fml-solver {z3|cvc4|yices|boolector|bitwuzla}`
-Set solver to use *[default:*`z3`*]*
+#### `-sse-help`
+For a more exhaustive list of *sse* command line options
+
+#### `-smt-solver {auto|bitwuzla|bitwuzla:native|bitwuzla:smtlib|boolector|boolector:smtlib|z3|z3:smtlib|cvc4|cvc4:smtlib|yices|yices:smtlib}`
+Set the SMT solver to use *[default:*`z3`*]*
 
 #### `-fml-solver-timeout <n>`
-Set a timout in second for solver queries *[default:*`5s`*]*
+Set a timeout in seconds for solver queries *[default:*`5s`*]*
+
+### `-arm-supported-modes {both|thumb|arm}`
+Can be used to specifically decode `thumb` instructions, `arm` instructions or `both` *[default:*`arm`*]*

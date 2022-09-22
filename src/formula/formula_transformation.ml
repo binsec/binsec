@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -423,11 +423,14 @@ module ConstantPropagation = struct
         let bv1 = visit_bv_term env bv1 in
         let bv2 = visit_bv_term env bv2 in
         mk_bv_bnop b bv1 bv2
-    | BvIte (bl, bv1, bv2) ->
-        let bl = visit_bl_term env bl in
-        let bv1 = visit_bv_term env bv1 in
-        let bv2 = visit_bv_term env bv2 in
-        mk_bv_ite bl bv1 bv2
+    | BvIte (bl, bv1, bv2) -> (
+        match visit_bl_term env bl with
+        | { bl_term_desc = Formula.BlTrue; _ } -> visit_bv_term env bv1
+        | { bl_term_desc = Formula.BlFalse; _ } -> visit_bv_term env bv2
+        | bl ->
+            let bv1 = visit_bv_term env bv1 in
+            let bv2 = visit_bv_term env bv2 in
+            mk_bv_ite bl bv1 bv2)
     | Select (n, ax, bv) ->
         let ax = visit_ax_term env ax in
         let bv = visit_bv_term env bv in

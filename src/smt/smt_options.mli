@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,7 +24,7 @@
 include Cli.S
 
 type solver =
-  | Best  (** try to use the best SMT solver available; in order *)
+  | Auto  (** try to use the best SMT solver available; in order *)
   | Bitwuzla_native  (** bitwuzla native ocaml binding *)
   | Bitwuzla_smtlib  (** bitwuzla external process *)
   | Boolector_smtlib  (** boolector external process *)

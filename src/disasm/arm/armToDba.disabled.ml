@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,18 +19,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-type t = private string
-(** This module is intended to generate valid SMTLib2 short identifiers
-    Are valid any non-empty sequence of letters, digits
-                  and the characters ~ ! @ $ % ^ & * _ - + = < > . ? /
-                  that does not start with a digit
-    To never clash with reserved keywords, generated identifiers
-    always start with one of the special characters *)
+let cached_decode _ = failwith "not linked with 'unisim_archisec'"
 
-external to_string : t -> string = "%identity"
-
-val pp : Format.formatter -> t -> unit
-
-val zero : t
-
-val incr : t -> t
+let decode _ = cached_decode

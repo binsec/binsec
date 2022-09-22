@@ -4,7 +4,7 @@ set breakpoint pending on
 set env LD_BIND_NOW=1
 set env GLIBC_TUNABLES=glibc.cpu.hwcaps=-AVX2_Usable
 b __libc_start_main
-start
+run
 b *$rdi
 continue
 generate-core-file core.snapshot

@@ -1,12 +1,17 @@
 (include_subdirs no)
 
 (library
- (package binsec)
- (optional)
+ (public_name binsec.amd64decoder)
  (name amd64decoder)
  (modules (:standard))
  (library_flags
   (:standard -linkall))
  (flags
   (:standard -w -3 -open Binsec))
- (libraries binsec unisim_archisec.amd64dba))
+ (libraries
+  binsec
+  (select
+   amd64ToDba.ml
+   from
+   (unisim_archisec.amd64dba -> amd64ToDba.enabled.ml)
+   (-> amd64ToDba.disabled.ml))))

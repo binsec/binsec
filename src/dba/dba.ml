@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,6 +20,14 @@
 (**************************************************************************)
 
 (** Definition of DBA type *)
+
+let invalid_boolean = Invalid_argument "not a boolean expression"
+
+let bad_bound = Invalid_argument "index out of bound"
+
+let mismatched_operands = Invalid_argument "mismatched operands size"
+
+let invalid_assignment = Invalid_argument "mismatched assign"
 
 type size = int
 
@@ -116,7 +124,17 @@ type region = [ `Constant | restricted_region ]
 module VarTag = struct
   type attribute = Value | Size | Last
 
-  type t = Flag | Temp | Register | Symbol of attribute | Empty
+  let pp_attribute ppf = function
+    | Value -> ()
+    | Size -> Format.pp_print_string ppf ":size"
+    | Last -> Format.pp_print_string ppf ":last"
+
+  type t =
+    | Flag
+    | Temp
+    | Register
+    | Symbol of attribute * Bitvector.t lazy_t
+    | Empty
 end
 
 module Expr : sig
@@ -283,7 +301,8 @@ end = struct
 
   let ite condition then_expr else_expr =
     (* Valid conditions are bitvectors of size one  only *)
-    assert (size_of condition = 1);
+    if size_of condition <> 1 then raise invalid_boolean;
+    if size_of then_expr <> size_of else_expr then raise mismatched_operands;
     match condition with
     | Cst b when Bitvector.is_zero b -> else_expr
     | Cst b when Bitvector.is_one b -> then_expr
@@ -309,7 +328,7 @@ end = struct
     let rotate_right = binary RightRotate
 
     let symmetric_binary op e1 e2 =
-      assert (size_of e1 = size_of e2);
+      if size_of e1 <> size_of e2 then raise mismatched_operands;
       binary op e1 e2
 
     let add = symmetric_binary Plus
@@ -363,9 +382,7 @@ end = struct
     let uext bits = unary (Unary_op.Uext bits)
 
     let restrict lo hi e =
-      assert (hi < size_of e);
-      assert (hi >= lo);
-      assert (lo >= 0);
+      if hi >= size_of e || hi < lo || lo < 0 then raise bad_bound;
       unary (Unary_op.Restrict { Interval.lo; Interval.hi }) e
   end
 
@@ -863,9 +880,8 @@ module LValue = struct
 
   let size_of = function
     | Var v -> v.size
-    | Restrict (v, { Interval.lo; Interval.hi }) ->
+    | Restrict (_, { Interval.lo; Interval.hi }) ->
         let restricted_size = hi - lo + 1 in
-        assert (restricted_size <= v.size);
         restricted_size
     | Store (sz, _, _) -> 8 * sz
 
@@ -885,9 +901,7 @@ module LValue = struct
     temporary name nbits
 
   let restrict v lo hi =
-    assert (lo <= hi);
-    assert (lo >= 0);
-    assert (hi < v.size);
+    if hi >= v.size || hi < lo || lo < 0 then raise bad_bound;
     if hi - lo + 1 = v.size then Var v
     else Restrict (v, { Interval.lo; Interval.hi })
 
@@ -902,7 +916,6 @@ module LValue = struct
   let store nbytes endianness e =
     let sz = Size.Byte.to_int nbytes in
     (*    Format.printf "store : %d@." (Expr.size_of e); *)
-    assert (Expr.size_of e = Kernel_options.Machine.word_size ());
     Store (sz, endianness, e)
 
   let is_expr_translatable = function
@@ -929,9 +942,8 @@ module LValue = struct
   (* size expected for rhs *)
   let bitsize = function
     | Var { size; _ } -> Size.Bit.create size
-    | Restrict (v, { Interval.lo; Interval.hi }) ->
+    | Restrict (_, { Interval.lo; Interval.hi }) ->
         let res = hi - lo + 1 in
-        assert (v.size >= res);
         Size.Bit.create res
     | Store (sz, _endianness, _e) -> Size.Byte.(to_bitsize (create sz))
 
@@ -959,9 +971,8 @@ module Instr = struct
     | Print of printable list * id
 
   let assign lval rval nid =
-    let lval_sz = Size.Bit.to_int (LValue.bitsize lval)
-    and rval_sz = Expr.size_of rval in
-    assert (lval_sz = rval_sz);
+    if Size.Bit.to_int (LValue.bitsize lval) <> Expr.size_of rval then
+      raise invalid_assignment;
     Assign (lval, rval, nid)
 
   let static_jump ?tag jt = SJump (jt, tag)

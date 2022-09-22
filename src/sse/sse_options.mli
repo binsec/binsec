@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -32,8 +32,6 @@ module TransientEnum : Cli.INTEGER
 module JumpEnumDepth : Cli.INTEGER
 
 module Randomize : Cli.BOOLEAN
-
-module AddressTraceFile : Cli.STRING_OPT
 
 module AvoidAddresses : Cli.STRING_SET
 

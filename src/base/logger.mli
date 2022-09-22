@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -79,6 +79,8 @@ module type S = sig
   val set_debug_level : int -> unit
 
   val get_debug_level : unit -> int
+
+  val is_debug_enabled : unit -> bool
 
   val set_tagged_entry : bool -> unit
   (** [set_tagged_entry]

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -42,7 +42,7 @@ module Session = struct
   let start ?stdlog timeout solver =
     Sse_options.Logger.debug "Openning session %d" !n;
     incr n;
-    let cmd = Prover.command timeout solver in
+    let cmd = Prover.command ~incremental:true timeout solver in
     let pid = Subprocess.spawn ~pdeathsig:Sys.sigkill cmd in
     let stdin = Subprocess.stdin pid
     and stdout = Subprocess.stdout pid
@@ -114,60 +114,63 @@ end
 
 (* utils *)
 let pp_int_as_bv ppf x = function
-  | 1 -> Format.fprintf ppf "#b%d" x
-  | 4 -> Format.fprintf ppf "#x%01x" x
-  | 8 -> Format.fprintf ppf "#x%02x" x
-  | 12 -> Format.fprintf ppf "#x%03x" x
-  | 16 -> Format.fprintf ppf "#x%04x" x
-  | 20 -> Format.fprintf ppf "#x%05x" x
-  | 24 -> Format.fprintf ppf "#x%06x" x
-  | 28 -> Format.fprintf ppf "#x%07x" x
-  | 32 -> Format.fprintf ppf "#x%08x" x
+  | 1 -> Format.fprintf ppf "#b%d" (x land 1)
+  | 4 -> Format.fprintf ppf "#x%01x" (x land 0xf)
+  | 8 -> Format.fprintf ppf "#x%02x" (x land 0xff)
+  | 12 -> Format.fprintf ppf "#x%03x" (x land 0xfff)
+  | 16 -> Format.fprintf ppf "#x%04x" (x land 0xffff)
+  | 20 -> Format.fprintf ppf "#x%05x" (x land 0xfffff)
+  | 24 -> Format.fprintf ppf "#x%06x" (x land 0xffffff)
+  | 28 -> Format.fprintf ppf "#x%07x" (x land 0xfffffff)
+  | 32 -> Format.fprintf ppf "#x%08x" (x land 0xffffffff)
+  | sz when x < 0 ->
+      Format.fprintf ppf "(_ bv%a %d)" Z.pp_print
+        (Z.logand (Z.of_int x) (Z.pred (Z.shift_left Z.one sz)))
+        sz
   | sz -> Format.fprintf ppf "(_ bv%d %d)" x sz
 
 let pp_bv ppf value size =
   try pp_int_as_bv ppf (Z.to_int value) size
   with Z.Overflow -> Format.fprintf ppf "(_ bv%a %d)" Z.pp_print value size
 
-module Solver () : Solver_sig.S = struct
-  type result = Sat | Unsat | Unknown
-
-  type memory = unit
+module Printer = struct
+  open Sexpr
 
   type term = string * int
 
   type access = Select of term * int | Store of term
 
-  open Sexpr
+  and def = Bl of Expr.t | Bv of Expr.t | Ax of Memory.t
 
-  module Context = struct
-    type t = {
-      mutable id : Suid.t;
-      bv_decl : unit BvTbl.t;
-      bl_cons : string BvTbl.t;
-      bv_cons : string BvTbl.t;
-      ax_cons : string AxTbl.t;
-      ordered_defs : def Queue.t;
-      ordered_mem : access Queue.t;
+  and t = {
+    mutable id : Suid.t;
+    bv_decl : string BvTbl.t;
+    bl_cons : string BvTbl.t;
+    bv_cons : string BvTbl.t;
+    ax_cons : string AxTbl.t;
+    ordered_defs : def Queue.t;
+    ordered_mem : access Queue.t;
+    word_size : int;
+  }
+
+  let create ?(word_size = Kernel_options.Machine.word_size ()) ~next_id () =
+    let bv_cons = BvTbl.create 128 and bl_cons = BvTbl.create 32 in
+    BvTbl.add bl_cons Expr.zero "false";
+    BvTbl.add bv_cons Expr.zero "#b0";
+    BvTbl.add bl_cons Expr.one "true";
+    BvTbl.add bv_cons Expr.one "#b1";
+    {
+      id = next_id;
+      bv_decl = BvTbl.create 16;
+      bl_cons;
+      bv_cons;
+      ax_cons = AxTbl.create 64;
+      ordered_defs = Queue.create ();
+      ordered_mem = Queue.create ();
+      word_size;
     }
 
-    and def = Bl of Expr.t | Bv of Expr.t | Ax of Memory.t
-
-    let create id =
-      {
-        id;
-        bv_decl = BvTbl.create 16;
-        bl_cons = BvTbl.create 32;
-        bv_cons = BvTbl.create 128;
-        ax_cons = AxTbl.create 64;
-        ordered_defs = Queue.create ();
-        ordered_mem = Queue.create ();
-      }
-  end
-
-  open Context
-
-  let pp_int_as_offset ppf i = pp_bv ppf i (Kernel_options.Machine.word_size ())
+  let pp_int_as_offset size ppf i = pp_bv ppf i size
 
   let once = ""
 
@@ -221,7 +224,8 @@ module Solver () : Solver_sig.S = struct
           BvTbl.add ctx.bv_cons bv name;
           if size = 1 then
             BvTbl.add ctx.bl_cons bv (Printf.sprintf "(= %s #b1)" name);
-          BvTbl.add ctx.bv_decl bv ()
+          BvTbl.add ctx.bv_decl bv
+            (Format.sprintf "(declare-const %s (_ BitVec %d))" name size)
       | Load { len; addr; label; _ } ->
           BvTbl.add ctx.bv_cons bv once;
           visit_bv ctx addr;
@@ -294,7 +298,9 @@ module Solver () : Solver_sig.S = struct
           BiMap.iter
             (fun i _ ->
               let index =
-                Format.asprintf "(bvadd %s %a)" index pp_int_as_offset i
+                Format.asprintf "(bvadd %s %a)" index
+                  (pp_int_as_offset ctx.word_size)
+                  i
               in
               Queue.push (Store (index, Expr.sizeof addr)) ctx.ordered_mem)
             bytes)
@@ -341,9 +347,15 @@ module Solver () : Solver_sig.S = struct
     fun ppf f -> Format.pp_print_string ppf (string_of_binop f)
 
   let rec print_bl ctx ppf bl =
-    let name = BvTbl.find ctx.bl_cons bl in
-    if name == once then print_bl_no_cons ctx ppf bl
-    else Format.pp_print_string ppf name
+    try
+      let name = BvTbl.find ctx.bl_cons bl in
+      if name == once then print_bl_no_cons ctx ppf bl
+      else Format.pp_print_string ppf name
+    with Not_found ->
+      Format.pp_print_string ppf "(= ";
+      Format.pp_print_space ppf ();
+      print_bv ctx ppf bl;
+      Format.pp_print_string ppf " #b1)"
 
   and print_bl_no_cons ctx ppf bl =
     match bl with
@@ -442,10 +454,13 @@ module Solver () : Solver_sig.S = struct
         Format.pp_print_string ppf "#b1";
         Format.pp_print_space ppf ();
         Format.pp_print_string ppf "#b0)"
-    | Binary { f = Diff; _ } ->
-        Format.pp_print_string ppf "(ite";
+    | Binary { f = Diff; x; y; _ } ->
+        Format.pp_print_string ppf "(ite (=";
         Format.pp_print_space ppf ();
-        print_bl ctx ppf bv;
+        print_bv ctx ppf x;
+        Format.pp_print_space ppf ();
+        print_bv ctx ppf y;
+        Format.pp_print_char ppf ')';
         Format.pp_print_space ppf ();
         Format.pp_print_string ppf "#b0";
         Format.pp_print_space ppf ();
@@ -570,30 +585,19 @@ module Solver () : Solver_sig.S = struct
     | LittleEndian -> print_multi_select_le
     | BigEndian -> print_multi_select_be 0
 
-  let put ctx ppf constraints =
-    Format.pp_open_vbox ppf 0;
-    (* init *)
-    BvTbl.add ctx.bl_cons Expr.zero "false";
-    BvTbl.add ctx.bv_cons Expr.zero "#b0";
-    BvTbl.add ctx.bl_cons Expr.one "true";
-    BvTbl.add ctx.bv_cons Expr.one "#b1";
-    (* visit assertions *)
-    List.iter (visit_bl ctx) constraints;
-    (* print declarations *)
+  let pp_print_decls ppf ctx =
     BvTbl.iter
-      (fun bv _ ->
-        match bv with
-        | Var { name; size; _ } ->
-            Format.fprintf ppf "(declare-const %s (_ BitVec %d))@ " name size
-        | _ -> assert false)
+      (fun _ decl ->
+        Format.pp_print_string ppf decl;
+        Format.pp_print_space ppf ())
       ctx.bv_decl;
-    (if Queue.is_empty ctx.ordered_mem = false then
-     let addr_space = Kernel_options.Machine.word_size () in
-     Format.fprintf ppf
-       "(declare-const %a (Array (_ BitVec %d) (_ BitVec %d)))@ " Suid.pp
-       Suid.zero addr_space byte_size);
-    (* print assertions *)
-    Format.pp_open_hovbox ppf 0;
+    if Queue.is_empty ctx.ordered_mem = false then
+      let addr_space = Kernel_options.Machine.word_size () in
+      Format.fprintf ppf
+        "(declare-const %a (Array (_ BitVec %d) (_ BitVec %d)))@ " Suid.pp
+        Suid.zero addr_space byte_size
+
+  let pp_print_defs ppf ctx =
     Queue.iter
       (function
         | Bl bl ->
@@ -618,11 +622,39 @@ module Solver () : Solver_sig.S = struct
                 byte_size;
               print_ax_no_cons ctx ppf ax;
               Format.fprintf ppf ")@ "))
-      ctx.ordered_defs;
+      ctx.ordered_defs
+
+  let pp_print_bl = print_bl
+
+  let pp_print_bv = print_bv
+
+  let pp_print_ax = print_ax
+end
+
+module Solver () : Solver_sig.S = struct
+  open Sexpr
+
+  type result = Sat | Unsat | Unknown
+
+  type memory = unit
+
+  type term = Printer.term
+
+  type access = Printer.access = Select of term * int | Store of term
+
+  let put (ctx : Printer.t) ppf constraints =
+    Format.pp_open_vbox ppf 0;
+    (* visit assertions *)
+    List.iter (Printer.visit_bl ctx) constraints;
+    (* print declarations *)
+    Printer.pp_print_decls ppf ctx;
+    (* print assertions *)
+    Format.pp_open_hovbox ppf 0;
+    Printer.pp_print_defs ppf ctx;
     List.iter
       (fun bl ->
         Format.pp_print_string ppf "(assert ";
-        print_bl ctx ppf bl;
+        Printer.print_bl ctx ppf bl;
         Format.pp_print_char ppf ')';
         Format.pp_print_space ppf ())
       constraints;
@@ -631,33 +663,38 @@ module Solver () : Solver_sig.S = struct
 
   let session =
     Session.start (* ~stdlog:stderr *)
-      (int_of_float (Sse_options.Timeout.get ()))
+      (Formula_options.Solver.Timeout.get ())
       (Formula_options.Solver.get ())
 
   let ctx = ref None
 
   let bind fid e constraints =
     let ctx =
-      let x = create fid in
+      let x = Printer.create ~next_id:fid () in
       ctx := Some x;
       x
     in
-    visit_bv ctx e;
-    visit_bv ctx e;
+    Printer.visit_bv ctx e;
+    Printer.visit_bv ctx e;
     put ctx session.formatter constraints;
     (BvTbl.find ctx.bv_cons e, Expr.sizeof e)
 
   let put fid constraints =
-    ctx := Some (create fid);
+    ctx := Some (Printer.create ~next_id:fid ());
     put (Option.get !ctx) session.formatter constraints
 
   let get e = (BvTbl.find (Option.get !ctx).bv_cons e, Expr.sizeof e)
 
-  let add bl =
-    let ctx = Option.get !ctx in
+  let set_memory ~addr y =
     Session.put session
-      (fun ppf bl -> Format.fprintf ppf "(assert %a)" (print_bl ctx) bl)
-      bl
+      (fun ppf () ->
+        Format.fprintf ppf "(assert (= (select %s " Suid.(to_string zero);
+        Format.pp_print_char ppf ' ';
+        pp_bv ppf addr (Option.get !ctx).Printer.word_size;
+        Format.pp_print_string ppf ") ";
+        pp_bv ppf y 8;
+        Format.pp_print_string ppf "))")
+      ()
 
   let neq (e, s) x =
     Session.put session
@@ -676,7 +713,8 @@ module Solver () : Solver_sig.S = struct
 
   let get_value (x, _) = Session.get_value session Format.pp_print_string x
 
-  let succ (x, s) = (Format.asprintf "(bvadd %s %a)" x pp_int_as_offset Z.one, s)
+  let succ (x, s) =
+    (Format.asprintf "(bvadd %s %a)" x (Printer.pp_int_as_offset s) Z.one, s)
 
   let check_sat () =
     match Session.check_sat session with

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,43 +19,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-type t = string
+let cached_decode _ = failwith "not linked with 'unisim_archisec'"
 
-external to_string : t -> string = "%identity"
-
-let pp = Format.pp_print_string
-
-let zero = "!0"
-
-let incr =
-  let set t' i c =
-    Bytes.set t' i c;
-    Bytes.unsafe_to_string t'
-  in
-  (* to keep it compact, transition rules are impacted by the ASCII encoding:
-        0-9a-zA-Z!$%&*+./<=>?@^_~ *)
-  let rec incr t' i =
-    match Bytes.get t' i with
-    | '9' -> set t' i 'a'
-    | 'z' -> set t' i 'A'
-    | 'Z' -> set t' i '!'
-    | '!' -> set t' i '$'
-    | '&' -> set t' i '*'
-    | '+' -> set t' i '.'
-    | '/' -> set t' i '<'
-    | '<' -> set t' i '>'
-    | '@' -> set t' i '^'
-    | '_' -> set t' i '~'
-    | '~' when i = 0 ->
-        (* overflow *)
-        let t' = Bytes.(make (length t' + 1) '0') in
-        Bytes.set t' 0 '!';
-        Bytes.unsafe_to_string t'
-    | '~' ->
-        Bytes.set t' i '0';
-        incr t' (i - 1) (* carry *)
-    | x -> set t' i Char.(unsafe_chr (code x + 1))
-  in
-  fun t ->
-    let t' = Bytes.of_string t in
-    incr t' (Bytes.length t' - 1)
+let decode _ = cached_decode

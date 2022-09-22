@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -18,6 +18,15 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
 (*                                                                        *)
 (**************************************************************************)
+
+let start_with =
+  let rec iter prefix str n i =
+    if i = n then true
+    else
+      String.unsafe_get prefix i = String.unsafe_get str i
+      && iter prefix str n (i + 1)
+  in
+  fun ~prefix str -> iter prefix str (String.length prefix) 0
 
 let replace_chars f s =
   let b = Buffer.create (String.length s) in

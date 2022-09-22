@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2021                                               */
+/*  Copyright (C) 2016-2022                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -94,8 +94,8 @@ let core :=
   | value=CONST;
     { Dba.Expr.constant value }
   | symbol=SYMBOL;
-    { Dba.Expr.var ~tag:(Dba.VarTag.Symbol (snd symbol))
-		   (fst symbol) E.wordsize }
+    { let name, attr = symbol in
+      E.lookup_symbol name attr }
 
 let extra :=
   | ~=core;

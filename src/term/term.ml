@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -933,6 +933,11 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     | Xor, Binary { f = Xor; x = a; y = b; _ }, c
       when compare b c = 0 ->
         a
+    | (Lsl, x, Cst bv | Lsr, x, Cst bv) when Bv.to_uint bv >= sizeof x ->
+        zeros (sizeof x)
+    | Asr, x, Cst bv when Bv.to_uint bv >= sizeof x ->
+        let size = sizeof x in
+        unary (Sext size) (unary (Restrict { hi = size - 1; lo = size - 1 }) x)
     (* factorisation *)
     | Plus, a, b when compare a b = 0 ->
         binary Mul a (constant (Bv.of_int ~size:(sizeof a) 2))
@@ -1080,6 +1085,8 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
         unary (Restrict { lo = lo'; hi }) a
     (* TODO: more to come like loads.. *)
     (* misc *)
+    | Asr, Unary { f = Uext _; x; _ }, Cst bv when Bv.to_uint bv >= sizeof x ->
+        zeros (Bv.size_of bv)
     | Asr, Unary { f = Uext n; x; _ }, Cst bv ->
         let shift = Bv.to_uint bv in
         unary
@@ -1107,7 +1114,13 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
         ite c (constant (Bv.binary f bv bv')) (binary f x e)
     | f, (Cst bv as x), Ite { c; t; e = Cst bv'; _ } ->
         ite c (binary f x t) (constant (Bv.binary f bv bv'))
-    (* default case *)
+    (* basic equation *)
+    | Eq, Binary { f = Plus; x; y = Cst bv; _ }, Cst bv' ->
+        binary Eq x (constant (Bv.sub bv' bv))
+    | Eq, Binary { f = Minus; x; y = Cst bv; _ }, Cst bv' ->
+        binary Eq x (constant (Bv.add bv' bv))
+    | Eq, Binary { f = Minus; x = Cst bv; y; _ }, Cst bv' ->
+        binary Eq y (constant (Bv.sub bv bv')) (* default case *)
     | _, _, _ -> mk_binary f x y
 
   and ite c t e =

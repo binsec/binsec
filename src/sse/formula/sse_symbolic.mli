@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,4 +19,4 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module State (S : Smt_solver.Solver) : Sse_types.STATE
+module State (S : Smt_sig.Solver) : Sse_types.STATE_FACTORY

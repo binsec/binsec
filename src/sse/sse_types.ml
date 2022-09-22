@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -56,15 +56,82 @@ module type STATE = sig
     ?slice:(Dba.Expr.t * string) list -> Format.formatter -> t -> unit
 
   val as_ascii : string -> t -> string
-
-  val pp_stats : Format.formatter -> unit -> unit
 end
+
+module type EXPLORATION_STATISTICS = sig
+  val get_paths : unit -> int
+
+  val get_completed_paths : unit -> int
+
+  val get_unknown_paths : unit -> int
+
+  val get_total_asserts : unit -> int
+
+  val get_failed_asserts : unit -> int
+
+  val get_branches : unit -> int
+
+  val get_max_depth : unit -> int
+
+  val get_instructions : unit -> int
+
+  val get_unique_insts : unit -> int
+
+  val get_time : unit -> float
+end
+
+module type QUERY_STATISTICS = sig
+  module Preprocess : sig
+    val get_sat : unit -> int
+
+    val get_unsat : unit -> int
+
+    val get_const : unit -> int
+
+    val incr_sat : unit -> unit
+
+    val incr_unsat : unit -> unit
+
+    val incr_const : unit -> unit
+
+    val pp : Format.formatter -> unit -> unit
+
+    val to_toml : unit -> Toml.Types.table
+  end
+
+  module Solver : sig
+    val get_sat : unit -> int
+
+    val get_unsat : unit -> int
+
+    val get_err : unit -> int
+
+    val get_time : unit -> float
+
+    val incr_sat : unit -> unit
+
+    val incr_unsat : unit -> unit
+
+    val incr_err : unit -> unit
+
+    val start_timer : unit -> unit
+
+    val stop_timer : unit -> unit
+
+    val pp : Format.formatter -> unit -> unit
+
+    val to_toml : unit -> Toml.Types.table
+  end
+end
+
+module type STATE_FACTORY = functor (QS : QUERY_STATISTICS) -> STATE
 
 module Pragma = struct
   type t =
     | Start_from of Dba.Expr.t * Dhunk.t
     | Start_from_core of Dhunk.t
     | Load_sections of string list
+    | Reach_all
 end
 
 module Script = struct
@@ -193,8 +260,6 @@ module Path_state (S : STATE) = struct
   let is_depth_ok ps =
     let max_depth = Sse_options.MaxDepth.get () in
     ps.depth < max_depth
-
-  let may_lead_to_goal = is_depth_ok
 
   (* One might elements from the CFG here *)
 

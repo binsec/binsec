@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2021                                               */
+/*  Copyright (C) 2016-2022                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -74,6 +74,8 @@ let goal :=
   | REACH; MUL; loc=address; guard=option(preceded(pair(SUCH, THAT), bool));
     actions=option(preceded(THEN, separated_nonempty_list(TAND, action)));
     { Sse_types.Script.Goal (Directive.reach_all ?guard ?actions ~loc ()) }
+  | REACH; MUL;
+    { Sse_types.Script.Pragma Sse_types.Pragma.Reach_all }
   | CUT; AT; loc=address; guard=option(preceded(IF,bool));
     { Sse_types.Script.Goal (Directive.cut ?guard ~loc ()) }
   | AT; loc=address; ~=directive;

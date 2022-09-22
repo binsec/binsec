@@ -1,3 +1,25 @@
+## 0.6.0 (2022-09-22)
+
+** Features
+
+   - New architecture support : RISC V 64bit
+   - Catch interrupt signal (`CTRL-C`) in SSE in order to
+     print exploration summary gracefully
+   - Switch between log and monitor screen in SSE by pressing `space`
+     (require `curses`)
+
+** Documentation
+
+   - Broaden the SSE [manual reference](doc/sse/references.md)
+   - Add the write-up
+	 ["How to read the SSE exploration board"](doc/sse/exploration_board.md)
+
+** Bugs
+
+   - Fix bitvector canonical representation
+   - Fix compatibility issues with `unisim-archisec.0.0.3`
+   - Fix issues with new experimental SSE engine
+
 ## 0.5.0 (2022-04-18)
 
 ** Features

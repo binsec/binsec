@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -235,6 +235,8 @@ module type S = sig
 
   val get_debug_level : unit -> int
 
+  val is_debug_enabled : unit -> bool
+
   val set_tagged_entry : bool -> unit
 
   val set_log_level : string -> unit
@@ -277,13 +279,9 @@ module Make (G : ChannelGroup) = struct
     mutable ppfs : Format.formatter list; (* These are similar to listeners *)
   }
 
-  let stdout_ppf () = formatter_of_out_channel stdout
+  let default_out kind = { kind; ppfs = [ Format.std_formatter ] }
 
-  let stderr_ppf () = formatter_of_out_channel stderr
-
-  let default_out kind = { kind; ppfs = [ stdout_ppf () ] }
-
-  let err_out kind = { kind; ppfs = [ stderr_ppf () ] }
+  let err_out kind = { kind; ppfs = [ Format.err_formatter ] }
 
   let debug_channel = default_out ChannelKind.ChDebug
 
@@ -300,7 +298,8 @@ module Make (G : ChannelGroup) = struct
   let set_formatters ppfs channel = channel.ppfs <- ppfs
 
   let reset_channels () =
-    let stdfmt () = [ stdout_ppf () ] and errfmt () = [ stderr_ppf () ] in
+    let stdfmt () = [ Format.std_formatter ]
+    and errfmt () = [ Format.err_formatter ] in
     set_formatters (stdfmt ()) debug_channel;
     set_formatters (stdfmt ()) info_channel;
     set_formatters (stdfmt ()) result_channel;
@@ -424,6 +423,10 @@ module Make (G : ChannelGroup) = struct
 
   let get_debug_level, set_debug_level, debug_pass =
     mk_level_functions debug_channel
+
+  let is_debug_enabled =
+    let threshold = ChannelKind.loglevel ChannelKind.ChDebug in
+    fun () -> get_log_level () <= threshold
 
   let get_info_level, set_info_level, info_pass =
     mk_level_functions info_channel

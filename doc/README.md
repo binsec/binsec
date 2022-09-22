@@ -2,7 +2,7 @@
 
 In a nutshell.
 ```console
-$ opam install bitwuzla unisim_archisec binsec
+$ opam install curses bitwuzla unisim_archisec binsec
 ```
 More detailed instructions on how to install the tool from sources can be found [here](../INSTALL.md).
 
@@ -17,5 +17,5 @@ More detailed instructions on how to install the tool from sources can be found 
 
 ## Analysis
 
-- [Static Symbolic Execution](sse)
-- [Backward Bounded Static Symbolic Execution](bbsse)
+- [Static Symbolic Execution (SSE)](sse)
+- [Backward Bounded Static Symbolic Execution (BBSSE)](bbsse)

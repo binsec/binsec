@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,79 +21,12 @@
 
 open Sse_options
 
-module Query_stats = struct
-  module Preprocess = struct
-    let sat = ref 0
-
-    let unsat = ref 0
-
-    let const = ref 0
-
-    let total () = !sat + !unsat + !const
-
-    let reset () =
-      sat := 0;
-      unsat := 0;
-      const := 0
-
-    let pp ppf () =
-      let open Format in
-      fprintf ppf
-        "@[<v 2>@[<h>Preprocessing simplifications@]@,\
-         @[<h>total          %d@]@,\
-         @[<h>sat            %d@]@,\
-         @[<h>unsat          %d@]@,\
-         @[<h>constant enum  %d@]@]" (total ()) !sat !unsat !const
-  end
-
-  module SMT = struct
-    let sat = ref 0
-
-    let unsat = ref 0
-
-    let err = ref 0
-
-    let time = ref 0.0
-
-    let add_time t = time := !time +. t
-
-    let total () = !sat + !unsat + !err
-
-    let avg_time () = !time /. float (total ())
-
-    let reset () =
-      sat := 0;
-      unsat := 0;
-      err := 0;
-      time := 0.0
-
-    let pp ppf () =
-      let open Format in
-      fprintf ppf
-        "@[<v 2>@[<h>Satisfiability queries@]@,\
-         @[<h>total          %d@]@,\
-         @[<h>sat            %d@]@,\
-         @[<h>unsat          %d@]@,\
-         @[<h>unknown        %d@]@,\
-         @[<h>time           %.2f@]@,\
-         @[<h>average        %.2f@]@]" (total ()) !sat !unsat !err !time
-        (avg_time ())
-  end
-
-  let _reset () =
-    Preprocess.reset ();
-    SMT.reset ()
-
-  let pp ppf () =
-    let open Format in
-    fprintf ppf "@[<v 0>%a@,@,%a@,@]" Preprocess.pp () SMT.pp ()
-end
-
 let byte_size = Natural.to_int Basic_types.Constants.bytesize
 
 module S = Basic_types.String.Map
 
-module State (Solver : Smt_solver.Solver) : Sse_types.STATE = struct
+module State (Solver : Smt_sig.Solver) (QS : Sse_types.QUERY_STATISTICS) :
+  Sse_types.STATE = struct
   type t = {
     formula : Formula.formula;
     (* SMT2 formula *)
@@ -252,7 +185,7 @@ module State (Solver : Smt_solver.Solver) : Sse_types.STATE = struct
       | DivU -> Formula.mk_bv_udiv
       | DivS -> Formula.mk_bv_sdiv
       | ModU -> Formula.mk_bv_urem
-      | ModS -> Formula.mk_bv_srem
+      | ModS -> Formula.mk_bv_smod
       | Eq -> as_bv Formula.mk_bv_equal
       | Diff -> as_bv Formula.mk_bv_distinct
       | LeqU -> as_bv Formula.mk_bv_ule
@@ -277,8 +210,9 @@ module State (Solver : Smt_solver.Solver) : Sse_types.STATE = struct
       let smt_unary = unary and smt_binary = binary in
       let open Expr in
       match e with
+      | Dba.Expr.Var { info = Symbol (_, (lazy bv)); _ } | Cst bv ->
+          (Formula.mk_bv_cst bv, state)
       | Var { name; size; _ } -> lookup name size state
-      | Cst bv -> (Formula.mk_bv_cst bv, state)
       | Load (bytes, _endianness, e) ->
           let smt_e, state = expr state e in
           (Formula.mk_select bytes state.vmemory smt_e, state)
@@ -317,26 +251,27 @@ module State (Solver : Smt_solver.Solver) : Sse_types.STATE = struct
       model
 
     let with_solver formula f =
+      QS.Solver.start_timer ();
       let session = Solver.open_session () in
       Formula.iter_forward (Solver.put session) formula;
-      let time, r = Utils.time (fun () -> f session) in
+      let r = f session in
       Solver.close_session session;
-      Query_stats.SMT.add_time time;
+      QS.Solver.stop_timer ();
       r
 
     let check_satistifiability formula vars memory =
       with_solver formula (fun session ->
           match Solver.check_sat session with
           | Formula.SAT ->
-              incr Query_stats.SMT.sat;
+              QS.Solver.incr_sat ();
               Logger.debug ~level:4 "SMT query resulted in SAT";
               Some (extract_model session vars memory)
           | Formula.UNSAT ->
-              incr Query_stats.SMT.unsat;
+              QS.Solver.incr_unsat ();
               Logger.debug ~level:4 "SMT query resulted in UNSAT";
               None
           | Formula.UNKNOWN | Formula.TIMEOUT ->
-              incr Query_stats.SMT.err;
+              QS.Solver.incr_err ();
               Logger.warning ~level:0 "SMT query resulted in UNKNOWN";
               raise Sse_types.Unknown)
 
@@ -347,7 +282,7 @@ module State (Solver : Smt_solver.Solver) : Sse_types.STATE = struct
             else
               match Solver.check_sat session with
               | Formula.SAT ->
-                  incr Query_stats.SMT.sat;
+                  QS.Solver.incr_sat ();
                   let bv = Solver.get_bv_value session e' in
                   Logger.debug ~level:5
                     "Solver returned %a ; %d solutions still to be found"
@@ -357,11 +292,11 @@ module State (Solver : Smt_solver.Solver) : Sse_types.STATE = struct
                   @@ Formula.mk_bv_distinct e (Formula.mk_bv_cst bv);
                   loop e' (n - 1) ((bv, model) :: enum)
               | Formula.UNSAT ->
-                  incr Query_stats.SMT.unsat;
+                  QS.Solver.incr_unsat ();
                   Logger.debug ~level:4 "Solver returned UNSAT";
                   enum
               | Formula.UNKNOWN | Formula.TIMEOUT ->
-                  incr Query_stats.SMT.err;
+                  QS.Solver.incr_err ();
                   Logger.warning ~level:0 "SMT query resulted in UNKNOWN";
                   raise Sse_types.Unknown
           in
@@ -410,7 +345,7 @@ module State (Solver : Smt_solver.Solver) : Sse_types.STATE = struct
           _;
         } ->
         assert (v = var);
-        incr Query_stats.Preprocess.sat;
+        QS.Preprocess.incr_sat ();
         Some { state with formula; fid }
     | Some
         {
@@ -424,7 +359,7 @@ module State (Solver : Smt_solver.Solver) : Sse_types.STATE = struct
           _;
         } ->
         assert (v = var);
-        incr Query_stats.Preprocess.unsat;
+        QS.Preprocess.incr_unsat ();
         None
     | _ -> (
         let formula =
@@ -457,7 +392,7 @@ module State (Solver : Smt_solver.Solver) : Sse_types.STATE = struct
           _;
         } ->
         assert (v = var);
-        incr Query_stats.Preprocess.sat;
+        QS.Preprocess.incr_sat ();
         Sse_types.True { state with formula; fid }
     | Some
         {
@@ -471,7 +406,7 @@ module State (Solver : Smt_solver.Solver) : Sse_types.STATE = struct
           _;
         } ->
         assert (v = var);
-        incr Query_stats.Preprocess.unsat;
+        QS.Preprocess.incr_unsat ();
         Sse_types.False { state with formula; fid }
     | _ -> (
         let formula = Formula.push_front_assert (Formula.mk_bl_var var) formula
@@ -518,9 +453,9 @@ module State (Solver : Smt_solver.Solver) : Sse_types.STATE = struct
           _;
         } ->
         assert (v = var);
-        if Bitvector.is_one bv then incr Query_stats.Preprocess.sat
-        else if Bitvector.is_zero bv then incr Query_stats.Preprocess.unsat
-        else incr Query_stats.Preprocess.const;
+        if Bitvector.is_one bv then QS.Preprocess.incr_sat ()
+        else if Bitvector.is_zero bv then QS.Preprocess.incr_unsat ()
+        else QS.Preprocess.incr_const ();
         Logger.debug ~level:4 "Enumeration of %a resolved to constant %a"
           Formula_pp.pp_bv_term e Bitvector.pp bv;
         [ (bv, { state with formula; fid }) ]
@@ -626,6 +561,4 @@ module State (Solver : Smt_solver.Solver) : Sse_types.STATE = struct
     @@ List.rev
     @@ S.find name state.fvariables;
     Buffer.contents buf
-
-  let pp_stats = Query_stats.pp
 end

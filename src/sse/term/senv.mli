@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,4 +21,4 @@
 
 val get_solver_factory : unit -> (module Solver_sig.FACTORY)
 
-module State (F : Solver_sig.FACTORY) : Sse_types.STATE
+module State (F : Solver_sig.FACTORY) : Sse_types.STATE_FACTORY

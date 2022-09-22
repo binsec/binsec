@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,6 +21,8 @@
 
 module type Env = sig
   val lookup : string -> int -> Dba.LValue.t
+
+  val lookup_symbol : string -> Dba.VarTag.attribute -> Dba.Expr.t
 
   val wordsize : int
 

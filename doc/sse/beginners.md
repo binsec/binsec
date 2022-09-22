@@ -1,6 +1,7 @@
 # SSE Tutorial \#1: First steps with BINSEC SSE
 
-In this post, we will exercise the **S**tatic **S**ymbolic **E**xecution engine of **BINSEC** over the small *CTF* puzzle named [**magic**](../../examples/sse/quickstart/magic).
+In this post, we will exercise the **S**tatic **S**ymbolic **E**xecution engine of **BINSEC** over the small *CTF* puzzle named [**magic**](../../examples/sse/quickstart/magic).   
+You can find everything about this tutorial in [/examples/sse/quickstart](../../examples/sse/quickstart).
 
 What are we looking for? *Capture The Flag* games can take the form of a reverse-engineering challenges to find an input (password, etc.) that will reach a special state of the program such as leading to an exploit, a crash or simply printing a victory message. 
 
@@ -306,5 +307,5 @@ Let us just recap how we proceeded:
 - initialize some values (especially the stack pointer and return address);
 - do not forget to cut unwanted paths.
 
-Now you will find [here](intermediates.md) an other example of how to use **BINSEC** symbolic execution to solve a [FLARE On](https://flare-on.com/) CTF challenge.  
+Now you will find [here](intermediates_1.md) an other example of how to use **BINSEC** symbolic execution to solve a [FLARE On](https://flare-on.com/) CTF challenge.  
 Have a nice day :-)

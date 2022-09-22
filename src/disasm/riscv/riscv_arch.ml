@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -130,11 +130,11 @@ module Mode = struct
   let size = function M32 -> 32 | M64 -> 64 | M128 -> 128
 end
 
-module type Mode_s = sig
-  val size : int
+module type RegisterSize = sig
+  val size : Mode.t
 end
 
-module Register (M : Mode_s) = struct
+module Register (M : RegisterSize) = struct
   type register = Dba.VarTag.t Dba.var
 
   type t = register
@@ -170,7 +170,7 @@ module Register (M : Mode_s) = struct
   let add_all () =
     let info = Dba.VarTag.Register in
     List.iter
-      (fun r -> H.set r { Dba.name = r; Dba.size = M.size; Dba.info })
+      (fun r -> H.set r { Dba.name = r; Dba.size = Mode.size M.size; Dba.info })
       canonical_registers
 
   let _ = add_all ()
@@ -300,17 +300,5 @@ module Register (M : Mode_s) = struct
       raise Not_found
     with Found i -> i
 
-  let bvnum t = Bitvector.of_int ~size:M.size (num t)
+  let bvnum t = Bitvector.of_int ~size:(Mode.size M.size) (num t)
 end
-
-module V32 = Register (struct
-  let size = Mode.size Mode.m32
-end)
-
-module V64 = Register (struct
-  let size = Mode.size Mode.m64
-end)
-
-module V128 = Register (struct
-  let size = Mode.size Mode.m128
-end)

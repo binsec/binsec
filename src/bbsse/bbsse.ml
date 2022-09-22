@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -160,7 +160,7 @@ let do_optimization ?(keep = Formula.VarSet.empty) fm =
     Stat.preprocess_time.sec +. Unix.gettimeofday () -. t;
   r
 
-module Runner (Solver : Smt_solver.Solver) = struct
+module Runner (Solver : Smt_sig.Solver) = struct
   let rec loop state status = function
     | [] -> status
     | p :: paths -> (
@@ -448,7 +448,7 @@ let run () =
         jump_targets
     in
 
-    let module R = Runner ((val P.get_solver () : P.Solver)) in
+    let module R = Runner ((val P.get_solver () : Smt_sig.Solver)) in
     R.loop state bounds (n - 1) predicates 0)
 
 let _ = Cli.Boot.enlist ~name:"BB-SSE" ~f:run

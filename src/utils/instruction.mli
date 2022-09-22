@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -81,7 +81,7 @@ val unsupported :
 
 val of_generic_instruction : Virtual_address.t -> Generic.t -> Dhunk.t -> t
 
-val of_dba_block : Virtual_address.t -> Dhunk.t -> t
+val of_dba_block : ?mnemonic:Mnemonic.t -> Virtual_address.t -> Dhunk.t -> t
 
 val to_generic_instruction : t -> Generic.t
 

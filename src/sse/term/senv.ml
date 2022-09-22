@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2019                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,7 +27,7 @@ let map =
   let open Formula_options in
   let open Smt_options in
   function
-  | Best | Bitwuzla_native -> assert false
+  | Auto | Bitwuzla_native -> assert false
   | Bitwuzla_smtlib -> Bitwuzla
   | Boolector_smtlib -> Boolector
   | Z3_smtlib -> Z3
@@ -38,10 +38,10 @@ let get_solver_factory () =
   let open Formula_options in
   let open Smt_options in
   match Smt_options.SMTSolver.get () with
-  | (Smt_options.Best | Smt_options.Bitwuzla_native) when Smt_bitwuzla.available
+  | (Smt_options.Auto | Smt_options.Bitwuzla_native) when Smt_bitwuzla.available
     ->
       (module Native_solver.Solver : Solver_sig.FACTORY)
-  | Best -> (
+  | Auto -> (
       try
         let solver = List.find Prover.ping solvers in
         Logger.info "Found %a in the path." Prover.pp solver;
@@ -64,74 +64,6 @@ type 'a test = 'a Sse_types.test =
   | False of 'a
   | Both of { t : 'a; f : 'a }
 
-module Query_stats = struct
-  module Preprocess = struct
-    let sat = ref 0
-
-    let unsat = ref 0
-
-    let const = ref 0
-
-    let total () = !sat + !unsat + !const
-
-    let reset () =
-      sat := 0;
-      unsat := 0;
-      const := 0
-
-    let pp ppf () =
-      let open Format in
-      fprintf ppf
-        "@[<v 2>@[<h>Preprocessing simplifications@]@,\
-         @[<h>total          %d@]@,\
-         @[<h>sat            %d@]@,\
-         @[<h>unsat          %d@]@,\
-         @[<h>constant enum  %d@]@]" (total ()) !sat !unsat !const
-  end
-
-  module SMT = struct
-    let sat = ref 0
-
-    let unsat = ref 0
-
-    let err = ref 0
-
-    let time = ref 0.0
-
-    let add_time t = time := !time +. t
-
-    let total () = !sat + !unsat + !err
-
-    let avg_time () = !time /. float (total ())
-
-    let reset () =
-      sat := 0;
-      unsat := 0;
-      err := 0;
-      time := 0.0
-
-    let pp ppf () =
-      let open Format in
-      fprintf ppf
-        "@[<v 2>@[<h>Satisfiability queries@]@,\
-         @[<h>total          %d@]@,\
-         @[<h>sat            %d@]@,\
-         @[<h>unsat          %d@]@,\
-         @[<h>unknown        %d@]@,\
-         @[<h>time           %.2f@]@,\
-         @[<h>average        %.2f@]@]" (total ()) !sat !unsat !err !time
-        (avg_time ())
-  end
-
-  let _reset () =
-    Preprocess.reset ();
-    SMT.reset ()
-
-  let pp ppf () =
-    let open Format in
-    fprintf ppf "@[<v 0>%a@,@,%a@,@]" Preprocess.pp () SMT.pp ()
-end
-
 (* utils *)
 let pp_int_as_bv ppf x = function
   | 1 -> Format.fprintf ppf "#b%d" x
@@ -143,6 +75,7 @@ let pp_int_as_bv ppf x = function
   | 24 -> Format.fprintf ppf "#x%06x" x
   | 28 -> Format.fprintf ppf "#x%07x" x
   | 32 -> Format.fprintf ppf "#x%08x" x
+  | 64 when x >= 0 -> Format.fprintf ppf "#x%016x" x
   | sz -> Format.fprintf ppf "(_ bv%d %d)" x sz
 
 let pp_bv ppf value size =
@@ -159,7 +92,12 @@ open Sexpr
 module BiItM = Imap
 module BvSet = Set.Make (Expr)
 module S = Basic_types.String.Map
-module I = Basic_types.BigInt.Map
+
+module I = Map.Make (struct
+  type t = Z.t
+
+  let compare x y = -Z.compare x y
+end)
 
 module Model = struct
   type t = Bv.t BvTbl.t * char BiTbl.t
@@ -204,7 +142,7 @@ module Model = struct
       let img = Kernel_functions.get_img () in
       let noname = "" in
       let section_name addr =
-        let address = Z.to_int addr in
+        let address = Virtual_address.to_int (Virtual_address.of_bigint addr) in
         match Loader_utils.find_section_by_address ~address img with
         | None -> noname
         | Some section -> Loader.Section.name section
@@ -309,7 +247,7 @@ module Model = struct
           if !map' <> Z.zero then lookup m ptr !map' buf over
       | Layer { addr; bytes; over; _ } ->
           let addr = eval m addr in
-          let offset = Bv.value_of (Bv.sub ptr addr) in
+          let offset = Bv.signed_of (Bv.sub ptr addr) in
           let map = ref map and map' = ref Z.zero in
           while !map <> Z.zero do
             let x = Z.trailing_zeros !map in
@@ -327,7 +265,7 @@ module Model = struct
       concat dir buf
 end
 
-module State (F : Solver_sig.FACTORY) = struct
+module State (F : Solver_sig.FACTORY) (QS : Sse_types.QUERY_STATISTICS) = struct
   type t = {
     constraints : Expr.t list;
     (* reversed sequence of assertions *)
@@ -471,7 +409,15 @@ module State (F : Solver_sig.FACTORY) = struct
         match constraints with
         | [] -> ()
         | eq :: constraints ->
-            Solver.add eq;
+            let addr, value =
+              match eq with
+              | Binary
+                  { f = Eq; x = Load { addr = Cst addr; _ }; y = Cst value; _ }
+                ->
+                  (Bitvector.value_of addr, Bitvector.value_of value)
+              | _ -> assert false
+            in
+            Solver.set_memory ~addr value;
             force_lazy_init constraints state
 
     let enumerate =
@@ -480,13 +426,13 @@ module State (F : Solver_sig.FACTORY) = struct
         else
           match Solver.check_sat () with
           | Unknown ->
-              incr Query_stats.SMT.err;
+              QS.Solver.incr_err ();
               raise Unknown
           | Unsat ->
-              incr Query_stats.SMT.unsat;
+              QS.Solver.incr_unsat ();
               enum
           | Sat ->
-              incr Query_stats.SMT.sat;
+              QS.Solver.incr_sat ();
               let memory, constraints = extract_memory state in
               if constraints == state.constraints = false then (
                 force_lazy_init constraints state;
@@ -513,7 +459,7 @@ module State (F : Solver_sig.FACTORY) = struct
           let bv = Model.eval state.model e in
           if List.mem bv except then []
           else (
-            incr Query_stats.Preprocess.const;
+            QS.Preprocess.incr_const ();
             Solver.neq expr (Bitvector.value_of bv);
             let cond = Expr.equal e (Expr.constant bv) in
             [
@@ -549,16 +495,16 @@ module State (F : Solver_sig.FACTORY) = struct
 
   let assume cond state =
     if Expr.is_equal cond Expr.one then (
-      incr Query_stats.Preprocess.sat;
+      QS.Preprocess.incr_sat ();
       Some state)
     else if Expr.is_equal cond Expr.zero then (
-      incr Query_stats.Preprocess.unsat;
+      QS.Preprocess.incr_unsat ();
       None)
     else if BvSet.mem cond state.constset then (
-      incr Query_stats.Preprocess.sat;
+      QS.Preprocess.incr_sat ();
       Some state)
     else if BvSet.mem (Expr.lognot cond) state.constset then (
-      incr Query_stats.Preprocess.unsat;
+      QS.Preprocess.incr_unsat ();
       None)
     else
       let state =
@@ -569,40 +515,39 @@ module State (F : Solver_sig.FACTORY) = struct
         }
       in
       if Bitvector.zero = Model.eval state.model cond then (
-        let t0 = Unix.gettimeofday () in
+        QS.Solver.start_timer ();
         let open Engine (F ()) in
         let r =
           match check_sat state with
           | exception Unknown ->
-              incr Query_stats.SMT.err;
+              QS.Solver.incr_err ();
               raise Unknown
           | Unsat ->
-              incr Query_stats.SMT.unsat;
+              QS.Solver.incr_unsat ();
               None
           | Sat state ->
-              incr Query_stats.SMT.sat;
+              QS.Solver.incr_sat ();
               Some state
         in
         close ();
-        let t1 = Unix.gettimeofday () in
-        Query_stats.SMT.add_time (t1 -. t0);
+        QS.Solver.stop_timer ();
         r)
       else (
-        incr Query_stats.Preprocess.sat;
+        QS.Preprocess.incr_sat ();
         Some state)
 
   let test cond state =
     if Expr.is_equal cond Expr.one then (
-      incr Query_stats.Preprocess.sat;
+      QS.Preprocess.incr_sat ();
       True state)
     else if Expr.is_equal cond Expr.zero then (
-      incr Query_stats.Preprocess.unsat;
+      QS.Preprocess.incr_unsat ();
       False state)
     else if BvSet.mem cond state.constset then (
-      incr Query_stats.Preprocess.sat;
+      QS.Preprocess.incr_sat ();
       True state)
     else if BvSet.mem (Expr.lognot cond) state.constset then (
-      incr Query_stats.Preprocess.unsat;
+      QS.Preprocess.incr_unsat ();
       False state)
     else
       let t =
@@ -622,50 +567,48 @@ module State (F : Solver_sig.FACTORY) = struct
       in
       let e = Model.eval state.model cond in
       let s = if Bv.is_zero e then t else f in
-      let t0 = Unix.gettimeofday () in
+      QS.Solver.start_timer ();
       let open Engine (F ()) in
       let r =
         match check_sat s with
         | exception Unknown ->
-            incr Query_stats.SMT.err;
+            QS.Solver.incr_err ();
             raise Unknown
         | Unsat ->
-            incr Query_stats.SMT.unsat;
+            QS.Solver.incr_unsat ();
             if Bv.is_zero e then False f else True t
         | Sat state ->
-            incr Query_stats.SMT.sat;
+            QS.Solver.incr_sat ();
             if Bv.is_zero e then Both { t = state; f }
             else Both { t; f = state }
       in
       close ();
-      let t1 = Unix.gettimeofday () in
-      Query_stats.SMT.add_time (t1 -. t0);
+      QS.Solver.stop_timer ();
       r
 
   let enumerate =
     let with_solver e ?n ?except state =
       Sse_options.Logger.debug ~level:5 "Call solver";
-      let t0 = Unix.gettimeofday () in
+      QS.Solver.start_timer ();
       let open Engine (F ()) in
       let r = enumerate e ?n ?except state in
       close ();
-      let t1 = Unix.gettimeofday () in
-      Query_stats.SMT.add_time (t1 -. t0);
+      QS.Solver.stop_timer ();
       r
     in
     fun e ?n ?(except = []) state ->
       match (e, n) with
       | Expr.Cst bv, _ when List.mem bv except = false ->
-          incr Query_stats.Preprocess.const;
+          QS.Preprocess.incr_const ();
           [ (bv, state) ]
       | Expr.Cst _, _ ->
-          incr Query_stats.Preprocess.const;
+          QS.Preprocess.incr_const ();
           []
       | _, Some 1 ->
           let bv = Model.eval state.model e in
           if List.mem bv except then with_solver e ?n ~except state
           else (
-            incr Query_stats.Preprocess.const;
+            QS.Preprocess.incr_const ();
             let cond = Expr.equal e (Expr.constant bv) in
             [
               ( bv,
@@ -717,8 +660,9 @@ module State (F : Solver_sig.FACTORY) = struct
 
     let rec expr symbolic_state e =
       match e with
+      | Dba.Expr.Var { info = Symbol (_, (lazy bv)); _ } | Dba.Expr.Cst bv ->
+          (Expr.constant bv, symbolic_state)
       | Dba.Expr.Var { name; size; _ } -> lookup name size symbolic_state
-      | Dba.Expr.Cst bv -> (Expr.constant bv, symbolic_state)
       | Dba.Expr.Load (bytes, endianness, e) ->
           let addr, symbolic_state = expr symbolic_state e in
           (read ~addr bytes endianness symbolic_state, symbolic_state)
@@ -729,11 +673,15 @@ module State (F : Solver_sig.FACTORY) = struct
       | Dba.Expr.Unary (uop, e) ->
           let v, symbolic_state = expr symbolic_state e in
           (Expr.unary (unary e uop) v, symbolic_state)
-      | Dba.Expr.Ite (c, then_e, else_e) ->
+      | Dba.Expr.Ite (c, then_e, else_e) -> (
           let cond, symbolic_state = expr symbolic_state c in
-          let then_smt, symbolic_state = expr symbolic_state then_e in
-          let else_smt, symbolic_state = expr symbolic_state else_e in
-          (Expr.ite cond then_smt else_smt, symbolic_state)
+          match cond with
+          | Expr.Cst bv when Bv.is_zero bv -> expr symbolic_state else_e
+          | Expr.Cst _ -> expr symbolic_state then_e
+          | _ ->
+              let then_smt, symbolic_state = expr symbolic_state then_e in
+              let else_smt, symbolic_state = expr symbolic_state else_e in
+              (Expr.ite cond then_smt else_smt, symbolic_state))
   end
 
   let assume e t =
@@ -757,7 +705,53 @@ module State (F : Solver_sig.FACTORY) = struct
     let value, t = Translate.expr t value in
     write ~addr value dir t
 
-  let pp_smt ?slice:_ _ _ = Sse_options.Logger.fatal "unimplemented feature"
+  let pp_smt ?slice ppf t =
+    let module P = Smt2_solver.Printer in
+    let ctx = P.create ~next_id:t.fid () in
+    (* visit assertions *)
+    List.iter (P.visit_bl ctx) t.constraints;
+    (* visit terms *)
+    let defs =
+      match slice with
+      | Some defs ->
+          List.map
+            (fun (expr, name) ->
+              let expr, _ = Translate.expr t expr in
+              P.visit_bv ctx expr;
+              (expr, name))
+            defs
+      | None ->
+          P.visit_ax ctx t.vmemory;
+          List.rev
+            (S.fold
+               (fun name expr defs ->
+                 P.visit_bv ctx expr;
+                 (expr, name) :: defs)
+               t.vsymbols [])
+    in
+    Format.pp_open_vbox ppf 0;
+    (* print declarations *)
+    P.pp_print_decls ppf ctx;
+    Format.pp_open_hovbox ppf 0;
+    (* print definitions *)
+    P.pp_print_defs ppf ctx;
+    List.iter
+      (fun (bv, name) ->
+        Format.fprintf ppf "(define-fun %s () (_ BitVec %d)@ " name
+          (Expr.sizeof bv);
+        P.pp_print_bv ctx ppf bv;
+        Format.fprintf ppf ")@ ")
+      defs;
+    (* print assertions *)
+    List.iter
+      (fun bl ->
+        Format.pp_print_string ppf "(assert ";
+        P.pp_print_bl ctx ppf bl;
+        Format.pp_print_char ppf ')';
+        Format.pp_print_space ppf ())
+      t.constraints;
+    Format.pp_close_box ppf ();
+    Format.pp_close_box ppf ()
 
   let as_ascii name t =
     let buf = Buffer.create 16 in
@@ -774,6 +768,4 @@ module State (F : Solver_sig.FACTORY) = struct
         iter (Model.eval t.model var))
     @@ List.rev @@ S.find name t.fvariables;
     Buffer.contents buf
-
-  let pp_stats = Query_stats.pp
 end

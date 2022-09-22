@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -105,7 +105,14 @@ type 'a var = { name : string; size : size; info : 'a }
 module VarTag : sig
   type attribute = Value | Size | Last
 
-  type t = Flag | Temp | Register | Symbol of attribute | Empty
+  val pp_attribute : Format.formatter -> attribute -> unit
+
+  type t =
+    | Flag
+    | Temp
+    | Register
+    | Symbol of attribute * Bitvector.t lazy_t
+    | Empty
 end
 
 module Expr : sig

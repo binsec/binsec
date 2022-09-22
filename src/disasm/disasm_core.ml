@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -81,8 +81,11 @@ let x86_decode reader (addr : Virtual_address.t) =
       raise (Decode_error "Bad opcode sequence")
   | res -> res
 
-let riscv_decode reader vaddr =
-  generic_decode reader Riscv_to_dba.decode (fun x -> x) vaddr
+let riscv32_decode reader vaddr =
+  generic_decode reader Riscv_to_dba.decode_32 (fun x -> x) vaddr
+
+let riscv64_decode reader vaddr =
+  generic_decode reader Riscv_to_dba.decode_64 (fun x -> x) vaddr
 
 (* End wrappers *)
 
@@ -111,7 +114,9 @@ let register_decoder isa decode convert =
 
 let () = M.add tbl Machine.x86 x86_decode
 
-let () = M.add tbl (Machine.riscv `x32) riscv_decode
+let () = M.add tbl (Machine.riscv `x32) riscv32_decode
+
+let () = M.add tbl (Machine.riscv `x64) riscv64_decode
 
 let () =
   M.add tbl Machine.unknown (fun _ ->
