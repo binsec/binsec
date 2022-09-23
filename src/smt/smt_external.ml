@@ -279,11 +279,11 @@ module Solver = struct
     | CstBinary s -> Bitvector.of_string ("0b" ^ s)
     | CstDecimalSize (value, size) ->
         Bitvector.create (Z.of_string value) (int_of_string size)
-    | CstNumeral _ | CstString _ | CstBool _ | CstDecimal _ ->
-        Logger.error
+    | CstBool b -> Bitvector.of_bool b
+    | CstNumeral _ | CstString _ | CstDecimal _ ->
+        Logger.fatal
           "Model construction: unexpected constant %a as bitvector value"
-          Smtlib_pp.pp_spec_constant cst;
-        exit 2
+          Smtlib_pp.pp_spec_constant cst
 
   let extract_bv terms =
     let open Smtlib in

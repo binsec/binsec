@@ -52,12 +52,12 @@ BINSEC is developed at CEA List in scientfic collaboration with Verimag and LORI
 
 An overview of some BINSEC features can be found in our SSPREW'17 tutorial.")
  (depends
-  (ocaml (>= 4.13))
+  (ocaml (and (>= 4.09) (< 5)))
   (menhir (and :build (>= 20181113)))
   (ocamlgraph (>= 1.8.5))
   (zarith (>= 1.4))
   dune-site
-  toml
+  (toml (>= 6))
   (ounit2 (and :with-test (>= 2)))
   (qcheck (and :with-test (>= 0.7))))
  (depopts

@@ -29,7 +29,8 @@ end = struct
   let interrupt f x =
     match Unix.sigpending () with
     | [] | (exception Invalid_argument _) -> f x
-    | _ -> 1
+    | l when List.mem Sys.sigint l -> 1
+    | _ -> f x
 
   let zero = Fun.const 0
 

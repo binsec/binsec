@@ -17,7 +17,7 @@ $ opem install curses # optional -- for real time summary window
 ##### System
 
 - [GMP v6.1 (GNU Multi-Precision arithmetic library)](https://gmplib.org)
-- [OCaml >= 4.08](https://github.com/ocaml/ocaml)
+- [OCaml >= 4.09](https://github.com/ocaml/ocaml)
 
 ##### OCaml
 
@@ -44,7 +44,7 @@ When `opam` is available, using the command `make` will automatically install th
 :information_source: **Local opam switch**  
 If `opam` is available, using the following command will create a new OCaml switch inside the BINSEC tree.
 ```bash
-OCAML_COMPILER=4.08.1 make switch
+OCAML_COMPILER=4.09.1 make switch
 ```
 A local switch makes the installation of dependencies, including ocaml supported version, not impacting the system wide ocaml configuration.  
 *Doing so, everything installed will be readily available but only inside the BINSEC directory.*

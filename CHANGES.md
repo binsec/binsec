@@ -1,3 +1,11 @@
+## 0.6.1 (2022-09-23)
+
+** Bugs
+
+  - Fix the model extraction for newer versions of `Bitwuzla`
+  - Fix the timeout handler for `ocaml-bitwuzla` when `4.09 <= ocaml < 4.13`
+  - Fix SSE not properly resetting the screen when an exception occurs
+
 ## 0.6.0 (2022-09-22)
 
 ** Features

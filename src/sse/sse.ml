@@ -1049,7 +1049,11 @@ module Env_make (S : functor (QS : QUERY_STATISTICS) -> STATE)
     try
       Sys.catch_break true;
       loop_aux ps
-    with Halt | Sys.Break -> halt e
+    with
+    | Halt | Sys.Break -> halt e
+    | err ->
+        Screen.release ();
+        raise err
 
   let interval_or_set_to_cond expr is =
     let open Parse_helpers.Initialization in

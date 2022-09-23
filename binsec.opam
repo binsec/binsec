@@ -58,12 +58,12 @@ homepage: "https://binsec.github.io"
 bug-reports: "mailto:binsec@saxifrage.saclay.cea.fr"
 depends: [
   "dune" {>= "3.0"}
-  "ocaml" {>= "4.13"}
+  "ocaml" {>= "4.09" & < "5"}
   "menhir" {build & >= "20181113"}
   "ocamlgraph" {>= "1.8.5"}
   "zarith" {>= "1.4"}
   "dune-site"
-  "toml"
+  "toml" {>= "6"}
   "ounit2" {with-test & >= "2"}
   "qcheck" {with-test & >= "0.7"}
   "odoc" {with-doc}
