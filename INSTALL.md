@@ -11,7 +11,7 @@ Dependencies can be automatically installed via
 $ opam install dune menhir ocamlgraph zarith toml
 $ opam install bitwuzla # optional -- for native SMT solver binding
 $ opam install unisim_archisec # optional -- for x86-64, ARMv7 and ARMv8
-$ opem install curses # optional -- for real time summary window
+$ opam install curses # optional -- for real time summary window
 ```
 
 ##### System

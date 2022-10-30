@@ -57,12 +57,12 @@ module Make (E : EXPLORATION_STATISTICS) (Q : QUERY_STATISTICS) = struct
         flush out_string out_flush t;
         if n > capacity then out_string s p n
         else (
-          Bytes.unsafe_blit_string s p t.content 0 n;
+          Bytes.blit_string s p t.content 0 n;
           t.insert_pos <- n);
         Curses.reset_prog_mode ();
         ignore @@ Curses.refresh ())
       else (
-        Bytes.unsafe_blit_string s p t.content t.insert_pos n;
+        Bytes.blit_string s p t.content t.insert_pos n;
         t.insert_pos <- insert_pos);
       Mutex.unlock mutex
 
