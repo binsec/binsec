@@ -22,7 +22,12 @@
 module Printer : sig
   type t
 
-  val create : ?word_size:int -> next_id:Suid.t -> unit -> t
+  val create :
+    ?word_size:int ->
+    ?debug:(name:string -> label:string -> string) ->
+    next_id:Suid.t ->
+    unit ->
+    t
 
   val visit_bl : t -> Sexpr.Expr.t -> unit
 

@@ -100,6 +100,10 @@
     	   { IDENT (s, int_of_string i) }
   | ident as s
     	   { IDENT (s, -1) }
+  | ('%' '%' digit+ as s) '<' (digit+ as i) '>'
+           { IDENT (s, int_of_string i) }
+  | '%' '%' digit+ as s
+           { IDENT (s, -1) }
   | '-'? digit+ as s
     	   { INT (Z.of_string s) }
   | '{' space* (digit+ as hi) space* ".." space* (digit+ as lo) '}'

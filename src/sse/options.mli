@@ -19,10 +19,60 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module Make
-    (E : Sse_types.EXPLORATION_STATISTICS)
-    (Q : Sse_types.QUERY_STATISTICS) : sig
-  val init : unit -> unit
+(** Definition of command-line & programmatic options for SSE *)
 
-  val release : unit -> unit
+include Cli.S
+
+module AlternativeEngine : Cli.BOOLEAN
+
+module MaxDepth : Cli.INTEGER
+
+module TransientEnum : Cli.INTEGER
+
+module JumpEnumDepth : Cli.INTEGER
+
+module QMerge : Cli.INTEGER
+
+module Randomize : Cli.BOOLEAN
+
+module AddressTraceDir : Cli.STRING_OPT
+
+module AvoidAddresses : Cli.STRING_SET
+
+module GoalAddresses : Cli.STRING_SET
+
+module LoadSections : Cli.STRING_SET
+
+module LoadROSections : Cli.BOOLEAN
+
+module MemoryFile : Cli.STRING_OPT
+
+module ScriptFiles : Cli.STRING_LIST
+
+module Comment : Cli.BOOLEAN
+
+module Timeout : Cli.FLOAT
+
+module Address_counter : sig
+  type t = private { address : Virtual_address.t; counter : int }
+
+  val check_and_decr : t -> t option
 end
+
+module Visit_address_counter :
+  Cli.CHECKABLE with type t = Address_counter.t list
+
+type search_heuristics = Dfs | Bfs | Nurs
+
+module Search_heuristics : Cli.GENERIC with type t = search_heuristics
+
+module Solver_call_frequency : Cli.INTEGER
+(** Define the frequency -- in terms of number of conditionals -- with which we
+    call the solver *)
+
+module Seed : Cli.INTEGER_OPT
+(** Seed for the random number generator *)
+
+module Directives : Cli.GENERIC with type t = Directive.t list
+
+module Dot_filename_out : Cli.STRING_OPT

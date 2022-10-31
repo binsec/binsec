@@ -113,6 +113,8 @@ module VarTag : sig
     | Register
     | Symbol of attribute * Bitvector.t lazy_t
     | Empty
+
+  include Sigs.HASHABLE with type t := t
 end
 
 module Expr : sig
@@ -181,7 +183,7 @@ module Expr : sig
 
   val append : t -> t -> t
 
-  include Sigs.Comparisons with type t := t and type boolean = t
+  include Sigs.COMPARISON with type t := t and type boolean = t
 
   val unary : Unary_op.t -> t -> t
 

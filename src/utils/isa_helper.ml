@@ -879,6 +879,18 @@ module RISCV = struct
       ]
 end
 
+module Z80 = struct
+  let defs =
+    let add r l =
+      let name = Z80_arch.name r in
+      let lval = Z80_arch.lval r in
+      (name, lval) :: (String.lowercase_ascii name, lval) :: l
+    in
+    Array.fold_right add Z80_arch.registers16
+      (Array.fold_right add Z80_arch.registers8
+         (Array.fold_right add Z80_arch.flags []))
+end
+
 let get_defs () =
   match Kernel_options.Machine.isa () with
   | X86 { bits = `x32 } -> X86.defs
@@ -887,6 +899,7 @@ let get_defs () =
   | ARM { rev = `v8; _ } -> AARCH64.defs
   | RISCV { bits = `x32 } -> RISCV.defs 32
   | RISCV { bits = `x64 } -> RISCV.defs 64
+  | Z80 -> Z80.defs
   | _ ->
       (* TODO *)
       raise (Errors.not_yet_implemented "incomplete architecture definition")
@@ -903,6 +916,7 @@ let max_instruction_len () =
   match Kernel_options.Machine.isa () with
   | X86 _ -> b15
   | ARM _ -> b4
+  | Z80 -> b4
   | _ ->
       (* TODO *)
       raise (Errors.not_yet_implemented "incomplete architecture definition")

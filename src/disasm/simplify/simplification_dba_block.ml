@@ -430,7 +430,7 @@ module Constant_propagation = struct
                 env))
       else env
     in
-    ignore (loop env Dhunk.(start block |> Node.id));
+    ignore (loop env Dhunk.(start block));
     envs
 
   let do_propagations block propagation_envs =

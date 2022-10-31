@@ -19,21 +19,19 @@
 /*                                                                        */
 /**************************************************************************/
 
-%{
-    let entrypoint = Dba.Expr.var "$ENTRYPOINT" E.wordsize
-%}
 
-%token STARTING FROM FILE CORE LOAD SECTION SECTIONS
+%token STARTING FROM FILE CORE LOAD SECTION SECTIONS IMPORT
 %token REACH CUT ENUMERATE
-%token TIMES SUCH THAT PRINT FORMULA MODEL STREAM BIN DEC HEXA ASCII
+%token TIMES SUCH THAT PRINT FORMULA MODEL STREAM BIN DEC HEXA ASCII CSTRING
 %token REPLACE BY WITH TAND
 %token EOF
 
-%start <Sse_types.Script.t list> script
+%start <Script.t list> script
 
 %%
 
-let script := statements=list(terminated(statement, option(SEMICOLON))); EOF;
+let script :=
+  | statements=nonempty_list(terminated(statement, option(SEMICOLON))); EOF;
     { statements }
 
 let statement :=
@@ -47,111 +45,91 @@ let statement :=
     { stub }
 
 let init :=
-  | a=assignment;
-    { Sse_types.Script.Init
-	(Parse_helpers.Initialization.from_assignment (a 0)) }
-  | a=assignment; AS; id=IDENT;
-    { match a 0 with
-      | Dba.Instr.Assign (lval, _, _)
-      | Dba.Instr.Nondet (lval, _, _) as a ->
-	 let size = Dba.LValue.size_of lval in
-	 let identifier, _ = id in
-	 ignore (E.lookup identifier size);
-	 Sse_types.Script.Init
-	   (Parse_helpers.Initialization.from_assignment ~identifier a)
-      | _ -> assert false }
-  | ~=load; FROM; FILE;
-    { Sse_types.Script.Init (Parse_helpers.Initialization.from_store load) }
-  | ASSUME; ~=bool;
-    { Sse_types.Script.Init (Parse_helpers.Initialization.assume bool) }
+  | ~=instr;
+    { Init instr }
 
 let goal :=
   | REACH; loc=address; times=option(terminated(INT, TIMES));
     guard=option(preceded(pair(SUCH, THAT), bool));
-    actions=option(preceded(THEN, separated_nonempty_list(TAND, action)));
+    actions=loption(preceded(THEN, separated_nonempty_list(TAND, action)));
     { let n = Option.fold ~none:1 ~some:Z.to_int times in
-      Sse_types.Script.Goal (Directive.reach ~n ?guard ?actions ~loc ()) }
+      Directive (loc, Reach (n, guard, actions)) }
   | REACH; MUL; loc=address; guard=option(preceded(pair(SUCH, THAT), bool));
-    actions=option(preceded(THEN, separated_nonempty_list(TAND, action)));
-    { Sse_types.Script.Goal (Directive.reach_all ?guard ?actions ~loc ()) }
-  | REACH; MUL;
-    { Sse_types.Script.Pragma Sse_types.Pragma.Reach_all }
+    actions=loption(preceded(THEN, separated_nonempty_list(TAND, action)));
+    { Directive (loc, Reach (-1, guard, actions)) }
   | CUT; AT; loc=address; guard=option(preceded(IF,bool));
-    { Sse_types.Script.Goal (Directive.cut ?guard ~loc ()) }
+    { Directive (loc, Cut guard) }
   | AT; loc=address; ~=directive;
-    { Sse_types.Script.Goal (directive ~loc ()) }
+    { Directive (loc, directive) }
+
+let directive :=
+  | ENUMERATE; enum=expr; times=option(delimited(LPAR, INT, RPAR));
+    { Enumerate (Option.fold ~none:1 ~some:Z.to_int times, enum) }
+  | ENUMERATE; MUL; enum=expr;
+    { Enumerate (max (1 lsl Expr.size_of enum) max_int, enum) }
+  | ASSUME; test=bool;
+    { Assume test }
+  | ASSERT; test=bool;
+    { Assert test }
+
 
 let address ==
   | ~=iexpr;
     { match iexpr with
-      | Left i -> Dba.Expr.constant (Bitvector.create i E.wordsize)
+      | Left i -> Expr.constant (Bitvector.create i Env.wordsize)
       | Right e -> e }
 
-let directive :=
-  | ENUMERATE; e=expr; times=option(delimited(LPAR, INT, RPAR));
-    { let n = Option.fold ~none:1 ~some:Z.to_int times in
-      Directive.enumerate ~n e }
-  | ENUMERATE; MUL; e=expr;
-    { Directive.enumerate_all e }
-  | ASSUME; e=bool;
-    { Directive.assume e }
-  | ASSERT; e=bool;
-    { Directive.dynamic_assert e }
-
 let stub :=
-  | REPLACE; locs=separated_nonempty_list(COMMA, address); BY; ~=chunk;
-    { Sse_types.Script.Stub (locs, chunk) }
+  | REPLACE; locs=separated_nonempty_list(COMMA, address); BY; ~=chunk; END;
+    { Stub (locs, chunk) }
   | ABORT; AT; locs=separated_nonempty_list(COMMA, address);
-    { Sse_types.Script.Stub (locs, Dhunk.singleton
-				     (Dba.Instr._assert Dba.Expr.zero 0)) }
+    { Stub (locs, [ Instr.dynamic_assert Expr.zero ]) }
   | HALT; AT; locs=separated_nonempty_list(COMMA, address);
-    { Sse_types.Script.Stub (locs, Dhunk.singleton (Dba.Instr.stop None)) }
+    { Stub (locs, [ Instr.halt ]) }
 
 let pragma :=
   | STARTING; FROM; ~=address;
     stmts=loption(delimited(WITH,flatten(nonempty_list(stmt)), END));
-    {
-      let stmts =
-	List.append stmts [ [], Terminator (Dba.Instr.dynamic_jump address) ] in
-      Sse_types.Script.Pragma
-	(Sse_types.Pragma.Start_from (address, dhunk_of_list stmts)) }
+    { Start_from (address, stmts) }
   | STARTING; FROM; CORE;
     stmts=loption(delimited(WITH,flatten(nonempty_list(stmt)), END));
-    {
-      let stmts = List.append
-		    stmts
-		    [ [], Terminator (Dba.Instr.dynamic_jump entrypoint) ] in
-      Sse_types.Script.Pragma
-	(Sse_types.Pragma.Start_from_core (dhunk_of_list stmts)) }
+    { Start_from_core stmts }
   | LOAD; SECTION; ~=section; FROM; FILE;
-    { Sse_types.Script.Pragma (Sse_types.Pragma.Load_sections [ section ]) }
+    { Load_sections [ section ] }
   | LOAD; SECTIONS; sections=separated_nonempty_list(COMMA, section);
     FROM; FILE;
-    { Sse_types.Script.Pragma (Sse_types.Pragma.Load_sections sections) }
+    { Load_sections sections }
+  | ~=load; FROM; FILE;
+    { Load_data (LValue.to_expr load) }
+  | IMPORT; symbols=separated_nonempty_list(COMMA, SYMBOL); FROM; file=ident;
+    { Import_symbols (symbols, file) }
+
 
 let action :=
   | PRINT; FORMULA;
-    { Directive.Action.Print_formula None }
+    { Action.Print_formula None }
   | PRINT; FORMULA; FOR; slice=separated_nonempty_list(COMMA, identifiable);
-    { Directive.Action.Print_formula (Some slice) }
+    { Action.Print_formula (Some slice) }
   | PRINT; MODEL;
-    { Directive.Action.Print_model }
+    { Action.Print_model }
   | PRINT; ~=format; ~=expr;
-    { Directive.Action.Print_value (format, expr) }
+    { Action.Print_value (format, expr) }
   | PRINT; ASCII; STREAM; id=IDENT;
-    { Directive.Action.Print_stream (fst id) }
+    { Action.Print_stream (fst id) }
+  | PRINT; CSTRING; id=IDENT;
+    { Action.Print_c_string (fst id) }
 
 let format :=
   |
-    { Directive.Action.Hex }
+    { Action.Hex }
   | BIN;
-    { Directive.Action.Bin }
+    { Action.Bin }
   | DEC;
-    { Directive.Action.Dec }
+    { Action.Dec }
   | HEXA;
-    { Directive.Action.Hex }
+    { Action.Hex }
   | ASCII;
-    { Directive.Action.Ascii }
+    { Action.Ascii }
 
 
 let ident ==
@@ -164,7 +142,7 @@ let identifiable :=
       expr, name }
   | id=IDENT;
     { let name, size = id in
-      Dba.LValue.to_expr (E.lookup name size), name }
+      LValue.to_expr (Env.lookup name size), name }
 
 let section :=
   | ~=ident;

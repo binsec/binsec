@@ -135,6 +135,39 @@ module VarTag = struct
     | Register
     | Symbol of attribute * Bitvector.t lazy_t
     | Empty
+
+  let compare a b =
+    match (a, b) with
+    | Flag, Flag -> 0
+    | Flag, (Temp | Register | Symbol _ | Empty) -> -1
+    | Temp, Flag -> 1
+    | Temp, Temp -> 0
+    | Temp, (Register | Symbol _ | Empty) -> -1
+    | Register, (Flag | Temp) -> 1
+    | Register, Register -> 0
+    | Register, (Symbol _ | Empty) -> -1
+    | Symbol _, (Flag | Temp | Register) -> 1
+    | Symbol (attr, _), Symbol (attr', _) -> compare attr attr'
+    | Symbol _, Empty -> -1
+    | Empty, (Flag | Temp | Register | Symbol _) -> 1
+    | Empty, Empty -> 0
+
+  let equal a b =
+    match (a, b) with
+    | Flag, Flag | Temp, Temp | Register, Register | Empty, Empty -> true
+    | Symbol (attr, _), Symbol (attr', _) -> attr = attr'
+    | ( (Flag | Temp | Register | Symbol _ | Empty),
+        (Flag | Temp | Register | Symbol _ | Empty) ) ->
+        false
+
+  let hash = function
+    | Flag -> 129913994
+    | Temp -> 883721435
+    | Register -> 648017920
+    | Symbol (Value, _) -> 543159235
+    | Symbol (Size, _) -> 72223805
+    | Symbol (Last, _) -> 828390822
+    | Empty -> 152507349
 end
 
 module Expr : sig
@@ -196,13 +229,13 @@ module Expr : sig
 
   val append : t -> t -> t
 
-  include Sigs.Comparisons with type t := t and type boolean = t
+  include Sigs.COMPARISON with type t := t and type boolean = t
 
   val unary : Unary_op.t -> t -> t
 
   val uminus : t -> t
 
-  include Sigs.Logical with type t := t
+  include Sigs.LOGICAL with type t := t
 
   val logxor : t -> t -> t
 
@@ -839,9 +872,9 @@ end
 module type INSTR = sig
   type t
 
-  include Sigs.Arithmetic with type t := t
+  include Sigs.ARITHMETIC with type t := t
 
-  include Sigs.Bitwise with type t := t
+  include Sigs.BITWISE with type t := t
 end
 
 module Var = struct
@@ -915,7 +948,6 @@ module LValue = struct
 
   let store nbytes endianness e =
     let sz = Size.Byte.to_int nbytes in
-    (*    Format.printf "store : %d@." (Expr.size_of e); *)
     Store (sz, endianness, e)
 
   let is_expr_translatable = function

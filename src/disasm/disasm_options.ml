@@ -99,12 +99,6 @@ module Functions = Builder.String_set (struct
   let doc = "Disassemble given comma separated list of functions"
 end)
 
-module SimplifiedDisassembly = Builder.False (struct
-  let name = "no-hunk-simplification"
-
-  let doc = "Disable DBA hunks simplifications"
-end)
-
 module Decode_instruction = Builder.String_option (struct
   let name = "decode"
 

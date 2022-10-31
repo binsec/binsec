@@ -41,22 +41,20 @@ module Solver () : Solver_sig.S = struct
 
   type nonrec term = bv term
 
-  type access = Select of term * int | Store of term
-
   module Context = struct
     type t = {
       st_cons : bv sort NiTbl.t;
       bv_cons : term BvTbl.t;
       ax_cons : memory AxTbl.t;
-      history : access Queue.t;
+      addr_space : int;
     }
 
-    let create () =
+    let create addr_space =
       {
         st_cons = NiTbl.create 8;
         bv_cons = BvTbl.create 128;
         ax_cons = AxTbl.create 64;
-        history = Queue.create ();
+        addr_space;
       }
   end
 
@@ -116,6 +114,15 @@ module Solver () : Solver_sig.S = struct
     | Sge -> Term.Bv.sge
     | Sgt -> Term.Bv.sgt
 
+  let rec unroll_store array index x s =
+    if s = 8 then Term.Ar.store array index x
+    else
+      unroll_store
+        (Term.Ar.store array index (Term.Bv.extract ~hi:7 ~lo:0 x))
+        (Term.Bv.succ index)
+        (Term.Bv.extract ~hi:(s - 1) ~lo:8 x)
+        (s - 8)
+
   let rec visit_bv ctx bv =
     try BvTbl.find ctx.bv_cons bv
     with Not_found ->
@@ -125,7 +132,6 @@ module Solver () : Solver_sig.S = struct
         | Load { len; dir; addr; label; _ } ->
             let sort = visit_sort ctx (Expr.sizeof addr) in
             let index = visit_bv ctx addr and array = visit_ax ctx sort label in
-            Queue.push (Select (index, len)) ctx.history;
             visit_select len dir index array
         | Cst bv ->
             let size = Bv.size_of bv and value = Bv.value_of bv in
@@ -145,30 +151,31 @@ module Solver () : Solver_sig.S = struct
       BvTbl.add ctx.bv_cons bv e;
       e
 
-  and visit_ax ctx index ax =
+  and visit_ax ctx index (ax : Memory.t) =
     try AxTbl.find ctx.ax_cons ax
     with Not_found ->
       let a =
         match ax with
-        | Memory.Unknown ->
+        | Root ->
             Term.const
               (Sort.ar index (visit_sort ctx byte_size))
               Suid.(to_string zero)
-        | Memory.Source { over; _ } -> visit_ax ctx index over
-        | Memory.Layer { addr; bytes; over; _ } ->
+        | Symbol name ->
+            Term.const (Sort.ar index (visit_sort ctx byte_size)) name
+        | Layer { addr; store; over; _ } ->
             let base = visit_bv ctx addr and array = visit_ax ctx index over in
-            BiMap.fold
-              (fun i byte array ->
-                let x = visit_bv ctx byte
+            Sexpr.Store.fold
+              (fun i value array ->
+                let s = Expr.sizeof value in
+                let x = visit_bv ctx value
                 and index = Term.Bv.(add base (of_z index i)) in
-                Queue.push (Store index) ctx.history;
-                Term.Ar.store array index x)
-              bytes array
+                unroll_store array index x s)
+              array store
       in
       AxTbl.add ctx.ax_cons ax a;
       a
 
-  let ctx = create ()
+  let ctx = create (Kernel_options.Machine.word_size ())
 
   let put _ constraints =
     List.iter (fun bl -> assert' (visit_bv ctx bl)) constraints
@@ -181,54 +188,31 @@ module Solver () : Solver_sig.S = struct
   let get e = BvTbl.find ctx.bv_cons e
 
   let set_memory ~addr value =
-    let sort =
-      match Queue.top ctx.history with Select (t, _) | Store t -> Term.sort t
-    in
+    let sort = visit_sort ctx ctx.addr_space in
     assert'
       (Term.equal
          (Term.Ar.select
-            (AxTbl.find ctx.ax_cons Memory.Unknown)
+            (AxTbl.find ctx.ax_cons Memory.Root)
             (Term.Bv.of_z sort addr))
          (Term.Bv.of_z (visit_sort ctx byte_size) value))
 
   let neq e x = assert' (Term.distinct e (Term.Bv.of_z (Term.sort e) x))
 
-  let get_memory () = (AxTbl.find ctx.ax_cons Memory.Unknown, ctx.history)
+  let get_array ar =
+    let assignment, _ =
+      Term.Ar.assignment (get_value (AxTbl.find ctx.ax_cons ar))
+    in
+    Array.map
+      (fun (addr, value) ->
+        ( Term.Bv.assignment addr,
+          Char.unsafe_chr (Z.to_int (Term.Bv.assignment value)) ))
+      assignment
 
-  let get_at ar x = Term.Bv.assignment @@ get_value (Term.Ar.select ar x)
-
-  let get_value x = Term.Bv.assignment @@ get_value x
-
-  let succ = Term.Bv.succ
+  let get_value x = Term.Bv.assignment (get_value x)
 
   let timeout = Formula_options.Solver.Timeout.get ()
 
   let check_sat () = Smt_bitwuzla_utils.watchdog ~timeout check_sat ()
 
   let close () = unsafe_close ()
-
-  (* let check_binop f x y e =
-   *   let x' = visit_bv ctx x and y' = visit_bv ctx y and e' = visit_bv ctx e in
-   *   assert' (Term.distinct (visit_binop f x' y') e');
-   *   match check_sat () with
-   *   | Sat ->
-   *       Sse_options.Logger.fatal "(%a %a %a) <> %a" T.pp_op f T.pp x T.pp y T.pp
-   *         e
-   *   | _ -> close ()
-   *
-   * let visit_unop =
-   *   let open T in
-   *   function
-   *   | Not -> Term.Bv.lognot
-   *   | Minus -> Term.Bv.neg
-   *   | Uext n -> Term.Bv.zero_extend n
-   *   | Sext n -> Term.Bv.sign_extend n
-   *   | Restrict { lo; hi } -> Term.Bv.extract ~hi ~lo
-   *
-   * let check_unop f x e =
-   *   let x' = visit_bv ctx x and e' = visit_bv ctx e in
-   *   assert' (Term.distinct (visit_unop f x') e');
-   *   match check_sat () with
-   *   | Sat -> Sse_options.Logger.fatal "(%a %a) <> %a" T.pp_op f T.pp x T.pp e
-   *   | _ -> close () *)
 end

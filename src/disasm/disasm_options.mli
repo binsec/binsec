@@ -39,8 +39,6 @@ module Sections : Cli.STRING_SET
 
 module Functions : Cli.STRING_SET
 
-module SimplifiedDisassembly : Cli.BOOLEAN
-
 type disassembly_mode =
   | Recursive
   | Linear

@@ -1,65 +1,60 @@
-(include_subdirs unqualified)
+(include_subdirs no)
+
+(dirs :standard \ formula)
+
+(library
+ (public_name binsec.sse_register)
+ (name sse)
+ (modules sse)
+ (flags
+  (:standard -open Binsec -open Libsse -open Libterm))
+ (library_flags
+  (:standard -linkall))
+ (libraries libsse libterm))
 
 (library
  (public_name binsec.sse)
- (name se)
- (modules :standard)
- (modules_without_implementation solver_sig)
+ (name libsse)
+ (modules :standard \ sse)
  (flags
-  (:standard -open Binsec -open Smt))
- (library_flags
-  (:standard -linkall))
+  (:standard -open Binsec))
  (libraries
   threads
   toml
   binsec
-  smt
   (select
-   sse_screen.ml
+   screen.ml
    from
-   (curses -> sse_screen.enabled.ml)
-   (!curses -> sse_screen.stubs.ml))
-  (select
-   native_solver.ml
-   from
-   (bitwuzla -> native_solver.enabled.ml)
-   (!bitwuzla -> native_solver.stubs.ml))))
+   (curses -> screen.enabled.ml)
+   (!curses -> screen.stubs.ml))))
 
 (rule
- (copy ../dba/dba_expr_parser.mly dba_expr_parser.mly))
+ (copy ../ast/expr_parser.mly expr_parser.mly))
 
 (rule
- (copy ../dba/dba_instr_parser.mly dba_instr_parser.mly))
+ (copy ../ast/instr_parser.mly instr_parser.mly))
 
 (rule
- (copy ../dba/dba_chunk_parser.mly dba_chunk_parser.mly))
-
-(rule
- (copy ../dba/dba_env_parser.mly dba_env_parser.mly))
+ (copy ../ast/chunk_parser.mly chunk_parser.mly))
 
 (rule
  (with-stdout-to
-  sse_lexer.mll
+  script_lexer.mll
   (progn
-   (cat sse_lexer.mll.header)
-   (cat ../dba/dba_lexer.mll.decl)
-   (cat sse_lexer.mll.ext)
-   (cat ../dba/dba_lexer.mll.body))))
+   (cat script_lexer.mll.header)
+   (cat ../ast/ast_lexer.mll.decl)
+   (cat script_lexer.mll.ext)
+   (cat ../ast/ast_lexer.mll.body))))
 
 (menhir
- (modules dba_expr_parser dba_instr_parser dba_chunk_parser script_parser)
+ (modules expr_parser instr_parser chunk_parser script_parser)
  (flags --only-tokens)
  (merge_into sse_tokens))
 
 (menhir
- (modules
-  dba_expr_parser
-  dba_instr_parser
-  dba_chunk_parser
-  dba_env_parser
-  script_parser)
+ (modules expr_parser instr_parser chunk_parser param_parser script_parser)
  (flags --fixed-exception --external-tokens Sse_tokens)
  (merge_into sse_parser))
 
 (ocamllex
- (modules sse_lexer))
+ (modules script_lexer))

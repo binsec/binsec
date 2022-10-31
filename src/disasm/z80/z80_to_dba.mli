@@ -19,12 +19,5 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module type Env = sig
-  val lookup : string -> int -> Dba.LValue.t
-
-  val lookup_symbol : string -> Dba.VarTag.attribute -> Dba.Expr.t
-
-  val wordsize : int
-
-  val endianness : Machine.endianness
-end
+val decode : Lreader.t -> Virtual_address.t -> Instruction.Generic.t * Dhunk.t
+(** [decode r addr] decodes what is at address [addr] in reader [r]. *)

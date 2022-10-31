@@ -21,4 +21,4 @@
 
 val get_solver_factory : unit -> (module Solver_sig.FACTORY)
 
-module State (F : Solver_sig.FACTORY) : Sse_types.STATE_FACTORY
+module State (F : Solver_sig.FACTORY) : Types.STATE_FACTORY

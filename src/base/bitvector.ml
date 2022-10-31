@@ -93,7 +93,7 @@ let value_of t =
       Z.of_int (unsafe_to_int (unsafe_to_unboxed t) asr 10)
     else
       let value = unsafe_to_int (unsafe_to_unboxed t) asr 10 in
-      Z.logand (Z.of_int value) (Z.pred (Z.shift_left Z.one size))
+      if value < 0 then Z.extract (Z.of_int value) 0 size else Z.of_int value
   else
     let { unsigned; _ } = unsafe_to_boxed t in
     unsigned
@@ -517,7 +517,9 @@ module type Common = sig
 
   val sgt : t -> t -> boolean
 
-  include Sigs.Arithmetic with type t := t
+  include Sigs.ARITHMETIC with type t := t
+
+  val pow : t -> t -> t
 
   val succ : t -> t
 
@@ -538,7 +540,7 @@ module type Common = sig
   val is_pos : t -> bool
 
   (* land, lor, lxor and lnot are keywords... *)
-  include Sigs.Bitwise with type t := t
+  include Sigs.BITWISE with type t := t
 
   val reduce : t -> int -> t
 

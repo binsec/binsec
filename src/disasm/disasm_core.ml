@@ -54,12 +54,8 @@ let compute_next_address current_address current_instruction =
 
 (* Platform-specific decoding wrappers *)
 
-let simplify_hunk dh =
-  if Disasm_options.SimplifiedDisassembly.get () then Dhunk.Simplify.run dh
-
 let generic_decode reader decode to_generic address =
   let xinstr, dhunk = decode reader address in
-  simplify_hunk dhunk;
   (* Side effects beware *)
   let ginstr = to_generic xinstr in
   let next_address = compute_next_address address ginstr in
@@ -86,6 +82,9 @@ let riscv32_decode reader vaddr =
 
 let riscv64_decode reader vaddr =
   generic_decode reader Riscv_to_dba.decode_64 (fun x -> x) vaddr
+
+let z80_decode reader vaddr =
+  generic_decode reader Z80_to_dba.decode (fun x -> x) vaddr
 
 (* End wrappers *)
 
@@ -117,6 +116,8 @@ let () = M.add tbl Machine.x86 x86_decode
 let () = M.add tbl (Machine.riscv `x32) riscv32_decode
 
 let () = M.add tbl (Machine.riscv `x64) riscv64_decode
+
+let () = M.add tbl Machine.z80 z80_decode
 
 let () =
   M.add tbl Machine.unknown (fun _ ->

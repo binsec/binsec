@@ -4,10 +4,10 @@
  (name bbsse)
  (modules :standard)
  (flags
-  (:standard -open Binsec -open Smt -open Se))
+  (:standard -open Binsec -open Smt -open Sse))
  (library_flags
   (:standard -linkall))
- (libraries binsec smt se))
+ (libraries binsec smt sse))
 
 (menhir
  (modules bbsse_parser))

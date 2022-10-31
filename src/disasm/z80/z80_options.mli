@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2021                                               *)
+(*  Copyright (C) 2016-2022                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,28 +19,4 @@
 (*                                                                        *)
 (**************************************************************************)
 
-  | "starting"  { STARTING }
-  | "from"      { FROM }
-  | "file"      { FILE }
-  | "core"	{ CORE }
-  | "load" 	{ LOAD }
-  | "section"   { SECTION }
-  | "sections"  { SECTIONS }
-  | "reach"     { REACH }
-  | "cut"       { CUT }
-  | "enumerate" { ENUMERATE }
-  | "times"     { TIMES }
-  | "such"      { SUCH }
-  | "that"      { THAT }
-  | "print"     { PRINT }
-  | "formula"   { FORMULA }
-  | "model"     { MODEL }
-  | "stream"    { STREAM }
-  | "bin"       { BIN }
-  | "dec"       { DEC }
-  | "hexa"      { HEXA }
-  | "ascii"     { ASCII }
-  | "replace"   { REPLACE }
-  | "by"        { BY }
-  | "with"	{ WITH }
-  | "and"       { TAND }
+include Cli.S

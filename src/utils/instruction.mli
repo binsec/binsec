@@ -97,6 +97,6 @@ val stop : Virtual_address.t -> t
 
 val get_caddress : t -> Dba_types.Caddress.t
 
-val start : t -> Dhunk.Node.t
+val start : t -> int
 
 include Sigs.PRINTABLE with type t := t

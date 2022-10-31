@@ -19,6 +19,41 @@
 /*                                                                        */
 /**************************************************************************/
 
-%parameter <E : Astbuilder.Env>
+%token ASSERT ASSUME ASSIGN GOTO JUMP HALT
+%token UNDEF NONDET
+%token AT IF THEN ELSE
 
 %%
+
+%public
+let assignment :=
+  | ~=loc; ASSIGN; ~=expr;
+    { Instr.assign loc expr }
+  | ~=loc; ASSIGN; value=INT;
+    { Instr.assign
+	loc (Expr.constant
+	     @@ Bitvector.create value (LValue.size_of loc)) }
+  | ~=loc; ASSIGN; UNDEF;
+    { Instr.undef loc }
+  | ~=loc; ASSIGN; NONDET;
+    { Instr.nondet loc }
+
+%public
+let fallthrough :=
+  | ~=assignment;
+    { assignment }
+  | ASSERT; ~=bool;
+    { Instr.dynamic_assert bool }
+  | ASSUME; ~=bool;
+    { Instr.assume bool }
+
+%public
+let terminator :=
+  | JUMP; AT; ~=iexpr;
+    { let addr = match iexpr with
+	| Right e -> e
+	| Left i -> Expr.constant
+		    @@ Bitvector.create i Env.wordsize in
+      Instr.dynamic_jump addr }
+  | HALT;
+    { Instr.halt }

@@ -11,6 +11,10 @@
 - [How to #1: Solving self-modifying CTF with BINSEC SSE (advanced)](advanced_users.md)
 - [How to #2: Read the SSE exploration board](exploration_board.md)
 
+# Write up
+
+- [FCSC 2022: Licorne](fcsc_licorne.md)
+
 ## Manual reference
 
 DBA language reference and command line options are listed [here](references.md).

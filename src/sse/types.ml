@@ -19,9 +19,21 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module I = Basic_types.Int
+module S = Basic_types.String
+module A = Fiber.A
+module Var = Fiber.Var
+module Expr = Fiber.Expr
+
 exception Unknown
 
+exception Non_unique
+
+exception Non_mergeable
+
 type 'a test = True of 'a | False of 'a | Both of { t : 'a; f : 'a }
+
+type target = Slice of (Expr.t * string) list | Env of string I.Htbl.t
 
 module type STATE = sig
   type t
@@ -29,31 +41,34 @@ module type STATE = sig
 
   val empty : unit -> t
 
-  val assume : Dba.Expr.t -> t -> t option
+  val assume : Expr.t -> t -> t option
 
-  val test : Dba.Expr.t -> t -> t test
+  val test : Expr.t -> t -> t test
+
+  val get_value : ?check_unique:bool -> Expr.t -> t -> Bitvector.t
 
   val split_on :
-    Dba.Expr.t ->
-    ?n:int ->
-    ?except:Bitvector.t list ->
-    t ->
-    (Bitvector.t * t) list
+    Expr.t -> ?n:int -> ?except:Bitvector.t list -> t -> (Bitvector.t * t) list
 
-  val fresh : string -> int -> t -> t
+  val fresh : Var.t -> t -> t
 
-  val assign : string -> Dba.Expr.t -> t -> t
+  val assign : Var.t -> Expr.t -> t -> t
 
-  val write : addr:Dba.Expr.t -> Dba.Expr.t -> Machine.endianness -> t -> t
+  val write : addr:Expr.t -> Expr.t -> Machine.endianness -> t -> t
+
+  val store : string -> addr:Expr.t -> Expr.t -> Machine.endianness -> t -> t
 
   val memcpy : addr:Bitvector.t -> int -> Loader_buf.t -> t -> t
 
+  val merge : t -> t -> t
+
   val pp : Format.formatter -> t -> unit
 
-  val pp_smt :
-    ?slice:(Dba.Expr.t * string) list -> Format.formatter -> t -> unit
+  val pp_smt : target -> Format.formatter -> t -> unit
 
-  val as_ascii : string -> t -> string
+  val as_ascii : name:string -> t -> string
+
+  val as_c_string : name:string -> t -> string
 end
 
 module type EXPLORATION_STATISTICS = sig
@@ -62,6 +77,8 @@ module type EXPLORATION_STATISTICS = sig
   val get_completed_paths : unit -> int
 
   val get_unknown_paths : unit -> int
+
+  val get_pending_paths : unit -> int
 
   val get_total_asserts : unit -> int
 
@@ -76,6 +93,30 @@ module type EXPLORATION_STATISTICS = sig
   val get_unique_insts : unit -> int
 
   val get_time : unit -> float
+
+  val reset : unit -> unit
+
+  val add_path : unit -> unit
+
+  val terminate_path : unit -> unit
+
+  val interrupt_path : unit -> unit
+
+  val add_assert : unit -> unit
+
+  val add_failed_assert : unit -> unit
+
+  val add_branch : unit -> unit
+
+  val update_depth : int -> unit
+
+  val add_instruction : unit -> unit
+
+  val add_unique_inst : unit -> unit
+
+  val pp : Format.formatter -> unit -> unit
+
+  val to_toml : unit -> Toml.Types.table
 end
 
 module type QUERY_STATISTICS = sig
@@ -120,125 +161,26 @@ module type QUERY_STATISTICS = sig
 
     val to_toml : unit -> Toml.Types.table
   end
+
+  val reset : unit -> unit
+
+  val pp : Format.formatter -> unit -> unit
 end
 
 module type STATE_FACTORY = functor (QS : QUERY_STATISTICS) -> STATE
 
-module Pragma : sig
-  type t =
-    | Start_from of Dba.Expr.t * Dhunk.t
-    | Start_from_core of Dhunk.t
-    | Load_sections of string list
-    | Reach_all
-end
-
-module Script : sig
-  type t =
-    | Init of Parse_helpers.Initialization.t
-    | Goal of Directive.t
-    | Stub of Dba.Expr.t list * Dhunk.t
-    | Pragma of Pragma.t
-end
-
-module C :
-  Instr_cfg.S
-    with type addr = Virtual_address.t
-     and type inst = Instruction.t
-     and type symb = Basic_types.Int.t
-
-module Path_state (S : STATE) : sig
-  type t
-
-  val create :
-    ?depth:int ->
-    ?address_counters:Sse_options.Address_counter.t Virtual_address.Map.t ->
-    ?block_index:int ->
-    S.t ->
-    Instruction.t ->
-    t
-
-  val branch : t -> t
-
-  (** {2 Accessors} *)
-
-  val dba_instruction : t -> Dba.Instr.t
-
-  val current_statement : t -> Dba_types.Statement.t
-
-  val virtual_address : t -> Virtual_address.t
-
-  val location : t -> Dba_types.Caddress.t
-
-  val symbolic_state : t -> S.t
-
-  val block_index : t -> int
-
-  val id : t -> int
-
-  val depth : t -> int
-
-  val solver_calls : t -> int
-
-  val paths_created : unit -> int
-
-  val is_depth_ok : t -> bool
-
-  val inst : t -> Instruction.t
-
-  val next_address : t -> Virtual_address.t option
-
-  val counter : Virtual_address.t -> t -> Sse_options.Address_counter.t option
-
-  (** {2 Modifiers} *)
-
-  val set_counter : Virtual_address.t -> Sse_options.Address_counter.t -> t -> t
-
-  val set_block_index : int -> t -> t
-
-  val set_instruction : Instruction.t -> t -> t
-  (** increase depth and extend path *)
-
-  val set_symbolic_state : S.t -> t -> t
-
-  val incr_solver_calls : t -> t
-
-  val reset_solver_calls : t -> t
-
-  val set_address_counters :
-    Sse_options.Address_counter.t Virtual_address.Map.t -> t -> t
-
-  val set_next_address : Virtual_address.t -> t -> t
-
-  (** {2 Printers} *)
-
-  val pp_loc : Format.formatter -> t -> unit
-
-  val pp_path : Format.formatter -> t -> unit
-end
-
 module type WORKLIST = sig
-  type elt
+  type 'a t
 
-  type t
+  val push : 'a -> 'a t -> 'a t
 
-  val push : elt -> t -> t
+  val pop : 'a t -> 'a * 'a t
 
-  val pop : t -> elt * t
+  val singleton : 'a -> 'a t
 
-  val singleton : elt -> t
+  val length : 'a t -> int
 
-  val length : t -> int
+  val is_empty : 'a t -> bool
 
-  val is_empty : t -> bool
-
-  val empty : t
+  val empty : 'a t
 end
-
-module type WORKLIST_FACTORY = functor (E : Sigs.ANY) ->
-  WORKLIST with type elt := E.t
-
-module Dfs : WORKLIST_FACTORY
-
-module Bfs : WORKLIST_FACTORY
-
-module Nurs : WORKLIST_FACTORY

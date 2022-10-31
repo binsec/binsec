@@ -19,8 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Sse_types
-open Sse_options
+open Options
+open Types
 
 module Make (E : EXPLORATION_STATISTICS) (Q : QUERY_STATISTICS) = struct
   type mode = Logging | Drawing
@@ -57,12 +57,12 @@ module Make (E : EXPLORATION_STATISTICS) (Q : QUERY_STATISTICS) = struct
         flush out_string out_flush t;
         if n > capacity then out_string s p n
         else (
-          Bytes.unsafe_blit_string s p t.content 0 n;
+          Bytes.blit_string s p t.content 0 n;
           t.insert_pos <- n);
         Curses.reset_prog_mode ();
         ignore @@ Curses.refresh ())
       else (
-        Bytes.unsafe_blit_string s p t.content t.insert_pos n;
+        Bytes.blit_string s p t.content t.insert_pos n;
         t.insert_pos <- insert_pos);
       Mutex.unlock mutex
 
@@ -188,22 +188,22 @@ module Make (E : EXPLORATION_STATISTICS) (Q : QUERY_STATISTICS) = struct
               if s > 0 then Printf.sprintf "%7d.%1ds" s (ms / 100)
               else Printf.sprintf "%8dms" ms)
 
-    let freq y x f =
+    let ips y x f =
       ignore
       @@ Curses.mvaddstr y x
            (if Float.compare f 1e9 >= 1 then
             let g = int_of_float (f /. 1e9) in
             let m = int_of_float (f /. 1e8) - (10 * g) in
-            Printf.sprintf "%5d.%1dGHz" g m
+            Printf.sprintf "%4d.%1dGIPS" g m
            else if Float.compare f 1e6 >= 1 then
              let m = int_of_float (f /. 1e6) in
              let k = int_of_float (f /. 1e5) - (10 * m) in
-             Printf.sprintf "%5d.%1dMHz" m k
+             Printf.sprintf "%4d.%1dMIPS" m k
            else if Float.compare f 1e3 >= 1 then
              let k = int_of_float (f /. 1e3) in
              let z = int_of_float (f /. 1e2) - (10 * k) in
-             Printf.sprintf "%5d.%1dkHz" k z
-           else Printf.sprintf "%8dHz" (int_of_float f))
+             Printf.sprintf "%4d.%1dkIPS" k z
+           else Printf.sprintf "%7dIPS" (int_of_float f))
 
     let percent y x p = ignore @@ Curses.mvaddstr y x (Printf.sprintf "%9d%%" p)
   end
@@ -250,7 +250,7 @@ module Make (E : EXPLORATION_STATISTICS) (Q : QUERY_STATISTICS) = struct
 
     Draw.int 13 25 unique_insts;
     Draw.int 14 25 instructions;
-    Draw.freq 15 25
+    Draw.ips 15 25
       (float_of_int (instructions - state.instructions)
       /. (total_time -. state.total_time));
 
@@ -502,6 +502,7 @@ module Make (E : EXPLORATION_STATISTICS) (Q : QUERY_STATISTICS) = struct
         Thread.join thread;
         ignore @@ Curses.nocbreak ();
         Curses.endwin ();
+        opened_state.flush_buffers ();
         Format.(
           pp_set_formatter_out_functions std_formatter
             opened_state.restore_stdout_fof;

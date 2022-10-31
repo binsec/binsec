@@ -1,3 +1,20 @@
+## 0.7.0-alpha (2022-10-31)
+
+** Features
+  - New architecture support : Z80
+  - New quick merging strategy in SSE
+  - Support for custom array in SSE stubs
+
+** Documentation
+
+  - Add the write-up ["FCSC 2022: Licorne"](doc/sse/fcsc_licorne.md)
+
+** Examples
+
+  - Add SSE [`prechall` challenge](examples/sse/fcsc/2022.prechall) from FCSC 2022
+  - Add SSE [`souk` challenge](examples/sse/fcsc/2022.souk) from FCSC 2022
+  - Add SSE [`licorne` challenge](examples/sse/fcsc/2022.licorne) from FCSC 2022
+
 ## 0.6.1 (2022-09-23)
 
 ** Bugs

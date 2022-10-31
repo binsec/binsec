@@ -31,8 +31,6 @@ module V_comparable = struct
   let hash x = x
 end
 
-let equal = V_comparable.equal
-
 include Basic_types.Collection_make.Hashed (V_comparable)
 
 let zero = 0

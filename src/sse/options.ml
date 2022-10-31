@@ -55,10 +55,24 @@ module JumpEnumDepth = Builder.Integer (struct
   let doc = "Set maximum number of jump targets to retrieve for dynamic jumps"
 end)
 
+module QMerge = Builder.Integer (struct
+  let name = "qmerge"
+
+  let default = 0
+
+  let doc = "Set maximum look ahead depth for quick merging"
+end)
+
 module Randomize = Builder.False (struct
   let name = "randomize"
 
   let doc = "randomize path selection"
+end)
+
+module AddressTraceDir = Builder.String_option (struct
+  let name = "address-trace-directory"
+
+  let doc = "set path for adress trace export"
 end)
 
 module AvoidAddresses = Builder.String_set (struct
