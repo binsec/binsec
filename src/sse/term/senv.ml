@@ -302,7 +302,7 @@ module State (F : Solver_sig.FACTORY) (QS : Sse_types.QUERY_STATISTICS) = struct
     }
 
   let fresh name size state =
-    let v = Expr.var (Sname.to_string state.fid) size () in
+    let v = Expr.var (Sname.to_string state.fid) size name in
     let fid = Sname.incr state.fid in
     let h =
       match S.find name state.fvariables with
@@ -707,7 +707,9 @@ module State (F : Solver_sig.FACTORY) (QS : Sse_types.QUERY_STATISTICS) = struct
 
   let pp_smt ?slice ppf t =
     let module P = Smt2_solver.Printer in
-    let ctx = P.create ~next_id:t.fid () in
+    let ctx =
+      P.create ~debug:(fun ~name ~label -> label ^ name) ~next_id:t.fid ()
+    in
     (* visit assertions *)
     List.iter (P.visit_bl ctx) t.constraints;
     (* visit terms *)
@@ -732,25 +734,30 @@ module State (F : Solver_sig.FACTORY) (QS : Sse_types.QUERY_STATISTICS) = struct
     Format.pp_open_vbox ppf 0;
     (* print declarations *)
     P.pp_print_decls ppf ctx;
-    Format.pp_open_hovbox ppf 0;
     (* print definitions *)
     P.pp_print_defs ppf ctx;
     List.iter
       (fun (bv, name) ->
-        Format.fprintf ppf "(define-fun %s () (_ BitVec %d)@ " name
+        Format.fprintf ppf "@[<h>(define-fun %s () (_ BitVec %d)@ " name
           (Expr.sizeof bv);
         P.pp_print_bv ctx ppf bv;
-        Format.fprintf ppf ")@ ")
+        Format.fprintf ppf ")@]@ ")
       defs;
+    if slice == None then
+      Format.fprintf ppf
+        "@[<h>(define-fun memory () (Array (_ BitVec %d) (_ BitVec 8))@ %a)@]"
+        (Kernel_options.Machine.word_size ())
+        (P.pp_print_ax ctx) t.vmemory;
     (* print assertions *)
     List.iter
       (fun bl ->
+        Format.pp_open_hbox ppf ();
         Format.pp_print_string ppf "(assert ";
         P.pp_print_bl ctx ppf bl;
         Format.pp_print_char ppf ')';
+        Format.pp_close_box ppf ();
         Format.pp_print_space ppf ())
       t.constraints;
-    Format.pp_close_box ppf ();
     Format.pp_close_box ppf ()
 
   let as_ascii name t =

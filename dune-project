@@ -4,7 +4,7 @@
 (generate_opam_files true)
 
 (name binsec)
-(version "0.6.0")
+(version "0.6.2")
 (maintainers "BINSEC <binsec@saxifrage.saclay.cea.fr>")
 (authors
   "Adel Djoudi"

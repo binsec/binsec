@@ -24,16 +24,16 @@ let byte_size = Natural.to_int Basic_types.Constants.bytesize
 module Bv = Bitvector
 module BiMap = Basic_types.BigInt.Map
 
-module rec Expr : (Term.S with type a := unit and type b := Memory.t) =
+module rec Expr : (Term.S with type a := string and type b := Memory.t) =
   Term.Make
     (struct
-      type t = unit
+      type t = string
 
-      let compare () () = 0
+      let compare _ _ = 0
 
-      let equal () () = true
+      let equal _ _ = true
 
-      let hash () = 0
+      let hash _ = 0
     end)
     (Memory)
 

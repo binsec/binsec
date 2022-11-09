@@ -1,3 +1,15 @@
+## 0.6.2 (2022-11-09)
+
+** Misc
+
+  - Improve SSE SMT-LIB printer
+
+** Bugs
+
+  - Fix SSE screen not properly releasing the terminal
+  - Fix SSE screen forget some pending logs
+  - Correct typo from #17
+
 ## 0.6.1 (2022-09-23)
 
 ** Bugs

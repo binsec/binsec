@@ -22,7 +22,7 @@
 module Bv = Bitvector
 module BiMap = Basic_types.BigInt.Map
 
-module rec Expr : (Term.S with type a := unit and type b := Memory.t)
+module rec Expr : (Term.S with type a := string and type b := Memory.t)
 
 and Memory : sig
   type t =

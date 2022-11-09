@@ -863,6 +863,9 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
            let s = Z.numbits v in
            hi < s && s = Z.popcount v ->
         unary f x
+    | ( Restrict { hi; lo = 0 },
+        Binary { f = (Plus | Minus) as bop; x; y = Cst bv; _ } ) ->
+        binary bop (unary f x) (constant (Bv.extract ~lo:0 ~hi bv))
     (* forward ite *)
     | f, Ite { c; t = Cst bv; e; _ } ->
         ite c (constant (Bv.unary f bv)) (unary f e)

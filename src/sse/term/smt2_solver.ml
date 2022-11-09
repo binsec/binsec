@@ -125,13 +125,16 @@ let pp_int_as_bv ppf x = function
   | 32 -> Format.fprintf ppf "#x%08x" (x land 0xffffffff)
   | sz when x < 0 ->
       Format.fprintf ppf "(_ bv%a %d)" Z.pp_print
-        (Z.logand (Z.of_int x) (Z.pred (Z.shift_left Z.one sz)))
+        (Z.extract (Z.of_int x) 0 sz)
         sz
   | sz -> Format.fprintf ppf "(_ bv%d %d)" x sz
 
 let pp_bv ppf value size =
   try pp_int_as_bv ppf (Z.to_int value) size
-  with Z.Overflow -> Format.fprintf ppf "(_ bv%a %d)" Z.pp_print value size
+  with Z.Overflow ->
+    Format.fprintf ppf "(_ bv%a %d)" Z.pp_print
+      (if Z.lt value Z.zero then Z.extract value 0 size else value)
+      size
 
 module Printer = struct
   open Sexpr
@@ -151,9 +154,11 @@ module Printer = struct
     ordered_defs : def Queue.t;
     ordered_mem : access Queue.t;
     word_size : int;
+    debug : name:string -> label:string -> string;
   }
 
-  let create ?(word_size = Kernel_options.Machine.word_size ()) ~next_id () =
+  let create ?(word_size = Kernel_options.Machine.word_size ())
+      ?(debug = fun ~name ~label:_ -> name) ~next_id () =
     let bv_cons = BvTbl.create 128 and bl_cons = BvTbl.create 32 in
     BvTbl.add bl_cons Expr.zero "false";
     BvTbl.add bv_cons Expr.zero "#b0";
@@ -168,6 +173,7 @@ module Printer = struct
       ordered_defs = Queue.create ();
       ordered_mem = Queue.create ();
       word_size;
+      debug;
     }
 
   let pp_int_as_offset size ppf i = pp_bv ppf i size
@@ -220,12 +226,13 @@ module Printer = struct
         BvTbl.replace ctx.bv_cons bv name)
     with Not_found -> (
       match bv with
-      | Var { name; size; _ } ->
+      | Var { name; size; label; _ } ->
+          let name = ctx.debug ~name ~label in
           BvTbl.add ctx.bv_cons bv name;
           if size = 1 then
             BvTbl.add ctx.bl_cons bv (Printf.sprintf "(= %s #b1)" name);
           BvTbl.add ctx.bv_decl bv
-            (Format.sprintf "(declare-const %s (_ BitVec %d))" name size)
+            (Format.sprintf "(declare-fun %s () (_ BitVec %d))" name size)
       | Load { len; addr; label; _ } ->
           BvTbl.add ctx.bv_cons bv once;
           visit_bv ctx addr;
@@ -282,7 +289,9 @@ module Printer = struct
         AxTbl.replace ctx.ax_cons ax name)
     with Not_found -> (
       match ax with
-      | Memory.Unknown -> AxTbl.add ctx.ax_cons ax Suid.(to_string zero)
+      | Memory.Unknown ->
+          AxTbl.add ctx.ax_cons ax
+            (ctx.debug ~name:Suid.(to_string zero) ~label:"memory")
       | Memory.Source { over; _ } ->
           AxTbl.add ctx.ax_cons ax once;
           visit_ax ctx over;
@@ -593,9 +602,10 @@ module Printer = struct
       ctx.bv_decl;
     if Queue.is_empty ctx.ordered_mem = false then
       let addr_space = Kernel_options.Machine.word_size () in
+      let name = ctx.debug ~name:Suid.(to_string zero) ~label:"memory" in
       Format.fprintf ppf
-        "(declare-const %a (Array (_ BitVec %d) (_ BitVec %d)))@ " Suid.pp
-        Suid.zero addr_space byte_size
+        "(declare-fun %s () (Array (_ BitVec %d) (_ BitVec %d)))@ " name
+        addr_space byte_size
 
   let pp_print_defs ppf ctx =
     Queue.iter
@@ -603,25 +613,26 @@ module Printer = struct
         | Bl bl ->
             let name = BvTbl.find ctx.bl_cons bl in
             if name != once then (
-              Format.fprintf ppf "(define-fun %s () Bool " name;
+              Format.fprintf ppf "@[<h>(define-fun %s () Bool " name;
               print_bl_no_cons ctx ppf bl;
-              Format.fprintf ppf ")@ ")
+              Format.fprintf ppf ")@]@ ")
         | Bv bv ->
             let name = BvTbl.find ctx.bv_cons bv in
             if name != once then (
-              Format.fprintf ppf "(define-fun %s () (_ BitVec %d) " name
+              Format.fprintf ppf "@[<h>(define-fun %s () (_ BitVec %d) " name
                 (Expr.sizeof bv);
               print_bv_no_cons ctx ppf bv;
-              Format.fprintf ppf ")@ ")
+              Format.fprintf ppf ")@]@ ")
         | Ax ax ->
             let name = AxTbl.find ctx.ax_cons ax in
             if name != once then (
               Format.fprintf ppf
-                "(define-fun %s () (Array (_ BitVec %d) (_ BitVec %d)) " name
+                "@[<h>(define-fun %s () (Array (_ BitVec %d) (_ BitVec %d)) "
+                name
                 (Kernel_options.Machine.word_size ())
                 byte_size;
               print_ax_no_cons ctx ppf ax;
-              Format.fprintf ppf ")@ "))
+              Format.fprintf ppf ")@]@ "))
       ctx.ordered_defs
 
   let pp_print_bl = print_bl

@@ -1048,6 +1048,7 @@ module Env_make (S : functor (QS : QUERY_STATISTICS) -> STATE)
     in
     try
       Sys.catch_break true;
+      Screen.init ();
       loop_aux ps
     with
     | Halt | Sys.Break -> halt e
