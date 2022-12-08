@@ -22,31 +22,23 @@
 open Loader_types
 
 module Section = struct
-  type t = {
-    flag : int;
-    name : string;
-    pos : int map;
-    size : int map;
-    binstream : Binstream.t; (* Or reader? *)
-  }
+  type t = Loader_buf.t
 
-  let has_flag n t =
-    match n with
-    | Read -> t.flag land 1 == 1
-    | Write -> t.flag land 2 == 2
-    | Exec -> t.flag land 4 == 4
+  let has_flag f _ = match f with Read | Exec -> true | Write -> false
 
   type header = unit
 
   let header _ = ()
 
-  let size t = t.size
+  let size t =
+    let raw = Bigarray.Array1.dim t in
+    { raw; virt = raw }
 
-  let pos t = t.pos
+  let pos _ = { raw = 0; virt = 0 }
 
-  let flag t = t.flag
+  let flag _ = 0b110
 
-  let name t = t.name
+  let name _ = ".raw"
 end
 
 module Symbol = struct
@@ -64,9 +56,9 @@ end
 module Img = struct
   type header = unit
 
-  type t = { sections : Section.t list; arch : Machine.t; entry : int }
+  type t = { content : Section.t; sections : Section.t array; arch : Machine.t }
 
-  let sections { sections; _ } = Array.of_list sections
+  let sections { sections; _ } = sections
 
   let symbols _ = [||]
 
@@ -74,63 +66,49 @@ module Img = struct
 
   let header _ = ()
 
-  let entry t = t.entry
+  let entry _ = 0
 
-  let cursor ?at:_ _ = assert false
+  let cursor ?(at = 0) t =
+    Loader_buf.cursor ~at Machine.LittleEndian (Array.get t.sections 0)
 
-  let content _ _ = assert false
+  let content _ buf = buf
 
-  let pp _ _ = assert false
+  let pp ppf _ = Format.pp_print_string ppf "Raw image"
 end
 
 let check_magic _ = assert false
 
 let read_address img i =
-  let sections = img.Img.sections in
-  let exception Ret of int in
-  try
-    sections
-    |> List.iter (fun sec ->
-           let open Section in
-           let min = sec.pos.virt in
-           let max = min + sec.size.virt in
-           if min <= i && i < max then
-             let idx = i - min in
-             match Binstream.get_byte sec.binstream idx with
-             | Some x -> raise (Ret x)
-             | None -> raise (Ret 0)
-           else ());
-    raise Not_found
-  with Ret x -> x
+  try Bigarray.Array1.get img.Img.content i
+  with Invalid_argument _ -> raise Not_found
 
-let read_offset _ = assert false
+let read_offset = read_address
 
-let load_file _ = assert false
+let load content =
+  {
+    Img.arch = Kernel_options.Machine.get ();
+    content;
+    sections = [| content |];
+  }
 
-let load_file_descr _ = assert false
+let load_file_descr file_descr =
+  load
+    Bigarray.(
+      array1_of_genarray
+        (Unix.map_file file_descr Int8_unsigned C_layout false [| -1 |]))
 
-let load _ = assert false
+let load_file path =
+  let file_descr = Unix.openfile path [ Unix.O_RDONLY ] 0 in
+  let img = load_file_descr file_descr in
+  Unix.close file_descr;
+  img
 
 module Offset = Loader_buf.Make (struct
   type t = Img.t
 
-  let get _t _i = assert false
-
-  let dim _i = assert false
-end)
-
-module Address = Loader_buf.Make (struct
-  type t = Img.t
-
   let get t i = read_address t i
 
-  let dim _ = max_int
+  let dim t = Bigarray.Array1.dim t.Img.content
 end)
 
-let add_section ~flag ~name ~pos ~size binstream img =
-  let pos = { raw = 0; virt = pos } in
-  let size = { raw = Binstream.length binstream; virt = size } in
-  let sec = { Section.flag; name; pos; size; binstream } in
-  { img with Img.sections = sec :: img.Img.sections }
-
-let initial_img ~entry ~arch = { Img.entry; Img.arch; Img.sections = [] }
+module Address = Offset

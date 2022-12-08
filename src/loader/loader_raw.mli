@@ -22,14 +22,3 @@
 (* A loader for memory dumps and raw files. *)
 
 include Loader_sigs.S
-
-val add_section :
-  flag:int ->
-  name:string ->
-  pos:int ->
-  size:int ->
-  Binstream.t ->
-  Img.t ->
-  Img.t
-
-val initial_img : entry:int -> arch:Machine.t -> Img.t

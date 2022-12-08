@@ -346,7 +346,8 @@ module State (F : Solver_sig.FACTORY) (QS : Sse_types.QUERY_STATISTICS) = struct
               (fun constraints (access : Solver.access) ->
                 match access with
                 | Select (index, len) ->
-                    let z = Solver.get_value index in
+                    let index = Solver.get_value index in
+                    let z = Solver.assignment index in
                     let rec fold z index len memory constraints =
                       if len = 0 then constraints
                       else if BiTbl.mem dirty z then
@@ -384,7 +385,7 @@ module State (F : Solver_sig.FACTORY) (QS : Sse_types.QUERY_STATISTICS) = struct
                     in
                     fold z index len memory constraints
                 | Store index ->
-                    let z = Solver.get_value index in
+                    let z = Solver.(assignment (get_value index)) in
                     BiTbl.replace dirty z ();
                     constraints)
               state.constraints history
@@ -400,7 +401,9 @@ module State (F : Solver_sig.FACTORY) (QS : Sse_types.QUERY_STATISTICS) = struct
               | exception Not_found -> ()
               | x ->
                   BvTbl.add vars bv
-                    (Bitvector.create (Solver.get_value x) (Expr.sizeof bv))))
+                    (Bitvector.create
+                       Solver.(assignment (get_value x))
+                       (Expr.sizeof bv))))
         state.fvariables;
       vars
 
@@ -438,7 +441,7 @@ module State (F : Solver_sig.FACTORY) (QS : Sse_types.QUERY_STATISTICS) = struct
                 force_lazy_init constraints state;
                 iter { state with constraints } e expr size n enum)
               else
-                let x = Solver.get_value expr in
+                let x = Solver.(assignment (get_value expr)) in
                 let b = Bv.create x size in
                 let cond = Expr.equal e (Expr.constant b) in
                 let state' =
@@ -775,4 +778,14 @@ module State (F : Solver_sig.FACTORY) (QS : Sse_types.QUERY_STATISTICS) = struct
         iter (Model.eval t.model var))
     @@ List.rev @@ S.find name t.fvariables;
     Buffer.contents buf
+
+  let to_formula t =
+    let module C = Smt2_solver.Cross in
+    let ctx =
+      C.create ~debug:(fun ~name ~label -> label ^ name) ~next_id:t.fid ()
+    in
+    List.iter (C.assert_bl ctx) t.constraints;
+    C.define_ax ctx "memory" t.vmemory;
+    S.iter (fun name expr -> C.define_bv ctx name expr) t.vsymbols;
+    C.to_formula ctx
 end

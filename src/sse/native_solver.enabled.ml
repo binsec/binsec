@@ -41,6 +41,8 @@ module Solver () : Solver_sig.S = struct
 
   type nonrec term = bv term
 
+  type nonrec value = bv value
+
   type access = Select of term * int | Store of term
 
   module Context = struct
@@ -195,11 +197,14 @@ module Solver () : Solver_sig.S = struct
 
   let get_memory () = (AxTbl.find ctx.ax_cons Memory.Unknown, ctx.history)
 
-  let get_at ar x = Term.Bv.assignment @@ get_value (Term.Ar.select ar x)
+  let get_at ar (x : value) =
+    Term.Bv.assignment @@ get_value (Term.Ar.select ar (x :> term))
 
-  let get_value x = Term.Bv.assignment @@ get_value x
+  let get_value x = get_value x
 
-  let succ = Term.Bv.succ
+  let assignment = Term.Bv.assignment
+
+  let succ (x : value) = get_value (Term.Bv.succ (x :> term))
 
   let timeout = Formula_options.Solver.Timeout.get ()
 

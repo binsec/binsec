@@ -47,7 +47,7 @@ module ScriptFiles : Cli.STRING_LIST
 
 module Comment : Cli.BOOLEAN
 
-module Timeout : Cli.FLOAT
+module Timeout : Cli.INTEGER_OPT
 
 module Address_counter : sig
   type t = private { address : Virtual_address.t; counter : int }

@@ -105,12 +105,10 @@ module Comment = Builder.False (struct
     "Add comments indicating the origin of the formulas in generated scripts"
 end)
 
-module Timeout = Builder.Float (struct
+module Timeout = Builder.Integer_option (struct
   let name = "timeout"
 
-  let doc = "Sets a timeout for symbolic execution"
-
-  let default = infinity
+  let doc = "Sets a timeout for symbolic execution in second"
 end)
 
 module Address_counter = struct

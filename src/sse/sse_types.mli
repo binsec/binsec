@@ -54,6 +54,8 @@ module type STATE = sig
     ?slice:(Dba.Expr.t * string) list -> Format.formatter -> t -> unit
 
   val as_ascii : string -> t -> string
+
+  val to_formula : t -> Formula.formula
 end
 
 module type EXPLORATION_STATISTICS = sig

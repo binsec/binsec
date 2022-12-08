@@ -62,14 +62,15 @@ let executable = function
 let name_of = executable
 
 let ping solver =
-  match
-    Unix.close_process_full
-      (Unix.open_process_full
-         (Printf.sprintf "%s --version" (executable solver))
-         (Unix.environment ()))
-  with
-  | WEXITED 0 -> true
-  | _ -> false
+  let cout =
+    Unix.open_process_in (Printf.sprintf "%s --version" (executable solver))
+  in
+  try
+    ignore (input_line cout);
+    match Unix.close_process_in cout with WEXITED 0 -> true | _ -> false
+  with End_of_file | Sys_error _ ->
+    ignore (Unix.close_process_in cout);
+    false
 
 let default_arguments = function
   | Boolector | Bitwuzla -> [ "-m"; "-x" ]

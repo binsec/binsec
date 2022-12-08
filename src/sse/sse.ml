@@ -1049,6 +1049,15 @@ module Env_make (S : functor (QS : QUERY_STATISTICS) -> STATE)
     try
       Sys.catch_break true;
       Screen.init ();
+      Option.iter
+        (fun timeout ->
+          Sys.set_signal Sys.sigalrm
+            (Sys.Signal_handle
+               (fun s ->
+                 assert (s = Sys.sigalrm);
+                 raise_notrace Halt));
+          ignore (Unix.alarm timeout))
+        (Timeout.get_opt ());
       loop_aux ps
     with
     | Halt | Sys.Break -> halt e
@@ -1229,7 +1238,7 @@ module Env_make (S : functor (QS : QUERY_STATISTICS) -> STATE)
     in
     let from_core prehook state =
       match Kernel_functions.get_img () with
-      | Loader.Dump _ | Loader.PE _ -> Logger.fatal "Binary is not an ELF file."
+      | Loader.Raw _ | Loader.PE _ -> Logger.fatal "Binary is not an ELF file."
       | Loader.ELF img' ->
           let hdr = Loader_elf.Img.header img' in
           if hdr.Loader_elf.Ehdr.kind <> Loader_elf.Ehdr.ET.CORE then
@@ -1525,7 +1534,6 @@ module Env_make (S : functor (QS : QUERY_STATISTICS) -> STATE)
     state
 
   let do_sse ~filename =
-    Screen.init ();
     let level = 3 in
     Logger.debug ~level "Running SSE on %s" filename;
     let entrypoint = get_entry_point () in

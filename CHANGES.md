@@ -1,3 +1,14 @@
+## 0.6.3 (2022-12-08)
+
+** Misc
+
+  - Restore SSE timeout option
+  - Enable non ELF nor PE file loading as a single contiguous bytes section
+
+** Bugs
+
+  - Fix rare issues with SMT solvers
+
 ## 0.6.2 (2022-11-09)
 
 ** Misc

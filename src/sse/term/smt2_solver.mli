@@ -46,4 +46,23 @@ module Printer : sig
   val pp_print_ax : t -> Format.formatter -> Sexpr.Memory.t -> unit
 end
 
+module Cross : sig
+  type t
+
+  val create :
+    ?word_size:int ->
+    ?debug:(name:string -> label:string -> string) ->
+    next_id:Suid.t ->
+    unit ->
+    t
+
+  val assert_bl : t -> Sexpr.Expr.t -> unit
+
+  val define_bv : t -> string -> Sexpr.Expr.t -> unit
+
+  val define_ax : t -> string -> Sexpr.Memory.t -> unit
+
+  val to_formula : t -> Formula.formula
+end
+
 module Solver () : Solver_sig.S

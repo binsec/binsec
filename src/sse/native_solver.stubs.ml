@@ -26,6 +26,8 @@ module Solver () : Solver_sig.S = struct
 
   type term = unit
 
+  type value = unit
+
   type access = Select of term * int | Store of term
 
   let put _ _ = assert false
@@ -43,6 +45,8 @@ module Solver () : Solver_sig.S = struct
   let get_at _ _ = assert false
 
   let get_value _ = assert false
+
+  let assignment _ = assert false
 
   let succ _ = assert false
 

@@ -45,7 +45,7 @@ let size_of_symbol symbol =
   match header with
   | Loader.ELF_header elf -> elf.Loader_elf.Sym.size
   | Loader.PE_header _ -> failwith "No size for PE symbols"
-  | Loader.Dump_header _ -> failwith "No size for Dump symbols"
+  | Loader.Raw_header _ -> failwith "No size for Dump symbols"
 
 let size_of_symbol_by_name ~name img =
   match symbol_by_name ~name img with

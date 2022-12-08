@@ -561,4 +561,6 @@ module State (Solver : Smt_sig.Solver) (QS : Sse_types.QUERY_STATISTICS) :
     @@ List.rev
     @@ S.find name state.fvariables;
     Buffer.contents buf
+
+  let to_formula { formula; _ } = formula
 end

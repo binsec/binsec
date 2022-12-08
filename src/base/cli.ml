@@ -1464,7 +1464,9 @@ module Parse = struct
     in
     read_loop 0 "";
     close_in ic;
-    run_on ~origin:Config_file (unstack stack)
+    let res = run_on ~origin:Config_file (unstack stack) in
+    done_parsing := true;
+    res
 
   let run () =
     let res = run_on ~origin:Command_line Sys.argv in
