@@ -34,13 +34,26 @@ module Session = struct
     stdout : in_channel;
     stderr : in_channel;
     stdlog : out_channel option;
+    fdlog : out_channel option;
     formatter : Format.formatter;
   }
 
-  let close t = ignore @@ Subprocess.close t.pid
+  let close t =
+    ignore @@ Subprocess.close t.pid;
+    match t.fdlog with None -> () | Some fd -> close_out fd
 
   let start ?stdlog timeout solver =
-    Sse_options.Logger.debug "Openning session %d" !n;
+    Options.Logger.debug "Openning session %d" !n;
+    let fdlog =
+      match Smt_options.SMT_dir.get_opt () with
+      | None -> None
+      | Some dir ->
+          if not (Sys.file_exists dir) then Unix.mkdir dir 0o777;
+          let filename =
+            Filename.concat dir (Printf.sprintf "query_%d.smt2" !n)
+          in
+          Some (open_out filename)
+    in
     incr n;
     let cmd = Prover.command ~incremental:true timeout solver in
     let pid = Subprocess.spawn ~pdeathsig:Sys.sigkill cmd in
@@ -48,9 +61,9 @@ module Session = struct
     and stdout = Subprocess.stdout pid
     and stderr = Subprocess.stderr pid in
     let formatter =
-      match stdlog with
-      | None -> Format.formatter_of_out_channel stdin
-      | Some stdlog ->
+      match (stdlog, fdlog) with
+      | None, None -> Format.formatter_of_out_channel stdin
+      | Some stdlog, None ->
           let output str pos len =
             output_substring stdlog str pos len;
             output_substring stdin str pos len
@@ -59,11 +72,41 @@ module Session = struct
             flush stdin
           in
           Format.make_formatter output flush
+      | None, Some fdlog ->
+          let output str pos len =
+            output_substring fdlog str pos len;
+            output_substring stdin str pos len
+          and flush () =
+            flush fdlog;
+            flush stdin
+          in
+          Format.make_formatter output flush
+      | Some stdlog, Some fdlog ->
+          let output str pos len =
+            output_substring stdlog str pos len;
+            output_substring fdlog str pos len;
+            output_substring stdin str pos len
+          and flush () =
+            flush stdlog;
+            flush fdlog;
+            flush stdin
+          in
+          Format.make_formatter output flush
     in
     Format.fprintf formatter
       "@[<v 0>(set-option :print-success false)@ (set-info :smt-lib-version \
        2.5)@ (set-logic QF_ABV)@ @]";
-    { solver; state = Assert; pid; stdin; stdout; stderr; stdlog; formatter }
+    {
+      solver;
+      state = Assert;
+      pid;
+      stdin;
+      stdout;
+      stderr;
+      stdlog;
+      fdlog;
+      formatter;
+    }
 
   type status = SAT | UNSAT | UNKNOWN
 
@@ -79,7 +122,7 @@ module Session = struct
     | "unknown" ->
         t.state <- Assert;
         UNKNOWN
-    | s -> Sse_options.Logger.fatal "Solver returned: %s" s
+    | s -> Options.Logger.fatal "Solver returned: %s" s
     | exception End_of_file ->
         t.state <- Dead;
         UNKNOWN
@@ -93,7 +136,7 @@ module Session = struct
     | CstDecimal d | CstDecimalSize (d, _) -> Z.of_string_base 10 d
     | CstHexadecimal x -> Z.of_string_base 16 x
     | CstNumeral _ | CstString _ ->
-        Sse_options.Logger.fatal
+        Options.Logger.fatal
           "Model construction: unexpected constant %a as bitvector value"
           Smtlib_pp.pp_spec_constant cst
 
@@ -141,7 +184,7 @@ module Printer = struct
 
   type term = string * int
 
-  type access = Select of term * int | Store of term
+  type access = Select of term * int | Store of term * int
 
   and def = Bl of Expr.t | Bv of Expr.t | Ax of Memory.t
 
@@ -151,8 +194,9 @@ module Printer = struct
     bl_cons : string BvTbl.t;
     bv_cons : string BvTbl.t;
     ax_cons : string AxTbl.t;
+    ax_root : Memory.t AxTbl.t;
     ordered_defs : def Queue.t;
-    ordered_mem : access Queue.t;
+    ordered_mem : access Queue.t AxTbl.t;
     word_size : int;
     debug : name:string -> label:string -> string;
   }
@@ -170,8 +214,9 @@ module Printer = struct
       bl_cons;
       bv_cons;
       ax_cons = AxTbl.create 64;
+      ax_root = AxTbl.create 64;
       ordered_defs = Queue.create ();
-      ordered_mem = Queue.create ();
+      ordered_mem = AxTbl.create 4;
       word_size;
       debug;
     }
@@ -240,9 +285,11 @@ module Printer = struct
           visit_ax ctx label;
           if len > 1 then visit_ax ctx label;
           Queue.push (Bv bv) ctx.ordered_defs;
+          let root = AxTbl.find ctx.ax_root label in
+          let ordered_mem = AxTbl.find ctx.ordered_mem root in
           Queue.push
             (Select ((BvTbl.find ctx.bv_cons addr, Expr.sizeof addr), len))
-            ctx.ordered_mem
+            ordered_mem
       | Cst _ ->
           BvTbl.add ctx.bv_cons bv once;
           Queue.push (Bv bv) ctx.ordered_defs
@@ -281,7 +328,7 @@ module Printer = struct
           visit_bv ctx e;
           Queue.push (Bv bv) ctx.ordered_defs)
 
-  and visit_ax ctx ax =
+  and visit_ax ctx (ax : Memory.t) =
     try
       if AxTbl.find ctx.ax_cons ax == once then (
         let name = Suid.to_string ctx.id in
@@ -289,30 +336,63 @@ module Printer = struct
         AxTbl.replace ctx.ax_cons ax name)
     with Not_found -> (
       match ax with
-      | Memory.Unknown ->
+      | Root ->
           AxTbl.add ctx.ax_cons ax
-            (ctx.debug ~name:Suid.(to_string zero) ~label:"memory")
-      | Memory.Source { over; _ } ->
+            (ctx.debug ~name:Suid.(to_string zero) ~label:"memory");
+          AxTbl.add ctx.ax_root ax ax;
+          AxTbl.add ctx.ordered_mem ax (Queue.create ())
+      | Symbol name ->
+          AxTbl.add ctx.ax_cons ax name;
+          AxTbl.add ctx.ax_root ax ax;
+          AxTbl.add ctx.ordered_mem ax (Queue.create ())
+      | Layer { addr = Cst _; store; over; _ }
+      | Overlay { addr = Cst _; store; over; _ } ->
           AxTbl.add ctx.ax_cons ax once;
+          Store.iter
+            (fun _ bv ->
+              visit_bv ctx bv;
+              if Expr.sizeof bv > 1 then visit_bv ctx bv)
+            store;
           visit_ax ctx over;
-          Queue.push (Ax ax) ctx.ordered_defs
-      | Memory.Layer { addr; bytes; over; _ } ->
-          AxTbl.add ctx.ax_cons ax once;
-          visit_bv ctx addr;
-          visit_bv ctx addr;
-          BiMap.iter (fun _ bv -> visit_bv ctx bv) bytes;
-          visit_ax ctx over;
+          let root = AxTbl.find ctx.ax_root over in
+          AxTbl.add ctx.ax_root ax root;
           Queue.push (Ax ax) ctx.ordered_defs;
+          let ordered_mem = AxTbl.find ctx.ordered_mem root in
+          Store.iter
+            (fun i bv ->
+              let index =
+                Format.asprintf "%a" (pp_int_as_offset ctx.word_size) i
+              in
+              Queue.push
+                (Store ((index, ctx.word_size), Expr.sizeof bv))
+                ordered_mem)
+            store
+      | Layer { addr; store; over; _ } | Overlay { addr; store; over; _ } ->
+          AxTbl.add ctx.ax_cons ax once;
+          visit_bv ctx addr;
+          visit_bv ctx addr;
+          Store.iter
+            (fun _ bv ->
+              visit_bv ctx bv;
+              if Expr.sizeof bv > 1 then visit_bv ctx bv)
+            store;
+          visit_ax ctx over;
+          let root = AxTbl.find ctx.ax_root over in
+          AxTbl.add ctx.ax_root ax root;
+          Queue.push (Ax ax) ctx.ordered_defs;
+          let ordered_mem = AxTbl.find ctx.ordered_mem root in
           let index = BvTbl.find ctx.bv_cons addr in
-          BiMap.iter
-            (fun i _ ->
+          Store.iter
+            (fun i bv ->
               let index =
                 Format.asprintf "(bvadd %s %a)" index
                   (pp_int_as_offset ctx.word_size)
                   i
               in
-              Queue.push (Store (index, Expr.sizeof addr)) ctx.ordered_mem)
-            bytes)
+              Queue.push
+                (Store ((index, ctx.word_size), Expr.sizeof bv))
+                ordered_mem)
+            store)
 
   let pp_unop ppf (op : Term.unary Term.operator) =
     match op with
@@ -531,30 +611,28 @@ module Printer = struct
     if name == once then print_ax_no_cons ctx ppf ax
     else Format.pp_print_string ppf name
 
-  and print_ax_no_cons ctx ppf ax =
+  and print_ax_no_cons ctx ppf (ax : Memory.t) =
     match ax with
-    | Memory.Unknown -> Suid.pp ppf Suid.zero
-    | Memory.Source { over; _ } -> print_ax ctx ppf over
-    | Memory.Layer { addr; bytes; over; pop = 1; _ } ->
-        Format.pp_print_string ppf "(store";
-        Format.pp_print_space ppf ();
+    | Root -> Suid.pp ppf Suid.zero
+    | Symbol _ -> assert false
+    | Layer { addr; store; over; _ } | Overlay { addr; store; over; _ } ->
+        Store.iter
+          (fun _ value ->
+            for _ = 1 to Expr.sizeof value lsr 3 do
+              Format.pp_print_string ppf "(store";
+              Format.pp_print_space ppf ()
+            done)
+          store;
         print_ax ctx ppf over;
-        Format.pp_print_space ppf ();
-        print_bv ctx ppf addr;
-        Format.pp_print_space ppf ();
-        print_bv ctx ppf (snd (BiMap.choose bytes));
-        Format.pp_print_char ppf ')'
-    | Memory.Layer { addr; bytes; over; pop; _ } ->
-        for _ = 1 to pop do
-          Format.pp_print_string ppf "(store";
-          Format.pp_print_space ppf ()
-        done;
-        print_ax ctx ppf over;
-        let addr_space = Expr.sizeof addr
-        and idx = BvTbl.find ctx.bv_cons addr in
-        BiMap.iter
-          (fun i bv ->
-            Format.pp_print_space ppf ();
+        let addr_space = ctx.word_size in
+        let rebase, idx =
+          match addr with
+          | Cst _ -> (false, "")
+          | _ -> (true, BvTbl.find ctx.bv_cons addr)
+        in
+        let rec unroll_store lo i bv =
+          Format.pp_print_space ppf ();
+          if rebase then
             if Z.zero = i then (
               Format.pp_print_string ppf idx;
               Format.pp_print_space ppf ())
@@ -564,11 +642,22 @@ module Printer = struct
               Format.pp_print_string ppf idx;
               Format.pp_print_space ppf ();
               pp_bv ppf i addr_space;
-              Format.pp_print_char ppf ')';
-              Format.pp_print_space ppf ());
+              Format.pp_print_char ppf ')')
+          else pp_bv ppf i addr_space;
+          Format.pp_print_space ppf ();
+          let size = Expr.sizeof bv in
+          if size > 8 then (
+            Format.fprintf ppf "((_ extract %d %d)" (lo + 7) lo;
+            Format.pp_print_space ppf ();
+            print_bv ctx ppf bv;
+            Format.pp_print_string ppf "))";
+            let lo' = lo + 8 in
+            if lo' < size then unroll_store lo' (Z.succ i) bv)
+          else (
             print_bv ctx ppf bv;
             Format.pp_print_char ppf ')')
-          bytes
+        in
+        Store.iter (unroll_store 0) store
 
   and print_multi_select =
     let rec print_multi_select_le ppf len ax bv size =
@@ -600,12 +689,21 @@ module Printer = struct
         Format.pp_print_string ppf decl;
         Format.pp_print_space ppf ())
       ctx.bv_decl;
-    if Queue.is_empty ctx.ordered_mem = false then
-      let addr_space = Kernel_options.Machine.word_size () in
-      let name = ctx.debug ~name:Suid.(to_string zero) ~label:"memory" in
-      Format.fprintf ppf
-        "(declare-fun %s () (Array (_ BitVec %d) (_ BitVec %d)))@ " name
-        addr_space byte_size
+    AxTbl.iter
+      (fun (ax : Memory.t) ordered_mem ->
+        match ax with
+        | Root ->
+            Format.fprintf ppf
+              "(declare-fun %s () (Array (_ BitVec %d) (_ BitVec %d)))@ "
+              (ctx.debug ~name:Suid.(to_string zero) ~label:"memory")
+              ctx.word_size byte_size
+        | Symbol name ->
+            if not (Queue.is_empty ordered_mem) then
+              Format.fprintf ppf
+                "(declare-fun %s () (Array (_ BitVec %d) (_ BitVec %d)))@ " name
+                ctx.word_size byte_size
+        | _ -> assert false)
+      ctx.ordered_mem
 
   let pp_print_defs ppf ctx =
     Queue.iter
@@ -774,7 +872,7 @@ module Cross = struct
         AxTbl.replace ctx.ax_cons ax (Formula.ax_var name ctx.word_size 8))
     with Not_found -> (
       match ax with
-      | Memory.Unknown ->
+      | Memory.Root ->
           let var =
             Formula.ax_var
               (ctx.debug ~name:Suid.(to_string zero) ~label:"memory")
@@ -782,14 +880,17 @@ module Cross = struct
           in
           AxTbl.add ctx.ax_cons ax var;
           AxTbl.add ctx.ax_decl ax (Formula.mk_ax_decl var [])
-      | Memory.Source { over; _ } ->
-          AxTbl.add ctx.ax_cons ax ax_once;
-          visit_ax ctx over;
-          Queue.push (Ax ax) ctx.ordered
-      | Memory.Layer { addr; bytes; over; _ } ->
+      | Memory.Symbol name ->
+          let var =
+            Formula.ax_var (ctx.debug ~name ~label:"") ctx.word_size 8
+          in
+          AxTbl.add ctx.ax_cons ax var;
+          AxTbl.add ctx.ax_decl ax (Formula.mk_ax_decl var [])
+      | Memory.Layer { addr; store; over; _ }
+      | Memory.Overlay { addr; store; over; _ } ->
           AxTbl.add ctx.ax_cons ax ax_once;
           visit_bv ctx addr;
-          BiMap.iter (fun _ bv -> visit_bv ctx bv) bytes;
+          Store.iter (fun _ bv -> visit_bv ctx bv) store;
           visit_ax ctx over;
           Queue.push (Ax ax) ctx.ordered)
 
@@ -919,17 +1020,17 @@ module Cross = struct
 
   and mk_ax_no_cons ctx ax =
     match ax with
-    | Memory.Unknown -> assert false
-    | Memory.Source { over; _ } -> mk_ax ctx over
-    | Memory.Layer { addr; bytes; over; _ } ->
+    | Memory.Root | Memory.Symbol _ -> assert false
+    | Memory.Layer { addr; store; over; _ }
+    | Memory.Overlay { addr; store; over; _ } ->
         let addr = mk_bv ctx addr in
-        BiMap.fold
+        Store.fold
           (fun i bv store ->
             Formula.mk_store 1 store
               (Formula.mk_bv_add addr
                  (Formula.mk_bv_cst (Bitvector.create i ctx.word_size)))
               (mk_bv ctx bv))
-          bytes (mk_ax ctx over)
+          (mk_ax ctx over) store
 
   and mk_select_be =
     let rec mk_select_be len ax bv sel =
@@ -992,13 +1093,7 @@ module Solver () : Solver_sig.S = struct
 
   type result = Sat | Unsat | Unknown
 
-  type memory = unit
-
   type term = Printer.term
-
-  type value = Z.t * int
-
-  type access = Printer.access = Select of term * int | Store of term
 
   let put (ctx : Printer.t) ppf constraints =
     Format.pp_open_vbox ppf 0;
@@ -1032,14 +1127,20 @@ module Solver () : Solver_sig.S = struct
       ctx := Some x;
       x
     in
+    Printer.visit_ax ctx Memory.Root;
     Printer.visit_bv ctx e;
     Printer.visit_bv ctx e;
     put ctx session.formatter constraints;
     (BvTbl.find ctx.bv_cons e, Expr.sizeof e)
 
   let put fid constraints =
-    ctx := Some (Printer.create ~next_id:fid ());
-    put (Option.get !ctx) session.formatter constraints
+    let ctx =
+      let x = Printer.create ~next_id:fid () in
+      ctx := Some x;
+      x
+    in
+    Printer.visit_ax ctx Memory.Root;
+    put ctx session.formatter constraints
 
   let get e = (BvTbl.find (Option.get !ctx).bv_cons e, Expr.sizeof e)
 
@@ -1062,23 +1163,56 @@ module Solver () : Solver_sig.S = struct
         Format.pp_print_string ppf ")))")
       ()
 
-  let get_memory () = ((), (Option.get !ctx).ordered_mem)
+  let get_value (x, _) = Session.get_value session Format.pp_print_string x
 
-  let get_at () (x, s) =
+  let get_at name x s =
     Session.get_value session
       (fun ppf x ->
         Format.pp_print_string ppf "(select ";
-        Format.pp_print_string ppf Suid.(to_string zero);
+        Format.pp_print_string ppf name;
         Format.pp_print_char ppf ' ';
         pp_bv ppf x s;
         Format.pp_print_char ppf ')')
       x
 
-  let get_value (x, s) = (Session.get_value session Format.pp_print_string x, s)
-
-  let assignment (x, _) = x
-
-  let succ (x, s) = (Z.succ x, s)
+  let get_array ar =
+    match AxTbl.find (Option.get !ctx).ordered_mem ar with
+    | exception Not_found -> [||]
+    | history ->
+        if Queue.is_empty history then [||]
+        else
+          let dirty = BiTbl.create (Queue.length history) in
+          let name =
+            Format.asprintf "%a" (Printer.pp_print_ax (Option.get !ctx)) ar
+          and addr_space = (Option.get !ctx).word_size in
+          let binding =
+            Queue.fold
+              (fun binding (access : Printer.access) ->
+                match access with
+                | Select (index, len) ->
+                    let index = get_value index in
+                    let rec fold index len binding =
+                      if len = 0 then binding
+                      else if BiTbl.mem dirty index then
+                        fold (Z.succ index) (len - 1) binding
+                      else
+                        let k = get_at name index addr_space in
+                        fold (Z.succ index) (len - 1)
+                          ((index, Char.unsafe_chr (Z.to_int k)) :: binding)
+                    in
+                    fold index len binding
+                | Store (index, len) ->
+                    let index = get_value index in
+                    let rec loop index len =
+                      if len <> 0 then (
+                        BiTbl.replace dirty index ();
+                        loop (Z.succ index) (len - 1))
+                    in
+                    loop index len;
+                    binding)
+              [] history
+          in
+          Array.of_list binding
 
   let check_sat () =
     match Session.check_sat session with

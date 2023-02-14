@@ -206,7 +206,8 @@ let pretty_dot ppf (g, m) =
               ~pp_sep:(fun _ () -> ())
               (fun ppf v ->
                 Format.fprintf ppf "%a: %s\\l" Virtual_address.pp v
-                  (Virtual_address.Htbl.find m v)))
+                  (try Virtual_address.Htbl.find m v
+                   with Not_found -> "extern")))
            bb);
       let e = List.fold_left (fun _ e -> e) v bb in
       G.iter_succ_e (fun (_, k, d) -> G.add_edge_e g' (v, k, d)) g e)

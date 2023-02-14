@@ -19,10 +19,21 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module Make
-    (E : Sse_types.EXPLORATION_STATISTICS)
-    (Q : Sse_types.QUERY_STATISTICS) : sig
-  val init : unit -> unit
+open Types
 
-  val release : unit -> unit
-end
+type t =
+  | Print of Output.t
+  | Enumerate of {
+      enum : Expr.t;
+      id : int;
+      format : Output.format;
+      n : int;
+      mutable k : int;
+      mutable values : Bitvector.t list;
+    }
+  | Reach of {
+      id : int;
+      mutable n : int;
+      guard : Expr.t;
+      actions : Output.t list;
+    }

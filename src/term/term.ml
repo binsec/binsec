@@ -102,54 +102,48 @@ let pp_op : type a. Format.formatter -> a operator -> unit =
   | Sge -> Format.pp_print_string ppf "sge"
   | Sgt -> Format.pp_print_string ppf "sgt"
 
-type cst = C
-
-and loc = L
-
-and exp = E
-
-type (_, _, 'a, 'b) t =
+type (_, 'a, 'b) t =
   | Var : {
       hash : int;
       size : size;
       name : string;
       label : 'a;
     }
-      -> (exp, _, 'a, _) t
+      -> ([< `Var | `Loc | `Exp ], 'a, _) t
   | Load : {
       hash : int;
       len : size;
       dir : endianness;
-      addr : (exp, exp, 'a, 'b) t;
+      addr : ([ `Exp ], 'a, 'b) t;
       label : 'b;
     }
-      -> (exp, _, 'a, 'b) t
-  | Cst : (Bitvector.t[@unboxed]) -> (_, exp, _, _) t
+      -> ([< `Mem | `Loc | `Exp ], 'a, 'b) t
+  | Cst : Bitvector.t -> ([< `Cst | `Exp ], _, _) t
   | Unary : {
       hash : int;
       size : size;
       f : unary operator;
-      x : (exp, exp, 'a, 'b) t;
+      x : ([ `Exp ], 'a, 'b) t;
     }
-      -> (exp, exp, 'a, 'b) t
+      -> ([ `Exp ], 'a, 'b) t
   | Binary : {
       hash : int;
       size : size;
       f : binary operator;
-      x : (exp, exp, 'a, 'b) t;
-      y : (exp, exp, 'a, 'b) t;
+      x : ([ `Exp ], 'a, 'b) t;
+      y : ([ `Exp ], 'a, 'b) t;
     }
-      -> (exp, exp, 'a, 'b) t
+      -> ([ `Exp ], 'a, 'b) t
   | Ite : {
       hash : int;
       size : size;
-      c : (exp, exp, 'a, 'b) t;
-      t : (exp, exp, 'a, 'b) t;
-      e : (exp, exp, 'a, 'b) t;
+      c : ([ `Exp ], 'a, 'b) t;
+      t : ([ `Exp ], 'a, 'b) t;
+      e : ([ `Exp ], 'a, 'b) t;
     }
-      -> (exp, exp, 'a, 'b) t
+      -> ([ `Exp ], 'a, 'b) t
 
-let rec pp : type k l. Format.formatter -> (k, l, 'a, 'b) t -> unit =
+let rec pp : type k. Format.formatter -> (k, 'a, 'b) t -> unit =
  fun ppf -> function
   | Var { name; size; _ } -> Format.fprintf ppf "%s<%d>" name size
   | Load { len; dir; addr; _ } ->
@@ -164,7 +158,7 @@ let to_string t = Format.asprintf "%a" pp t
 
 let abort t = raise (Invalid_argument (to_string t))
 
-let hash : type k l. (k, l, _, _) t -> int = function
+let hash : type k. (k, _, _) t -> int = function
   | Cst bv -> Bitvector.hash bv
   | Load { hash; _ } -> hash
   | Var { hash; _ } -> hash
@@ -172,7 +166,7 @@ let hash : type k l. (k, l, _, _) t -> int = function
   | Binary { hash; _ } -> hash
   | Ite { hash; _ } -> hash
 
-let sizeof : type k l. (k, l, _, _) t -> int = function
+let sizeof : type k. (k, _, _) t -> int = function
   | Cst bv -> Bitvector.size_of bv
   | Load { len; _ } -> byte_size * len
   | Var { size; _ } -> size
@@ -183,7 +177,7 @@ let sizeof : type k l. (k, l, _, _) t -> int = function
   | Binary { size; _ } -> size
   | Ite { size; _ } -> size
 
-type ('a, 'b) any = Term : (_, _, 'a, 'b) t -> ('a, 'b) any [@@unboxed]
+type ('a, 'b) any = Term : (_, 'a, 'b) t -> ('a, 'b) any [@@unboxed]
 
 let to_exp t =
   match Term t with
@@ -193,6 +187,10 @@ let to_exp t =
   | Term (Unary _ as u) -> u
   | Term (Binary _ as b) -> b
   | Term (Ite _ as i) -> i
+
+let to_var t = match Term t with Term (Var _ as v) -> Some v | _ -> None
+
+let to_var_exn t = match Term t with Term (Var _ as v) -> v | _ -> abort t
 
 let to_loc t =
   match Term t with
@@ -205,6 +203,10 @@ let to_loc_exn t =
   | Term (Var _ as v) -> v
   | Term (Load _ as l) -> l
   | _ -> abort t
+
+let to_mem t = match Term t with Term (Load _ as l) -> Some l | _ -> None
+
+let to_mem_exn t = match Term t with Term (Load _ as l) -> l | _ -> abort t
 
 let to_cst t = match Term t with Term (Cst _ as c) -> Some c | _ -> None
 
@@ -300,48 +302,48 @@ module type S = sig
     | Sge : binary op
     | Sgt : binary op
 
-  type ('k, 'l, 'a, 'b) term = ('k, 'l, 'a, 'b) t = private
+  type ('k, 'a, 'b) term = ('k, 'a, 'b) t = private
     | Var : {
         hash : int;
         size : size;
         name : string;
         label : 'a;
       }
-        -> (exp, _, 'a, _) term
+        -> ([< `Var | `Loc | `Exp ], 'a, _) term
     | Load : {
         hash : int;
         len : size;
         dir : endianness;
-        addr : (exp, exp, 'a, 'b) term;
+        addr : ([ `Exp ], 'a, 'b) term;
         label : 'b;
       }
-        -> (exp, _, 'a, 'b) term
-    | Cst : (Bitvector.t[@unboxed]) -> (_, exp, _, _) term
+        -> ([< `Mem | `Loc | `Exp ], 'a, 'b) term
+    | Cst : Bitvector.t -> ([< `Cst | `Exp ], _, _) term
     | Unary : {
         hash : int;
         size : size;
         f : unary operator;
-        x : (exp, exp, 'a, 'b) term;
+        x : ([ `Exp ], 'a, 'b) term;
       }
-        -> (exp, exp, 'a, 'b) term
+        -> ([ `Exp ], 'a, 'b) term
     | Binary : {
         hash : int;
         size : size;
         f : binary operator;
-        x : (exp, exp, 'a, 'b) term;
-        y : (exp, exp, 'a, 'b) term;
+        x : ([ `Exp ], 'a, 'b) term;
+        y : ([ `Exp ], 'a, 'b) term;
       }
-        -> (exp, exp, 'a, 'b) term
+        -> ([ `Exp ], 'a, 'b) term
     | Ite : {
         hash : int;
         size : size;
-        c : (exp, exp, 'a, 'b) term;
-        t : (exp, exp, 'a, 'b) term;
-        e : (exp, exp, 'a, 'b) term;
+        c : ([ `Exp ], 'a, 'b) term;
+        t : ([ `Exp ], 'a, 'b) term;
+        e : ([ `Exp ], 'a, 'b) term;
       }
-        -> (exp, exp, 'a, 'b) term
+        -> ([ `Exp ], 'a, 'b) term
 
-  type t = (exp, exp, a, b) term
+  type t = ([ `Exp ], a, b) term
 
   (** {2 Constructors} *)
 
@@ -456,6 +458,8 @@ module type S = sig
 
   val addi : t -> int -> t
 
+  val addz : t -> Z.t -> t
+
   (** {4 Utils} **)
 
   val hash : t -> int
@@ -470,7 +474,11 @@ module type S = sig
   (** [sizeof t] returns the bit size of [t] in constant time.
   *)
 
-  val map : ('a -> a) -> ('b -> b) -> (_, _, 'a, 'b) term -> t
+  val map :
+    (string -> int -> 'a -> t) ->
+    (int -> Machine.endianness -> t -> 'b -> t) ->
+    (_, 'a, 'b) term ->
+    t
 end
 
 module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
@@ -513,48 +521,48 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     | Sge : binary op
     | Sgt : binary op
 
-  type ('k, 'l, 'a, 'b) term = ('k, 'l, 'a, 'b) t =
+  type ('k, 'a, 'b) term = ('k, 'a, 'b) t =
     | Var : {
         hash : int;
         size : size;
         name : string;
         label : 'a;
       }
-        -> (exp, _, 'a, 'b) term
+        -> ([< `Var | `Loc | `Exp ], 'a, _) term
     | Load : {
         hash : int;
         len : size;
         dir : endianness;
-        addr : (exp, exp, 'a, 'b) term;
+        addr : ([ `Exp ], 'a, 'b) term;
         label : 'b;
       }
-        -> (exp, _, 'a, 'b) term
-    | Cst : Bitvector.t -> (_, exp, _, _) term
+        -> ([< `Mem | `Loc | `Exp ], 'a, 'b) term
+    | Cst : Bitvector.t -> ([< `Cst | `Exp ], _, _) term
     | Unary : {
         hash : int;
         size : size;
         f : unary operator;
-        x : (exp, exp, 'a, 'b) term;
+        x : ([ `Exp ], 'a, 'b) term;
       }
-        -> (exp, exp, 'a, 'b) term
+        -> ([ `Exp ], 'a, 'b) term
     | Binary : {
         hash : int;
         size : size;
         f : binary operator;
-        x : (exp, exp, 'a, 'b) term;
-        y : (exp, exp, 'a, 'b) term;
+        x : ([ `Exp ], 'a, 'b) term;
+        y : ([ `Exp ], 'a, 'b) term;
       }
-        -> (exp, exp, 'a, 'b) term
+        -> ([ `Exp ], 'a, 'b) term
     | Ite : {
         hash : int;
         size : size;
-        c : (exp, exp, 'a, 'b) term;
-        t : (exp, exp, 'a, 'b) term;
-        e : (exp, exp, 'a, 'b) term;
+        c : ([ `Exp ], 'a, 'b) term;
+        t : ([ `Exp ], 'a, 'b) term;
+        e : ([ `Exp ], 'a, 'b) term;
       }
-        -> (exp, exp, 'a, 'b) term
+        -> ([ `Exp ], 'a, 'b) term
 
-  type t = (exp, exp, A.t, B.t) term
+  type t = ([ `Exp ], A.t, B.t) term
 
   let hash = hash
 
@@ -1206,13 +1214,18 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
 
   let addi x y = binary Plus x (constant (Bv.of_int ~size:(sizeof x) y))
 
-  let rec map : type k l a b. (a -> A.t) -> (b -> B.t) -> (k, l, a, b) term -> t
-      =
+  let addz x y = binary Plus x (constant (Bv.create y (sizeof x)))
+
+  let rec map :
+      type k a b.
+      (string -> int -> a -> t) ->
+      (int -> Machine.endianness -> t -> b -> t) ->
+      (k, a, b) term ->
+      t =
    fun a b t ->
     match Term t with
-    | Term (Var { name; size; label; _ }) -> var name size (a label)
-    | Term (Load { len; dir; addr; label; _ }) ->
-        load len dir (map a b addr) (b label)
+    | Term (Var { name; size; label; _ }) -> a name size label
+    | Term (Load { len; dir; addr; label; _ }) -> b len dir (map a b addr) label
     | Term (Cst _ as c) -> c
     | Term (Unary { f; x; _ }) -> unary f (map a b x)
     | Term (Binary { f; x; y; _ }) -> binary f (map a b x) (map a b y)

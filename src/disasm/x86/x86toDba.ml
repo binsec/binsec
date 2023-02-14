@@ -229,7 +229,7 @@ let _lhs_of_xmm_reg_restrict r off1 off2 =
 let lhs_of_flag f =
   Dba.LValue.var (X86Util.flag_to_string f)
     ~bitsize:Size.Bit.(if f = IOPL then create 2 else bits1)
-    ~tag:Dba.VarTag.Flag
+    ~tag:Dba.Var.Tag.Flag
 
 let undef_flag flag = Predba.undefined (lhs_of_flag flag)
 
@@ -314,7 +314,7 @@ let eflags22, split_eflags =
   and position =
     [| 0; 2; 4; 6; 7; 8; 9; 10; 11; 12; 14; 16; 17; 18; 19; 20; 21 |]
   and action = [| U; U; U; U; U; U; U; U; U; U; U; C; K; U; K; K; U |]
-  and tag = Dba.VarTag.Flag in
+  and tag = Dba.Var.Tag.Flag in
   let rec iter1 i e =
     if i = Array.length flag then e
     else
@@ -537,7 +537,7 @@ let assign lhs rhs lo hi =
   let open Dba in
   let bytesize = Natural.to_int Basic_types.Constants.bytesize in
   match lhs with
-  | LValue.Store (sz, endian, e)
+  | LValue.Store (sz, endian, e, _)
     when lo mod bytesize = 0 && hi mod bytesize = bytesize - 1 ->
       let sz' = Size.(Byte.of_bitsize (Bit.create (hi - lo + 1))) in
       let o' =
@@ -550,7 +550,7 @@ let assign lhs rhs lo hi =
       in
       let lval = LValue.store sz' endian e' in
       Predba.assign lval rhs
-  | LValue.Store (sz, endian, e) when lo mod bytesize = 0 ->
+  | LValue.Store (sz, endian, e, _) when lo mod bytesize = 0 ->
       let top =
         Expr.(
           restrict (hi + 1)
@@ -559,13 +559,13 @@ let assign lhs rhs lo hi =
       in
       let rhs = Expr.append top rhs in
       Predba.assign lhs rhs
-  | LValue.Store (sz, endian, e) when hi mod bytesize = bytesize - 1 ->
+  | LValue.Store (sz, endian, e, _) when hi mod bytesize = bytesize - 1 ->
       let bot =
         Expr.(restrict 0 (lo - 1) (load (Size.Byte.create sz) endian e))
       in
       let rhs = Expr.append rhs bot in
       Predba.assign lhs rhs
-  | LValue.Store (sz, endian, e) ->
+  | LValue.Store (sz, endian, e, _) ->
       let old = Expr.load (Size.Byte.create sz) endian e in
       let top = Expr.restrict (hi + 1) ((bytesize * sz) - 1) old in
       let bot = Expr.restrict 0 (lo - 1) old in
@@ -587,7 +587,7 @@ let assign_xmm gop1 off1 off2 gop2 off3 off4 xmm mm sreg =
 
 let assign_xmm_zero_ext ~dst off1 off2 ~src off3 off4 xmm mm sreg =
   match assign_xmm dst off1 off2 src off3 off4 xmm mm sreg with
-  | Predba.Assign (Dba.LValue.Restrict (({ Dba.size; _ } as v), _), e) ->
+  | Predba.Assign (Dba.LValue.Restrict (({ size; _ } as v), _), e) ->
       Predba.assign (Dba.LValue.v v) (Dba.Expr.uext size e)
   | res -> res
 
@@ -913,7 +913,7 @@ let pmovMSK gop1 gop2 xmm mm sreg =
   let start = X86Util.bytesize_of_xmm_mm xmm in
   aux [] 0 start @ [ assign_expr start 31 ]
 
-let mk_temp base size = (base ^ string_of_int size, size, Dba.VarTag.Temp)
+let mk_temp base size = (base ^ string_of_int size, size, Dba.Var.Tag.Temp)
 
 let mk_lhs_temp base size =
   let name, sz, tag = mk_temp base size in
@@ -935,7 +935,7 @@ let temp_expr mode = mk_res_temp "temp" (size_mode mode)
 module type B = sig
   val base : string
 
-  val tag : Dba.VarTag.t
+  val tag : Dba.Var.Tag.t
 end
 
 module Bidirectional_name (X : B) = struct
@@ -971,7 +971,7 @@ module Bidirectional_tmp = struct
   include Bidirectional_name (struct
     let base = "temp"
 
-    let tag = Dba.VarTag.Temp
+    let tag = Dba.Var.Tag.Temp
   end)
 end
 
@@ -2160,7 +2160,7 @@ let lift_fxch float_register =
   let operand2_expr = expr_of_float_reg ST0 in
   let name = "temp80"
   and size = Size.Bit.create 80
-  and vtag_opt = Dba.VarTag.Temp in
+  and vtag_opt = Dba.Var.Tag.Temp in
   let temp_lhs = Dba.LValue.var name ~bitsize:size ~tag:vtag_opt in
   let temp_expr = Expr.var name size vtag_opt in
   [
@@ -2295,8 +2295,8 @@ let lift_lsl mode _src dst sreg =
   match mode with
   | `M16 | `M32 ->
       [
-        Predba.non_deterministic (lhs_of_flag ZF) `Constant;
-        Predba.non_deterministic (disas_lval dst mode sreg) `Constant;
+        Predba.non_deterministic (lhs_of_flag ZF);
+        Predba.non_deterministic (disas_lval dst mode sreg);
       ]
   | `M8 -> failwith "decode lsl with operands on 8 bits"
 

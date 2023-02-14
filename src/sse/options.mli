@@ -19,20 +19,31 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Sse_options
+(** Definition of command-line & programmatic options for SSE *)
 
-let mk_var_name basename idx = Format.sprintf "%s_%d" basename idx
+include Cli.S
 
-let string_to_vaddr sloc acc =
-  let img = Kernel_functions.get_img () in
-  match Loader_utils.Binary_loc.(to_virtual_address ~img (of_string sloc)) with
-  | Some vaddr -> Virtual_address.Set.add vaddr acc
-  | None -> Logger.fatal "Unable to parse the address %s" sloc
+module AlternativeEngine : Cli.BOOLEAN
 
-let get_goal_addresses () =
-  Basic_types.String.Set.fold string_to_vaddr (GoalAddresses.get ())
-    Virtual_address.Set.empty
+module LegacyEngine : Cli.BOOLEAN
 
-let get_avoid_addresses () =
-  Basic_types.String.Set.fold string_to_vaddr (AvoidAddresses.get ())
-    Virtual_address.Set.empty
+module MaxDepth : Cli.INTEGER
+
+module TransientEnum : Cli.INTEGER
+
+module JumpEnumDepth : Cli.INTEGER
+
+module QMerge : Cli.INTEGER
+
+module Randomize : Cli.BOOLEAN
+
+module ScriptFiles : Cli.STRING_LIST
+
+module Timeout : Cli.INTEGER_OPT
+
+type search_heuristics = Dfs | Bfs | Nurs
+
+module Search_heuristics : Cli.GENERIC with type t = search_heuristics
+
+module Seed : Cli.INTEGER_OPT
+(** Seed for the random number generator *)

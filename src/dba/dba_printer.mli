@@ -38,8 +38,6 @@ module type DbaPrinter = sig
 
   val pp_lhs : Format.formatter -> Dba.LValue.t -> unit
 
-  val pp_region : Format.formatter -> Dba.region -> unit
-
   (* Print the instruction, but prints the explicit goto only if it
      does not go to (current_id + 1). *)
   val pp_instruction_maybe_goto :

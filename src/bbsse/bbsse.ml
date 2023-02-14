@@ -108,7 +108,7 @@ module Eval = struct
   let rec loop state sym a c j =
     match A.Htbl.find state.G.dis a with
     | I.Assign (r, e, n) -> loop state (T.assign r e sym) (A.reid a n) c j
-    | I.Undef (r, n) | I.Nondet (r, _, n) ->
+    | I.Undef (r, n) | I.Nondet (r, n) ->
         loop state (T.havoc r sym) (A.reid a n) c j
     | I.SJump (t, _) -> loop state sym (A.of_jump_target a t) c j
     | I.If (e, t, n) -> (
@@ -132,13 +132,6 @@ module Eval = struct
     | I.Stop _ -> assert false
     | I.Assert (e, n) | I.Assume (e, n) ->
         loop state (T.assume e sym) (A.reid a n) c j
-    | I.NondetAssume (rl, e, n) ->
-        loop state
-          (T.assume e (List.fold_left (fun sym r -> T.havoc r sym) sym rl))
-          (A.reid a n) c j
-    | I.Malloc _ -> assert false
-    | I.Free _ -> assert false
-    | I.Print _ -> assert false
 
   let run state (a, c, j) =
     incr Stat.all_paths;

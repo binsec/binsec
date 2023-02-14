@@ -49,6 +49,12 @@ module type COMPARABLE = sig
   val compare : t -> t -> int
 end
 
+module type COMPARABLE_EXT = sig
+  include COMPARABLE
+
+  val equal : t -> t -> bool
+end
+
 module type HASHABLE_AUTO = sig
   include COMPARABLE
 
@@ -78,7 +84,7 @@ module type Eq = sig
 end
 
 module type Collection = sig
-  include COMPARABLE
+  include HASHABLE
 
   module Map : sig
     include Map.S with type key = t
@@ -107,7 +113,7 @@ module type Collection = sig
   end
 end
 
-module type Comparisons = sig
+module type COMPARISON = sig
   type t
 
   type boolean
@@ -133,7 +139,7 @@ module type Comparisons = sig
   val sgt : t -> t -> boolean
 end
 
-module type Arithmetic = sig
+module type ARITHMETIC = sig
   type t
 
   val add : t -> t -> t
@@ -151,8 +157,6 @@ module type Arithmetic = sig
 
   val urem : t -> t -> t
 
-  val pow : t -> t -> t
-
   (* Signed operations *)
   val sdiv : t -> t -> t
 
@@ -161,7 +165,7 @@ module type Arithmetic = sig
   val srem : t -> t -> t
 end
 
-module type Logical = sig
+module type LOGICAL = sig
   type t
 
   val logand : t -> t -> t
@@ -172,7 +176,7 @@ module type Logical = sig
 end
 
 module type EXTENDED_LOGICAL = sig
-  include Logical
+  include LOGICAL
 
   val logxor : t -> t -> t
 end
@@ -191,7 +195,7 @@ module type SHIFT_ROT = sig
   val rotate_right : t -> int -> t
 end
 
-module type Bitwise = sig
+module type BITWISE = sig
   include EXTENDED_LOGICAL
 
   include SHIFT_ROT with type t := t

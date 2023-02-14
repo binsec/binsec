@@ -33,7 +33,7 @@ type 'a t =
   | Assert of Dba.Expr.t
   | If of Dba.Expr.t * 'a Dba.jump_target
   | Undef of Dba.LValue.t
-  | Nondet of Dba.LValue.t * Dba.region
+  | Nondet of Dba.LValue.t
   | Stop of Dba.state
 
 let assign lval e =
@@ -56,17 +56,16 @@ let conditional_jump c jt = If (c, jt)
 
 let undefined lval = Undef lval
 
-let non_deterministic lval r = Nondet (lval, r)
+let non_deterministic lval = Nondet lval
 
 let stop s = Stop s
 
 let needs_termination = function
   | Dba.Instr.DJump _ | Dba.Instr.SJump (Dba.JOuter _, _) | Dba.Instr.Stop _ ->
       false
-  | Dba.Instr.Assume _ | Dba.Instr.Assert _ | Dba.Instr.NondetAssume _
-  | Dba.Instr.Malloc _ | Dba.Instr.Free _ | Dba.Instr.Print _
-  | Dba.Instr.Assign _ | Dba.Instr.Undef _ | Dba.Instr.If _ | Dba.Instr.Nondet _
-  | Dba.Instr.SJump _ ->
+  | Dba.Instr.Assume _ | Dba.Instr.Assert _ | Dba.Instr.Assign _
+  | Dba.Instr.Undef _ | Dba.Instr.If _ | Dba.Instr.Nondet _ | Dba.Instr.SJump _
+    ->
       true
 
 let to_dba_instruction next_id = function
@@ -74,7 +73,7 @@ let to_dba_instruction next_id = function
   | If (cond, thn) -> Dba.Instr.ite cond thn next_id
   | Assign (lhs, expr) -> Dba.Instr.assign lhs expr next_id
   | Undef lhs -> Dba.Instr.undefined lhs next_id
-  | Nondet (lhs, region) -> Dba.Instr.non_deterministic lhs ~region next_id
+  | Nondet lhs -> Dba.Instr.non_deterministic lhs next_id
   | SJump (dst, tag) -> Dba.Instr.static_jump dst ?tag
   | DJump (dst, tag) -> Dba.Instr.dynamic_jump dst ?tag
   | Stop st -> Dba.Instr.stop (Some st)

@@ -86,10 +86,12 @@ module type Common = sig
       or returns [false] otherwise *)
 
   (* Comparison *)
-  include Sigs.Comparisons with type t := t and type boolean = bool
+  include Sigs.COMPARISON with type t := t and type boolean = bool
 
   (* Arithmetic *)
-  include Sigs.Arithmetic with type t := t
+  include Sigs.ARITHMETIC with type t := t
+
+  val pow : t -> t -> t
 
   val succ : t -> t
 
@@ -114,7 +116,7 @@ module type Common = sig
   (* Logical *)
 
   (* land, lor, lxor and lnot are keywords... *)
-  include Sigs.Bitwise with type t := t
+  include Sigs.BITWISE with type t := t
 
   val reduce : t -> int -> t
 

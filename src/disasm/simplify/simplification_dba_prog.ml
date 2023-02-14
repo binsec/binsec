@@ -34,13 +34,9 @@ let remove_goto m =
     match ik with
     | Dba.Instr.Assign (_, _, nid)
     | Dba.Instr.Undef (_, nid)
-    | Dba.Instr.Print (_, nid)
-    | Dba.Instr.NondetAssume (_, _, nid)
     | Dba.Instr.Assume (_, nid)
     | Dba.Instr.Assert (_, nid)
-    | Dba.Instr.Malloc (_, _, nid)
-    | Dba.Instr.Free (_, nid)
-    | Dba.Instr.Nondet (_, _, nid) -> (
+    | Dba.Instr.Nondet (_, nid) -> (
         try
           let a = Dba_types.Caddress.reid addr nid in
           let nik, _ = local_find a in
@@ -140,13 +136,9 @@ let remove_goto m =
       match ik with
       | Dba.Instr.Assign (_, _, nid)
       | Dba.Instr.Undef (_, nid)
-      | Dba.Instr.Print (_, nid)
-      | Dba.Instr.NondetAssume (_, _, nid)
       | Dba.Instr.Assume (_, nid)
       | Dba.Instr.Assert (_, nid)
-      | Dba.Instr.Malloc (_, _, nid)
-      | Dba.Instr.Free (_, nid)
-      | Dba.Instr.Nondet (_, _, nid)
+      | Dba.Instr.Nondet (_, nid)
       | Dba.Instr.SJump (Dba.JInner nid, _) -> (
           let accu = Caddress.Map.add addr (ik, opcode) accu in
           try

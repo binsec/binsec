@@ -164,18 +164,20 @@ module Env = struct
     let open Dba.Expr in
     function
     | Cst v -> v
-    | Var { Dba.name; _ } as v -> (
+    | Var { name; _ } as v -> (
         try Var.Map.find name e.meta with Not_found -> raise @@ Ox8BADF00D v)
-    | Load (s, m, a) -> read e m (Addr.of_bitvector @@ eval e a) s
+    | Load (s, m, a, None) -> read e m (Addr.of_bitvector @@ eval e a) s
+    | Load _ -> assert false
     | Unary (o, a) -> eval_unop o @@ eval e a
     | Binary (o, a, b) -> eval e b |> eval_binop o @@ eval e a
     | Ite (c, t, f) -> if Bv.is_zero @@ eval e c then eval e f else eval e t
 
   let assign e l v =
     match l with
-    | Dba.LValue.Store (s, m, a) ->
+    | Dba.LValue.Store (s, m, a, None) ->
         write e m (Addr.of_bitvector @@ eval e a) v s
-    | Dba.LValue.Var va -> { e with meta = Var.Map.add va.Dba.name v e.meta }
+    | Dba.LValue.Store _ -> assert false
+    | Dba.LValue.Var va -> { e with meta = Var.Map.add va.name v e.meta }
     | Dba.(LValue.Restrict ({ name = n; size = s; _ }, { It.lo; It.hi })) ->
         let v =
           match Var.Map.find n e.meta with
@@ -195,7 +197,7 @@ module Env = struct
   let kill e = function
     | Dba.LValue.Store _ -> Errors.not_yet_implemented "Undef on memory cell."
     | Dba.LValue.Var v | Dba.LValue.Restrict (v, _) ->
-        { e with meta = Var.Map.remove v.Dba.name e.meta }
+        { e with meta = Var.Map.remove v.name e.meta }
 
   let load_memory_file e filename =
     let map =
@@ -269,10 +271,6 @@ module Interpreter (P : Program) = struct
 
   exception EndOfTrace of Env.t
 
-  let echo ppf = function
-    | Dba.Exp e -> Dba_printer.Ascii.pp_bl_term ppf e
-    | Dba.Str s -> Format.fprintf ppf "%s" s
-
   let step e a =
     let open Dba.Instr in
     function
@@ -291,9 +289,6 @@ module Interpreter (P : Program) = struct
     | Assert (c, n) ->
         if Bv.is_one @@ Env.eval e c then (e, Caddr.reid a n)
         else raise @@ AssertFailure a
-    | Print (l, n) ->
-        List.iter (fun p -> Logger.result "%a" echo p) l;
-        (e, Caddr.reid a n)
     | _ -> Errors.not_yet_implemented "Non supported DBA instruction."
 
   let fetch = P.fetch

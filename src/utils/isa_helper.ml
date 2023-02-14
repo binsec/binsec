@@ -20,71 +20,71 @@
 (**************************************************************************)
 
 module X86 = struct
-  let info = Dba.VarTag.Register
+  let info = Dba.Var.Tag.Register
 
-  let eax = { Dba.name = "eax"; size = 32; info }
+  let eax = Dba.Var.create "eax" ~bitsize:Size.Bit.bits32 ~tag:info
 
-  and ebx = { Dba.name = "ebx"; size = 32; info }
+  and ebx = Dba.Var.create "ebx" ~bitsize:Size.Bit.bits32 ~tag:info
 
-  and ecx = { Dba.name = "ecx"; size = 32; info }
+  and ecx = Dba.Var.create "ecx" ~bitsize:Size.Bit.bits32 ~tag:info
 
-  and edx = { Dba.name = "edx"; size = 32; info }
+  and edx = Dba.Var.create "edx" ~bitsize:Size.Bit.bits32 ~tag:info
 
-  and edi = { Dba.name = "edi"; size = 32; info }
+  and edi = Dba.Var.create "edi" ~bitsize:Size.Bit.bits32 ~tag:info
 
-  and esi = { Dba.name = "esi"; size = 32; info }
+  and esi = Dba.Var.create "esi" ~bitsize:Size.Bit.bits32 ~tag:info
 
-  and esp = { Dba.name = "esp"; size = 32; info }
+  and esp = Dba.Var.create "esp" ~bitsize:Size.Bit.bits32 ~tag:info
 
-  and ebp = { Dba.name = "ebp"; size = 32; info }
+  and ebp = Dba.Var.create "ebp" ~bitsize:Size.Bit.bits32 ~tag:info
 
-  let cs = { Dba.name = "cs"; size = 16; info }
+  let cs = Dba.Var.create "cs" ~bitsize:Size.Bit.bits16 ~tag:info
 
-  and ds = { Dba.name = "ds"; size = 16; info }
+  and ds = Dba.Var.create "ds" ~bitsize:Size.Bit.bits16 ~tag:info
 
-  and es = { Dba.name = "es"; size = 16; info }
+  and es = Dba.Var.create "es" ~bitsize:Size.Bit.bits16 ~tag:info
 
-  and fs = { Dba.name = "fs"; size = 16; info }
+  and fs = Dba.Var.create "fs" ~bitsize:Size.Bit.bits16 ~tag:info
 
-  and gs = { Dba.name = "gs"; size = 16; info }
+  and gs = Dba.Var.create "gs" ~bitsize:Size.Bit.bits16 ~tag:info
 
-  and ss = { Dba.name = "ss"; size = 16; info }
+  and ss = Dba.Var.create "ss" ~bitsize:Size.Bit.bits16 ~tag:info
 
-  let info = Dba.VarTag.Flag
+  let info = Dba.Var.Tag.Flag
 
-  let cf = { Dba.name = "CF"; size = 1; info }
+  let cf = Dba.Var.create "CF" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and pf = { Dba.name = "PF"; size = 1; info }
+  and pf = Dba.Var.create "PF" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and af = { Dba.name = "AF"; size = 1; info }
+  and af = Dba.Var.create "AF" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and zf = { Dba.name = "ZF"; size = 1; info }
+  and zf = Dba.Var.create "ZF" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and sf = { Dba.name = "SF"; size = 1; info }
+  and sf = Dba.Var.create "SF" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and tf = { Dba.name = "TF"; size = 1; info }
+  and tf = Dba.Var.create "TF" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and if' = { Dba.name = "IF"; size = 1; info }
+  and if' = Dba.Var.create "IF" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and df = { Dba.name = "DF"; size = 1; info }
+  and df = Dba.Var.create "DF" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and of' = { Dba.name = "OF"; size = 1; info }
+  and of' = Dba.Var.create "OF" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and iopl = { Dba.name = "IOPL"; size = 2; info }
+  and iopl = Dba.Var.create "IOPL" ~bitsize:Size.Bit.bits2 ~tag:info
 
-  and nt = { Dba.name = "NT"; size = 1; info }
+  and nt = Dba.Var.create "NT" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and rf = { Dba.name = "RF"; size = 1; info }
+  and rf = Dba.Var.create "RF" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and vm = { Dba.name = "VM"; size = 1; info }
+  and vm = Dba.Var.create "VM" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and ac = { Dba.name = "AC"; size = 1; info }
+  and ac = Dba.Var.create "AC" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and vif = { Dba.name = "VIF"; size = 1; info }
+  and vif = Dba.Var.create "VIF" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and vip = { Dba.name = "VIP"; size = 1; info }
+  and vip = Dba.Var.create "VIP" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and id = { Dba.name = "ID"; size = 1; info }
+  and id = Dba.Var.create "ID" ~bitsize:Size.Bit.bits1 ~tag:info
 
   let defs =
     [
@@ -108,6 +108,10 @@ module X86 = struct
       ("dl", Dba.LValue.restrict ebx 0 7);
       ("dh", Dba.LValue.restrict ebx 8 15);
       ("dx", Dba.LValue.restrict ebx 0 15);
+      ("di", Dba.LValue.restrict edi 0 15);
+      ("si", Dba.LValue.restrict esi 0 15);
+      ("sp", Dba.LValue.restrict esp 0 15);
+      ("bp", Dba.LValue.restrict ebp 0 15);
       ("CF", Dba.LValue.v cf);
       ("PF", Dba.LValue.v pf);
       ("AF", Dba.LValue.v af);
@@ -215,7 +219,7 @@ module X86 = struct
                 (Bitvector.of_int ~size:1 ((eflags lsr 11) land 0b1))
             and riopl =
               Dba.Expr.constant
-                (Bitvector.of_int ~size:1 ((eflags lsr 12) land 0b11))
+                (Bitvector.of_int ~size:2 ((eflags lsr 12) land 0b11))
             and rnt =
               Dba.Expr.constant
                 (Bitvector.of_int ~size:1 ((eflags lsr 14) land 0b1))
@@ -286,123 +290,123 @@ module X86 = struct
 end
 
 module AMD64 = struct
-  let info = Dba.VarTag.Register
+  let info = Dba.Var.Tag.Register
 
-  let rax = { Dba.name = "rax"; size = 64; info }
+  let rax = Dba.Var.create "rax" ~bitsize:Size.Bit.bits64 ~tag:info
 
-  and rbx = { Dba.name = "rbx"; size = 64; info }
+  and rbx = Dba.Var.create "rbx" ~bitsize:Size.Bit.bits64 ~tag:info
 
-  and rcx = { Dba.name = "rcx"; size = 64; info }
+  and rcx = Dba.Var.create "rcx" ~bitsize:Size.Bit.bits64 ~tag:info
 
-  and rdx = { Dba.name = "rdx"; size = 64; info }
+  and rdx = Dba.Var.create "rdx" ~bitsize:Size.Bit.bits64 ~tag:info
 
-  and rdi = { Dba.name = "rdi"; size = 64; info }
+  and rdi = Dba.Var.create "rdi" ~bitsize:Size.Bit.bits64 ~tag:info
 
-  and rsi = { Dba.name = "rsi"; size = 64; info }
+  and rsi = Dba.Var.create "rsi" ~bitsize:Size.Bit.bits64 ~tag:info
 
-  and rsp = { Dba.name = "rsp"; size = 64; info }
+  and rsp = Dba.Var.create "rsp" ~bitsize:Size.Bit.bits64 ~tag:info
 
-  and rbp = { Dba.name = "rbp"; size = 64; info }
+  and rbp = Dba.Var.create "rbp" ~bitsize:Size.Bit.bits64 ~tag:info
 
-  and r8 = { Dba.name = "r8"; size = 64; info }
+  and r8 = Dba.Var.create "r8" ~bitsize:Size.Bit.bits64 ~tag:info
 
-  and r9 = { Dba.name = "r9"; size = 64; info }
+  and r9 = Dba.Var.create "r9" ~bitsize:Size.Bit.bits64 ~tag:info
 
-  and r10 = { Dba.name = "r10"; size = 64; info }
+  and r10 = Dba.Var.create "r10" ~bitsize:Size.Bit.bits64 ~tag:info
 
-  and r11 = { Dba.name = "r11"; size = 64; info }
+  and r11 = Dba.Var.create "r11" ~bitsize:Size.Bit.bits64 ~tag:info
 
-  and r12 = { Dba.name = "r12"; size = 64; info }
+  and r12 = Dba.Var.create "r12" ~bitsize:Size.Bit.bits64 ~tag:info
 
-  and r13 = { Dba.name = "r13"; size = 64; info }
+  and r13 = Dba.Var.create "r13" ~bitsize:Size.Bit.bits64 ~tag:info
 
-  and r14 = { Dba.name = "r14"; size = 64; info }
+  and r14 = Dba.Var.create "r14" ~bitsize:Size.Bit.bits64 ~tag:info
 
-  and r15 = { Dba.name = "r15"; size = 64; info }
+  and r15 = Dba.Var.create "r15" ~bitsize:Size.Bit.bits64 ~tag:info
 
-  let cs = { Dba.name = "cs"; size = 16; info }
+  let cs = Dba.Var.create "cs" ~bitsize:Size.Bit.bits16 ~tag:info
 
-  and ds = { Dba.name = "ds"; size = 16; info }
+  and ds = Dba.Var.create "ds" ~bitsize:Size.Bit.bits16 ~tag:info
 
-  and es = { Dba.name = "es"; size = 16; info }
+  and es = Dba.Var.create "es" ~bitsize:Size.Bit.bits16 ~tag:info
 
-  and fs = { Dba.name = "fs"; size = 16; info }
+  and fs = Dba.Var.create "fs" ~bitsize:Size.Bit.bits16 ~tag:info
 
-  and gs = { Dba.name = "gs"; size = 16; info }
+  and gs = Dba.Var.create "gs" ~bitsize:Size.Bit.bits16 ~tag:info
 
-  and ss = { Dba.name = "ss"; size = 16; info }
+  and ss = Dba.Var.create "ss" ~bitsize:Size.Bit.bits16 ~tag:info
 
-  and fs_base = { Dba.name = "fs_base"; size = 64; info }
+  and fs_base = Dba.Var.create "fs_base" ~bitsize:Size.Bit.bits64 ~tag:info
 
-  and gs_base = { Dba.name = "gs_base"; size = 64; info }
+  and gs_base = Dba.Var.create "gs_base" ~bitsize:Size.Bit.bits64 ~tag:info
 
-  let ymm0 = { Dba.name = "ymm0"; size = 256; info }
+  let ymm0 = Dba.Var.create "ymm0" ~bitsize:Size.Bit.bits256 ~tag:info
 
-  and ymm1 = { Dba.name = "ymm1"; size = 256; info }
+  and ymm1 = Dba.Var.create "ymm1" ~bitsize:Size.Bit.bits256 ~tag:info
 
-  and ymm2 = { Dba.name = "ymm2"; size = 256; info }
+  and ymm2 = Dba.Var.create "ymm2" ~bitsize:Size.Bit.bits256 ~tag:info
 
-  and ymm3 = { Dba.name = "ymm3"; size = 256; info }
+  and ymm3 = Dba.Var.create "ymm3" ~bitsize:Size.Bit.bits256 ~tag:info
 
-  and ymm4 = { Dba.name = "ymm4"; size = 256; info }
+  and ymm4 = Dba.Var.create "ymm4" ~bitsize:Size.Bit.bits256 ~tag:info
 
-  and ymm5 = { Dba.name = "ymm5"; size = 256; info }
+  and ymm5 = Dba.Var.create "ymm5" ~bitsize:Size.Bit.bits256 ~tag:info
 
-  and ymm6 = { Dba.name = "ymm6"; size = 256; info }
+  and ymm6 = Dba.Var.create "ymm6" ~bitsize:Size.Bit.bits256 ~tag:info
 
-  and ymm7 = { Dba.name = "ymm7"; size = 256; info }
+  and ymm7 = Dba.Var.create "ymm7" ~bitsize:Size.Bit.bits256 ~tag:info
 
-  and ymm8 = { Dba.name = "ymm8"; size = 256; info }
+  and ymm8 = Dba.Var.create "ymm8" ~bitsize:Size.Bit.bits256 ~tag:info
 
-  and ymm9 = { Dba.name = "ymm9"; size = 256; info }
+  and ymm9 = Dba.Var.create "ymm9" ~bitsize:Size.Bit.bits256 ~tag:info
 
-  and ymm10 = { Dba.name = "ymm10"; size = 256; info }
+  and ymm10 = Dba.Var.create "ymm10" ~bitsize:Size.Bit.bits256 ~tag:info
 
-  and ymm11 = { Dba.name = "ymm11"; size = 256; info }
+  and ymm11 = Dba.Var.create "ymm11" ~bitsize:Size.Bit.bits256 ~tag:info
 
-  and ymm12 = { Dba.name = "ymm12"; size = 256; info }
+  and ymm12 = Dba.Var.create "ymm12" ~bitsize:Size.Bit.bits256 ~tag:info
 
-  and ymm13 = { Dba.name = "ymm13"; size = 256; info }
+  and ymm13 = Dba.Var.create "ymm13" ~bitsize:Size.Bit.bits256 ~tag:info
 
-  and ymm14 = { Dba.name = "ymm14"; size = 256; info }
+  and ymm14 = Dba.Var.create "ymm14" ~bitsize:Size.Bit.bits256 ~tag:info
 
-  and ymm15 = { Dba.name = "ymm15"; size = 256; info }
+  and ymm15 = Dba.Var.create "ymm15" ~bitsize:Size.Bit.bits256 ~tag:info
 
-  let info = Dba.VarTag.Flag
+  let info = Dba.Var.Tag.Flag
 
-  let cf = { Dba.name = "cf"; size = 1; info }
+  let cf = Dba.Var.create "cf" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and pf = { Dba.name = "pf"; size = 1; info }
+  and pf = Dba.Var.create "pf" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and af = { Dba.name = "af"; size = 1; info }
+  and af = Dba.Var.create "af" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and zf = { Dba.name = "zf"; size = 1; info }
+  and zf = Dba.Var.create "zf" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and sf = { Dba.name = "sf"; size = 1; info }
+  and sf = Dba.Var.create "sf" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and tf = { Dba.name = "tf"; size = 1; info }
+  and tf = Dba.Var.create "tf" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and if' = { Dba.name = "if"; size = 1; info }
+  and if' = Dba.Var.create "if" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and df = { Dba.name = "df"; size = 1; info }
+  and df = Dba.Var.create "df" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and of' = { Dba.name = "of"; size = 1; info }
+  and of' = Dba.Var.create "of" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and iopl = { Dba.name = "iopl"; size = 2; info }
+  and iopl = Dba.Var.create "iopl" ~bitsize:Size.Bit.bits2 ~tag:info
 
-  and nt = { Dba.name = "nt"; size = 1; info }
+  and nt = Dba.Var.create "nt" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and rf = { Dba.name = "rf"; size = 1; info }
+  and rf = Dba.Var.create "rf" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and vm = { Dba.name = "vm"; size = 1; info }
+  and vm = Dba.Var.create "vm" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and ac = { Dba.name = "ac"; size = 1; info }
+  and ac = Dba.Var.create "ac" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and vif' = { Dba.name = "vif"; size = 1; info }
+  and vif' = Dba.Var.create "vif" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and vip = { Dba.name = "vip"; size = 1; info }
+  and vip = Dba.Var.create "vip" ~bitsize:Size.Bit.bits1 ~tag:info
 
-  and id = { Dba.name = "id"; size = 1; info }
+  and id = Dba.Var.create "id" ~bitsize:Size.Bit.bits1 ~tag:info
 
   let defs =
     [
@@ -450,6 +454,30 @@ module AMD64 = struct
       ("dl", Dba.LValue.restrict rbx 0 7);
       ("dh", Dba.LValue.restrict rbx 8 15);
       ("dx", Dba.LValue.restrict rbx 0 15);
+      ("dil", Dba.LValue.restrict rdi 0 7);
+      ("di", Dba.LValue.restrict rdi 0 15);
+      ("sil", Dba.LValue.restrict rsi 0 7);
+      ("si", Dba.LValue.restrict rsi 0 15);
+      ("spl", Dba.LValue.restrict rsp 0 7);
+      ("sp", Dba.LValue.restrict rsp 0 15);
+      ("bpl", Dba.LValue.restrict rbp 0 7);
+      ("bp", Dba.LValue.restrict rbp 0 15);
+      ("r8w", Dba.LValue.restrict r8 0 31);
+      ("r9w", Dba.LValue.restrict r9 0 31);
+      ("r10w", Dba.LValue.restrict r10 0 15);
+      ("r11w", Dba.LValue.restrict r11 0 15);
+      ("r12w", Dba.LValue.restrict r12 0 15);
+      ("r13w", Dba.LValue.restrict r13 0 15);
+      ("r14w", Dba.LValue.restrict r14 0 15);
+      ("r15w", Dba.LValue.restrict r15 0 15);
+      ("r8b", Dba.LValue.restrict r8 0 7);
+      ("r9b", Dba.LValue.restrict r9 0 7);
+      ("r10b", Dba.LValue.restrict r10 0 7);
+      ("r11b", Dba.LValue.restrict r11 0 7);
+      ("r12b", Dba.LValue.restrict r12 0 7);
+      ("r13b", Dba.LValue.restrict r13 0 7);
+      ("r14b", Dba.LValue.restrict r14 0 7);
+      ("r15b", Dba.LValue.restrict r15 0 7);
       ("cs", Dba.LValue.v cs);
       ("ds", Dba.LValue.v ds);
       ("es", Dba.LValue.v es);
@@ -599,7 +627,7 @@ module AMD64 = struct
                 (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 11) land 0b1))
             and viopl =
               Dba.Expr.constant
-                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 12) land 0b11))
+                (Bitvector.of_int ~size:2 ((rflags_15_0 lsr 12) land 0b11))
             and vnt =
               Dba.Expr.constant
                 (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 14) land 0b1))
@@ -673,29 +701,29 @@ end
 
 module ARM = struct
   let defs =
-    let info = Dba.VarTag.Register in
-    let r0 = { Dba.name = "r0"; size = 32; info }
-    and r1 = { Dba.name = "r1"; size = 32; info }
-    and r2 = { Dba.name = "r2"; size = 32; info }
-    and r3 = { Dba.name = "r3"; size = 32; info }
-    and r4 = { Dba.name = "r4"; size = 32; info }
-    and r5 = { Dba.name = "r5"; size = 32; info }
-    and r6 = { Dba.name = "r6"; size = 32; info }
-    and r7 = { Dba.name = "r7"; size = 32; info }
-    and r8 = { Dba.name = "r8"; size = 32; info }
-    and r9 = { Dba.name = "r9"; size = 32; info }
-    and r10 = { Dba.name = "r10"; size = 32; info }
-    and r11 = { Dba.name = "fp"; size = 32; info }
-    and r12 = { Dba.name = "ip"; size = 32; info }
-    and r13 = { Dba.name = "sp"; size = 32; info }
-    and r14 = { Dba.name = "lr"; size = 32; info }
-    and r15 = { Dba.name = "pc"; size = 32; info } in
-    let info = Dba.VarTag.Flag in
-    let n = { Dba.name = "n"; size = 1; info }
-    and z = { Dba.name = "z"; size = 1; info }
-    and c = { Dba.name = "c"; size = 1; info }
-    and v = { Dba.name = "v"; size = 1; info }
-    and t = { Dba.name = "t"; size = 1; info } in
+    let info = Dba.Var.Tag.Register in
+    let r0 = Dba.Var.create "r0" ~bitsize:Size.Bit.bits32 ~tag:info
+    and r1 = Dba.Var.create "r1" ~bitsize:Size.Bit.bits32 ~tag:info
+    and r2 = Dba.Var.create "r2" ~bitsize:Size.Bit.bits32 ~tag:info
+    and r3 = Dba.Var.create "r3" ~bitsize:Size.Bit.bits32 ~tag:info
+    and r4 = Dba.Var.create "r4" ~bitsize:Size.Bit.bits32 ~tag:info
+    and r5 = Dba.Var.create "r5" ~bitsize:Size.Bit.bits32 ~tag:info
+    and r6 = Dba.Var.create "r6" ~bitsize:Size.Bit.bits32 ~tag:info
+    and r7 = Dba.Var.create "r7" ~bitsize:Size.Bit.bits32 ~tag:info
+    and r8 = Dba.Var.create "r8" ~bitsize:Size.Bit.bits32 ~tag:info
+    and r9 = Dba.Var.create "r9" ~bitsize:Size.Bit.bits32 ~tag:info
+    and r10 = Dba.Var.create "r10" ~bitsize:Size.Bit.bits32 ~tag:info
+    and r11 = Dba.Var.create "fp" ~bitsize:Size.Bit.bits32 ~tag:info
+    and r12 = Dba.Var.create "ip" ~bitsize:Size.Bit.bits32 ~tag:info
+    and r13 = Dba.Var.create "sp" ~bitsize:Size.Bit.bits32 ~tag:info
+    and r14 = Dba.Var.create "lr" ~bitsize:Size.Bit.bits32 ~tag:info
+    and r15 = Dba.Var.create "pc" ~bitsize:Size.Bit.bits32 ~tag:info in
+    let info = Dba.Var.Tag.Flag in
+    let n = Dba.Var.create "n" ~bitsize:Size.Bit.bits1 ~tag:info
+    and z = Dba.Var.create "z" ~bitsize:Size.Bit.bits1 ~tag:info
+    and c = Dba.Var.create "c" ~bitsize:Size.Bit.bits1 ~tag:info
+    and v = Dba.Var.create "v" ~bitsize:Size.Bit.bits1 ~tag:info
+    and t = Dba.Var.create "t" ~bitsize:Size.Bit.bits1 ~tag:info in
     [
       ("r0", Dba.LValue.v r0);
       ("r1", Dba.LValue.v r1);
@@ -728,45 +756,45 @@ end
 
 module AARCH64 = struct
   let defs =
-    let info = Dba.VarTag.Register in
-    let x0 = { Dba.name = "x0"; size = 64; info }
-    and x1 = { Dba.name = "x1"; size = 64; info }
-    and x2 = { Dba.name = "x2"; size = 64; info }
-    and x3 = { Dba.name = "x3"; size = 64; info }
-    and x4 = { Dba.name = "x4"; size = 64; info }
-    and x5 = { Dba.name = "x5"; size = 64; info }
-    and x6 = { Dba.name = "x6"; size = 64; info }
-    and x7 = { Dba.name = "x7"; size = 64; info }
-    and x8 = { Dba.name = "x8"; size = 64; info }
-    and x9 = { Dba.name = "x9"; size = 64; info }
-    and x10 = { Dba.name = "x10"; size = 64; info }
-    and x11 = { Dba.name = "x11"; size = 64; info }
-    and x12 = { Dba.name = "x12"; size = 64; info }
-    and x13 = { Dba.name = "x13"; size = 64; info }
-    and x14 = { Dba.name = "x14"; size = 64; info }
-    and x15 = { Dba.name = "x15"; size = 64; info }
-    and x16 = { Dba.name = "x16"; size = 64; info }
-    and x17 = { Dba.name = "x17"; size = 64; info }
-    and x18 = { Dba.name = "x18"; size = 64; info }
-    and x19 = { Dba.name = "x19"; size = 64; info }
-    and x20 = { Dba.name = "x20"; size = 64; info }
-    and x21 = { Dba.name = "x21"; size = 64; info }
-    and x22 = { Dba.name = "x22"; size = 64; info }
-    and x23 = { Dba.name = "x23"; size = 64; info }
-    and x24 = { Dba.name = "x24"; size = 64; info }
-    and x25 = { Dba.name = "x25"; size = 64; info }
-    and x26 = { Dba.name = "x26"; size = 64; info }
-    and x27 = { Dba.name = "x27"; size = 64; info }
-    and x28 = { Dba.name = "x28"; size = 64; info }
-    and x29 = { Dba.name = "x29"; size = 64; info }
-    and x30 = { Dba.name = "x30"; size = 64; info }
-    and sp = { Dba.name = "sp"; size = 64; info } in
-    let info = Dba.VarTag.Flag in
-    let n = { Dba.name = "n"; size = 1; info }
-    and z = { Dba.name = "z"; size = 1; info }
-    and c = { Dba.name = "c"; size = 1; info }
-    and v = { Dba.name = "v"; size = 1; info }
-    and t = { Dba.name = "t"; size = 1; info } in
+    let info = Dba.Var.Tag.Register in
+    let x0 = Dba.Var.create "x0" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x1 = Dba.Var.create "x1" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x2 = Dba.Var.create "x2" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x3 = Dba.Var.create "x3" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x4 = Dba.Var.create "x4" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x5 = Dba.Var.create "x5" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x6 = Dba.Var.create "x6" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x7 = Dba.Var.create "x7" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x8 = Dba.Var.create "x8" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x9 = Dba.Var.create "x9" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x10 = Dba.Var.create "x10" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x11 = Dba.Var.create "x11" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x12 = Dba.Var.create "x12" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x13 = Dba.Var.create "x13" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x14 = Dba.Var.create "x14" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x15 = Dba.Var.create "x15" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x16 = Dba.Var.create "x16" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x17 = Dba.Var.create "x17" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x18 = Dba.Var.create "x18" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x19 = Dba.Var.create "x19" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x20 = Dba.Var.create "x20" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x21 = Dba.Var.create "x21" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x22 = Dba.Var.create "x22" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x23 = Dba.Var.create "x23" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x24 = Dba.Var.create "x24" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x25 = Dba.Var.create "x25" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x26 = Dba.Var.create "x26" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x27 = Dba.Var.create "x27" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x28 = Dba.Var.create "x28" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x29 = Dba.Var.create "x29" ~bitsize:Size.Bit.bits64 ~tag:info
+    and x30 = Dba.Var.create "x30" ~bitsize:Size.Bit.bits64 ~tag:info
+    and sp = Dba.Var.create "sp" ~bitsize:Size.Bit.bits64 ~tag:info in
+    let info = Dba.Var.Tag.Flag in
+    let n = Dba.Var.create "n" ~bitsize:Size.Bit.bits1 ~tag:info
+    and z = Dba.Var.create "z" ~bitsize:Size.Bit.bits1 ~tag:info
+    and c = Dba.Var.create "c" ~bitsize:Size.Bit.bits1 ~tag:info
+    and v = Dba.Var.create "v" ~bitsize:Size.Bit.bits1 ~tag:info
+    and t = Dba.Var.create "t" ~bitsize:Size.Bit.bits1 ~tag:info in
     [
       ("r0", Dba.LValue.v x0);
       ("r1", Dba.LValue.v x1);
@@ -841,8 +869,9 @@ end
 
 module RISCV = struct
   let defs size =
-    let info = Dba.VarTag.Register in
-    let reg name = (name, Dba.LValue.v { Dba.name; size; info }) in
+    let info = Dba.Var.Tag.Register in
+    let bitsize = Size.Bit.create size in
+    let reg name = (name, Dba.LValue.var name ~bitsize ~tag:info) in
     List.map reg
       [
         "ra";
@@ -879,6 +908,18 @@ module RISCV = struct
       ]
 end
 
+module Z80 = struct
+  let defs =
+    let add r l =
+      let name = Z80_arch.name r in
+      let lval = Z80_arch.lval r in
+      (name, lval) :: (String.lowercase_ascii name, lval) :: l
+    in
+    Array.fold_right add Z80_arch.registers16
+      (Array.fold_right add Z80_arch.registers8
+         (Array.fold_right add Z80_arch.flags []))
+end
+
 let get_defs () =
   match Kernel_options.Machine.isa () with
   | X86 { bits = `x32 } -> X86.defs
@@ -887,6 +928,7 @@ let get_defs () =
   | ARM { rev = `v8; _ } -> AARCH64.defs
   | RISCV { bits = `x32 } -> RISCV.defs 32
   | RISCV { bits = `x64 } -> RISCV.defs 64
+  | Z80 -> Z80.defs
   | _ ->
       (* TODO *)
       raise (Errors.not_yet_implemented "incomplete architecture definition")
@@ -903,6 +945,8 @@ let max_instruction_len () =
   match Kernel_options.Machine.isa () with
   | X86 _ -> b15
   | ARM _ -> b4
+  | RISCV _ -> b4
+  | Z80 -> b4
   | _ ->
       (* TODO *)
       raise (Errors.not_yet_implemented "incomplete architecture definition")

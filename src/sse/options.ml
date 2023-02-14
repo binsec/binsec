@@ -31,6 +31,14 @@ module AlternativeEngine = Builder.False (struct
   let doc = "Enable the experimental engine"
 end)
 
+module LegacyEngine = Builder.False (struct
+  let name = "legacy-engine"
+
+  let doc =
+    "Use the legacy engine. Some features are not or hardly supported (e.g. \
+     core dump, custom arrays, etc.)."
+end)
+
 module MaxDepth = Builder.Integer (struct
   let name = "depth"
 
@@ -55,41 +63,18 @@ module JumpEnumDepth = Builder.Integer (struct
   let doc = "Set maximum number of jump targets to retrieve for dynamic jumps"
 end)
 
+module QMerge = Builder.Integer (struct
+  let name = "qmerge"
+
+  let default = 0
+
+  let doc = "Set maximum look ahead depth for quick merging"
+end)
+
 module Randomize = Builder.False (struct
   let name = "randomize"
 
   let doc = "randomize path selection"
-end)
-
-module AvoidAddresses = Builder.String_set (struct
-  let name = "no-explore"
-
-  let doc = "set addresses where sse should stop"
-end)
-
-module GoalAddresses = Builder.String_set (struct
-  let name = "explore"
-
-  let doc = "set addresses where sse should try to go"
-end)
-
-module LoadSections = Builder.String_set (struct
-  let name = "load-sections"
-
-  let doc = "Sections to load in initial memory (may be overridden by -memory)"
-end)
-
-module LoadROSections = Builder.False (struct
-  let name = "load-ro-sections"
-
-  let doc =
-    "Load the content of all read-only sections (see also -sse-load-sections)"
-end)
-
-module MemoryFile = Builder.String_option (struct
-  let name = "memory"
-
-  let doc = "set file containing the initial (concrete) memory state"
 end)
 
 module ScriptFiles = Builder.String_list (struct
@@ -98,44 +83,10 @@ module ScriptFiles = Builder.String_list (struct
   let doc = "set file containing initializations, directives and stubs"
 end)
 
-module Comment = Builder.False (struct
-  let name = "comment"
-
-  let doc =
-    "Add comments indicating the origin of the formulas in generated scripts"
-end)
-
 module Timeout = Builder.Integer_option (struct
   let name = "timeout"
 
-  let doc = "Sets a timeout for symbolic execution in second"
-end)
-
-module Address_counter = struct
-  type t = { address : Virtual_address.t; counter : int }
-
-  let of_string s =
-    match String.split_on_char ':' s with
-    | [ address; counter ] ->
-        {
-          address = Virtual_address.of_string address;
-          counter = int_of_string counter;
-        }
-    | _ -> assert false
-
-  let decr c = { c with counter = c.counter - 1 }
-
-  let check_and_decr c = if c.counter > 0 then Some (decr c) else None
-end
-
-module Visit_address_counter = Builder.Variant_list (struct
-  include Address_counter
-
-  let name = "visit-until"
-
-  let doc =
-    "Specify a the maximum number of times [n] an address [vaddr] is visited \
-     by SE (format: <vaddr>:<n>)"
+  let doc = "Sets a timeout in second for symbolic execution"
 end)
 
 type search_heuristics = Dfs | Bfs | Nurs
@@ -152,38 +103,8 @@ module Search_heuristics = Builder.Variant_choice_assoc (struct
   let assoc_map = [ ("dfs", Dfs); ("bfs", Bfs); ("nurs", Nurs) ]
 end)
 
-module Solver_call_frequency = Builder.Integer (struct
-  let name = "solver-call-frequency"
-
-  let default = 1
-
-  let doc = "Call the solver every <n> times"
-end)
-
 module Seed = Builder.Integer_option (struct
   let name = "seed"
 
   let doc = "Give a specific seed for random number generators"
-end)
-
-module Directives = Builder.Any (struct
-  type t = Directive.t list
-
-  let name = "directives"
-
-  let doc = "Set SSE directive"
-
-  let default = []
-
-  let to_string _ = "no directives"
-
-  let of_string s =
-    let lexbuf = Lexing.from_string s in
-    Parser.directives Lexer.token lexbuf
-end)
-
-module Dot_filename_out = Builder.String_option (struct
-  let name = "cfg-o"
-
-  let doc = "Output CFG in this file"
 end)

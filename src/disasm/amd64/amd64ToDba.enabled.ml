@@ -172,28 +172,26 @@ let decode addr bytes = Amd64dba.decode ~m64:true ~addr bytes |> parse_result
 let read_sample_size = 15
 (* This value is chosen to be large enough to get a sure opcode hit *)
 
-let peek_at_most =
-  let rec aux r reader = function
-    | 0 -> List.rev r
-    | n ->
-        let r = try Lreader.Read.u8 reader :: r with _ -> r in
-        aux r reader (n - 1)
+let fill_buffer =
+  let rec aux i bytes reader =
+    if i = Bytes.length bytes then i
+    else
+      try
+        Bytes.set bytes i (Char.unsafe_chr (Lreader.Read.u8 reader));
+        aux (i + 1) bytes reader
+      with _ -> i
   in
-  aux []
+  aux 0
 
 let decode_from_reader addr reader =
-  let bytes = peek_at_most reader read_sample_size in
-  let bytes =
-    Format.asprintf "%a"
-      (Format.pp_print_list
-         ~pp_sep:(fun _ () -> ())
-         (fun ppf x -> Format.fprintf ppf "%02x" x))
-      bytes
-  in
+  let bytes = Bytes.create read_sample_size in
+  let n = fill_buffer bytes reader in
+  let bytes = String_utils.to_hex (Bytes.unsafe_to_string bytes) in
   let r = decode addr bytes in
   match r with
   | Ok i ->
       Statistics.incr_decoded i stats;
+      Lreader.rewind reader (n - Size.Byte.to_int (fst i).size);
       i
   | Error (etype, i) ->
       (match etype with

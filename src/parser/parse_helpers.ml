@@ -32,7 +32,7 @@ let cur_address () = !cur_address
 module Declarations = struct
   module SH = Basic_types.String.Htbl
 
-  let declarations : (Dba.size * Dba.VarTag.t) SH.t = SH.create 16
+  let declarations : (Dba.size * Dba.Var.Tag.t) SH.t = SH.create 16
 
   let add name size opttags = SH.add declarations name (size, opttags)
 end
@@ -61,48 +61,6 @@ module Mk = struct
           let elmts, (q1, q2, q3) = of_list l in
           ( elmt :: elmts,
             (Expr.logand p1 q1, Expr.logand p2 q2, Expr.logand p3 q3) )
-  end
-
-  module Permissions = struct
-    let empty = (Dba_types.Region.Map.empty, Dba_types.Rights.empty)
-
-    let add_rights (p1, p2, p3) region rights =
-      let open Dba_types.Rights in
-      let update_rights v p rights =
-        let right_condition =
-          match find v rights with
-          | p' -> Expr.logand p p'
-          | exception Not_found -> p
-        in
-        add v right_condition rights
-      in
-      update_rights (R, region) p1 rights
-      |> update_rights (W, region) p2
-      |> update_rights (X, region) p3
-
-    let add_permissions l region permissions =
-      let ps =
-        match Dba_types.Region.Map.find region permissions with
-        | p_l -> p_l @ l
-        | exception Not_found -> l
-      in
-      Dba_types.Region.Map.add region ps permissions
-
-    let add_permissions l region (perms, rights) =
-      (add_permissions l region perms, rights)
-
-    let add_rights v region (perms, rights) = (perms, add_rights v region rights)
-
-    let of_list l =
-      let rec aux p = function
-        | [] -> p
-        | (region, permission, rights) :: l' ->
-            let p' =
-              add_permissions permission region (add_rights rights region p)
-            in
-            aux p' l'
-      in
-      aux empty l
   end
 
   module Initializations = struct
@@ -138,7 +96,7 @@ module Mk = struct
     else address_size_error address
 
   let extract_declaration_data = function
-    | Dba.LValue.Var { name; size; info } -> (name, size, info)
+    | Dba.LValue.Var { name; size; info; _ } -> (name, size, info)
     | Dba.LValue.Restrict _ | Dba.LValue.Store _ -> assert false
 
   let fill_sizes declarations initializations =
@@ -166,10 +124,8 @@ module Mk = struct
     List.mapi (fun i instruction ->
         Dba_types.Instruction.set_successor instruction (i + 1))
 
-  let program permissions initializations start_address declarations
-      instructions =
-    let permissions = Utils.get_opt_or_default Permissions.empty permissions
-    and declarations =
+  let program initializations start_address declarations instructions =
+    let declarations =
       List.map extract_declaration_data declarations
       |> Dba_types.Declarations.of_list
     in
@@ -183,13 +139,7 @@ module Mk = struct
       fill_sizes declarations initializations
       |> Initializations.checked_of_list |> set_nexts
     in
-    {
-      Dba_types.start_address;
-      declarations;
-      permissions;
-      initializations;
-      instructions;
-    }
+    { Dba_types.start_address; declarations; initializations; instructions }
 end
 
 let expr_of_name name =
@@ -251,9 +201,9 @@ let rec patch_expr_size e sz =
   | Dba.(Expr.Var { name; info = tag; _ }) ->
       if is_wildmetapld_expr e then e else var name sz ~tag
   | Dba.Expr.Cst bv -> constant (Bitvector.create (Bitvector.value_of bv) sz)
-  | Dba.Expr.Load (_old_sz, en, e) ->
+  | Dba.Expr.Load (_old_sz, en, e, array) ->
       let bysz = Size.(Bit.create sz |> Byte.of_bitsize) in
-      load bysz en e
+      load bysz en e ?array
   | Dba.Expr.Unary (Dba.Unary_op.Uext size, e) ->
       uext size (patch_expr_size e (sz - size))
   | Dba.Expr.Unary (Dba.Unary_op.Sext size, e) ->
@@ -304,14 +254,13 @@ module Initialization = struct
   let from_assignment ?identifier ?(controlled = true) = function
     | Dba.Instr.Assign (lval, rval, _) ->
         assign ?identifier ~controlled lval (Singleton rval)
-    | Dba.Instr.Nondet (lval, _, _) ->
-        assign ?identifier ~controlled lval Nondet
+    | Dba.Instr.Nondet (lval, _) -> assign ?identifier ~controlled lval Nondet
     | _ -> failwith "initialization with non assignment"
 
   let from_store ?(controlled = true) lv =
     Logger.debug "Init from store %a" Dba_printer.Ascii.pp_lhs lv;
     match lv with
-    | LValue.Store (size, _, addr) ->
+    | LValue.Store (size, _, addr, None) ->
         assert (Dba.Expr.size_of addr = Kernel_options.Machine.word_size ());
         let operation = Mem_load (addr, size) in
         create ~controlled ~operation

@@ -32,8 +32,7 @@ module Expr : sig
 
   val eval_addr_from_img : Loader.Img.t -> Dba.Expr.t -> Virtual_address.t
 
-  val complement :
-    Dba.Expr.t -> lo:int -> hi:int -> Dba.VarTag.t Dba.var -> Dba.Expr.t
+  val complement : Dba.Expr.t -> lo:int -> hi:int -> Dba.Var.t -> Dba.Expr.t
   (** [complement e lo hi v]
      return the expression e' such as v{hi .. lo} := e <=> v := e'
   *)

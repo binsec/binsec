@@ -74,11 +74,7 @@ let fetch state v =
       | I.Assume (_, n)
       | I.Assign (_, _, n)
       | I.Undef (_, n)
-      | I.Nondet (_, _, n)
-      | I.NondetAssume (_, _, n)
-      | I.Malloc (_, _, n)
-      | I.Free (_, n)
-      | I.Print (_, n) ->
+      | I.Nondet (_, n) ->
           let f = A.create v n in
           A.Htbl.replace state.dap f
             (a :: (try A.Htbl.find state.dap f with Not_found -> [])))
@@ -189,7 +185,7 @@ let enumerate_path state n a =
     | p :: preds -> (
         match (A.Htbl.find state.dis p, n) with
         (* if we reach both bound and end of basic bloc *)
-        | I.If _, 0 | I.DJump _, 0 | I.SJump (_, Some (Call _)), 0 ->
+        | I.If _, 0 | I.DJump _, 0 | I.SJump (_, Call _), 0 ->
             (* end of path *)
             step_backward state ((a, c, j) :: result) worklist delta a c j n
               preds
@@ -219,7 +215,7 @@ let enumerate_path state n a =
             step_backward state result
               ((p, c, A.to_virtual_address a :: j, n - delta) :: worklist)
               delta a c j n preds
-        | I.SJump (JOuter t, Some (Call _)), n ->
+        | I.SJump (JOuter t, Call _), n ->
             assert (A.equal a t);
             step_backward state result
               ((p, c, j, n - 1) :: worklist)
@@ -233,11 +229,7 @@ let enumerate_path state n a =
         | I.Assert (_, f), n
         | I.Assign (_, _, f), n
         | I.Undef (_, f), n
-        | I.Nondet (_, _, f), n
-        | I.NondetAssume (_, _, f), n
-        | I.Malloc (_, _, f), n
-        | I.Free (_, f), n
-        | I.Print (_, f), n ->
+        | I.Nondet (_, f), n ->
             assert (A.equal a (A.reid p f));
             step_backward state result ((p, c, j, n) :: worklist) delta a c j n
               preds

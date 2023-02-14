@@ -35,15 +35,6 @@ val read_string :
 
 val read_dba_file : string -> Dba_types.program
 
-val read_optional_config_file : string option -> Infos.t
-(** [read_optional_config_file optfile] parses [optfile] if it is not [None].
-    Otherwise, or in case of parse error, it returns [Infos.default].
-    If a start address has been set on the command line, it tries to set it.
-
-    Caveat: if an entry point has been set both through a configuration file and
-    the command line, [read_optional_config_file] fails.
-*)
-
 exception Invalid_dba_string of string
 
 val instruction_of_string : string -> Dba.Instr.t

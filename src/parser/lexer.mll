@@ -24,8 +24,6 @@ open Parser
 
 let keywords = [
   "as"            , AS;
-  "begin"         , BEGIN;
-  "end"           , END;
   "modu"          , MODU;
   "mods"          , MODS;
   "and"           , AND ;
@@ -51,24 +49,16 @@ let keywords = [
   "assert"        , ASSERT ;
   "assume"        , ASSUME ;
   "nondet"        , NONDET ;
-  "nondet_assume" , NONDETASSUME ;
-  "cst"           , CONSTANT ;
-  "stack"         , STACK ;
-  "malloc"        , MALLOC ;
-  "free"          , FREE ;
   "var"           , VAR;
-  "print"         , PRINT;
   "from"          , FROM;
   "file"          , FILE;
   "from_file"     , FROMFILE;
   (* "big"           , BIG ; *)
   (* "little"        , LITTLE; *)
-  "permissions"   , PERMISSIONS;
   "flag"          , FLAG;
   "temporary"     , TEMPORARY;
   "register"      , REGISTER;
   "entry_point"   , ENTRYPOINT;
-  "word_size"     , WORDSIZE ;
   (* "endianness"    , ENDIANNESS; *)
   "unimplemented" , UNIMPLEMENTED;
   "undefined"     , UNDEFINED;
@@ -156,15 +146,8 @@ rule token = parse
   | "!"             { NOT }
   | "<TEMP>"        { TEMPTAG }
   | "<FLAG>"        { FLAGTAG }
-  | "\\addr"        { WORDSIZE }
   | "\\entry_point" { ENTRYPOINT }
   (* | "\\endianness"  { ENDIANNESS } *)
-  | 'R'             { READ }
-  | "!R"            { NREAD }
-  | 'W'             { WRITE }
-  | "!W"            { NWRITE }
-  | "X"             { EXEC }
-  | "!X"            { NEXEC }
   | "OK"            { SOK }
   | "KO"            { SKO }
   | "\\undef"       { UNDEF }

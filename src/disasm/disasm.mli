@@ -54,8 +54,6 @@ end
 
 (** Function *)
 
-val disassemble : Infos.t -> Program.t
-
 val file : filename:string -> Program.t
 
 val section : ?program:Program.t -> Loader.Img.t -> string -> Program.t
@@ -63,8 +61,8 @@ val section : ?program:Program.t -> Loader.Img.t -> string -> Program.t
 val sections :
   ?program:Program.t -> Loader.Img.t -> Basic_types.String.Set.t -> Program.t
 
-val run : ?configuration_file:string -> unit -> unit
-(** Run disassembly with stubs from [configuration_file] *)
+val run : unit -> unit
+(** Run disassembly *)
 
 val decode : string -> unit
 (** [decode s] decodes the string opcode [s].

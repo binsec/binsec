@@ -28,6 +28,7 @@ type isa =
   | ARM of { rev : [ `v7 | `v8 ]; endianness : endianness }
   | RISCV of { bits : [ `x32 | `x64 | `x128 ] }
   | X86 of { bits : [ `x16 | `x32 | `x64 ] }
+  | Z80
 
 let unknown_msg =
   "Machine ISA set to unknown. Aborting. Did you forget to set an -isa switch \
@@ -41,6 +42,7 @@ module ISA = struct
     | ARM { endianness; _ } -> endianness
     | RISCV _ -> LittleEndian
     | X86 _ -> LittleEndian
+    | Z80 -> LittleEndian
 
   let bits = function
     | Unknown -> failwith unknown_msg
@@ -48,12 +50,14 @@ module ISA = struct
     | ARM { rev = `v8; _ } -> `x64
     | RISCV { bits; _ } -> (bits :> bitwidth)
     | X86 { bits; _ } -> (bits :> bitwidth)
+    | Z80 -> `x16
 
   let stack_register = function
     | Unknown -> failwith unknown_msg
     | ARM _ -> "sp"
     | RISCV _ -> "x2"
     | X86 _ -> "esp"
+    | Z80 -> "sp"
 
   let to_string = function
     | Unknown -> "unknown"
@@ -61,6 +65,7 @@ module ISA = struct
     | ARM { rev = `v8; _ } -> "armv8"
     | RISCV _ -> "risk-v"
     | X86 _ -> "x86"
+    | Z80 -> "Z80"
 
   let pp ppf t = Format.pp_print_string ppf (to_string t)
 end
@@ -106,6 +111,8 @@ let armv8 endianness = ARM { rev = `v8; endianness }
 let riscv bits = RISCV { bits }
 
 let x86 = X86 { bits = `x32 }
+
+let z80 = Z80
 
 let unknown = Unknown
 

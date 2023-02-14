@@ -5,12 +5,6 @@
  (modules lexer))
 
 (menhir
- (modules parser_infos))
-
-(ocamllex
- (modules lexer_infos))
-
-(menhir
  (modules dbacsl_parser))
 
 (ocamllex

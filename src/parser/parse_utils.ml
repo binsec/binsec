@@ -75,30 +75,6 @@ let read_string ~parser ~lexer ~string =
   in
   try_and_parse ~parser ~lexer ~lexbuf context
 
-let read_config_file filename =
-  try
-    read_file ~parser:Parser_infos.configuration ~lexer:Lexer_infos.token
-      ~filename
-  with Failure _ -> Infos.default
-
-let read_optional_config_file filename_opt =
-  let ep = Kernel_functions.get_ep () in
-  let mk_eps address = address |> Virtual_address.Set.singleton in
-  match (ep, filename_opt) with
-  | None, None -> Infos.default
-  | None, Some filename -> read_config_file filename
-  | Some address, None ->
-      let ep = mk_eps address in
-      let conf = Infos.default in
-      Infos.set_entry_points ep conf
-  | Some address, Some filename ->
-      let conf = read_config_file filename in
-      let ep = mk_eps address in
-      if Infos.has_entry_points conf then
-        Kernel_options.Logger.warning
-          "Entry points in file %s overriden by command line" filename;
-      Infos.set_entry_points ep conf
-
 let read_dba_file filename =
   let program = read_file ~parser:Parser.dba ~lexer:Lexer.token ~filename in
   let start_address = Kernel_functions.get_ep () in

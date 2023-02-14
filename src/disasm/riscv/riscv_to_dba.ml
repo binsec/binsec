@@ -138,16 +138,16 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
       | Lab _ -> raise (Invalid_argument "label")
       | _ -> Lab (label, inst)
 
-    let is_zero_var v = v.Dba.name = "zero"
+    let is_zero_var v = v.Dba.Var.name = "zero"
 
     let rec replace_zero e =
       let zero_cst = De.zeros (Kernel_options.Machine.word_size ()) in
       match e with
       | De.Var v when is_zero_var v -> zero_cst
       | De.Var _ -> e
-      | De.Load (size, endianness, expr) ->
+      | De.Load (size, endianness, expr, array) ->
           let e = replace_zero expr in
-          De.load (Size.Byte.create size) endianness e
+          De.load (Size.Byte.create size) endianness e ?array
       | De.Cst _ -> e
       | De.Unary (uop, e) ->
           let e = replace_zero e in
@@ -177,9 +177,9 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
             let lval =
               match lval with
               | Dba.LValue.Var _ | Dba.LValue.Restrict _ -> lval
-              | Dba.LValue.Store (sz, endianness, e) ->
+              | Dba.LValue.Store (sz, endianness, e, array) ->
                   let e = replace_zero e in
-                  Dba.LValue.store (Size.Byte.create sz) endianness e
+                  Dba.LValue.store (Size.Byte.create sz) endianness e ?array
             in
             let dst = replace_zero dst in
             let id =

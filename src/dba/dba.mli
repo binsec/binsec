@@ -23,8 +23,6 @@
 
 type size = int
 
-type malloc_size = Z.t
-
 type id = int
 (** An [id] is a local identifier which characterizes an atomic instruction
     inside a Dba.block *)
@@ -40,7 +38,10 @@ type 'a jump_target =
   | JInner of 'a  (** Jump inside the same block, to a label *)
   | JOuter of address  (** Jump outside the block to its first element *)
 
-type tag = Call of address | Return  (** For call address of return site *)
+type tag =
+  | Default
+  | Call of address
+  | Return  (** For call address of return site *)
 
 type state =
   | OK
@@ -94,31 +95,50 @@ module Binary_op : sig
   val has_inverse : t -> bool
 end
 
-type malloc_status = Freed | Freeable
+module Var : sig
+  module Tag : sig
+    type attribute = Value | Size | Last
 
-type restricted_region = [ `Stack | `Malloc of (int * address) * Z.t ]
+    val pp_attribute : Format.formatter -> attribute -> unit
 
-type region = [ `Constant | restricted_region ]
+    type t =
+      | Flag
+      | Temp
+      | Register
+      | Symbol of attribute * Bitvector.t lazy_t
+      | Empty
 
-type 'a var = { name : string; size : size; info : 'a }
+    include Sigs.HASHABLE with type t := t
+  end
 
-module VarTag : sig
-  type attribute = Value | Size | Last
+  type t = private { id : int; name : string; size : size; info : Tag.t }
 
-  val pp_attribute : Format.formatter -> attribute -> unit
+  val create : string -> bitsize:Size.Bit.t -> tag:Tag.t -> t
 
-  type t =
-    | Flag
-    | Temp
-    | Register
-    | Symbol of attribute * Bitvector.t lazy_t
-    | Empty
+  val flag : ?bitsize:Size.Bit.t -> string -> t
+  (** [flag ~size fname] creates a flag variable.
+      - [size] defaults to 1
+  *)
+
+  val temporary : string -> Size.Bit.t -> t
+
+  val temp : Size.Bit.t -> t
+  (** [temp n] creates a lvalue representing a temporary of size [n] with name
+      [Format.sprintf "temp%d" n]. *)
+
+  include Hashtbl.HashedType with type t := t
+
+  val from_id : int -> t
+  (** [from_id id] returns the variable identified by [id].
+
+      @raise Not_found if [id] is not a valid identifier.
+  *)
 end
 
 module Expr : sig
   type t = private
-    | Var of VarTag.t var (* size: bits *)
-    | Load of size * Machine.endianness * t (* size: bytes *)
+    | Var of Var.t
+    | Load of size * Machine.endianness * t * string option (* size: bytes *)
     | Cst of Bitvector.t
     | Unary of Unary_op.t * t
     | Binary of Binary_op.t * t * t
@@ -131,17 +151,15 @@ module Expr : sig
 
   val is_constant : t -> bool
 
-  val var : ?tag:VarTag.t -> string -> int -> t
+  val var : ?tag:Var.Tag.t -> string -> int -> t
   (** {2 Constructors} *)
 
-  val v : VarTag.t var -> t
+  val v : Var.t -> t
 
   val temporary : size:int -> string -> t
 
   val constant : Bitvector.t -> t
-  (** [constant ~region bv] creates a constant expression from the bitvector
-      [bv] from region [region].
-      Default region is [`Constant].
+  (** [constant bv] creates a constant expression from the bitvector [bv].
   *)
 
   (** {3 Specific constants }*)
@@ -181,7 +199,7 @@ module Expr : sig
 
   val append : t -> t -> t
 
-  include Sigs.Comparisons with type t := t and type boolean = t
+  include Sigs.COMPARISON with type t := t and type boolean = t
 
   val unary : Unary_op.t -> t -> t
 
@@ -219,7 +237,7 @@ module Expr : sig
   val bit_restrict : int -> t -> t
   (** [bit_restrict o e] is [restrict o o e] *)
 
-  val load : Size.Byte.t -> Machine.endianness -> t -> t
+  val load : ?array:string -> Size.Byte.t -> Machine.endianness -> t -> t
   (** [load nbytes endianness t] *)
 
   val is_max : t -> bool
@@ -230,41 +248,24 @@ end
 
 type exprs = Expr.t list
 
-module Var : sig
-  type t = VarTag.t var
-
-  val create : string -> bitsize:Size.Bit.t -> tag:VarTag.t -> t
-
-  val flag : ?bitsize:Size.Bit.t -> string -> t
-  (** [flag ~size fname] creates a flag variable.
-      - [size] defaults to 1
-  *)
-
-  val temporary : string -> Size.Bit.t -> t
-
-  val temp : Size.Bit.t -> t
-  (** [temp n] creates a lvalue representing a temporary of size [n] with name
-      [Format.sprintf "temp%d" n]. *)
-end
-
 type printable = Exp of Expr.t | Str of string
 
 module LValue : sig
   type t = private
-    | Var of VarTag.t var (* size in bits *)
-    | Restrict of VarTag.t var * int Interval.t
-    | Store of size * Machine.endianness * Expr.t
-  (* size in bytes *)
+    | Var of Var.t
+    | Restrict of Var.t * int Interval.t
+    | Store of
+        size (* size in bytes *) * Machine.endianness * Expr.t * string option
 
   include Sigs.Eq with type t := t
 
   val size_of : t -> int
   (** [size_of lv] yields the size of [lv] in bits **)
 
-  val var : ?tag:VarTag.t -> bitsize:Size.Bit.t -> string -> t
+  val var : ?tag:Var.Tag.t -> bitsize:Size.Bit.t -> string -> t
   (** [var tag name ~size] creates a DBA lvalue for a variable *)
 
-  val v : VarTag.t var -> t
+  val v : Var.t -> t
 
   val flag : ?bitsize:Size.Bit.t -> string -> t
   (** [flag ~size fname] creates a flag variable.
@@ -280,11 +281,11 @@ module LValue : sig
    ** below.
    *)
 
-  val restrict : VarTag.t var -> int -> int -> t
+  val restrict : Var.t -> int -> int -> t
 
-  val bit_restrict : VarTag.t var -> int -> t
+  val bit_restrict : Var.t -> int -> t
 
-  val store : Size.Byte.t -> Machine.endianness -> Expr.t -> t
+  val store : ?array:string -> Size.Byte.t -> Machine.endianness -> Expr.t -> t
 
   val temp : Size.Bit.t -> t
   (** [temp n] creates a lvalue representing a temporary of size [n] with name
@@ -336,20 +337,16 @@ end
 module Instr : sig
   type t = private
     | Assign of LValue.t * Expr.t * id
-    | SJump of id jump_target * tag option
-    | DJump of Expr.t * tag option
+    | SJump of id jump_target * tag
+    | DJump of Expr.t * tag
     | If of Expr.t * id jump_target * id
     | Stop of state option
     | Assert of Expr.t * id
     | Assume of Expr.t * id
-    | NondetAssume of LValue.t list * Expr.t * id
-    | Nondet of LValue.t * region * id
+    | Nondet of LValue.t * id
     | Undef of LValue.t * id
         (** value of lval is undefined
                               ** e.g. AF flag for And instruction in x86 **)
-    | Malloc of LValue.t * Expr.t * id
-    | Free of Expr.t * id
-    | Print of printable list * id
 
   (** {7 Constructors} *)
 
@@ -361,7 +358,7 @@ module Instr : sig
 
   val undefined : LValue.t -> int -> t
 
-  val non_deterministic : ?region:region -> LValue.t -> int -> t
+  val non_deterministic : LValue.t -> int -> t
 
   val static_jump : ?tag:Tag.t -> id Jump_target.t -> t
 
@@ -373,17 +370,9 @@ module Instr : sig
 
   val dynamic_jump : ?tag:Tag.t -> Expr.t -> t
 
-  val malloc : LValue.t -> Expr.t -> int -> t
-
-  val free : Expr.t -> int -> t
-
   val _assert : Expr.t -> int -> t
 
   val assume : Expr.t -> int -> t
 
-  val non_deterministic_assume : LValue.t list -> Expr.t -> int -> t
-
   val stop : state option -> t
-
-  val print : printable list -> int -> t
 end

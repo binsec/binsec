@@ -19,14 +19,26 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Sse_options
+open Options
+open Types
 
 let byte_size = Natural.to_int Basic_types.Constants.bytesize
 
+let byteswap e =
+  let rec loop e size e' =
+    if size = 0 then e'
+    else
+      loop e (size - 8)
+        (Formula.mk_bv_concat
+           (Formula.mk_bv_extract { lo = size - 8; hi = size - 1 } e)
+           e')
+  in
+  let size = Formula_utils.bv_size e in
+  loop e (size - 8) (Formula.mk_bv_extract { lo = size - 8; hi = size - 1 } e)
+
 module S = Basic_types.String.Map
 
-module State (Solver : Smt_sig.Solver) (QS : Sse_types.QUERY_STATISTICS) :
-  Sse_types.STATE = struct
+module State (Solver : Smt_sig.Solver) (QS : QUERY_STATISTICS) : STATE = struct
   type t = {
     formula : Formula.formula;
     (* SMT2 formula *)
@@ -44,108 +56,36 @@ module State (Solver : Smt_sig.Solver) (QS : Sse_types.QUERY_STATISTICS) :
   }
   (** Symbolic state *)
 
-  let empty () =
-    let word_size = Kernel_options.Machine.word_size () in
-    let fmemory = Formula.ax_var "__memory_0" word_size byte_size in
-    {
-      formula =
-        Formula.empty
-        |> Formula.push_back_declare @@ Formula.mk_ax_decl fmemory [];
-      vsymbols = S.empty;
-      vmemory = Formula.mk_ax_var fmemory;
-      fid = 1;
-      fvariables = S.empty;
-      fmemory;
-      model = Smt_model.empty;
-    }
+  let memory_name = "__memory"
 
-  let do_optimization ?(keep = Formula.VarSet.empty) fm =
-    let level = 3 in
-    if Formula.VarSet.is_empty keep then Logger.debug ~level "Optimize"
-    else
-      Logger.debug ~level
-        "@[<v 2>Optimize but keep intact these variables:@ %a@]"
-        Formula_pp.pp_varset keep;
-    Formula_transformation.optimize_from_options ?is_controlled:None ~keep fm
+  module Value = struct
+    type t = Formula.bv_term
 
-  let fresh name size state =
-    let v = Formula.bv_var (Printf.sprintf "%s_%d" name state.fid) size in
-    let fid = state.fid + 1 in
-    let h =
-      match S.find name state.fvariables with
-      | exception Not_found -> [ v ]
-      | h -> v :: h
-    in
-    let fvariables = S.add name h state.fvariables in
-    let vsymbols = S.add name (Formula.mk_bv_var v) state.vsymbols in
-    let formula =
-      state.formula |> Formula.push_front_declare @@ Formula.mk_bv_decl v []
-    in
-    { state with formula; vsymbols; fid; fvariables }
+    let constant = Formula.mk_bv_cst
 
-  let rec lookup name size state =
-    match S.find name state.vsymbols with
-    | exception Not_found -> lookup name size (fresh name size state)
-    | bv -> (bv, state)
+    let lookup (v : Dba.Var.t) t =
+      try S.find v.name t.vsymbols with Not_found -> raise (Undef v)
 
-  let assign name value state =
-    let value_size = Formula_utils.bv_size value in
-    let var =
-      Formula.bv_var (Printf.sprintf "%s_%d" name state.fid) value_size
-    in
-    let fid = state.fid + 1 in
-    let vsymbols = S.add name (Formula.mk_bv_var var) state.vsymbols in
-    let formula =
-      state.formula
-      |> Formula.push_front_define @@ Formula.mk_bv_def var [] value
-    in
-    { state with formula; vsymbols; fid }
+    let read ~addr bytes (dir : Machine.endianness) t =
+      let array = t.vmemory in
+      let content = Formula.mk_select bytes array addr in
+      let content =
+        match dir with LittleEndian -> content | BigEndian -> byteswap content
+      in
+      (content, t)
 
-  let write ~addr value state =
-    let addr_size = Formula_utils.bv_size addr
-    and write_size = Formula_utils.bv_size value / 8 in
-    let layer =
-      Formula.ax_var
-        (Printf.sprintf "__memory_%d" state.fid)
-        addr_size byte_size
-    in
-    let fid = state.fid + 1 in
-    let vmemory = Formula.mk_ax_var layer in
-    let formula =
-      state.formula
-      |> Formula.push_front_define @@ Formula.mk_ax_def layer []
-         @@ Formula.mk_store write_size state.vmemory addr value
-    in
-    { state with formula; vmemory; fid }
+    let select _ ~addr:_ _ _ _ = raise (Errors.not_yet_implemented "arrays")
 
-  let memcpy ~addr size img state =
-    let reader = Lreader.of_zero_extend_buffer img in
-    let chunk = Lreader.Read.read reader size in
-    let addr_size = Bitvector.size_of addr in
-    let layer =
-      Formula.ax_var
-        (Printf.sprintf "__memory_%d" state.fid)
-        addr_size byte_size
-    in
-    let vmemory = Formula.mk_ax_var layer in
-    let fid = state.fid + 1 in
-    let formula =
-      state.formula
-      |> Formula.push_front_define @@ Formula.mk_ax_def layer []
-         @@ Formula.mk_store size state.vmemory (Formula.mk_bv_cst addr)
-              (Formula.mk_bv_cst chunk)
-    in
-    { state with formula; vmemory; fid }
+    let ite cond then_smt else_smt =
+      Formula.(mk_bv_ite (mk_bv_equal cond mk_bv_one) then_smt else_smt)
 
-  module Translate = struct
-    open Dba
-
-    let unary e = function
-      | Unary_op.Not -> Formula.mk_bv_not
-      | Unary_op.UMinus -> Formula.mk_bv_neg
-      | Unary_op.Sext n -> Formula.mk_bv_sign_extend (n - Dba.Expr.size_of e)
-      | Unary_op.Uext n -> Formula.mk_bv_zero_extend (n - Dba.Expr.size_of e)
-      | Unary_op.Restrict interval -> Formula.mk_bv_extract interval
+    let unary e (op : Dba.Unary_op.t) =
+      match op with
+      | Not -> Formula.mk_bv_not
+      | UMinus -> Formula.mk_bv_neg
+      | Sext n -> Formula.mk_bv_sign_extend (n - Dba.Expr.size_of e)
+      | Uext n -> Formula.mk_bv_zero_extend (n - Dba.Expr.size_of e)
+      | Restrict interval -> Formula.mk_bv_extract interval
 
     let as_bv bop e1 e2 = Formula.(mk_bv_ite (bop e1 e2) mk_bv_one mk_bv_zero)
 
@@ -176,8 +116,7 @@ module State (Solver : Smt_sig.Solver) (QS : Sse_types.QUERY_STATISTICS) :
     let rotate_left =
       rotate Formula.mk_bv_shl Formula.mk_bv_lshr rotate_left_const
 
-    let binary op =
-      let open Binary_op in
+    let binary (op : Dba.Binary_op.t) =
       match op with
       | Plus -> Formula.mk_bv_add
       | Minus -> Formula.mk_bv_sub
@@ -206,34 +145,165 @@ module State (Solver : Smt_sig.Solver) (QS : Sse_types.QUERY_STATISTICS) :
       | LeftRotate -> rotate_left
       | RightRotate -> rotate_right
 
-    let rec expr state e =
-      let smt_unary = unary and smt_binary = binary in
-      let open Expr in
+    let rec eval (e : Dba.Expr.t) state =
       match e with
-      | Dba.Expr.Var { info = Symbol (_, (lazy bv)); _ } | Cst bv ->
-          (Formula.mk_bv_cst bv, state)
-      | Var { name; size; _ } -> lookup name size state
-      | Load (bytes, _endianness, e) ->
-          let smt_e, state = expr state e in
-          (Formula.mk_select bytes state.vmemory smt_e, state)
+      | Var { info = Symbol (_, (lazy bv)); _ } | Cst bv -> Formula.mk_bv_cst bv
+      | Var v -> lookup v state
+      | Load (bytes, dir, e, None) ->
+          let smt_e = eval e state in
+          fst (read ~addr:smt_e bytes dir state)
+      | Load _ -> raise (Errors.not_yet_implemented "arrays")
       | Binary (bop, lop, rop) as e ->
           Logger.debug ~level:6 "Translating binary %a"
             Dba_printer.Ascii.pp_bl_term e;
-          let l_smt_e, state = expr state lop in
-          let r_smt_e, state = expr state rop in
-          (smt_binary bop l_smt_e r_smt_e, state)
+          let l_smt_e = eval lop state in
+          let r_smt_e = eval rop state in
+          binary bop l_smt_e r_smt_e
       | Unary (uop, e) ->
-          let v, state = expr state e in
-          (smt_unary e uop v, state)
+          let v = eval e state in
+          unary e uop v
       | Ite (c, then_e, else_e) ->
-          let cond, state = expr state c in
-          let then_smt, state = expr state then_e in
-          let else_smt, state = expr state else_e in
-          let v =
-            Formula.(mk_bv_ite (mk_bv_equal cond mk_bv_one) then_smt else_smt)
-          in
-          (v, state)
+          let cond = eval c state in
+          let then_smt = eval then_e state in
+          let else_smt = eval else_e state in
+          ite cond then_smt else_smt
+
+    let unary_op (op : Term.unary Term.operator) =
+      match op with
+      | Not -> Formula.BvNot
+      | Minus -> Formula.BvNeg
+      | Sext size -> Formula.BvSignExtend size
+      | Uext size -> Formula.BvZeroExtend size
+      | Restrict it -> Formula.BvExtract it
+
+    let unary op e = Formula.mk_bv_unop (unary_op op) e
+
+    let binary_op (op : Term.binary Term.operator) =
+      match op with
+      | Plus -> Dba.Binary_op.Plus
+      | Minus -> Dba.Binary_op.Minus
+      | Mul -> Dba.Binary_op.Mult
+      | Udiv -> Dba.Binary_op.DivU
+      | Umod -> Dba.Binary_op.ModU
+      | Sdiv -> Dba.Binary_op.DivS
+      | Smod -> Dba.Binary_op.ModS
+      | Or -> Dba.Binary_op.Or
+      | And -> Dba.Binary_op.And
+      | Xor -> Dba.Binary_op.Xor
+      | Concat -> Dba.Binary_op.Concat
+      | Lsl -> Dba.Binary_op.LShift
+      | Lsr -> Dba.Binary_op.RShiftU
+      | Asr -> Dba.Binary_op.RShiftS
+      | Rol -> Dba.Binary_op.LeftRotate
+      | Ror -> Dba.Binary_op.RightRotate
+      | Eq -> Dba.Binary_op.Eq
+      | Diff -> Dba.Binary_op.Diff
+      | Ule -> Dba.Binary_op.LeqU
+      | Ult -> Dba.Binary_op.LtU
+      | Uge -> Dba.Binary_op.GeqU
+      | Ugt -> Dba.Binary_op.GtU
+      | Sle -> Dba.Binary_op.LeqS
+      | Slt -> Dba.Binary_op.LtS
+      | Sge -> Dba.Binary_op.GeqS
+      | Sgt -> Dba.Binary_op.GtS
+
+    let binary op e1 e2 = binary (binary_op op) e1 e2
   end
+
+  let empty () =
+    let word_size = Kernel_options.Machine.word_size () in
+    let fmemory = Formula.ax_var (memory_name ^ "_0") word_size byte_size in
+    {
+      formula =
+        Formula.empty
+        |> Formula.push_back_declare @@ Formula.mk_ax_decl fmemory [];
+      vsymbols = S.empty;
+      vmemory = Formula.mk_ax_var fmemory;
+      fid = 1;
+      fvariables = S.empty;
+      fmemory;
+      model = Smt_model.empty;
+    }
+
+  let do_optimization ?(keep = Formula.VarSet.empty) fm =
+    let level = 3 in
+    if Formula.VarSet.is_empty keep then Logger.debug ~level "Optimize"
+    else
+      Logger.debug ~level
+        "@[<v 2>Optimize but keep intact these variables:@ %a@]"
+        Formula_pp.pp_varset keep;
+    Formula_transformation.optimize_from_options ?is_controlled:None ~keep fm
+
+  let fresh ({ name; size; _ } : Dba.Var.t) state =
+    let v = Formula.bv_var (Printf.sprintf "%s_%d" name state.fid) size in
+    let fid = state.fid + 1 in
+    let h =
+      match S.find name state.fvariables with
+      | exception Not_found -> [ v ]
+      | h -> v :: h
+    in
+    let fvariables = S.add name h state.fvariables in
+    let vsymbols = S.add name (Formula.mk_bv_var v) state.vsymbols in
+    let formula =
+      state.formula |> Formula.push_front_declare @@ Formula.mk_bv_decl v []
+    in
+    { state with formula; vsymbols; fid; fvariables }
+
+  let alloc ~array:_ _ = raise (Errors.not_yet_implemented "arrays")
+
+  let assign name value state =
+    let value_size = Formula_utils.bv_size value in
+    let var =
+      Formula.bv_var (Printf.sprintf "%s_%d" name state.fid) value_size
+    in
+    let fid = state.fid + 1 in
+    let vsymbols = S.add name (Formula.mk_bv_var var) state.vsymbols in
+    let formula =
+      state.formula
+      |> Formula.push_front_define @@ Formula.mk_bv_def var [] value
+    in
+    { state with formula; vsymbols; fid }
+
+  let write ~addr value (dir : Machine.endianness) state =
+    let value =
+      match dir with LittleEndian -> value | BigEndian -> byteswap value
+    in
+    let addr_size = Formula_utils.bv_size addr
+    and write_size = Formula_utils.bv_size value / 8 in
+    let layer =
+      Formula.ax_var
+        (Printf.sprintf "%s_%d" memory_name state.fid)
+        addr_size byte_size
+    in
+    let fid = state.fid + 1 in
+    let vmemory = Formula.mk_ax_var layer in
+    let formula =
+      state.formula
+      |> Formula.push_front_define @@ Formula.mk_ax_def layer []
+         @@ Formula.mk_store write_size state.vmemory addr value
+    in
+    { state with formula; vmemory; fid }
+
+  let store _ ~addr:_ _ _ _ = raise (Errors.not_yet_implemented "arrays")
+
+  let memcpy ~addr size img state =
+    let reader = Lreader.of_zero_extend_buffer img in
+    let chunk = Lreader.Read.read reader size in
+    let addr_size = Bitvector.size_of addr in
+    let layer =
+      Formula.ax_var
+        (Printf.sprintf "%s_%d" memory_name state.fid)
+        addr_size byte_size
+    in
+    let fid = state.fid + 1 in
+    let vmemory = Formula.mk_ax_var layer in
+    let formula =
+      state.formula
+      |> Formula.push_front_define @@ Formula.mk_ax_def layer []
+         @@ Formula.mk_store size state.vmemory (Formula.mk_bv_cst addr)
+              (Formula.mk_bv_cst chunk)
+    in
+    { state with formula; vmemory; fid }
 
   module Solver = struct
     let extract_model session vars memory =
@@ -273,7 +343,7 @@ module State (Solver : Smt_sig.Solver) (QS : Sse_types.QUERY_STATISTICS) :
           | Formula.UNKNOWN | Formula.TIMEOUT ->
               QS.Solver.incr_err ();
               Logger.warning ~level:0 "SMT query resulted in UNKNOWN";
-              raise Sse_types.Unknown)
+              raise Unknown)
 
     let enumerate e ?(n = 1 lsl Formula_utils.bv_size e) formula vars memory =
       with_solver formula (fun session ->
@@ -298,10 +368,37 @@ module State (Solver : Smt_sig.Solver) (QS : Sse_types.QUERY_STATISTICS) :
               | Formula.UNKNOWN | Formula.TIMEOUT ->
                   QS.Solver.incr_err ();
                   Logger.warning ~level:0 "SMT query resulted in UNKNOWN";
-                  raise Sse_types.Unknown
+                  raise Unknown
           in
           loop e n [])
   end
+
+  let get_value e state =
+    let size = Formula_utils.bv_size e in
+    let var = Formula.bv_var (Printf.sprintf "__value_%d" state.fid) size in
+    let formula =
+      state.formula |> Formula.push_front_define @@ Formula.mk_bv_def var [] e
+    in
+    let keep = Formula.VarSet.singleton (Formula.BvVar var) in
+    let formula = do_optimization ~keep formula in
+    match Formula.peek_front formula with
+    | Some
+        {
+          entry_desc =
+            Formula.Define
+              {
+                def_desc =
+                  Formula.BvDef (v, _, { bv_term_desc = Formula.BvCst bv; _ });
+                _;
+              };
+          _;
+        } ->
+        assert (v = var);
+        QS.Preprocess.incr_const ();
+        Logger.debug ~level:4 "Value of %a resolved to constant %a"
+          Formula_pp.pp_bv_term e Bitvector.pp bv;
+        bv
+    | _ -> raise Non_unique
 
   let keep state =
     S.fold
@@ -325,6 +422,7 @@ module State (Solver : Smt_sig.Solver) (QS : Sse_types.QUERY_STATISTICS) :
     | _ -> assert false
 
   let assume e state =
+    let e = Formula.mk_bv_equal e Formula.mk_bv_one in
     let var = Formula.bl_var (Printf.sprintf "__assume_%d" state.fid) in
     let fid = state.fid + 1 in
     let formula =
@@ -372,6 +470,7 @@ module State (Solver : Smt_sig.Solver) (QS : Sse_types.QUERY_STATISTICS) :
         | None -> None)
 
   let test e state =
+    let e = Formula.mk_bv_equal e Formula.mk_bv_one in
     let var = Formula.bl_var (Printf.sprintf "__assume_%d" state.fid) in
     let fid = state.fid + 1 in
     let formula =
@@ -393,7 +492,7 @@ module State (Solver : Smt_sig.Solver) (QS : Sse_types.QUERY_STATISTICS) :
         } ->
         assert (v = var);
         QS.Preprocess.incr_sat ();
-        Sse_types.True { state with formula; fid }
+        True { state with formula; fid }
     | Some
         {
           entry_desc =
@@ -407,7 +506,7 @@ module State (Solver : Smt_sig.Solver) (QS : Sse_types.QUERY_STATISTICS) :
         } ->
         assert (v = var);
         QS.Preprocess.incr_unsat ();
-        Sse_types.False { state with formula; fid }
+        False { state with formula; fid }
     | _ -> (
         let formula = Formula.push_front_assert (Formula.mk_bl_var var) formula
         and formula' =
@@ -429,9 +528,9 @@ module State (Solver : Smt_sig.Solver) (QS : Sse_types.QUERY_STATISTICS) :
         | Some model, None -> True { state with formula; fid; model }
         | None, Some model' ->
             False { state with formula = formula'; fid; model = model' }
-        | None, None -> raise Sse_types.Unknown)
+        | None, None -> raise Unknown)
 
-  let split_on e ?n ?(except = []) state =
+  let enumerate e ?n ?(except = []) state =
     let size = Formula_utils.bv_size e in
     let var = Formula.bv_var (Printf.sprintf "__enum_%d" state.fid) size in
     let fid = state.fid + 1 in
@@ -478,54 +577,18 @@ module State (Solver : Smt_sig.Solver) (QS : Sse_types.QUERY_STATISTICS) :
             (bv, { state with formula; fid; model }))
         @@ Solver.enumerate evar ?n formula state.fvariables state.fmemory
 
-  let assign name e state =
-    let e, state = Translate.expr state e in
-    assign name e state
-
-  let byteswap e =
-    let rec loop e size e' =
-      if size = 0 then e'
-      else
-        loop e (size - 8)
-          (Formula.mk_bv_concat
-             (Formula.mk_bv_extract { lo = size - 8; hi = size - 1 } e)
-             e')
-    in
-    let size = Formula_utils.bv_size e in
-    loop e (size - 8) (Formula.mk_bv_extract { lo = size - 8; hi = size - 1 } e)
-
-  let write ~addr e dir state =
-    let addr, state = Translate.expr state addr in
-    let e, state = Translate.expr state e in
-    let e =
-      match dir with
-      | Machine.LittleEndian -> e
-      | Machine.BigEndian -> byteswap e
-    in
-    write ~addr e state
-
-  let assume e state =
-    let e, state = Translate.expr state e in
-    assume (Formula.mk_bv_equal e Formula.mk_bv_one) state
-
-  let test e state =
-    let e, state = Translate.expr state e in
-    test (Formula.mk_bv_equal e Formula.mk_bv_one) state
-
-  let split_on e ?n ?except state =
-    let e, state = Translate.expr state e in
-    split_on e ?n ?except state
+  let merge _ _ = raise Non_mergeable
 
   let pp ppf state = Smt_model.pp ppf state.model
 
-  let pp_smt ?slice ppf state =
+  let pp_smt slice ppf state =
     match slice with
     | None -> Formula_pp.pp_formula ppf state.formula
     | Some l ->
         let keep, state =
           List.fold_left
             (fun (keep, state) (e, n) ->
-              let state = assign n e state in
+              let state = assign n (Value.eval e state) state in
               match Formula.peek_front state.formula with
               | Some
                   {
@@ -540,7 +603,7 @@ module State (Solver : Smt_sig.Solver) (QS : Sse_types.QUERY_STATISTICS) :
         in
         Formula_pp.pp_formula ppf (do_optimization ~keep state.formula)
 
-  let as_ascii name state =
+  let as_ascii ~name state =
     let buf = Buffer.create 16 in
     List.iter (fun var ->
         let name = Formula_utils.bv_var_name var in
@@ -561,6 +624,10 @@ module State (Solver : Smt_sig.Solver) (QS : Sse_types.QUERY_STATISTICS) :
     @@ List.rev
     @@ S.find name state.fvariables;
     Buffer.contents buf
+
+  let as_c_string ~name:_ _ = raise (Errors.not_yet_implemented "arrays")
+
+  let assign ({ name; _ } : Dba.Var.t) state = assign name state
 
   let to_formula { formula; _ } = formula
 end

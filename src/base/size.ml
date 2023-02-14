@@ -64,6 +64,8 @@ module Bit = struct
 
   let bits1 = create 1
 
+  let bits2 = create 2
+
   let bits8 = create 8
 
   let bits16 = create 16
@@ -73,6 +75,10 @@ module Bit = struct
   let bits64 = create 64
 
   let bits128 = create 128
+
+  let bits256 = create 256
+
+  let bits512 = create 512
 end
 
 module Byte = struct

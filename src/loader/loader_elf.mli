@@ -85,6 +85,7 @@ module Shdr : sig
       | PREINIT_ARRAY
       | GROUP
       | SYMTAB_SHNDX
+      | RELR
       | OS of int
       | PROC of int
       | USER of int

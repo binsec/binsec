@@ -19,13 +19,71 @@
 (*                                                                        *)
 (**************************************************************************)
 
-val mk_var_name : string -> int -> string
-(** [mk_var_name basename idx] *)
+open Types
 
-val get_goal_addresses : unit -> Virtual_address.Set.t
-(** Returns the set of virtual addresses to reach according to
-    [Sse_options.GoalAddresses] *)
+module Dfs : WORKLIST = struct
+  type 'a t = 'a list
 
-val get_avoid_addresses : unit -> Virtual_address.Set.t
-(** Returns the set of virtual addresses to avoid according to
-    [Sse_options.AvoidAddresses] *)
+  let empty = []
+
+  let is_empty = function [] -> true | _ -> false
+
+  let push e w = e :: w
+
+  let singleton e = [ e ]
+
+  let pop = function e :: w -> (e, w) | [] -> raise Not_found
+
+  let length = List.length
+end
+
+module Bfs : WORKLIST = struct
+  type 'a t = 'a Sequence.t
+
+  let length = Sequence.length
+
+  let is_empty q = Sequence.length q = 0
+
+  let empty = Sequence.empty
+
+  let push p q = Sequence.push_back p q
+
+  let pop q =
+    match Sequence.peek_front q with
+    | None -> raise Not_found
+    | Some v -> (
+        match Sequence.pop_front q with
+        | None -> assert false
+        | Some seq -> (v, seq))
+
+  let singleton p = push p empty
+end
+
+module Nurs : WORKLIST = struct
+  (* This is actually a fairly classical heap.
+     The priority added to the date is just generated at random.
+  *)
+  module I = Basic_types.Int.Map
+
+  type 'a t = 'a I.t
+
+  let rec gen_priority t =
+    let p = Utils.random_max_int () in
+    if I.mem p t then gen_priority t else p
+
+  let length = I.cardinal
+
+  let is_empty = I.is_empty
+
+  let empty = I.empty
+
+  let push e t =
+    let p = gen_priority t in
+    I.add p e t
+
+  let pop t =
+    let (_, e), t' = I.pop t in
+    (e, t')
+
+  let singleton p = push p empty
+end

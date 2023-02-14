@@ -259,6 +259,7 @@ module Shdr = struct
       | PREINIT_ARRAY
       | GROUP
       | SYMTAB_SHNDX
+      | RELR
       | OS of int
       | PROC of int
       | USER of int
@@ -281,6 +282,7 @@ module Shdr = struct
       | 16 -> PREINIT_ARRAY
       | 17 -> GROUP
       | 18 -> SYMTAB_SHNDX
+      | 19 -> RELR
       | t when 0x60000000 <= t && t < 0x70000000 -> OS t
       | t when 0x70000000 <= t && t < 0x80000000 -> PROC t
       | t when 0x80000000 <= t && t <= 0xffffffff -> USER t
@@ -304,6 +306,7 @@ module Shdr = struct
       | PREINIT_ARRAY -> Format.fprintf ppf "PREINIT_ARRAY"
       | GROUP -> Format.fprintf ppf "GROUP"
       | SYMTAB_SHNDX -> Format.fprintf ppf "SYMTAB_SHNDX"
+      | RELR -> Format.fprintf ppf "RELR"
       | OS t -> vformat ppf t
       | PROC t -> Format.fprintf ppf "PROC(%08x)" t
       | USER t -> Format.fprintf ppf "USER(%08x)" t
@@ -889,7 +892,7 @@ end = struct
         | _ -> raise @@ Invalid_argument "Not a vendor specific type"
     end
 
-    module Symbole = struct
+    module Symbol = struct
       let ppt ppf = function
         | 10 -> Format.fprintf ppf "IFUNC"
         | t when 10 <= t && t < 13 -> Common.ppt ppf t
@@ -902,7 +905,7 @@ end = struct
   end
 
   module Symbol = struct
-    let ppt = function Unknown -> Common.ppt | GNU _ -> GNU.Symbole.ppt
+    let ppt = function Unknown -> Common.ppt | GNU _ -> GNU.Symbol.ppt
   end
 
   let read header sections symbols buf =

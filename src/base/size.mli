@@ -56,6 +56,8 @@ module Bit : sig
 
   val bits1 : t
 
+  val bits2 : t
+
   val bits8 : t
 
   val bits16 : t
@@ -65,6 +67,10 @@ module Bit : sig
   val bits64 : t
 
   val bits128 : t
+
+  val bits256 : t
+
+  val bits512 : t
 end
 
 module Byte : sig

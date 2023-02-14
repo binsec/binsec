@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2022                                               *)
+(*  Copyright (C) 2016-2021                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,12 +19,31 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module type Env = sig
-  val lookup : string -> int -> Dba.LValue.t
-
-  val lookup_symbol : string -> Dba.VarTag.attribute -> Dba.Expr.t
-
-  val wordsize : int
-
-  val endianness : Machine.endianness
-end
+  | "starting"  { STARTING }
+  | "from"      { FROM }
+  | "file"      { FILE }
+  | "core"	{ CORE }
+  | "load" 	{ LOAD }
+  | "section"   { SECTION }
+  | "sections"  { SECTIONS }
+  | "import"    { IMPORT }
+  | "reach"     { REACH }
+  | "cut"       { CUT }
+  | "enumerate" { ENUMERATE }
+  | "times"     { TIMES }
+  | "such"      { SUCH }
+  | "that"      { THAT }
+  | "print"     { PRINT }
+  | "formula"   { FORMULA }
+  | "model"     { MODEL }
+  | "stream"    { STREAM }
+  | 'c' ' '* "string"
+                { CSTRING } 
+  | "bin"       { BIN }
+  | "dec"       { DEC }
+  | "hexa"      { HEXA }
+  | "ascii"     { ASCII }
+  | "replace"   { REPLACE }
+  | "by"        { BY }
+  | "with"	{ WITH }
+  | "and"       { TAND }

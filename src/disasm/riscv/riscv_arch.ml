@@ -135,7 +135,7 @@ module type RegisterSize = sig
 end
 
 module Register (M : RegisterSize) = struct
-  type register = Dba.VarTag.t Dba.var
+  type register = Dba.Var.t
 
   type t = register
 
@@ -168,9 +168,10 @@ module Register (M : RegisterSize) = struct
 
   (* Add registers to the hashtbl *)
   let add_all () =
-    let info = Dba.VarTag.Register in
+    let info = Dba.Var.Tag.Register
+    and bitsize = Size.Bit.create (Mode.size M.size) in
     List.iter
-      (fun r -> H.set r { Dba.name = r; Dba.size = Mode.size M.size; Dba.info })
+      (fun r -> H.set r (Dba.Var.create r ~bitsize ~tag:info))
       canonical_registers
 
   let _ = add_all ()
@@ -278,9 +279,9 @@ module Register (M : RegisterSize) = struct
       t6;
     |]
 
-  let name t = t.Dba.name
+  let name t = t.Dba.Var.name
 
-  and size t = t.Dba.size
+  and size t = t.Dba.Var.size
 
   and expr t = Dba.Expr.v t
 

@@ -19,4 +19,4 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module State (S : Smt_sig.Solver) : Sse_types.STATE_FACTORY
+module State (S : Smt_sig.Solver) : Types.STATE_FACTORY

@@ -57,6 +57,8 @@ module Addr64 = Int64
 module Collection_make : sig
   module Default (C : Sigs.COMPARABLE) : Sigs.Collection with type t = C.t
 
+  module Auto (C : Sigs.COMPARABLE_EXT) : Sigs.Collection with type t = C.t
+
   module Hashed (C : Sigs.HASHABLE) : Sigs.Collection with type t = C.t
 end
 
@@ -79,5 +81,5 @@ module Ternary : sig
 
   (** {3 Operations} *)
 
-  include Sigs.Logical with type t := t
+  include Sigs.LOGICAL with type t := t
 end

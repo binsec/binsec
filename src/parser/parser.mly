@@ -27,7 +27,7 @@
 
   let default_endianness = Utils.get_opt_or_default Machine.LittleEndian
 
-  let mk_declaration (tag:VarTag.t) name size =
+  let mk_declaration (tag:Var.Tag.t) name size =
      Declarations.add name size tag;
      let bitsize = Size.Bit.create size in
      Dba.LValue.var name ~bitsize ~tag
@@ -38,10 +38,9 @@
 %}
 
 %token PLUS MINUS STAR STAR_U STAR_S SLASH_U SLASH_S
-%token MODU MODS UNDEF SOK SKO PRINT ASSERT FROMFILE FROM FILE
-%token ASSUME NONDET NONDETASSUME AT
-%token CONSTANT STACK MALLOC FREE NREAD READ NWRITE WRITE
-%token NEXEC EXEC ENTRYPOINT /* ENDIANNESS BIG LITTLE */
+%token MODU MODS UNDEF SOK SKO ASSERT FROMFILE FROM FILE
+%token ASSUME NONDET AT
+%token ENTRYPOINT /* ENDIANNESS BIG LITTLE */
 %token AND OR XOR NOT
 %token CONCAT COLON SEMICOLON COMMA DOT DOTDOT
 %token LSHIFT RSHIFTU RSHIFTS LROTATE RROTATE
@@ -53,8 +52,7 @@
 %token ARROW ARROWINV STOP
 %token ASSIGN TRUE FALSE IF THEN ELSE GOTO
 %token ANNOT CALLFLAG AS
-%token WORDSIZE
-%token RETURNFLAG BEGIN END PERMISSIONS
+%token RETURNFLAG
 %token FLAG TEMPORARY REGISTER VAR TEMPTAG FLAGTAG
 %token ENUMERATE REACH CUT CONSEQUENT ALTERNATIVE ALTERNATE UNCONTROLLED
 %token UNIMPLEMENTED UNDEFINED EOF
@@ -77,7 +75,6 @@
 %left AND
 
 %nonassoc NOT
-%nonassoc prec_uminus
 
 %start expr_eof
 %type <Dba.Expr.t> expr_eof
@@ -125,10 +122,9 @@ set_of(X):
 dba:
  | config=config;
    decls=list(terminated(declaration, SEMICOLON));
-   permissions=option(permission_block);
    initialization=list(terminated(assignment, SEMICOLON));
    instructions=body;
-   { Mk.program permissions initialization config decls instructions }
+   { Mk.program initialization config decls instructions }
 ;
 
 value:
@@ -188,98 +184,26 @@ entry:
 
 
 %inline specific_declaration_kwd:
-| TEMPORARY { mk_declaration VarTag.Temp }
-| FLAG      { mk_declaration VarTag.Flag }
-| REGISTER  { mk_declaration VarTag.Empty }
+| TEMPORARY { mk_declaration Var.Tag.Temp }
+| FLAG      { mk_declaration Var.Tag.Flag }
+| REGISTER  { mk_declaration Var.Tag.Empty }
 ;
 
 declaration:
 | VAR id=IDENT; COLON size=INT; tags=option(tags);
-  { mk_declaration (match tags with None -> VarTag.Empty | Some t -> t)  id (int_of_string size) }
+  { mk_declaration (match tags with None -> Var.Tag.Empty | Some t -> t)  id (int_of_string size) }
 | apply=specific_declaration_kwd; id=IDENT; COLON; size=INT;
   { apply id (int_of_string size) }
 ;
 
 %inline tags:
- | TEMPTAG { VarTag.Temp }
- | FLAGTAG { VarTag.Flag }
-;
-
-permission_block:
- | BEGIN PERMISSIONS permissions=list(permission); END PERMISSIONS
-   { Mk.Permissions.of_list permissions }
-
-
-permission:
- | region=regionnondet; COLON preds=predicates;
-   { region, fst preds, snd preds }
-;
-
-predicates:
- | predicates=nonempty_list(predicate); { Mk.Predicates.of_list predicates }
-;
-
-read_permission:
- | NREAD { false }
- | READ  { true }
-;
-
-write_permission:
- | WRITE  { true }
- | NWRITE { false }
-;
-
-exec_permission:
- | EXEC  { true }
- | NEXEC { false }
-;
-
-predicate:
- | addr=cond_addr; COLON
-   read=read_permission; write=write_permission; exec=exec_permission;
-   { Mk.filemode addr read write exec }
-;
-
-cond_addr:
- | TRUE        { Dba.Expr.one }
- | FALSE       { Dba.Expr.zero }
- | eaddr=constant_expr; { Mk.checked_cond_expr eaddr }
+ | TEMPTAG { Var.Tag.Temp }
+ | FLAGTAG { Var.Tag.Flag }
 ;
 
 size_annot:
 | INFER size=INT; SUPER { int_of_string size }
 ;
-
-constant_expr:
- | WORDSIZE; { Dba.Expr.var "\\addr" (Kernel_options.Machine.word_size ()) }
- | cst=constant;
-   { Dba.Expr.constant cst  }
- | e=constant_expr; offs=offsets;
-   { let lo, hi = offs in Dba.Expr.restrict lo hi e }
- | MINUS e=constant_expr; %prec prec_uminus
-   { Dba.Expr.uminus e }
- | NOT e=constant_expr;
-   { Dba.Expr.lognot e }
- | EXTU e=constant_expr; size=INT;
-   { Dba.Expr.uext (int_of_string size) e }
- | EXTS e=constant_expr; size=INT;
-   { Dba.Expr.sext (int_of_string size) e }
- | LPAR e=constant_expr; RPAR { e }
- | le=constant_expr; bop=bin_op; re=constant_expr;
-   { Dba.Expr.binary bop le re }
-;
-
-%inline region:
- | CONSTANT { `Constant }
- | STACK    { `Stack }
-;
-
-%inline regionnondet:
- | region=region; { region }
- | MALLOC         { Dba_types.Region.malloc (Kernel_options.Machine.word_size ())}
-;
-
-
 
 localized_instruction:
 | addr=address; instr=instruction;
@@ -329,10 +253,8 @@ jump_target:
 rvalue:
 | e=expr; { fun lv -> Dba.Instr.assign lv e }
 | UNDEF   { Dba.Instr.undefined }
-| MALLOC e=delimited(LPAR, expr, RPAR);
-  { fun lv -> Dba.Instr.malloc lv e  }
-| NONDET region=ioption(delimited(LPAR,regionnondet, RPAR));
-  { fun lv -> Dba.Instr.non_deterministic lv ?region }
+| NONDET
+  { fun lv -> Dba.Instr.non_deterministic lv }
 | UNCONTROLLED
   { fun lv -> Dba.Instr.non_deterministic lv }
 ;
@@ -386,19 +308,10 @@ initialization:
 
 annotable_instruction:
 | assign=assignment; { assign }
-| PRINT args=separated_nonempty_list(COMMA, printarg)
-  { Dba.Instr.print args unknown_successor }
-| FREE e=delimited(LPAR, expr, RPAR);
-  { Dba.Instr.free e unknown_successor }
 | ASSERT condition=delimited(LPAR, cond, RPAR);
   { Dba.Instr._assert condition unknown_successor }
 | ASSUME condition=delimited(LPAR, cond, RPAR);
   { Dba.Instr.assume condition unknown_successor }
-| NONDETASSUME LPAR lvalues=set_of(lvalue);
-  COMMA condition=cond; RPAR
-  { Dba.Instr.non_deterministic_assume
-      lvalues condition unknown_successor
-  }
 ;
 
 explicit_instruction:
@@ -440,11 +353,6 @@ dhunk_substitutions_eof:
 %inline addressOption:
 | GOTO INT { int_of_string $2 }
 |          { cur_address () }
-;
-
-printarg:
-| e=expr;   { Exp e }
-| s=STRING; { Str s }
 ;
 
 %inline store_annotation:

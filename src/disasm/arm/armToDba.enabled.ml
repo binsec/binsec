@@ -302,7 +302,7 @@ let decode_from_reader_thumb addr reader =
             merge_itblock addr ithunks )
       with Failure _ -> Error empty_instruction)
 
-let thumb_mode = Dba.(Expr.var ~tag:VarTag.Flag "t" 1)
+let thumb_mode = Dba.(Expr.var ~tag:Var.Tag.Flag "t" 1)
 
 let assert_mode mode dhunk =
   let open Dhunk in
@@ -363,13 +363,17 @@ let merge_result arm thumb =
 let unwrap_result = function Error i -> i | Ok x -> x
 
 let decode_from_reader addr reader =
-  match Arm_options.SupportedModes.get () with
-  | Arm_options.Both ->
-      merge_result
-        (decode_from_reader_arm addr reader)
-        (decode_from_reader_thumb addr reader)
-  | Arm_options.Arm -> decode_from_reader_arm addr reader |> unwrap_result
-  | Arm_options.Thumb -> decode_from_reader_thumb addr reader |> unwrap_result
+  let ((Instruction.Generic.{ size; _ }, _) as r) =
+    match Arm_options.SupportedModes.get () with
+    | Arm_options.Both ->
+        merge_result
+          (decode_from_reader_arm addr reader)
+          (decode_from_reader_thumb addr reader)
+    | Arm_options.Arm -> decode_from_reader_arm addr reader |> unwrap_result
+    | Arm_options.Thumb -> decode_from_reader_thumb addr reader |> unwrap_result
+  in
+  Lreader.advance reader (Size.Byte.to_int size);
+  r
 
 let decode reader (addr : Virtual_address.t) =
   let res = decode_from_reader (addr :> int) reader in

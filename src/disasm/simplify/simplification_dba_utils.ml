@@ -59,9 +59,10 @@ let must_lhs_expr_equal lhs expr : bool =
         ( Unary_op.Restrict { Interval.lo = i2; Interval.hi = j2 },
           Dba.Expr.Var v2 ) ) ->
       v1.name = v2.name && i1 = i2 && j1 = j2
-  | Dba.LValue.Store (_, endian1, e1), Dba.Expr.Load (_, endian2, e2) ->
+  | Dba.LValue.Store (_, endian1, e1, arr1), Dba.Expr.Load (_, endian2, e2, arr2)
+    ->
       (* on se limite au cas ou tableaux a acces constants *)
-      endian1 = endian2 && are_expr_same_cst e1 e2
+      endian1 = endian2 && are_expr_same_cst e1 e2 && arr1 = arr2
   | _ -> false
 
 let lhs_mustkilled_by_lhs lhs1 lhs2 : bool =
@@ -72,7 +73,7 @@ let lhs_mustkilled_by_lhs lhs1 lhs2 : bool =
       | Dba.LValue.Var { name = name2; _ } -> name1 = name2
       | Dba.LValue.Restrict (v, { Interval.lo = i2; Interval.hi = j2 }) ->
           v.name = name1 && i2 = 0 && j2 = v.size - 1
-      | Dba.LValue.Store (_, _, _) -> false)
+      | Dba.LValue.Store (_, _, _, _) -> false)
   | Dba.LValue.Restrict
       ({ name = name1; _ }, { Interval.lo = i1; Interval.hi = j1 }) -> (
       match lhs2 with
@@ -80,12 +81,12 @@ let lhs_mustkilled_by_lhs lhs1 lhs2 : bool =
       | Dba.LValue.Restrict
           ({ name = name2; _ }, { Interval.lo = i2; Interval.hi = j2 }) ->
           name1 = name2 && not (j1 < i2 || j2 < i1)
-      | Dba.LValue.Store (_size2, _endian2, _expr2) -> false)
-  | Dba.LValue.Store (_size1, _endian1, expr1) -> (
+      | Dba.LValue.Store (_size2, _endian2, _expr2, _) -> false)
+  | Dba.LValue.Store (_size1, _endian1, expr1, arr1) -> (
       match lhs2 with
       | Dba.LValue.Var _ | Dba.LValue.Restrict _ -> false
-      | Dba.LValue.Store (_size2, _endian2, expr2) ->
-          are_expr_same_cst expr1 expr2)
+      | Dba.LValue.Store (_size2, _endian2, expr2, arr2) ->
+          are_expr_same_cst expr1 expr2 && arr1 = arr2)
 
 (* reponse false est safe, on se concentre sur qqes cas particuliers utiles *)
 let rec lhs_mayused_in_expr lhs expr =
@@ -99,21 +100,21 @@ let rec lhs_mayused_in_expr lhs expr =
       (* If restricted areas overlap then may be used *)
       name1 = v.name && j1 >= i2 && j2 >= i1
   | _, Dba.Expr.Unary (_, e)
-  | Dba.LValue.Restrict _, Dba.Expr.Load (_, _, e)
-  | Dba.LValue.Var _, Dba.Expr.Load (_, _, e) ->
+  | Dba.LValue.Restrict _, Dba.Expr.Load (_, _, e, _)
+  | Dba.LValue.Var _, Dba.Expr.Load (_, _, e, _) ->
       lhs_mayused_in_expr lhs e
   | ( (Dba.LValue.Restrict ({ name; _ }, _) | Dba.LValue.Var { name; _ }),
       Dba.Expr.Var v ) ->
       name = v.name
-  | ( Dba.LValue.Store (size1, _, Dba.Expr.Cst bi1),
-      Dba.Expr.Load (size2, _, Dba.Expr.Cst bi2) ) ->
+  | ( Dba.LValue.Store (size1, _, Dba.Expr.Cst bi1, _),
+      Dba.Expr.Load (size2, _, Dba.Expr.Cst bi2, _) ) ->
       let bi1 = Bitvector.value_of bi1 in
       let bi2 = Bitvector.value_of bi2 in
       (* indep de endian *)
       let i1, j1 = (bi1, Z.add (Z.of_int size1) bi1)
       and i2, j2 = (bi2, Z.add (Z.of_int size2) bi2) in
       not (Z.lt j1 i2 || Z.lt j2 i1)
-  | Dba.LValue.Store _, Dba.Expr.Load (_, _, e) -> lhs_mayused_in_expr lhs e
+  | Dba.LValue.Store _, Dba.Expr.Load (_, _, e, _) -> lhs_mayused_in_expr lhs e
   | _, Dba.Expr.Binary (_bop, e1, e2) ->
       lhs_mayused_in_expr lhs e1 || lhs_mayused_in_expr lhs e2
   | _, Dba.Expr.Ite (cond, e1, e2) ->
@@ -122,7 +123,7 @@ let rec lhs_mayused_in_expr lhs expr =
 
 and lhs_mayused_in_lhs lv = function
   | Dba.LValue.Var _ | Dba.LValue.Restrict _ -> false
-  | Dba.LValue.Store (_, _, e) -> lhs_mayused_in_expr lv e
+  | Dba.LValue.Store (_, _, e, _) -> lhs_mayused_in_expr lv e
 
 let rec is_not_mayused prog addr look_ahead_limit var flags_env :
     bool Basic_types.String.Map.t Dba_types.Caddress.Map.t * bool =
@@ -155,7 +156,7 @@ and is_not_mayused_in_instr ik prog addr niter var flags_env :
         let prog = Caddress.Map.remove addr prog in
         let addr' = Caddress.reid addr id in
         is_not_mayused prog addr' (niter - 1) var flags_env
-  | Dba.Instr.SJump (JOuter addr', Some (Dba.Call _ | Dba.Return)) -> (
+  | Dba.Instr.SJump (JOuter addr', (Dba.Call _ | Dba.Return)) -> (
       let open Simplification_options in
       match Simplification.get () with
       | Function s | Sequence s ->
@@ -186,34 +187,9 @@ and is_not_mayused_in_instr ik prog addr niter var flags_env :
               let a = Caddress.reid addr id2 in
               is_not_mayused prog a (niter - 1) var flags_env
             else (flags_env, false))
-  | Dba.Instr.Print (args, id) ->
-      let f bool elem =
-        match elem with
-        | Exp e -> lhs_mayused_in_expr var e || bool
-        | Str _s -> bool
-      in
-      let b = List.fold_left f false args in
-      let res = loop id in
-      if b then (flags_env, false) else res
-  | Dba.Instr.NondetAssume (lhs, cond, id) ->
-      if lhs_mayused_in_expr var cond then (flags_env, false)
-      else
-        let f1 bool lhs = lhs_mayused_in_lhs var lhs || bool in
-        let f2 bool lhs = lhs_mustkilled_by_lhs var lhs && bool in
-        let b1 = List.fold_left f1 false lhs in
-        if b1 then (flags_env, false)
-        else
-          let b2 = List.fold_left f2 true lhs in
-          if b2 then (flags_env, true) else loop id
   | Dba.Instr.Assume (cond, id) | Dba.Instr.Assert (cond, id) ->
       if lhs_mayused_in_expr var cond then (flags_env, false) else loop id
-  | Dba.Instr.Malloc (lhs, e, id) ->
-      if lhs_mayused_in_expr var e then (flags_env, false)
-      else if lhs_mustkilled_by_lhs var lhs then (flags_env, true)
-      else loop id
-  | Dba.Instr.Free (e, id) ->
-      if lhs_mayused_in_expr var e then (flags_env, false) else loop id
-  | Dba.Instr.Undef (lhs, id) | Dba.Instr.Nondet (lhs, _, id) ->
+  | Dba.Instr.Undef (lhs, id) | Dba.Instr.Nondet (lhs, id) ->
       if lhs_mayused_in_lhs var lhs then (flags_env, false)
       else if lhs_mustkilled_by_lhs var lhs then (flags_env, true)
       else loop id

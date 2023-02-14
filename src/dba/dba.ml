@@ -31,8 +31,6 @@ let invalid_assignment = Invalid_argument "mismatched assign"
 
 type size = int
 
-type malloc_size = Z.t
-
 type id = int
 (** An [id] is a local identifier which characterizes an atomic instruction
     inside a Dba.block *)
@@ -48,16 +46,16 @@ type 'a jump_target =
   | JInner of 'a  (** Jump inside the same block, to a label *)
   | JOuter of address  (** Jump outside the block to its first element *)
 
-type tag = Call of address | Return  (** For call address of return site *)
+type tag =
+  | Default
+  | Call of address
+  | Return  (** For call address of return site *)
 
 type state =
   | OK
   | KO
   | Undecoded of string  (** Stop because of unanticipated string of bytes **)
   | Unsupported of string  (** Stop because instr is not supported by Binsec **)
-
-type 'a var = { name : string; size : size; info : 'a }
-(** The base type for variables *)
 
 module Unary_op = struct
   type t =
@@ -115,41 +113,163 @@ module Binary_op = struct
     | _ -> false
 end
 
-type malloc_status = Freed | Freeable
+module Var : sig
+  module Tag : sig
+    type attribute = Value | Size | Last
 
-type restricted_region = [ `Stack | `Malloc of (int * address) * Z.t ]
+    val pp_attribute : Format.formatter -> attribute -> unit
 
-type region = [ `Constant | restricted_region ]
+    type t =
+      | Flag
+      | Temp
+      | Register
+      | Symbol of attribute * Bitvector.t lazy_t
+      | Empty
 
-module VarTag = struct
-  type attribute = Value | Size | Last
+    include Sigs.HASHABLE with type t := t
+  end
 
-  let pp_attribute ppf = function
-    | Value -> ()
-    | Size -> Format.pp_print_string ppf ":size"
-    | Last -> Format.pp_print_string ppf ":last"
+  type t = private { id : int; name : string; size : size; info : Tag.t }
 
-  type t =
-    | Flag
-    | Temp
-    | Register
-    | Symbol of attribute * Bitvector.t lazy_t
-    | Empty
+  val create : string -> bitsize:Size.Bit.t -> tag:Tag.t -> t
+
+  val flag : ?bitsize:Size.Bit.t -> string -> t
+  (** [flag ~size fname] creates a flag variable.
+      - [size] defaults to 1
+  *)
+
+  val temporary : string -> Size.Bit.t -> t
+
+  val temp : Size.Bit.t -> t
+  (** [temp n] creates a lvalue representing a temporary of size [n] with name
+      [Format.sprintf "temp%d" n]. *)
+
+  include Hashtbl.HashedType with type t := t
+
+  val from_id : int -> t
+  (** [from_id id] returns the variable identified by [id].
+
+      @raise Not_found if [id] is not a valid identifier.
+  *)
+end = struct
+  module Tag = struct
+    type attribute = Value | Size | Last
+
+    let pp_attribute ppf = function
+      | Value -> ()
+      | Size -> Format.pp_print_string ppf ":size"
+      | Last -> Format.pp_print_string ppf ":last"
+
+    type t =
+      | Flag
+      | Temp
+      | Register
+      | Symbol of attribute * Bitvector.t lazy_t
+      | Empty
+
+    let compare a b =
+      match (a, b) with
+      | Flag, Flag -> 0
+      | Flag, (Temp | Register | Symbol _ | Empty) -> -1
+      | Temp, Flag -> 1
+      | Temp, Temp -> 0
+      | Temp, (Register | Symbol _ | Empty) -> -1
+      | Register, (Flag | Temp) -> 1
+      | Register, Register -> 0
+      | Register, (Symbol _ | Empty) -> -1
+      | Symbol _, (Flag | Temp | Register) -> 1
+      | Symbol (attr, _), Symbol (attr', _) -> compare attr attr'
+      | Symbol _, Empty -> -1
+      | Empty, (Flag | Temp | Register | Symbol _) -> 1
+      | Empty, Empty -> 0
+
+    let equal a b =
+      match (a, b) with
+      | Flag, Flag | Temp, Temp | Register, Register | Empty, Empty -> true
+      | Symbol (attr, _), Symbol (attr', _) -> attr = attr'
+      | ( (Flag | Temp | Register | Symbol _ | Empty),
+          (Flag | Temp | Register | Symbol _ | Empty) ) ->
+          false
+
+    let hash = function
+      | Flag -> 129913994
+      | Temp -> 883721435
+      | Register -> 648017920
+      | Symbol (Value, _) -> 543159235
+      | Symbol (Size, _) -> 72223805
+      | Symbol (Last, _) -> 828390822
+      | Empty -> 152507349
+  end
+
+  type t = { id : int; name : string; size : size; info : Tag.t }
+
+  module C = Weak.Make (struct
+    type nonrec t = t
+
+    let equal t t' =
+      t.size = t'.size (* && t.info = t'.info *) && String.equal t.name t'.name
+
+    let hash { name; size; (* info; *) _ } =
+      Hash.(
+        return
+          (fold_string
+             (fold_int (* (fold_int *) (seed 0) size)
+             (* (Tag.hash info)) *) name))
+  end)
+
+  module R = Weak.Make (struct
+    type nonrec t = t
+
+    let equal t t' = t.id = t'.id
+
+    let hash { id; _ } = id
+  end)
+
+  let cons = C.create 128
+
+  let id = ref 0
+
+  let rev = R.create 128
+
+  let create name ~bitsize ~tag =
+    let t = { id = !id; name; size = Size.Bit.to_int bitsize; info = tag } in
+    let t' = C.merge cons t in
+    if t == t' then (
+      incr id;
+      R.add rev t');
+    t'
+
+  let flag ?(bitsize = Size.Bit.bits1) flagname =
+    create flagname ~bitsize ~tag:Tag.Flag
+
+  let temporary tempname bitsize = create tempname ~bitsize ~tag:Tag.Temp
+
+  let temp nbits =
+    let name = Format.asprintf "temp%a" Size.Bit.pp nbits in
+    temporary name nbits
+
+  let hash { id; _ } = id
+
+  let equal = ( == )
+
+  let from_id id =
+    let t = { id; name = ""; size = 0; info = Tag.Empty } in
+    R.find rev t
 end
 
 module Expr : sig
   type t = private
-    | Var of VarTag.t var (* size: bits *)
-    | Load of size * Machine.endianness * t (* size: bytes *)
+    | Var of Var.t
+    | Load of size (* size: bytes *) * Machine.endianness * t * string option
     | Cst of Bitvector.t
     | Unary of Unary_op.t * t
     | Binary of Binary_op.t * t * t
     | Ite of t * t * t
   (* sugar operator *)
 
-  val v : VarTag.t var -> t
+  val v : Var.t -> t
 
-  val var : ?tag:VarTag.t -> string -> int -> t
+  val var : ?tag:Var.Tag.t -> string -> int -> t
 
   val is_equal : t -> t -> bool
 
@@ -196,13 +316,13 @@ module Expr : sig
 
   val append : t -> t -> t
 
-  include Sigs.Comparisons with type t := t and type boolean = t
+  include Sigs.COMPARISON with type t := t and type boolean = t
 
   val unary : Unary_op.t -> t -> t
 
   val uminus : t -> t
 
-  include Sigs.Logical with type t := t
+  include Sigs.LOGICAL with type t := t
 
   val logxor : t -> t -> t
 
@@ -226,15 +346,15 @@ module Expr : sig
 
   val bit_restrict : int -> t -> t
 
-  val load : Size.Byte.t -> Machine.endianness -> t -> t
+  val load : ?array:string -> Size.Byte.t -> Machine.endianness -> t -> t
 
   val is_max : t -> bool
 end = struct
   open Binary_op
 
   type t =
-    | Var of VarTag.t var (* size: bits *)
-    | Load of size * Machine.endianness * t (* size: bytes *)
+    | Var of Var.t
+    | Load of size (* size: bytes *) * Machine.endianness * t * string option
     | Cst of Bitvector.t
     | Unary of Unary_op.t * t
     | Binary of Binary_op.t * t * t
@@ -246,7 +366,7 @@ end = struct
   let rec size_of = function
     | Cst b -> Bitvector.size_of b
     | Var v -> v.size
-    | Load (bytesize, _, _) -> 8 * bytesize
+    | Load (bytesize, _, _, _) -> 8 * bytesize
     | Ite (_, e, _) | Unary ((Unary_op.UMinus | Unary_op.Not), e) -> size_of e
     | Unary ((Unary_op.Sext bits | Unary_op.Uext bits), _) -> bits
     | Unary (Unary_op.Restrict { Interval.lo; Interval.hi }, _) -> hi - lo + 1
@@ -261,8 +381,8 @@ end = struct
   let rec is_equal e1 e2 =
     match (e1, e2) with
     | Var v1, Var v2 -> v1 = v2
-    | Load (sz1, en1, e1), Load (sz2, en2, e2) ->
-        sz1 = sz2 && en1 = en2 && is_equal e1 e2
+    | Load (sz1, en1, e1, arr1), Load (sz2, en2, e2, arr2) ->
+        sz1 = sz2 && en1 = en2 && is_equal e1 e2 && arr1 = arr2
     | Cst bv1, Cst bv2 -> Bitvector.equal bv1 bv2
     | Unary (unop1, e1), Unary (unop2, e2) -> unop1 = unop2 && is_equal e1 e2
     | Binary (binop1, lexpr1, rexpr1), Binary (binop2, lexpr2, rexpr2) ->
@@ -281,9 +401,10 @@ end = struct
 
   let v va = Var va
 
-  let var ?(tag = VarTag.Empty) name size = Var { name; size; info = tag }
+  let var ?(tag = Var.Tag.Empty) name size =
+    Var (Var.create ~tag name ~bitsize:(Size.Bit.create size))
 
-  let temporary ~size name = var name size ~tag:VarTag.Temp
+  let temporary ~size name = var name size ~tag:Var.Tag.Temp
 
   let constant bv = Cst bv
 
@@ -308,9 +429,9 @@ end = struct
     | Cst b when Bitvector.is_one b -> then_expr
     | _ -> Ite (condition, then_expr, else_expr)
 
-  let load nbytes endianness e =
+  let load ?array nbytes endianness e =
     let nbytes = Size.Byte.to_int nbytes in
-    Load (nbytes, endianness, e)
+    Load (nbytes, endianness, e, array)
 
   module Straight = struct
     let binary op e1 e2 = Binary (op, e1, e2)
@@ -422,16 +543,16 @@ end = struct
   and restrict lo hi = function
     | e when lo = 0 && hi = size_of e - 1 -> e
     | Cst bv -> constant (Bitvector.extract bv Interval.{ lo; hi })
-    | Load (sz, LittleEndian, addr) when (8 * sz) - hi > 8 ->
+    | Load (sz, LittleEndian, addr, array) when (8 * sz) - hi > 8 ->
         let sz' = Size.Byte.create (sz - (((8 * sz) - hi - 1) / 8)) in
-        restrict lo hi (load sz' LittleEndian addr)
-    | Load (sz, LittleEndian, addr) when lo >= 8 ->
+        restrict lo hi (load sz' LittleEndian addr ?array)
+    | Load (sz, LittleEndian, addr, array) when lo >= 8 ->
         let bz' = lo / 8 in
         let lo' = lo - (8 * bz') and hi' = hi - (8 * bz') in
         let sz' = Size.Byte.create (sz - bz') in
         let size = size_of addr in
         let addr' = add addr (constant (Bitvector.of_int ~size bz')) in
-        restrict lo' hi' (load sz' LittleEndian addr')
+        restrict lo' hi' (load sz' LittleEndian addr' ?array)
     | Unary (Unary_op.Restrict { Interval.lo = lo'; _ }, e) ->
         Straight.restrict (lo' + lo) (lo' + hi) e
     | Unary (Unary_op.Uext _, e) when size_of e <= lo -> zeros (hi - lo + 1)
@@ -664,7 +785,9 @@ end = struct
     | Cst _, Binary (Binary_op.Concat, e3, e4) ->
         split_apply equal logand e1 e3 e4
     | Cst _, Unary (Unary_op.Uext n, e3) ->
-        split_apply equal logand e1 (constant (Bitvector.zeros n)) e3
+        split_apply equal logand e1
+          (constant (Bitvector.zeros (n - size_of e3)))
+          e3
     | Binary (Binary_op.Concat, e3, e4), Binary (Binary_op.Concat, e5, e6)
       when size_of e3 = size_of e5 ->
         logand (equal e3 e4) (equal e4 e6)
@@ -678,7 +801,9 @@ end = struct
     | Cst _, Binary (Binary_op.Concat, e3, e4) ->
         split_apply diff logor e1 e3 e4
     | Cst _, Unary (Unary_op.Uext n, e3) ->
-        split_apply diff logor e1 (constant (Bitvector.zeros n)) e3
+        split_apply diff logor e1
+          (constant (Bitvector.zeros (n - size_of e3)))
+          e3
     | Binary (Binary_op.Concat, e3, e4), Binary (Binary_op.Concat, e5, e6)
       when size_of e3 = size_of e5 ->
         logor (diff e3 e4) (diff e4 e6)
@@ -839,43 +964,26 @@ end
 module type INSTR = sig
   type t
 
-  include Sigs.Arithmetic with type t := t
+  include Sigs.ARITHMETIC with type t := t
 
-  include Sigs.Bitwise with type t := t
-end
-
-module Var = struct
-  type t = VarTag.t var
-
-  let create name ~bitsize ~tag =
-    { name; size = Size.Bit.to_int bitsize; info = tag }
-
-  let flag ?(bitsize = Size.Bit.bits1) flagname =
-    create flagname ~bitsize ~tag:VarTag.Flag
-
-  let temporary tempname bitsize = create tempname ~bitsize ~tag:VarTag.Temp
-
-  let temp nbits =
-    let name = Format.asprintf "temp%a" Size.Bit.pp nbits in
-    temporary name nbits
+  include Sigs.BITWISE with type t := t
 end
 
 module LValue = struct
   type t =
-    | Var of VarTag.t var (* size in bits *)
-    | Restrict of VarTag.t var * int Interval.t
-    | Store of size * Machine.endianness * Expr.t
-  (* size in bytes *)
+    | Var of Var.t
+    | Restrict of Var.t * int Interval.t
+    | Store of
+        size (* size in bytes *) * Machine.endianness * Expr.t * string option
 
   let equal lv1 lv2 =
     match (lv1, lv2) with
-    | Var { name = x1; size = sz1; _ }, Var { name = x2; size = sz2; _ } ->
-        x1 = x2 && sz1 = sz2
+    | Var v1, Var v2 -> Var.equal v1 v2
     | ( Restrict (v1, { Interval.lo = o11; Interval.hi = o12 }),
         Restrict (v2, { Interval.lo = o21; Interval.hi = o22 }) ) ->
-        v1.name = v2.name && v1.size = v2.size && o11 = o21 && o12 = o22
-    | Store (sz1, en1, e1), Store (sz2, en2, e2) ->
-        sz1 = sz2 && en1 = en2 && Expr.is_equal e1 e2
+        Var.equal v1 v2 && o11 = o21 && o12 = o22
+    | Store (sz1, en1, e1, arr1), Store (sz2, en2, e2, arr2) ->
+        sz1 = sz2 && en1 = en2 && Expr.is_equal e1 e2 && arr1 = arr2
     | _, _ -> false
 
   let size_of = function
@@ -883,40 +991,38 @@ module LValue = struct
     | Restrict (_, { Interval.lo; Interval.hi }) ->
         let restricted_size = hi - lo + 1 in
         restricted_size
-    | Store (sz, _, _) -> 8 * sz
+    | Store (sz, _, _, _) -> 8 * sz
 
   let v va = Var va
 
-  let var ?(tag = VarTag.Empty) ~bitsize name =
-    let size = Size.Bit.to_int bitsize in
-    Var { name; size; info = tag }
+  let var ?(tag = Var.Tag.Empty) ~bitsize name =
+    Var (Var.create name ~bitsize ~tag)
 
   let flag ?(bitsize = Size.Bit.bits1) flagname =
-    var flagname ~bitsize ~tag:VarTag.Flag
+    var flagname ~bitsize ~tag:Var.Tag.Flag
 
-  let temporary tempname bitsize = var tempname ~bitsize ~tag:VarTag.Temp
+  let temporary tempname bitsize = var tempname ~bitsize ~tag:Var.Tag.Temp
 
   let temp nbits =
     let name = Format.asprintf "temp%a" Size.Bit.pp nbits in
     temporary name nbits
 
-  let restrict v lo hi =
+  let restrict (v : Var.t) lo hi =
     if hi >= v.size || hi < lo || lo < 0 then raise bad_bound;
     if hi - lo + 1 = v.size then Var v
     else Restrict (v, { Interval.lo; Interval.hi })
 
-  let _restrict name sz lo hi =
-    let v = { name; size = Size.Bit.to_int sz; info = VarTag.Empty } in
+  let _restrict name bitsize lo hi =
+    let v = Var.create name ~bitsize ~tag:Var.Tag.Empty in
     restrict v lo hi
 
   let bit_restrict v bit = restrict v bit bit
 
   let _bit_restrict name sz bit = _restrict name sz bit bit
 
-  let store nbytes endianness e =
+  let store ?array nbytes endianness e =
     let sz = Size.Byte.to_int nbytes in
-    (*    Format.printf "store : %d@." (Expr.size_of e); *)
-    Store (sz, endianness, e)
+    Store (sz, endianness, e, array)
 
   let is_expr_translatable = function
     | Expr.Var _ | Expr.Load _ | Expr.Unary (Unary_op.Restrict _, Expr.Var _) ->
@@ -924,20 +1030,20 @@ module LValue = struct
     | Expr.Cst _ | Expr.Unary _ | Expr.Binary _ | Expr.Ite _ -> false
 
   let of_expr = function
-    | Expr.Var { name; size = sz; info = tag } ->
-        var ~bitsize:(Size.Bit.create sz) ~tag name
-    | Expr.Load (size, endian, e) -> store (Size.Byte.create size) endian e
+    | Expr.Var v -> Var v
+    | Expr.Load (size, endian, e, array) ->
+        store (Size.Byte.create size) endian e ?array
     | Expr.Unary (Unary_op.Restrict { Interval.lo; Interval.hi }, Expr.Var v) ->
         restrict v lo hi
     | Expr.Cst _ | Expr.Unary _ | Expr.Binary _ | Expr.Ite _ ->
         failwith "LValue.of_expr : Cannot create lvalue from expression"
 
   let to_expr = function
-    | Var { name; size; info = tag } -> Expr.var name size ~tag
+    | Var v -> Expr.v v
     | Restrict (v, { Interval.lo; hi }) ->
         Expr.restrict lo hi (Expr.var v.name v.size ~tag:v.info)
-    | Store (size, endianness, address) ->
-        Expr.load (Size.Byte.create size) endianness address
+    | Store (size, endianness, address, array) ->
+        Expr.load (Size.Byte.create size) endianness address ?array
 
   (* size expected for rhs *)
   let bitsize = function
@@ -945,37 +1051,33 @@ module LValue = struct
     | Restrict (_, { Interval.lo; Interval.hi }) ->
         let res = hi - lo + 1 in
         Size.Bit.create res
-    | Store (sz, _endianness, _e) -> Size.Byte.(to_bitsize (create sz))
+    | Store (sz, _, _, _) -> Size.Byte.(to_bitsize (create sz))
 
   let resize size = function
     | Var { name; info = tag; _ } -> var name ~bitsize:size ~tag
     | Restrict (v, { Interval.lo; Interval.hi }) -> restrict v lo hi
-    | Store (_sz, endianness, e) ->
-        store (Size.Byte.of_bitsize size) endianness e
+    | Store (_sz, endianness, e, array) ->
+        store (Size.Byte.of_bitsize size) endianness e ?array
 end
 
 module Instr = struct
   type t =
     | Assign of LValue.t * Expr.t * id
-    | SJump of id jump_target * tag option
-    | DJump of Expr.t * tag option
+    | SJump of id jump_target * tag
+    | DJump of Expr.t * tag
     | If of Expr.t * id jump_target * id
     | Stop of state option
     | Assert of Expr.t * id
     | Assume of Expr.t * id
-    | NondetAssume of LValue.t list * Expr.t * id
-    | Nondet of LValue.t * region * id
+    | Nondet of LValue.t * id
     | Undef of LValue.t * id
-    | Malloc of LValue.t * Expr.t * id
-    | Free of Expr.t * id
-    | Print of printable list * id
 
   let assign lval rval nid =
     if Size.Bit.to_int (LValue.bitsize lval) <> Expr.size_of rval then
       raise invalid_assignment;
     Assign (lval, rval, nid)
 
-  let static_jump ?tag jt = SJump (jt, tag)
+  let static_jump ?(tag = Default) jt = SJump (jt, tag)
 
   let static_inner_jump ?tag n = static_jump (Jump_target.inner n) ?tag
 
@@ -986,7 +1088,7 @@ module Instr = struct
     let tag = Some (Call return_address) in
     static_jump ?tag jt
 
-  let dynamic_jump ?tag e =
+  let dynamic_jump ?(tag = Default) e =
     match e with
     | Expr.Cst v ->
         let addr = { id = 0; base = Virtual_address.of_bitvector v } in
@@ -1002,17 +1104,9 @@ module Instr = struct
 
   let undefined lv nid = Undef (lv, nid)
 
-  let non_deterministic ?(region = `Constant) lv nid = Nondet (lv, region, nid)
-
-  let malloc lv e nid = Malloc (lv, e, nid)
-
-  let free e id = Free (e, id)
+  let non_deterministic lv nid = Nondet (lv, nid)
 
   let _assert c nid = Assert (c, nid)
 
   let assume c nid = Assume (c, nid)
-
-  let non_deterministic_assume lvs c id = NondetAssume (lvs, c, id)
-
-  let print args id = Print (args, id)
 end

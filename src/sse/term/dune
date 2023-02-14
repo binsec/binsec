@@ -1,0 +1,16 @@
+(library
+ (public_name binsec.sse.term)
+ (name libterm)
+ (modules :standard)
+ (modules_without_implementation solver_sig)
+ (flags
+  (:standard -open Binsec -open Smt -open Libsse))
+ (libraries
+  binsec
+  smt
+  libsse
+  (select
+   native_solver.ml
+   from
+   (bitwuzla -> native_solver.enabled.ml)
+   (!bitwuzla -> native_solver.stubs.ml))))

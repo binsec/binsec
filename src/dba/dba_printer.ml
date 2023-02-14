@@ -150,8 +150,6 @@ module type DbaPrinter = sig
 
   val pp_lhs : Format.formatter -> Dba.LValue.t -> unit
 
-  val pp_region : Format.formatter -> Dba.region -> unit
-
   val pp_instruction_maybe_goto :
     current_id:int -> Format.formatter -> Dba.Instr.t -> unit
 end
@@ -203,6 +201,7 @@ module Make (R : Renderer) : DbaPrinter = struct
     | Some value -> fprintf ppf "%a" pp_value value
 
   let pp_tag ppf = function
+    | Dba.Default -> ()
     | Dba.Call caddr ->
         fprintf ppf "#call with return address %@ %a" pp_code_address caddr
     | Dba.Return -> fprintf ppf "#return"
@@ -220,11 +219,15 @@ module Make (R : Renderer) : DbaPrinter = struct
       let size = Bitvector.size_of bv in
       fprintf ppf "%s<%a>" (Z.to_string n) pp_size size
 
+  let pp_array =
+    Format.pp_print_option
+      ~none:(fun ppf () -> Format.pp_print_char ppf '@')
+      Format.pp_print_string
+
   let rec pp_bl_term ppf = function
-    | Dba.Expr.Var { Dba.name; Dba.size; _ } ->
-        fprintf ppf "%s<%a>" name pp_size size
-    | Dba.Expr.Load (size, _endian, expr) ->
-        fprintf ppf "%@[%a,%a]" pp_bl_term expr pp_size size
+    | Dba.Expr.Var { name; size; _ } -> fprintf ppf "%s<%a>" name pp_size size
+    | Dba.Expr.Load (size, _endian, expr, array) ->
+        fprintf ppf "%a[%a,%a]" pp_array array pp_bl_term expr pp_size size
         (* pp_endianness endian *)
     | Dba.Expr.Cst bv -> pp_constant ppf bv
     | Dba.Expr.Unary (Dba.Unary_op.Uext n, expr) ->
@@ -249,12 +252,9 @@ module Make (R : Renderer) : DbaPrinter = struct
     | Dba.(LValue.Restrict ({ name; size; _ }, { Interval.lo; Interval.hi })) ->
         if lo <> hi then fprintf ppf "%s<%d>{%d, %d}" name size lo hi
         else fprintf ppf "%s<%d>{%d}" name size lo
-    | Dba.LValue.Store (size, _endian, expr) ->
-        fprintf ppf "%@[%a,%a]" pp_bl_term expr pp_size size
+    | Dba.LValue.Store (size, _endian, expr, array) ->
+        fprintf ppf "%a[%a,%a]" pp_array array pp_bl_term expr pp_size size
   (* pp_endianness endian *)
-
-  let pp_lhss ppf lhss =
-    fprintf ppf "%a" (Print_utils.pp_list ~sep:", " pp_lhs) lhss
 
   let pp_address ppf = function
     | Dba.JInner id -> fprintf ppf "%d" id
@@ -265,11 +265,6 @@ module Make (R : Renderer) : DbaPrinter = struct
     | Dba.KO -> fprintf ppf "KO"
     | Dba.Undecoded s -> fprintf ppf "#undecoded %s" s
     | Dba.Unsupported s -> fprintf ppf "#unsupported %s" s
-
-  let pp_region ppf = function
-    | `Constant -> fprintf ppf "cst"
-    | `Stack -> fprintf ppf "stack"
-    | `Malloc ((id, _), _) -> fprintf ppf "malloc%d" id
 
   let pp_instruction n ppf instruction =
     let suffix ppf id =
@@ -282,31 +277,22 @@ module Make (R : Renderer) : DbaPrinter = struct
     | Dba.Instr.Assign (lhs, expr, id) ->
         fprintf ppf "@[<hov 1>%a :=@ %a@,%a@]" pp_lhs lhs pp_bl_term expr suffix
           id
-    | Dba.Instr.SJump (addr, tagopt) ->
-        fprintf ppf "goto %a %a" pp_address addr (pp_opt pp_tag) tagopt
-    | Dba.Instr.DJump (e_addr, tagopt) ->
-        fprintf ppf "goto %a %a" pp_bl_term e_addr (pp_opt pp_tag) tagopt
+    | Dba.Instr.SJump (addr, tag) ->
+        fprintf ppf "goto %a %a" pp_address addr pp_tag tag
+    | Dba.Instr.DJump (e_addr, tag) ->
+        fprintf ppf "goto %a %a" pp_bl_term e_addr pp_tag tag
     | Dba.Instr.If (e, addr, int_addr) ->
         fprintf ppf "@[<hov 2>if %a@ @[<hv 0>goto %a@ else goto %d@]@]"
           pp_bl_term e pp_address addr int_addr
     | Dba.Instr.Stop state_opt -> fprintf ppf "%a" (pp_opt pp_state) state_opt
-    | Dba.Instr.Print (_, id) ->
-        fprintf ppf "print \"message not displayed\"%a" suffix id
-    | Dba.Instr.NondetAssume (lhslist, cond, id) ->
-        fprintf ppf "%@nondet_assume ({%a} %a)%a" pp_lhss lhslist pp_bl_term
-          cond suffix id
     | Dba.Instr.Assume (cond, id) ->
         fprintf ppf "%@assume (%a)%a" pp_bl_term cond suffix id
     | Dba.Instr.Assert (cond, id) ->
         fprintf ppf "%@assert (%a)%a" pp_bl_term cond suffix id
-    | Dba.Instr.Malloc (lhs, expr, id) ->
-        fprintf ppf "%a := malloc(%a)%a" pp_lhs lhs pp_bl_term expr suffix id
-    | Dba.Instr.Free (expr, id) ->
-        fprintf ppf "free (%a)%a" pp_bl_term expr suffix id
     | Dba.Instr.Undef (lhs, id) ->
         fprintf ppf "%a := \\undef%a" pp_lhs lhs suffix id
-    | Dba.Instr.Nondet (lhs, region, id) ->
-        fprintf ppf "%a := nondet(%a)%a" pp_lhs lhs pp_region region suffix id
+    | Dba.Instr.Nondet (lhs, id) ->
+        fprintf ppf "%a := nondet%a" pp_lhs lhs suffix id
 
   let pp_expr = pp_bl_term
 

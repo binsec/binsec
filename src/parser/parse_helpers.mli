@@ -72,7 +72,7 @@ module Message : sig
 end
 
 module Declarations : sig
-  val add : string -> Dba.size -> Dba.VarTag.t -> unit
+  val add : string -> Dba.size -> Dba.Var.Tag.t -> unit
 end
 
 module Mk : sig
@@ -90,9 +90,6 @@ module Mk : sig
   val checked_cond_expr : Dba.Expr.t -> Dba.Expr.t
 
   val program :
-    (Dba_types.permissions list Dba_types.Region.Map.t
-    * Dba.Expr.t Dba_types.Rights.t)
-    option ->
     Dba.Instr.t list ->
     Dba.address ->
     Dba.LValue.t list ->
@@ -103,15 +100,6 @@ module Mk : sig
     val of_list :
       ('a * (Dba.Expr.t * Dba.Expr.t * Dba.Expr.t)) list ->
       'a list * (Dba.Expr.t * Dba.Expr.t * Dba.Expr.t)
-  end
-
-  module Permissions : sig
-    val of_list :
-      (Dba_types.Region.Map.key
-      * 'a list
-      * (Dba.Expr.t * Dba.Expr.t * Dba.Expr.t))
-      list ->
-      'a list Dba_types.Region.Map.t * Dba.Expr.t Dba_types.Rights.t
   end
 end
 

@@ -35,8 +35,6 @@ val create : int -> t
 
 val to_int : t -> int
 
-val equal : t -> t -> bool
-
 val of_int64 : int64 -> t
 
 val of_bitvector : Bitvector.t -> t

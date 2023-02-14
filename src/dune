@@ -7,7 +7,7 @@
  (modules main)
  (flags
   (:standard -open Binsec))
- (libraries binsec se bbsse dtrace armv7decoder amd64decoder armv8decoder))
+ (libraries binsec sse bbsse dtrace armv7decoder amd64decoder armv8decoder))
 
 (library
  (public_name binsec)

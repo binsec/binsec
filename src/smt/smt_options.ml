@@ -68,13 +68,13 @@ module KeepGoing = Builder.False (struct
 end)
 
 module SMT_dir = Builder.String_option (struct
-  let name = "smt-dir"
+  let name = "dir"
 
   let doc = "set directory to cache smt scripts"
 end)
 
 module SMT_log_directory = Builder.String (struct
-  let name = "smt-dump-dir"
+  let name = "dump-dir"
 
   let doc = "Set directory where unsolved SMT scripts are dumped"
 

@@ -47,47 +47,16 @@ module MapSetMaker (C : Sigs.COMPARABLE) = struct
       let a = choose set in
       (a, remove a set)
   end
-
-  include C
 end
 
 module Collection_make = struct
-  module Default (C : Sigs.COMPARABLE) = struct
-    module H = struct
-      include C
-
-      let equal x y = compare x y = 0
-
-      let hash = Hashtbl.hash
-    end
-
-    include MapSetMaker (C)
-    module Hamt = Hashamt.Make (H)
-
-    module Htbl = struct
-      include Hashtbl.Make (H)
-
-      let filter p h =
-        let h' = create (length h) in
-        iter (fun k v -> if p k v then add h' k v) h;
-        h'
-
-      let bindings h = fold (fun k v acc -> (k, v) :: acc) h []
-    end
-  end
-
   module Hashed (C : Sigs.HASHABLE) = struct
-    module H = struct
-      include C
-
-      let equal x y = compare x y = 0
-    end
-
+    include C
     include MapSetMaker (C)
-    module Hamt = Hashamt.Make (H)
+    module Hamt = Hashamt.Make (C)
 
     module Htbl = struct
-      include Hashtbl.Make (H)
+      include Hashtbl.Make (C)
 
       let filter p h =
         let h' = create (length h) in
@@ -97,15 +66,22 @@ module Collection_make = struct
       let bindings h = fold (fun k v acc -> (k, v) :: acc) h []
     end
   end
+
+  module Auto (C : Sigs.COMPARABLE_EXT) = Hashed (struct
+    include C
+
+    let hash = Hashtbl.hash
+  end)
+
+  module Default (C : Sigs.COMPARABLE) = Auto (struct
+    include C
+
+    let equal a b = compare a b = 0
+  end)
 end
 
-module Float = Collection_make.Default (struct
-  type t = float
-
-  let compare = compare
-end)
-
-module String = Collection_make.Default (String)
+module Float = Collection_make.Default (Float)
+module String = Collection_make.Auto (String)
 
 module Int64 = struct
   let max n1 n2 = if Int64.compare n1 n2 <= 0 then n2 else n1
@@ -116,24 +92,12 @@ module Int64 = struct
     let min_int_int64 = Int64.of_int min_int in
     fun n -> min_int_int64 <= n && max_int_int64 >= n
 
-  include Collection_make.Default (Int64)
+  include Collection_make.Auto (Int64)
 end
 
 module Addr64 = Int64
-
-module Int = Collection_make.Default (struct
-  type t = int
-
-  let compare = compare
-end)
-
-module OrderedBigInt = struct
-  type t = Z.t
-
-  let compare = Z.compare
-end
-
-module BigInt = Collection_make.Default (OrderedBigInt)
+module Int = Collection_make.Auto (Int)
+module BigInt = Collection_make.Default (Z)
 
 module Ternary = struct
   type t = True | False | Unknown

@@ -52,23 +52,9 @@ let get_redundant_assign (lhs_temp, addr) block =
           | None, Some i -> (Some i, acc)
           | Some (_, a1, _), Some (_, a2, _) ->
               if a1.Dba.id = a2.Dba.id then (instr1, acc) else raise Killed_tmp)
-      | Dba.Instr.NondetAssume (lhslist, _, id) ->
-          let s =
-            List.fold_left
-              (fun res lhs ->
-                if lhs_mustkilled_by_lhs lhs lhs_temp then false else res)
-              true lhslist
-          in
-          if s then
-            aux (Caddress.reid addr id) (Caddress.Map.add addr (ik, opc) acc)
-          else raise Killed_tmp
-      | Dba.Instr.Nondet (lhs, _, id)
-      | Dba.Instr.Undef (lhs, id)
-      | Dba.Instr.Malloc (lhs, _, id) ->
+      | Dba.Instr.Nondet (lhs, id) | Dba.Instr.Undef (lhs, id) ->
           if lhs_mustkilled_by_lhs lhs_temp lhs then raise Killed_tmp
           else aux (Caddress.reid addr id) (Caddress.Map.add addr (ik, opc) acc)
-      | Dba.Instr.Free (_, id)
-      | Dba.Instr.Print (_, id)
       | Dba.Instr.SJump (Dba.JInner id, _)
       | Dba.Instr.If (_, Dba.JOuter _, id)
       | Dba.Instr.Assert (_, id)
@@ -100,31 +86,8 @@ let is_not_mayused_in_block temp_lhs insts =
         | Dba.Instr.Assert (c, _)
         | Dba.Instr.Assume (c, _) ->
             not (lhs_mayused_in_expr temp_lhs c)
-        | Dba.Instr.NondetAssume (lhslist, c, _) ->
-            List.fold_left
-              (fun res lhs ->
-                if
-                  lhs_mustkilled_by_lhs lhs temp_lhs
-                  || lhs_mayused_in_expr temp_lhs c
-                  || lhs_mayused_in_lhs temp_lhs lhs
-                then false
-                else res)
-              true lhslist
-        | Dba.Instr.Nondet (lhs, _, _) ->
-            not (lhs_mustkilled_by_lhs lhs temp_lhs)
+        | Dba.Instr.Nondet (lhs, _) -> not (lhs_mustkilled_by_lhs lhs temp_lhs)
         | Dba.Instr.Undef (lhs, _) -> not (lhs_mustkilled_by_lhs lhs temp_lhs)
-        | Dba.Instr.Malloc (lhs, expr, _) ->
-            (not (lhs_mustkilled_by_lhs lhs temp_lhs))
-            && not (lhs_mayused_in_expr temp_lhs expr)
-        | Dba.Instr.Free (expr, _off) -> not (lhs_mayused_in_expr temp_lhs expr)
-        | Dba.Instr.Print (printarglist, _off) ->
-            List.fold_left
-              (fun res elem ->
-                match elem with
-                | Dba.Exp e ->
-                    if lhs_mayused_in_expr temp_lhs e then false else res
-                | _ -> res)
-              true printarglist
       in
       s && res)
     insts true
@@ -149,38 +112,10 @@ let nb_used_in_block temp_lhs insts =
         | Dba.Instr.Assert (c, _)
         | Dba.Instr.Assume (c, _) ->
             if lhs_mayused_in_expr temp_lhs c then nb + 1 else nb
-        | Dba.Instr.NondetAssume (lhslist, c, _) ->
-            nb
-            + List.fold_left
-                (fun res lhs ->
-                  if
-                    lhs_mustkilled_by_lhs lhs temp_lhs
-                    || lhs_mayused_in_expr temp_lhs c
-                    || lhs_mayused_in_lhs temp_lhs lhs
-                  then res + 1
-                  else res)
-                0 lhslist
-        | Dba.Instr.Nondet (lhs, _, _) ->
+        | Dba.Instr.Nondet (lhs, _) ->
             if lhs_mustkilled_by_lhs lhs temp_lhs then nb + 1 else nb
         | Dba.Instr.Undef (lhs, _) ->
-            if lhs_mustkilled_by_lhs lhs temp_lhs then nb + 1 else nb
-        | Dba.Instr.Malloc (lhs, expr, _) ->
-            if
-              lhs_mustkilled_by_lhs lhs temp_lhs
-              || lhs_mayused_in_expr temp_lhs expr
-            then nb + 1
-            else nb
-        | Dba.Instr.Free (expr, _off) ->
-            if lhs_mayused_in_expr temp_lhs expr then nb + 1 else nb
-        | Dba.Instr.Print (printarglist, _off) ->
-            nb
-            + List.fold_left
-                (fun res elem ->
-                  match elem with
-                  | Dba.Exp e ->
-                      if lhs_mayused_in_expr temp_lhs e then res + 1 else res
-                  | _ -> res)
-                0 printarglist)
+            if lhs_mustkilled_by_lhs lhs temp_lhs then nb + 1 else nb)
       insts 0
   with Used_tmp nb -> nb
 
@@ -192,12 +127,12 @@ let rec replace_lhs_in_expr tmp_lhs red_lhs expr =
       | Dba.(LValue.Var { name = name2; _ }) ->
           if name1 = name2 then Dba_types.Expr.of_lvalue red_lhs else expr
       | Dba.LValue.Restrict
-          ({ Dba.name = name2; _ }, { Interval.lo = i; Interval.hi = j }) ->
+          ({ name = name2; _ }, { Interval.lo = i; Interval.hi = j }) ->
           if name1 = name2 && i = 0 && j = size1 - 1 then
             Dba_types.Expr.of_lvalue red_lhs
           else expr
-      | Dba.LValue.Store (_size, _endian, expr) -> expr)
-  | Dba.Expr.Load (size1, endian1, e1) -> (
+      | Dba.LValue.Store (_size, _endian, _expr, _) -> expr)
+  | Dba.Expr.Load (size1, endian1, e1, array) -> (
       match tmp_lhs with
       | Dba.LValue.Var _ | Dba.LValue.Restrict _ -> expr
       | Dba.LValue.Store _ ->
@@ -206,7 +141,7 @@ let rec replace_lhs_in_expr tmp_lhs red_lhs expr =
           else
             let e = replace_lhs_in_expr tmp_lhs red_lhs e1 in
             let sz1 = Size.Byte.create size1 in
-            Dba.Expr.load sz1 endian1 e)
+            Dba.Expr.load sz1 endian1 e ?array)
   | Dba.Expr.Cst _ -> expr
   | Dba.Expr.Unary (uop, e) -> unary uop (replace_lhs_in_expr tmp_lhs red_lhs e)
   | Dba.Expr.Binary (bop, e1, e2) ->
@@ -223,9 +158,11 @@ let replace_lhs_in_lhs tmp_lhs red_lhs lhs =
   else
     match lhs with
     | Dba.LValue.Var _ | Dba.LValue.Restrict _ -> lhs
-    | Dba.LValue.Store (size, endian, expr) ->
+    | Dba.LValue.Store (size, endian, expr, array) ->
         let size = Size.Byte.create size in
-        Dba.LValue.store size endian (replace_lhs_in_expr tmp_lhs red_lhs expr)
+        Dba.LValue.store size endian
+          (replace_lhs_in_expr tmp_lhs red_lhs expr)
+          ?array
 
 let replace lhs_red lhs_temp insts block =
   let open Dba.Instr in
@@ -238,7 +175,7 @@ let replace lhs_red lhs_temp insts block =
           assign lhs e id
       | Dba.Instr.DJump (e, tag) ->
           let e = replace_lhs_in_expr lhs_temp lhs_red e in
-          dynamic_jump e ?tag
+          dynamic_jump e ~tag
       | Dba.Instr.If (cond, id1, id2) ->
           let cond = replace_lhs_in_expr lhs_temp lhs_red cond in
           ite cond id1 id2
@@ -248,38 +185,12 @@ let replace lhs_red lhs_temp insts block =
       | Dba.Instr.Assume (cond, id) ->
           let cond = replace_lhs_in_expr lhs_temp lhs_red cond in
           assume cond id
-      | Dba.Instr.NondetAssume (lhslist, cond, id) ->
-          let lhslist =
-            List.fold_left
-              (fun res lhs -> replace_lhs_in_lhs lhs_temp lhs_red lhs :: res)
-              [] lhslist
-          in
-          let cond = replace_lhs_in_expr lhs_temp lhs_red cond in
-          non_deterministic_assume lhslist cond id
-      | Dba.Instr.Nondet (lhs, region, id) ->
+      | Dba.Instr.Nondet (lhs, id) ->
           let lhs = replace_lhs_in_lhs lhs_temp lhs_red lhs in
-          non_deterministic lhs ~region id
+          non_deterministic lhs id
       | Dba.Instr.Undef (lhs, id) ->
           let lhs = replace_lhs_in_lhs lhs_temp lhs_red lhs in
           undefined lhs id
-      | Dba.Instr.Malloc (lhs, e, id) ->
-          let lhs = replace_lhs_in_lhs lhs_temp lhs_red lhs in
-          let e = replace_lhs_in_expr lhs_temp lhs_red e in
-          malloc lhs e id
-      | Dba.Instr.Free (e, id) ->
-          let e = replace_lhs_in_expr lhs_temp lhs_red e in
-          free e id
-      | Dba.Instr.Print (printarglist, id) ->
-          let printarglist =
-            List.fold_left
-              (fun res elem ->
-                match elem with
-                | Dba.Exp e ->
-                    Dba.Exp (replace_lhs_in_expr lhs_temp lhs_red e) :: res
-                | i -> i :: res)
-              [] printarglist
-          in
-          print printarglist id
       | _ -> ik
     in
     Dba_types.Caddress.Map.add addr (instr, opcode) block
@@ -356,9 +267,9 @@ module Constant_propagation = struct
         match Basic_types.String.Map.find v.name env with
         | bv -> Expr.constant bv
         | exception Not_found -> e)
-    | Dba.Expr.Load (sz, en, e) ->
+    | Dba.Expr.Load (sz, en, e, array) ->
         let sz = Size.Byte.create sz in
-        Expr.load sz en (eval_expr env e)
+        Expr.load sz en (eval_expr env e) ?array
     | Dba.Expr.Cst _ as e -> e
     | Dba.Expr.Unary (uop, e) -> Expr.unary uop (eval_expr env e)
     | Dba.Expr.Binary (bop, e1, e2) ->
@@ -369,16 +280,12 @@ module Constant_propagation = struct
   let eval_instruction penv i =
     match i with
     | Dba.Instr.Assign (lv, e, id) -> Instr.assign lv (eval_expr penv e) id
-    | Dba.Instr.DJump (e, tag) -> Instr.dynamic_jump ?tag (eval_expr penv e)
+    | Dba.Instr.DJump (e, tag) -> Instr.dynamic_jump ~tag (eval_expr penv e)
     | Dba.Instr.If (c, jt, id) -> Instr.ite (eval_expr penv c) jt id
     | Dba.Instr.Assert (c, id) -> Instr._assert (eval_expr penv c) id
     | Dba.Instr.Assume (c, id) -> Instr.assume (eval_expr penv c) id
-    | Dba.Instr.NondetAssume (lvs, c, id) ->
-        Instr.non_deterministic_assume lvs (eval_expr penv c) id
-    | Dba.Instr.Malloc (lv, e, id) -> Instr.malloc lv (eval_expr penv e) id
-    | Dba.Instr.Free (e, id) -> Instr.free (eval_expr penv e) id
-    | ( Dba.Instr.Print _ | Dba.Instr.Undef _ | Dba.Instr.Nondet _
-      | Dba.Instr.Stop _ | Dba.Instr.SJump _ ) as instr ->
+    | ( Dba.Instr.Undef _ | Dba.Instr.Nondet _ | Dba.Instr.Stop _
+      | Dba.Instr.SJump _ ) as instr ->
         instr
 
   let gather_propagations ?(env = Env.empty) block =
@@ -404,33 +311,25 @@ module Constant_propagation = struct
         | None -> env
         | Some i -> (
             match i with
-            | Dba.Instr.Assign
-                (Dba.LValue.Var { Dba.name; _ }, Dba.Expr.Cst v, idx') ->
+            | Dba.Instr.Assign (Dba.LValue.Var { name; _ }, Dba.Expr.Cst v, idx')
+              ->
                 loop (Env.add name v env) idx'
             | Dba.Instr.If (_, Dba.JInner idx1, idx2) ->
                 loop (loop env idx1) idx2
-            | Dba.Instr.Nondet (lv, _, id) | Dba.Instr.Malloc (lv, _, id) ->
-                loop (remove lv env) id
-            | Dba.Instr.NondetAssume (lvals, _, id) ->
-                (* Let's be over-cautious in this case and treat all variables as
-                   non-constants *)
-                let env' = List.fold_left (fun e v -> remove v e) env lvals in
-                loop env' id
+            | Dba.Instr.Nondet (lv, id) -> loop (remove lv env) id
             | Dba.Instr.Assert (_, id)
             | Dba.Instr.Assume (_, id)
             | Dba.Instr.Undef (_, id)
             | Dba.Instr.Assign (_, _, id)
             | Dba.Instr.SJump (Dba.JInner id, _)
-            | Dba.Instr.If (_, Dba.JOuter _, id)
-            | Dba.Instr.Free (_, id)
-            | Dba.Instr.Print (_, id) ->
+            | Dba.Instr.If (_, Dba.JOuter _, id) ->
                 loop env id
             | Dba.Instr.SJump (Dba.JOuter _, _)
             | Dba.Instr.DJump _ | Dba.Instr.Stop _ ->
                 env))
       else env
     in
-    ignore (loop env Dhunk.(start block |> Node.id));
+    ignore (loop env Dhunk.(start block));
     envs
 
   let do_propagations block propagation_envs =

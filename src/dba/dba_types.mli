@@ -29,14 +29,6 @@ type instruction_sequence = (Dba.address * Dba.Instr.t) list
 
 module Call_stack : COMPARABLE with type t = (Dba.address * Dba.address) list
 
-module Region : sig
-  include Collection with type t = Dba.region
-
-  val malloc : int -> t
-
-  include PRINTABLE with type t := Dba.region
-end
-
 (** {2 Dba address / Code address } *)
 
 (** A DBA instruction is uniquely located at an address + label/id
@@ -90,18 +82,6 @@ module AddressStack : sig
   include Collection with type t := t
 end
 
-module Rights : sig
-  type action = R | W | X
-
-  include Map.S with type key = action * Dba.region
-
-  val find_read_right : Dba.region -> 'a t -> 'a
-
-  val find_write_right : Dba.region -> 'a t -> 'a
-
-  val find_exec_right : Dba.region -> 'a t -> 'a
-end
-
 (** {2 DBA AST modules} *)
 
 module Expr : sig
@@ -109,7 +89,7 @@ module Expr : sig
 
   include PRINTABLE with type t := t
 
-  val var : string -> Size.Bit.t -> Dba.VarTag.t -> t
+  val var : string -> Size.Bit.t -> Dba.Var.Tag.t -> t
   (** {6 Constructors } *)
 
   val flag : ?bits:Size.Bit.t -> string -> t
@@ -230,10 +210,10 @@ module Instruction : sig
 end
 
 module Declarations : sig
-  type t = (Dba.size * Dba.VarTag.t) Basic_types.String.Map.t
+  type t = (Dba.size * Dba.Var.Tag.t) Basic_types.String.Map.t
   (** A DBA declaration has a name, a size in bits and some optional tags *)
 
-  val of_list : (string * Dba.size * Dba.VarTag.t) list -> t
+  val of_list : (string * Dba.size * Dba.Var.Tag.t) list -> t
 end
 
 module Statement : sig
@@ -267,7 +247,6 @@ type permissions = Dba.Expr.t * (read_perm * write_perm * exec_perm)
 type program = {
   start_address : Dba.address;
   declarations : Declarations.t;
-  permissions : permissions list Region.Map.t * Dba.Expr.t Rights.t;
   initializations : Dba.Instr.t list;
   instructions : dbainstrmap;
 }

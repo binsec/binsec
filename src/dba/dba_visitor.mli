@@ -43,8 +43,6 @@ class type inplace_visitor_t =
 
     method visit_extu : Dba.Expr.t -> Dba.size -> unit
 
-    method visit_free : Dba.Expr.t -> unit
-
     method visit_if : Dba.Expr.t -> Dba.id Dba.jump_target -> Dba.id -> unit
 
     method visit_instrkind : Dba.Instr.t -> unit
@@ -54,33 +52,31 @@ class type inplace_visitor_t =
     method visit_lhs : Dba.LValue.t -> unit
 
     method visit_lhs_var :
-      string -> Dba.size -> Dba.id -> Dba.id -> Dba.VarTag.t -> unit
+      string -> Dba.size -> Dba.id -> Dba.id -> Dba.Var.Tag.t -> unit
 
-    method visit_load : Dba.size -> Machine.endianness -> Dba.Expr.t -> unit
+    method visit_load :
+      Dba.size -> Machine.endianness -> Dba.Expr.t -> string option -> unit
 
     method visit_local_if : Dba.Expr.t -> Dba.id -> Dba.id -> unit
 
-    method visit_malloc : Dba.LValue.t -> Dba.Expr.t -> unit
-
     method visit_nondet : Dba.LValue.t -> unit
-
-    method visit_nondet_assume : Dba.LValue.t list -> Dba.Expr.t -> unit
 
     method visit_remote_if : Dba.Expr.t -> Dba.address -> Dba.id -> unit
 
     method visit_restrict : Dba.Expr.t -> Dba.id -> Dba.id -> unit
 
-    method visit_sjump : Dba.id Dba.jump_target -> Dba.tag option -> unit
+    method visit_sjump : Dba.id Dba.jump_target -> Dba.tag -> unit
 
     method visit_stop : Dba.state option -> unit
 
-    method visit_store : Dba.size -> Machine.endianness -> Dba.Expr.t -> unit
+    method visit_store :
+      Dba.size -> Machine.endianness -> Dba.Expr.t -> string option -> unit
 
     method visit_unary : Dba.Unary_op.t -> Dba.Expr.t -> unit
 
     method visit_undef : Dba.LValue.t -> unit
 
-    method visit_var : string -> Dba.size -> Dba.VarTag.t -> unit
+    method visit_var : string -> Dba.size -> Dba.Var.Tag.t -> unit
   end
 
 class dba_inplace_visitor : inplace_visitor_t

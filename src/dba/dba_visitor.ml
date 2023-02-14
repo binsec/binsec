@@ -43,8 +43,6 @@ class type inplace_visitor_t =
 
     method visit_extu : Dba.Expr.t -> Dba.size -> unit
 
-    method visit_free : Dba.Expr.t -> unit
-
     method visit_if : Dba.Expr.t -> Dba.id Dba.jump_target -> Dba.id -> unit
 
     method visit_instrkind : Dba.Instr.t -> unit
@@ -54,33 +52,31 @@ class type inplace_visitor_t =
     method visit_lhs : Dba.LValue.t -> unit
 
     method visit_lhs_var :
-      string -> Dba.size -> Dba.id -> Dba.id -> Dba.VarTag.t -> unit
+      string -> Dba.size -> Dba.id -> Dba.id -> Dba.Var.Tag.t -> unit
 
-    method visit_load : Dba.size -> Machine.endianness -> Dba.Expr.t -> unit
+    method visit_load :
+      Dba.size -> Machine.endianness -> Dba.Expr.t -> string option -> unit
 
     method visit_local_if : Dba.Expr.t -> Dba.id -> Dba.id -> unit
 
-    method visit_malloc : Dba.LValue.t -> Dba.Expr.t -> unit
-
     method visit_nondet : Dba.LValue.t -> unit
-
-    method visit_nondet_assume : Dba.LValue.t list -> Dba.Expr.t -> unit
 
     method visit_remote_if : Dba.Expr.t -> Dba.address -> Dba.id -> unit
 
     method visit_restrict : Dba.Expr.t -> Dba.id -> Dba.id -> unit
 
-    method visit_sjump : Dba.id Dba.jump_target -> Dba.tag option -> unit
+    method visit_sjump : Dba.id Dba.jump_target -> Dba.tag -> unit
 
     method visit_stop : Dba.state option -> unit
 
-    method visit_store : Dba.size -> Machine.endianness -> Dba.Expr.t -> unit
+    method visit_store :
+      Dba.size -> Machine.endianness -> Dba.Expr.t -> string option -> unit
 
     method visit_unary : Dba.Unary_op.t -> Dba.Expr.t -> unit
 
     method visit_undef : Dba.LValue.t -> unit
 
-    method visit_var : string -> Dba.size -> Dba.VarTag.t -> unit
+    method visit_var : string -> Dba.size -> Dba.Var.Tag.t -> unit
   end
 
 class dba_inplace_visitor : inplace_visitor_t =
@@ -89,10 +85,10 @@ class dba_inplace_visitor : inplace_visitor_t =
     method visit_expr (expr : Dba.Expr.t) : unit =
       match expr with
       | Dba.Expr.Cst bv -> self#visit_cst bv
-      | Dba.(Expr.Var { name; size = sz; info = opts }) ->
+      | Dba.(Expr.Var { name; size = sz; info = opts; _ }) ->
           self#visit_var name sz opts
-      | Dba.Expr.Load (sz, en, expr) ->
-          self#visit_load sz en expr;
+      | Dba.Expr.Load (sz, en, expr, arr) ->
+          self#visit_load sz en expr arr;
           self#visit_expr expr
       | Dba.Expr.Unary (Dba.Unary_op.Uext n, expr) ->
           self#visit_extu expr n;
@@ -121,12 +117,12 @@ class dba_inplace_visitor : inplace_visitor_t =
 
     method visit_lhs (lhs : Dba.LValue.t) : unit =
       match lhs with
-      | Dba.(LValue.Var { name; size = sz; info = opts }) ->
+      | Dba.(LValue.Var { name; size = sz; info = opts; _ }) ->
           self#visit_lhs_var name sz 0 (sz - 1) opts
       | Dba.LValue.Restrict (v, { Interval.lo; Interval.hi }) ->
-          self#visit_lhs_var v.Dba.name v.Dba.size lo hi Dba.VarTag.Empty
-      | Dba.LValue.Store (sz, en, e) ->
-          self#visit_store sz en e;
+          self#visit_lhs_var v.name v.size lo hi v.info
+      | Dba.LValue.Store (sz, en, e, arr) ->
+          self#visit_store sz en e arr;
           self#visit_expr e
 
     method visit_instrkind (inst : Dba.Instr.t) : unit =
@@ -146,12 +142,7 @@ class dba_inplace_visitor : inplace_visitor_t =
           | Dba.JInner off1 -> self#visit_local_if cond off1 off2
           | Dba.JOuter addr -> self#visit_remote_if cond addr off2)
       | Dba.Instr.Stop opts -> self#visit_stop opts
-      | Dba.Instr.Print (_, _) -> ()
-      | Dba.Instr.NondetAssume (l, cond, _) ->
-          self#visit_nondet_assume l cond;
-          List.iter self#visit_lhs l;
-          self#visit_cond cond
-      | Dba.Instr.Nondet (lhs, _, _) ->
+      | Dba.Instr.Nondet (lhs, _) ->
           self#visit_nondet lhs;
           self#visit_lhs lhs
       | Dba.Instr.Assume (bcond, _) ->
@@ -160,13 +151,6 @@ class dba_inplace_visitor : inplace_visitor_t =
       | Dba.Instr.Assert (bcond, _) ->
           self#visit_assert bcond;
           self#visit_cond bcond
-      | Dba.Instr.Malloc (lhs, bexpr, _) ->
-          self#visit_malloc lhs bexpr;
-          self#visit_lhs lhs;
-          self#visit_expr bexpr
-      | Dba.Instr.Free (bexpr, _) ->
-          self#visit_free bexpr;
-          self#visit_expr bexpr
       | Dba.Instr.Undef (blhs, _) ->
           self#visit_undef blhs;
           self#visit_lhs blhs
@@ -179,7 +163,7 @@ class dba_inplace_visitor : inplace_visitor_t =
     method visit_var (_name : string) (_sz : Dba.size) _opts : unit = ()
 
     method visit_load (_sz : Dba.size) (_en : Machine.endianness)
-        (_expr : Dba.Expr.t) =
+        (_expr : Dba.Expr.t) (_arr : string option) =
       ()
 
     method visit_unary (_uop : Dba.Unary_op.t) (_expr : Dba.Expr.t) : unit = ()
@@ -202,12 +186,12 @@ class dba_inplace_visitor : inplace_visitor_t =
       ()
 
     method visit_store (_size : Dba.size) (_en : Machine.endianness)
-        (_expr : Dba.Expr.t) : unit =
+        (_expr : Dba.Expr.t) (_arr : string option) : unit =
       ()
 
     method visit_assign (_lhs : Dba.LValue.t) (_expr : Dba.Expr.t) : unit = ()
 
-    method visit_sjump _addr (_opts : Dba.tag option) : unit = ()
+    method visit_sjump _addr (_tag : Dba.tag) : unit = ()
 
     method visit_djump (_expr : Dba.Expr.t) : unit = ()
 
@@ -219,17 +203,11 @@ class dba_inplace_visitor : inplace_visitor_t =
 
     method visit_stop _state_option = ()
 
-    method visit_nondet_assume _lvalues _ = ()
-
     method visit_nondet (_lhs : Dba.LValue.t) : unit = ()
 
     method visit_assume _cond : unit = ()
 
     method visit_assert _cond : unit = ()
-
-    method visit_malloc (_lhs : Dba.LValue.t) (_expr : Dba.Expr.t) : unit = ()
-
-    method visit_free (_expr : Dba.Expr.t) : unit = ()
 
     method visit_undef _lvalue = ()
   end

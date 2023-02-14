@@ -19,10 +19,4 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Sse_types
-
-module Make (E : EXPLORATION_STATISTICS) (Q : QUERY_STATISTICS) = struct
-  let init () = ()
-
-  let release () = ()
-end
+include Cli.S

@@ -211,11 +211,12 @@ Names in script file are not case-sensitive. So writing `eax` or `EAX` behaves t
 <script> ::= (<assign> | <pragma> | <goal>) ..
 <pragma> ::= "starting" "from" <e> ["with" <chunk> "end"]
            | "starting" "from" "core" ["with" <chunk> "end"]
+           | "import" "<" <name> ">" ["," "<" <name> ">"] "from" <file> 
            | "assume" <e> 
            | "load" <mem> "from" "file" 
            | "load" "section" <section> "from" "file" 
-           | "load" "sections" <section> ["," <section> ..] "from" "file" 
-           | "replace" <e> "by" <chunk> 
+           | "load" "sections" <section> ["," <section> ..] "from" "file"
+           | "replace" <e> "by" <chunk> "end"
 <goal> ::= "reach" <e> [<n> "times"] ["such" "that" <e>] ["then" <action> ["and" <action> ..]]
            | "cut" "at" <e> ["if" <e>]
            | "at" <e> ("assume" | "assert") <e>
@@ -224,6 +225,7 @@ Names in script file are not case-sensitive. So writing `eax` or `EAX` behaves t
            | "print" "model"
            | "print" [<format>] <e>
            | "print" "ascii" "stream" <var>
+           | "print" "c" "string" <array>
 <format> ::= "bin" | "dec" | "hex" | "ascii"
 ```
 

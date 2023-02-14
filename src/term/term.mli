@@ -73,52 +73,46 @@ module Bv : sig
   val extract : lo:size -> hi:size -> t -> t
 end
 
-type cst = C
-
-and loc = L
-
-and exp = E
-
-type (_, _, 'a, 'b) t = private
+type (_, 'a, 'b) t = private
   | Var : {
       hash : int;
       size : size;
       name : string;
       label : 'a;
     }
-      -> (exp, _, 'a, _) t
+      -> ([< `Var | `Loc | `Exp ], 'a, _) t
   | Load : {
       hash : int;
       len : size;
       dir : endianness;
-      addr : (exp, exp, 'a, 'b) t;
+      addr : ([ `Exp ], 'a, 'b) t;
       label : 'b;
     }
-      -> (exp, _, 'a, 'b) t
-  | Cst : Bitvector.t -> (_, exp, _, _) t
+      -> ([< `Mem | `Loc | `Exp ], 'a, 'b) t
+  | Cst : Bitvector.t -> ([< `Cst | `Exp ], _, _) t
   | Unary : {
       hash : int;
       size : size;
       f : unary operator;
-      x : (exp, exp, 'a, 'b) t;
+      x : ([ `Exp ], 'a, 'b) t;
     }
-      -> (exp, exp, 'a, 'b) t
+      -> ([ `Exp ], 'a, 'b) t
   | Binary : {
       hash : int;
       size : size;
       f : binary operator;
-      x : (exp, exp, 'a, 'b) t;
-      y : (exp, exp, 'a, 'b) t;
+      x : ([ `Exp ], 'a, 'b) t;
+      y : ([ `Exp ], 'a, 'b) t;
     }
-      -> (exp, exp, 'a, 'b) t
+      -> ([ `Exp ], 'a, 'b) t
   | Ite : {
       hash : int;
       size : size;
-      c : (exp, exp, 'a, 'b) t;
-      t : (exp, exp, 'a, 'b) t;
-      e : (exp, exp, 'a, 'b) t;
+      c : ([ `Exp ], 'a, 'b) t;
+      t : ([ `Exp ], 'a, 'b) t;
+      e : ([ `Exp ], 'a, 'b) t;
     }
-      -> (exp, exp, 'a, 'b) t
+      -> ([ `Exp ], 'a, 'b) t
 
 module type S = sig
   type a
@@ -163,48 +157,48 @@ module type S = sig
     | Sge : binary op
     | Sgt : binary op
 
-  type ('k, 'l, 'a, 'b) term = ('k, 'l, 'a, 'b) t = private
+  type ('k, 'a, 'b) term = ('k, 'a, 'b) t = private
     | Var : {
         hash : int;
         size : size;
         name : string;
         label : 'a;
       }
-        -> (exp, _, 'a, _) term
+        -> ([< `Var | `Loc | `Exp ], 'a, _) term
     | Load : {
         hash : int;
         len : size;
         dir : endianness;
-        addr : (exp, exp, 'a, 'b) term;
+        addr : ([ `Exp ], 'a, 'b) term;
         label : 'b;
       }
-        -> (exp, _, 'a, 'b) term
-    | Cst : Bitvector.t -> (_, exp, _, _) term
+        -> ([< `Mem | `Loc | `Exp ], 'a, 'b) term
+    | Cst : Bitvector.t -> ([< `Cst | `Exp ], _, _) term
     | Unary : {
         hash : int;
         size : size;
         f : unary operator;
-        x : (exp, exp, 'a, 'b) term;
+        x : ([ `Exp ], 'a, 'b) term;
       }
-        -> (exp, exp, 'a, 'b) term
+        -> ([ `Exp ], 'a, 'b) term
     | Binary : {
         hash : int;
         size : size;
         f : binary operator;
-        x : (exp, exp, 'a, 'b) term;
-        y : (exp, exp, 'a, 'b) term;
+        x : ([ `Exp ], 'a, 'b) term;
+        y : ([ `Exp ], 'a, 'b) term;
       }
-        -> (exp, exp, 'a, 'b) term
+        -> ([ `Exp ], 'a, 'b) term
     | Ite : {
         hash : int;
         size : size;
-        c : (exp, exp, 'a, 'b) term;
-        t : (exp, exp, 'a, 'b) term;
-        e : (exp, exp, 'a, 'b) term;
+        c : ([ `Exp ], 'a, 'b) term;
+        t : ([ `Exp ], 'a, 'b) term;
+        e : ([ `Exp ], 'a, 'b) term;
       }
-        -> (exp, exp, 'a, 'b) term
+        -> ([ `Exp ], 'a, 'b) term
 
-  type t = (exp, exp, a, b) term
+  type t = ([ `Exp ], a, b) term
 
   (** {2 Constructors} *)
 
@@ -319,6 +313,8 @@ module type S = sig
 
   val addi : t -> int -> t
 
+  val addz : t -> Z.t -> t
+
   (** {4 Utils} **)
 
   val hash : t -> int
@@ -333,22 +329,36 @@ module type S = sig
   (** [sizeof t] returns the bit size of [t] in constant time.
   *)
 
-  val map : ('a -> a) -> ('b -> b) -> (_, _, 'a, 'b) term -> t
+  val map :
+    (string -> int -> 'a -> t) ->
+    (int -> Machine.endianness -> t -> 'b -> t) ->
+    (_, 'a, 'b) term ->
+    t
 end
 
 module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
   S with type a := A.t and type b := B.t
 
-val to_exp : (_, _, 'a, 'b) t -> (exp, exp, 'a, 'b) t
+val sizeof : (_, _, _) t -> int
+
+val to_exp : (_, 'a, 'b) t -> ([ `Exp ], 'a, 'b) t
 (** {4 Conversion} **)
 
-val to_loc : (_, _, 'a, 'b) t -> (exp, loc, 'a, 'b) t option
+val to_var : (_, 'a, 'b) t -> ([ `Var ], 'a, 'b) t option
 
-val to_loc_exn : (_, _, 'a, 'b) t -> (exp, loc, 'a, 'b) t
+val to_var_exn : (_, 'a, 'b) t -> ([ `Var ], 'a, 'b) t
 
-val to_cst : (_, _, _, _) t -> (cst, exp, _, _) t option
+val to_loc : (_, 'a, 'b) t -> ([ `Loc ], 'a, 'b) t option
 
-val to_cst_exn : (_, _, _, _) t -> (cst, exp, _, _) t
+val to_loc_exn : (_, 'a, 'b) t -> ([ `Loc ], 'a, 'b) t
+
+val to_mem : (_, 'a, 'b) t -> ([ `Mem ], 'a, 'b) t option
+
+val to_mem_exn : (_, 'a, 'b) t -> ([ `Mem ], 'a, 'b) t
+
+val to_cst : (_, _, _) t -> ([ `Cst ], _, _) t option
+
+val to_cst_exn : (_, _, _) t -> ([ `Cst ], _, _) t
 
 val pp : Format.formatter -> _ t -> unit
 (** {5 Debug} **)

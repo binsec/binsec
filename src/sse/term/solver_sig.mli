@@ -26,12 +26,6 @@ module type S = sig
 
   type term
 
-  type value
-
-  type memory
-
-  type access = Select of term * int | Store of term
-
   val put : Suid.t -> Expr.t list -> unit
 
   val set_memory : addr:Z.t -> Z.t -> unit
@@ -44,15 +38,9 @@ module type S = sig
 
   val check_sat : unit -> result
 
-  val get_memory : unit -> memory * access Queue.t
+  val get_value : term -> Z.t
 
-  val get_value : term -> value
-
-  val assignment : value -> Z.t
-
-  val get_at : memory -> value -> Z.t
-
-  val succ : value -> value
+  val get_array : Memory.t -> (Z.t * char) array
 
   val close : unit -> unit
 end

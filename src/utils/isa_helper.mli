@@ -27,9 +27,7 @@ val get_defs : unit -> (string * Dba.LValue.t) list
     Meaningfull for x86 only for now.
 *)
 
-val core :
-  Loader_elf.Img.t ->
-  Virtual_address.t * (Dba.VarTag.t Dba.var * Dba.Expr.t) list
+val core : Loader_elf.Img.t -> Virtual_address.t * (Dba.Var.t * Dba.Expr.t) list
 (** [core img]
     read and translate the content of [NT_PRSTATUS] note into
     entrypoint and initialisation values.

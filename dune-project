@@ -4,7 +4,8 @@
 (generate_opam_files true)
 
 (name binsec)
-(version "0.6.3")
+
+(version "0.7.1")
 (maintainers "BINSEC <binsec@saxifrage.saclay.cea.fr>")
 (authors
   "Adel Djoudi"
@@ -67,7 +68,7 @@ An overview of some BINSEC features can be found in our SSPREW'17 tutorial.")
   bitwuzla)
  (conflicts
   (llvm (< 6.0.0))
-  (bitwuzla (< 1.0.1)))
+  (bitwuzla (< 1.0.4)))
  (tags
   ("binary code analysis"
     "symbolic execution"

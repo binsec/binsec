@@ -95,10 +95,11 @@ module Translate = struct
     | Var { name; size; _ } ->
         Smt_symbolic.State.get_bv name (Size.Bit.create size) symbolic_state
     | Cst bv -> (Formula.mk_bv_cst bv, symbolic_state)
-    | Load (bytes, _endianness, e) ->
+    | Load (bytes, _endianness, e, None) ->
         let smt_e, st = expr symbolic_state e in
         let mem = Smt_symbolic.State.get_memory st in
         (Formula.mk_select bytes mem smt_e, st)
+    | Load _ -> assert false
     | Binary (bop, lop, rop) as e ->
         Logger.debug ~level:6 "Translating binary %a"
           Dba_printer.Ascii.pp_bl_term e;
@@ -158,12 +159,13 @@ module Translate = struct
           | true, true -> logical_rval
         in
         (name, t, Formula.mk_bv_term rval, st)
-    | LValue.Store (sz, _, e) ->
+    | LValue.Store (sz, _, e, None) ->
         let mem = State.get_memory symbolic_state in
         let value = logical_rval in
         let index, st = expr symbolic_state e in
         let n, s, v = State.memory_term (Formula.mk_store sz mem index value) in
         (n, s, v, st)
+    | LValue.Store _ -> assert false
 
   let assign ?(wild = false) lval rval symstate =
     let logical_rval_base, st = expr symstate rval in

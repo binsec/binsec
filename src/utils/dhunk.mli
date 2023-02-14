@@ -30,14 +30,6 @@ type t
     instruction.
 *)
 
-module Node : sig
-  type t
-
-  val id : t -> int
-
-  val inst : t -> Dba.Instr.t option
-end
-
 val empty : t
 (** The one and only empty DBA hunk. Get it here! *)
 
@@ -55,12 +47,15 @@ val goto : Virtual_address.t -> t
 
 val length : t -> int
 
-val node : t -> int -> Node.t option
-
 val inst : t -> int -> Dba.Instr.t option
 
-val start : t -> Node.t
+val inst_exn : t -> int -> Dba.Instr.t
+
+val start : t -> int
 (** [start b] is the first index of block [b] *)
+
+val exits : t -> int list
+(** [exits b] are the instruction indexes which end the block [b] *)
 
 val copy : t -> t
 
@@ -86,15 +81,29 @@ val fold : ('a -> Dba.Instr.t -> 'a) -> 'a -> t -> 'a
 
 val for_all : (Dba.Instr.t -> bool) -> t -> bool
 
+val unlink : t -> int -> unit
+(** [unlink dh i] skips the [i]th instruction.
+    Its predecessors go to its successor.
+
+    @raise [Invalid_argument] if [inst dh i] has not exactly one successor. *)
+
 val export_and_view : ?cmd:string -> t -> unit
 (** [view dh] Visualize dot-rendered DBA hunk [dh] using [cmd].
 
     Default value for [cmd] is firefox.
 *)
 
-val pred : t -> Node.t -> Node.t list
+val pred : t -> int -> int list
 
-val succ : t -> Node.t -> Node.t list
+val succ : t -> int -> int list
+
+val optimize : ?inplace:bool -> t -> t
+(** [optimize dh] Performs some "compiler" optimizations
+    and return the simplified block.
+
+    @param inplace Directly modify the block without making a copy.
+                   Default: [false].
+*)
 
 include Sigs.PRINTABLE with type t := t
 
@@ -119,16 +128,6 @@ module Check : sig
 
       @return [true] if that is the case.
   *)
-end
-
-module Simplify : sig
-  val remove_gotos : t -> unit
-  (** [remove_gotos d] removes static jump instruction which have 1 predecessor
-      and 1 successor
-  *)
-
-  val run : t -> unit
-  (** [run d] does all simplifications for dhunk [d]*)
 end
 
 val to_stmts : t -> Virtual_address.t -> Dba_types.Statement.t list

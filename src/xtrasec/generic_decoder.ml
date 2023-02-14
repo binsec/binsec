@@ -89,8 +89,9 @@ module Decode_Expr (I : Expr_Input) = struct
         | Unary_op.Restrict { Interval.lo; Interval.hi } ->
             I.Binary.bextract ~lo ~hi ~oldsize:(Dba.Expr.size_of e1) v1)
     | Expr.Var { name = var; size; _ } -> I.get_var ~size var
-    | Expr.Load (size, endianness, e) ->
+    | Expr.Load (size, endianness, e, None) ->
         expr e >>= fun address -> I.load ~size:(size * 8) endianness address
+    | Expr.Load _ -> assert false
     | Expr.Ite (c, e1, e2) ->
         cond c >>= fun vc ->
         expr e1 >>= fun v1 ->
@@ -152,9 +153,10 @@ end = struct
             S.Binary.bconcat ~size1:(size - hi) ~size2:hi pold v state
         in
         S.set_var ~size name v state
-    | LValue.Store (size, endianness, address) ->
+    | LValue.Store (size, endianness, address, None) ->
         let vaddress, state = EDecode.expr address state in
         S.store ~size:(size * 8) endianness vaddress value state
+    | LValue.Store _ -> assert false
 
   let instruction state instr =
     let open! Generic_decoder_sig in
@@ -179,30 +181,14 @@ end = struct
     | Assume (cond, id) | Assert (cond, id) ->
         let v, state = EDecode.cond cond state in
         (JKAssume (v, Static (JInner id)), state)
-    | Nondet (lhs, _, id) ->
+    | Nondet (lhs, id) ->
         let size = assert false in
         let v, state = S.unknown ~size state in
         let state = write_lhs state v lhs in
         (JKJump (Static (JInner id)), state)
-    | NondetAssume (l, cond, id) ->
-        let size = assert false in
-        let acc, state =
-          List.fold_left
-            (fun (acc, state) _lhs ->
-              let v, state = S.unknown ~size state in
-              (v :: acc, state))
-            ([], state) l
-        in
-        let values = List.rev acc in
-        let state = List.fold_left2 write_lhs state values l in
-        let cond, state = EDecode.cond cond state in
-        (JKAssume (cond, Static (JInner id)), state)
     | Undef (lhs, id) ->
         let size = Dba_types.LValue.unsafe_bitsize lhs in
         let v, state = S.undef ~size state in
         let state = write_lhs state v lhs in
         (JKJump (Static (JInner id)), state)
-    | Malloc _ -> assert false
-    | Free _ -> assert false
-    | Print _ -> assert false
 end

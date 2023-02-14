@@ -102,61 +102,12 @@ module Call_stack = struct
           callee
 end
 
-(* Region *)
-module ComparableRegion = struct
-  type t = Dba.region
-
-  let compare r1 r2 =
-    match (r1, r2) with
-    | `Constant, `Constant -> 0
-    | `Stack, `Stack -> 0
-    | `Malloc ((id1, _), _), `Malloc ((id2, _), _) -> compare id1 id2
-    | `Constant, _ -> 1
-    | `Stack, `Constant -> -1
-    | `Stack, _ -> 1
-    | `Malloc _, _ -> -1
-end
-
-module Region = struct
-  include Basic_types.Collection_make.Default (ComparableRegion)
-
-  let malloc _sz =
-    let a = Caddress.block_start (Virtual_address.create (-1)) in
-    `Malloc ((-1, a), Z.zero)
-
-  let pp ppf = function
-    | `Constant -> Format.fprintf ppf "constant"
-    | `Malloc _ -> Format.fprintf ppf "heap"
-    | `Stack -> Format.fprintf ppf "stack"
-end
-
-(* Rights *)
-module Rights = struct
-  type action = R | W | X
-
-  include Map.Make (struct
-    type t = action * Dba.region
-
-    let compare (a1, b1) (a2, b2) =
-      let i = Region.compare b1 b2 in
-      if i = 0 then compare a1 a2 else i
-  end)
-
-  let find_right right v m = find (right, v) m
-
-  let find_read_right v m = find_right R v m
-
-  let find_write_right v m = find_right W v m
-
-  let find_exec_right v m = find_right X v m
-end
-
 module Expr : sig
   include Sigs.PRINTABLE with type t := Dba.Expr.t
 
   type t = Dba.Expr.t
 
-  val var : string -> Size.Bit.t -> Dba.VarTag.t -> t
+  val var : string -> Size.Bit.t -> Dba.Var.Tag.t -> t
 
   val flag : ?bits:Size.Bit.t -> string -> t
 
@@ -192,7 +143,8 @@ end = struct
     let sz = Size.Bit.to_int nbits in
     Dba.Expr.var name sz ~tag
 
-  let flag ?(bits = Size.Bit.bits1) flagname = var flagname bits Dba.VarTag.Flag
+  let flag ?(bits = Size.Bit.bits1) flagname =
+    var flagname bits Dba.Var.Tag.Flag
 
   let temporary tempname nbits =
     let size = Size.Bit.to_int nbits in
@@ -222,12 +174,12 @@ end = struct
     | _ -> false
 
   let of_lvalue = function
-    | LValue.Var { name; size; info = tag } -> Expr.var name size ~tag
+    | LValue.Var v -> Expr.v v
     | LValue.Restrict (v, { Interval.lo = o1; Interval.hi = o2 }) ->
         Expr.restrict o1 o2 (Expr.var v.name v.size ~tag:v.info)
-    | LValue.Store (sz, endiannness, e) ->
+    | LValue.Store (sz, endiannness, e, array) ->
         let bysz = Size.Byte.create sz in
-        Expr.load bysz endiannness e
+        Expr.load bysz endiannness e ?array
 
   let is_zero = function Expr.Cst bv -> Bitvector.is_zeros bv | _ -> false
 
@@ -239,15 +191,15 @@ end = struct
 
   let rec variables = function
     | Dba.Expr.Cst _ -> Basic_types.String.Set.empty
-    | Dba.Expr.Unary (_, e) | Dba.Expr.Load (_, _, e) -> variables e
+    | Dba.Expr.Unary (_, e) | Dba.Expr.Load (_, _, e, _) -> variables e
     | Dba.Expr.Var { name; _ } -> Basic_types.String.Set.singleton name
     | Dba.Expr.Binary (_, e1, e2) | Dba.Expr.Ite (_, e1, e2) ->
         Basic_types.String.Set.union (variables e1) (variables e2)
 
   let rec temporaries = function
     | Dba.Expr.Cst _ -> Basic_types.String.Set.empty
-    | Dba.Expr.Unary (_, e) | Dba.Expr.Load (_, _, e) -> temporaries e
-    | Dba.Expr.Var { name; info = Dba.VarTag.Temp; _ } ->
+    | Dba.Expr.Unary (_, e) | Dba.Expr.Load (_, _, e, _) -> temporaries e
+    | Dba.Expr.Var { name; info = Dba.Var.Tag.Temp; _ } ->
         Basic_types.String.Set.singleton name
     | Dba.Expr.Var _ -> Basic_types.String.Set.empty
     | Dba.Expr.Binary (_, e1, e2) | Dba.Expr.Ite (_, e1, e2) ->
@@ -267,7 +219,7 @@ module LValue = struct
     let sz =
       match lval with
       | LValue.Var v -> v.size
-      | LValue.Store (size, _, _) -> 8 * size
+      | LValue.Store (size, _, _, _) -> 8 * size
       | LValue.Restrict (_, { Interval.lo; Interval.hi }) -> hi - lo + 1
     in
     Size.Bit.create sz
@@ -281,24 +233,24 @@ module LValue = struct
     | LValue.Store _ -> None
 
   let is_temporary = function
-    | LValue.Var { info = VarTag.Temp; _ } -> true
+    | LValue.Var { info = Var.Tag.Temp; _ } -> true
     | LValue.Var _ | LValue.Restrict _ | LValue.Store _ -> false
 
   let is_flag = function
-    | LValue.Var { info = VarTag.Flag; _ } -> true
+    | LValue.Var { info = Var.Tag.Flag; _ } -> true
     | LValue.Var _ | LValue.Restrict _ | LValue.Store _ -> false
 
   let variables = function
     | LValue.Var { name; _ } | LValue.Restrict ({ name; _ }, _) ->
         Basic_types.String.Set.singleton name
-    | LValue.Store (_, _, e) -> Expr.variables e
+    | LValue.Store (_, _, e, _) -> Expr.variables e
 
   let temporaries = function
-    | LValue.Var { name; info = VarTag.Temp; _ } ->
+    | LValue.Var { name; info = Var.Tag.Temp; _ } ->
         Basic_types.String.Set.singleton name
     | LValue.Var _ | LValue.Restrict _ -> Basic_types.String.Set.empty
     (* Restrict cannot be applied to temporaries : check that! *)
-    | LValue.Store (_, _, e) -> Expr.temporaries e
+    | LValue.Store (_, _, e, _) -> Expr.temporaries e
 end
 
 module ComparableAddressStack = struct
@@ -323,7 +275,7 @@ end
 type dbainstrmap = Dba.Instr.t Caddress.Map.t
 
 module Declarations = struct
-  type t = (Dba.size * Dba.VarTag.t) Basic_types.String.Map.t
+  type t = (Dba.size * Dba.Var.Tag.t) Basic_types.String.Map.t
 
   open Basic_types.String.Map
 
@@ -351,12 +303,8 @@ module Instruction = struct
     | If (c, jt, _) -> ite c jt id
     | Assert (c, _) -> _assert c id
     | Assume (c, _) -> assume c id
-    | NondetAssume (lvs, c, _) -> non_deterministic_assume lvs c id
-    | Nondet (lv, region, _) -> non_deterministic lv ~region id
+    | Nondet (lv, _) -> non_deterministic lv id
     | Undef (lv, _) -> undefined lv id
-    | Malloc (lv, e, _) -> malloc lv e id
-    | Free (e, _) -> free e id
-    | Print (ds, _) -> print ds id
     | Stop _ | SJump _ | DJump _ -> i
 
   let reloc =
@@ -368,14 +316,10 @@ module Instruction = struct
           ite c (Dba.Jump_target.inner (inner goto)) (inner id)
       | Assert (c, id) -> _assert c (inner id)
       | Assume (c, id) -> assume c (inner id)
-      | NondetAssume (lvs, c, id) -> non_deterministic_assume lvs c (inner id)
-      | Nondet (lv, region, id) -> non_deterministic lv ~region (inner id)
+      | Nondet (lv, id) -> non_deterministic lv (inner id)
       | Undef (lv, id) -> undefined lv (inner id)
-      | Malloc (lv, e, id) -> malloc lv e (inner id)
-      | Free (e, id) -> free e (inner id)
-      | Print (ds, id) -> print ds (inner id)
-      | SJump (Dba.JInner goto, tag) -> static_inner_jump ?tag (inner goto)
-      | SJump ((Dba.JOuter _ as j), tag) -> static_jump ?tag (outer j)
+      | SJump (Dba.JInner goto, tag) -> static_inner_jump ~tag (inner goto)
+      | SJump ((Dba.JOuter _ as j), tag) -> static_jump ~tag (outer j)
       | (DJump _ | Stop _) as i -> i
 
   let generic_reset_successors ~p ~f instr =
@@ -390,13 +334,9 @@ module Instruction = struct
     | If (c, jt, id) -> ite c (new_jt jt) (new_id id)
     | Assert (c, id) -> _assert c (new_id id)
     | Assume (c, id) -> assume c (new_id id)
-    | NondetAssume (lvs, c, id) -> non_deterministic_assume lvs c (new_id id)
-    | Nondet (lv, region, id) -> non_deterministic lv ~region (new_id id)
+    | Nondet (lv, id) -> non_deterministic lv (new_id id)
     | Undef (lv, id) -> undefined lv (new_id id)
-    | Malloc (lv, e, id) -> malloc lv e (new_id id)
-    | Free (e, id) -> free e (new_id id)
-    | Print (ds, id) -> print ds (new_id id)
-    | SJump (jt, tag) -> static_jump ?tag (new_jt jt)
+    | SJump (jt, tag) -> static_jump ~tag (new_jt jt)
     | Stop _ | DJump _ -> instr
 
   let reset_successor ~src_id ~dst_id instr =
@@ -406,12 +346,8 @@ module Instruction = struct
     | Instr.Assign (_, _, i)
     | Instr.Assert (_, i)
     | Instr.Assume (_, i)
-    | Instr.NondetAssume (_, _, i)
-    | Instr.Nondet (_, _, i)
-    | Instr.Undef (_, i)
-    | Instr.Malloc (_, _, i)
-    | Instr.Free (_, i)
-    | Instr.Print (_, i) ->
+    | Instr.Nondet (_, i)
+    | Instr.Undef (_, i) ->
         [ Dba.Jump_target.inner i ]
     | Instr.Stop _ -> []
     | Instr.SJump (jt, _) -> [ jt ]
@@ -421,73 +357,53 @@ module Instruction = struct
   let no_defs uses = { defs = Basic_types.String.Set.empty; uses }
 
   let variables = function
-    | Instr.Malloc (lv, e, _) | Instr.Assign (lv, e, _) ->
+    | Instr.Assign (lv, e, _) ->
         { defs = LValue.variables lv; uses = Expr.variables e }
-    | Instr.Print _ | Instr.Stop _ | Instr.SJump _ ->
-        no_defs Basic_types.String.Set.empty
-    | Instr.Free (e, _) | Instr.DJump (e, _) -> no_defs (Expr.variables e)
+    | Instr.Stop _ | Instr.SJump _ -> no_defs Basic_types.String.Set.empty
+    | Instr.DJump (e, _) -> no_defs (Expr.variables e)
     | Instr.If (c, _, _) | Instr.Assert (c, _) | Instr.Assume (c, _) ->
         no_defs (Expr.variables c)
-    | Instr.NondetAssume (lvals, c, _) ->
-        {
-          defs =
-            List.fold_left
-              (fun s lv -> Basic_types.String.Set.union s (LValue.variables lv))
-              Basic_types.String.Set.empty lvals;
-          uses = Expr.variables c;
-        }
-    | Instr.Nondet (lval, _, _) | Instr.Undef (lval, _) ->
+    | Instr.Nondet (lval, _) | Instr.Undef (lval, _) ->
         { defs = LValue.variables lval; uses = Basic_types.String.Set.empty }
 
   let temporaries = function
-    | Instr.Malloc (lv, e, _) | Instr.Assign (lv, e, _) ->
+    | Instr.Assign (lv, e, _) ->
         { defs = LValue.temporaries lv; uses = Expr.temporaries e }
-    | Instr.Print _ | Instr.Stop _ | Instr.SJump _ ->
+    | Instr.Stop _ | Instr.SJump _ ->
         {
           defs = Basic_types.String.Set.empty;
           uses = Basic_types.String.Set.empty;
         }
-    | Instr.Free (e, _) | Instr.DJump (e, _) ->
+    | Instr.DJump (e, _) ->
         { defs = Basic_types.String.Set.empty; uses = Expr.temporaries e }
     | Instr.If (c, _, _) | Instr.Assert (c, _) | Instr.Assume (c, _) ->
         { defs = Basic_types.String.Set.empty; uses = Expr.temporaries c }
-    | Instr.NondetAssume (lvals, c, _) ->
-        {
-          defs =
-            List.fold_left
-              (fun s lv ->
-                Basic_types.String.Set.union s (LValue.temporaries lv))
-              Basic_types.String.Set.empty lvals;
-          uses = Expr.temporaries c;
-        }
-    | Instr.Nondet (lval, _, _) | Instr.Undef (lval, _) ->
+    | Instr.Nondet (lval, _) | Instr.Undef (lval, _) ->
         { defs = LValue.temporaries lval; uses = Basic_types.String.Set.empty }
 
   let outer_jumps instr =
     match instr with
     | Instr.Assign _ | Instr.Stop _ | Instr.Assert _ | Instr.Assume _
-    | Instr.NondetAssume _ | Instr.Nondet _ | Instr.Undef _ | Instr.Free _
-    | Instr.Malloc _
-    | Instr.DJump (_, (Some Return | None))
-    | Instr.Print _ ->
+    | Instr.Nondet _ | Instr.Undef _
+    | Instr.DJump (_, (Return | Default)) ->
         Virtual_address.Set.empty
-    | Instr.DJump (_, Some (Call a)) ->
+    | Instr.DJump (_, Call a) ->
         Virtual_address.Set.singleton (Caddress.to_virtual_address a)
-    | Instr.SJump (jt, Some (Call a)) ->
+    | Instr.SJump (jt, Call a) ->
         Virtual_address.Set.add
           (Caddress.to_virtual_address a)
           (Jump_target.outer_jumps jt)
-    | Instr.SJump (jt, (Some Return | None)) | Instr.If (_, jt, _) ->
+    | Instr.SJump (jt, (Return | Default)) | Instr.If (_, jt, _) ->
         Jump_target.outer_jumps jt
 
   let is_call = function
-    | Instr.SJump (_, Some (Call _)) | Instr.DJump (_, Some (Call _)) -> true
+    | Instr.SJump (_, Call _) | Instr.DJump (_, Call _) -> true
     | _ -> false
 
   let is_return = function
-    | Instr.SJump (_, Some Return)
+    | Instr.SJump (_, Return)
     (* Returns are actually encoded mostly that way *)
-    | Instr.DJump (_, Some Return) ->
+    | Instr.DJump (_, Return) ->
         true
     | _ -> false
 end
@@ -521,7 +437,6 @@ type permissions = Dba.Expr.t * (read_perm * write_perm * exec_perm)
 type program = {
   start_address : Dba.address;
   declarations : Declarations.t;
-  permissions : permissions list Region.Map.t * Dba.Expr.t Rights.t;
   initializations : Dba.Instr.t list;
   instructions : dbainstrmap;
 }

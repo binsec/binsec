@@ -88,7 +88,7 @@ module Expr = struct
   let eval_from_img =
     let rec fold img = function
       | Dba.Expr.Cst _ as e -> e
-      | Dba.Expr.Var { info = Dba.VarTag.Symbol (_, (lazy value)); _ } ->
+      | Dba.Expr.Var { info = Dba.Var.Tag.Symbol (_, (lazy value)); _ } ->
           Dba.Expr.constant value
       | Dba.Expr.Var _ -> assert false (* TODO *)
       | Dba.Expr.Load _ -> assert false (* TODO *)
@@ -106,7 +106,7 @@ module Expr = struct
     Virtual_address.of_bitvector (eval_from_img img e)
 
   let complement e ~lo ~hi var =
-    let size = var.size and evar = Dba.Expr.v var in
+    let size = var.Var.size and evar = Dba.Expr.v var in
     if lo = 0 then
       Dba.Expr.append (Dba.Expr.restrict (hi + 1) (size - 1) evar) e
     else if hi = size - 1 then
@@ -149,7 +149,7 @@ let rec computesize_dbaexpr e : int =
       else
         Logger.fatal ~e:Bad_exp_size "Negatively sized expression %a" pp_bl_term
           e
-  | Expr.Load (size_byte, _, bexpr) as e ->
+  | Expr.Load (size_byte, _, bexpr, _) as e ->
       (* read by bytes *)
       let sz = computesize_dbaexpr bexpr in
       if 0 < size_byte then
@@ -224,10 +224,10 @@ let computesize_dbalhs blhs : int =
   (* plante si erreur *)
   match blhs with
   | LValue.Var v -> v.size
-  | LValue.Restrict ({ Dba.size; _ }, { Interval.lo = i; Interval.hi = j }) ->
+  | LValue.Restrict ({ size; _ }, { Interval.lo = i; Interval.hi = j }) ->
       if i <= j || 0 <= i || j < size then j - i + 1
       else raise (Bad_bound (Format.asprintf "{%d,%d}" i j))
-  | LValue.Store (size_byte, _endian, bexpr) ->
+  | LValue.Store (size_byte, _endian, bexpr, _) ->
       if 0 < size_byte then
         let sz = computesize_dbaexpr bexpr in
         if sz = Kernel_options.Machine.word_size () then size_byte * 8
@@ -254,25 +254,11 @@ let checksize_instruction binkd =
       else raise Bad_address_size
   | If (bcond, JInner _id1, _id2) -> valid_condition bcond
   | Stop _ -> true
-  | Print (l, _addr) ->
-      let f = function Exp x -> ignore (computesize_dbaexpr x) | _ -> () in
-      List.iter f l;
-      true
-  | NondetAssume (lhs_list, bcond, _addr) ->
-      let f x = ignore (computesize_dbalhs x) in
-      List.iter f lhs_list;
-      valid_condition bcond
-  | Nondet (blhs, _, _addr) ->
+  | Nondet (blhs, _addr) ->
       let _sz = computesize_dbalhs blhs in
       true
   | Assume (bcond, _addr) -> valid_condition bcond
   | Assert (bcond, _addr) -> valid_condition bcond
-  | Malloc (lhs, _bexpr, _addr) ->
-      let sz = computesize_dbalhs lhs in
-      sz = Kernel_options.Machine.word_size ()
-  | Free (bexpr, _addr) ->
-      let _sz = computesize_dbaexpr bexpr in
-      true
   | Undef (blhs, _addr) ->
       let _sz = computesize_dbalhs blhs in
       true
@@ -300,9 +286,9 @@ let substitute_dba_expr m_e r_e e =
     if e = m_e then r_e
     else
       match e with
-      | Expr.Load (sz, en, expr) ->
+      | Expr.Load (sz, en, expr, array) ->
           let bysz = Size.Byte.create sz in
-          Expr.load bysz en (aux expr)
+          Expr.load bysz en (aux expr) ?array
       | Expr.Unary (uop, expr) -> Expr.unary uop (aux expr)
       | Expr.Binary (bop, expr1, expr2) ->
           Expr.binary bop (aux expr1) (aux expr2)
