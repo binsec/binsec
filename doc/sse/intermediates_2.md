@@ -244,6 +244,7 @@ replace <puts>, <printf> by
   caller<64> := @[rsp, 8]
   rsp := rsp + 8
   jump at caller
+end
 ```
 
 Then we mock the input function `__isoc99_scanf`, assuming it only require
@@ -265,6 +266,7 @@ replace <__isoc99_scanf> by
   assume all_printables
   rsp := rsp + 8
   jump at caller
+end
 ```
 
 Finally, we set the directives:

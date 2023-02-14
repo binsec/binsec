@@ -244,8 +244,8 @@ Names in script file are not case-sensitive. So writing `eax` or `EAX` behaves t
 #### Initialize specific memory from file `load` *memory-access* `from` `file`
   (e.g. `load @[0x4000, 256] from file`)
   
-#### Set a DBA stub `replace` *addr* `by` *chunk*
-  (e.g. `replace <printf> by esp := esp + 4; jump at @[esp - 4]`)
+#### Set a DBA stub `replace` *addr* `by` *chunk* `end`
+  (e.g. `replace <printf> by esp := esp + 4; jump at @[esp - 4] end`)
   
 #### Set reach target `reach` *addr [n* `times`*] [*`such` `that` *bool] [*`then` *actions]*
   (e.g. `reach 0x4000 such that al = 0 then print ecx`)

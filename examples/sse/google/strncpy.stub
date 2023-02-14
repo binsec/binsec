@@ -8,3 +8,4 @@ replace strncpy by
   rax        := rdi
   rsp        := rsp + 8
   jump at caller
+end

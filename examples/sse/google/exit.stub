@@ -1,2 +1,1 @@
-replace exit by
-  halt
+halt at exit
