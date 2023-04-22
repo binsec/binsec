@@ -307,7 +307,8 @@ module Start (SF : STATE_FACTORY) (W : WORKLIST) = struct
       let scope =
         Fiber.Exec { addr; info; n; others; succ = Fiber.of_dhunk hunk }
       in
-      Virtual_address.Htbl.add env.rocache addr scope;
+      if not (Virtual_address.Htbl.mem env.rocache addr) then
+        Virtual_address.Htbl.add env.rocache addr scope;
       scope
     in
     let rec disasm addr reader infos hunks usize =

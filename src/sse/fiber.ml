@@ -249,7 +249,8 @@ let of_dhunk : Dhunk.t -> _ t =
           t.fallthrough <- lookup d a f'
       | If (_, JOuter _, i'), Branch t -> t.fallthrough <- lookup d a i'
       | SJump (JOuter _, _), Goto t ->
-          t.preds <- List.map (Array.get a) (Dhunk.pred d i)
+          t.preds <-
+            List.map (fun i -> forward_load (Array.get a i)) (Dhunk.pred d i)
       | DJump _, _ | SJump _, _ | Stop _, _ -> ()
       | _ -> assert false
     done;
