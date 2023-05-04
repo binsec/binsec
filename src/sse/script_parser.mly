@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2022                                               */
+/*  Copyright (C) 2016-2023                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -63,21 +63,14 @@ let goal :=
     { Directive (loc, directive) }
 
 let directive :=
-  | ENUMERATE; enum=expr; times=option(delimited(LPAR, INT, RPAR));
+  | ENUMERATE; enum=term; times=option(delimited(LPAR, INT, RPAR));
     { Enumerate (Option.fold ~none:1 ~some:Z.to_int times, enum) }
-  | ENUMERATE; MUL; enum=expr;
+  | ENUMERATE; MUL; enum=term;
     { Enumerate (max (1 lsl Expr.size_of enum) max_int, enum) }
   | ASSUME; test=bool;
     { Assume test }
   | ASSERT; test=bool;
     { Assert test }
-
-
-let address ==
-  | ~=iexpr;
-    { match iexpr with
-      | Left i -> Expr.constant (Bitvector.create i Env.wordsize)
-      | Right e -> e }
 
 let stub :=
   | REPLACE; locs=separated_nonempty_list(COMMA, address); BY; ~=chunk; END;
@@ -112,8 +105,8 @@ let action :=
     { Types.Output.Slice slice }
   | PRINT; MODEL;
     { Types.Output.Model }
-  | PRINT; ~=format; ~=expr;
-    { Types.Output.Value (format, expr) }
+  | PRINT; ~=format; ~=term;
+    { Types.Output.Value (format, term) }
   | PRINT; ASCII; STREAM; id=IDENT;
     { Types.Output.Stream (fst id) }
   | PRINT; CSTRING; id=IDENT;
@@ -131,6 +124,11 @@ let format :=
   | ASCII;
     { Types.Output.Ascii }
 
+let term :=
+  | ~=expr;
+    { match expr with
+      | Int _ -> Logger.fatal "unable to infer size for integer"
+      | Expr e -> e }
 
 let ident ==
   | id=IDENT;
@@ -139,9 +137,8 @@ let ident ==
     { Bitvector.to_asciistring value }
 
 let identifiable :=
-  | nammed=separated_pair(expr, AS, ident);
-    { let expr, name = nammed in
-      expr, name }
+  | ~=term; AS; ~=ident;
+    { term, ident }
   | id=IDENT;
     { let name, size = id in
       LValue.to_expr (Env.lookup name size), name }

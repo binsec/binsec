@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2022                                               *)
+(*  Copyright (C) 2016-2023                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -462,7 +462,10 @@ module Make (E : EXPLORATION_STATISTICS) (Q : QUERY_STATISTICS) = struct
       Format.(
         pp_set_formatter_out_functions std_formatter logging_stdout_fof;
         pp_set_formatter_out_functions err_formatter logging_stderr_fof);
-      let window = Curses.initscr () in
+      let window =
+        let stdscr = Curses.stdscr () in
+        if stdscr = Curses.null_window then Curses.initscr () else stdscr
+      in
       ignore @@ Curses.noecho ();
       ignore @@ Curses.nodelay window true;
       ignore @@ Curses.addstr "Hello World!";
@@ -501,6 +504,7 @@ module Make (E : EXPLORATION_STATISTICS) (Q : QUERY_STATISTICS) = struct
         opened_state.interrupt <- true;
         Thread.join thread;
         ignore @@ Curses.nocbreak ();
+        ignore @@ Curses.refresh ();
         Curses.endwin ();
         opened_state.flush_buffers ();
         Format.(

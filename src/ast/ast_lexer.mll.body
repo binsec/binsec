@@ -109,19 +109,21 @@
 
   | '-'? digit+ as s
     	   { INT (Z.of_string s) }
+  | ('-'? digit+ as s) '<' (digit+ as i) '>'
+    	   { CONST (Bitvector.create (Z.of_string s) (int_of_string i)) }
   | '{' space* (digit+ as hi) space* ".." space* (digit+ as lo) '}'
     	   { RANGE { Interval.hi=int_of_string hi; lo=int_of_string lo } }
   | '{' space* (digit+ as b) space* '}'
     	   { let hi = int_of_string b in RANGE { Interval.hi; lo=hi } }
   | bin | hex as s
            { INT (Z.of_string s) }
-  | '"' ([^'"']* as s) '"'
-           { let s = Scanf.unescaped s in
-	     CONST (Bitvector.create (Z.of_bits s) (String.length s * 8)) }
-  | '"' ([^'"']* as s) '"' 'z'
+  | (bin | hex as s) '<' (digit+ as i) '>'
+           { CONST (Bitvector.create (Z.of_string s) (int_of_string i)) }
+  | '"' ([^'"']* as s) '"' ('z'? as z)
+  | ''' ([^''']* as s) ''' ('z'? as z)
            { let s = Scanf.unescaped s in
 	     CONST (Bitvector.create (Z.of_bits s)
-	     	   ((String.length s + 1) * 8)) }
+	     	    ((String.length s + Bool.to_int (z <> "")) * 8)) }
   | space+          { token lexbuf }
   | '#' [^'\n']* '\n'
   | "\n"            { Lexing.new_line lexbuf; token lexbuf }

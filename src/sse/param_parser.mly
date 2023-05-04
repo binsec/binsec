@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2022                                               */
+/*  Copyright (C) 2016-2023                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -19,12 +19,14 @@
 /*                                                                        */
 /**************************************************************************/
 
-%parameter <Env : Ast_builder.ENV with type lval := Script.LValue.t
-                                   and type expr := Script.Expr.t>
+%parameter <Env : Ast_types.ENV with type lval := Script.LValue.t
+                                 and type expr := Script.Expr.t>
 
 %{
   module Libsse = struct end
+  open Options
   open Script
+  open Pexpr
 %}
 
 %%

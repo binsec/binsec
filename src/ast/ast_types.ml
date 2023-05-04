@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2022                                               *)
+(*  Copyright (C) 2016-2023                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -81,6 +81,42 @@ module type AST = sig
 
     val halt : t
   end
+end
+
+module type PARSER_EXPRESSION = sig
+  type expr
+
+  type t = Int of Z.t | Expr of expr
+
+  include Sigs.ARITHMETIC with type t := t
+
+  include Sigs.COMPARISON with type t := t and type boolean := t
+
+  include Sigs.EXTENDED_LOGICAL with type t := t
+
+  val shift_left : t -> t -> t
+
+  val shift_right : t -> t -> t
+
+  val shift_right_signed : t -> t -> t
+
+  val rotate_left : t -> t -> t
+
+  val rotate_right : t -> t -> t
+
+  val sext : int -> t -> t
+
+  val uext : int -> t -> t
+
+  val restrict : int -> int -> t -> t
+
+  val append : t -> t -> t
+
+  val ite : expr -> t -> t -> t
+
+  val to_bool : t -> expr
+
+  val to_expr : int -> t -> expr
 end
 
 module type ENV = sig

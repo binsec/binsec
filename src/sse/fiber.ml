@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2022                                               *)
+(*  Copyright (C) 2016-2023                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -78,7 +78,7 @@ type 'a t =
       -> [< `Branch | `All ] t
   | Goto : {
       addr : Virtual_address.t;
-      mutable preds : [ `All ] t list;
+      mutable preds : (bool * [ `All ] t) list;
     }
       -> [< `All ] t
   | Jump : Expr.t -> [< `Jump | `All ] t
@@ -250,7 +250,13 @@ let of_dhunk : Dhunk.t -> _ t =
       | If (_, JOuter _, i'), Branch t -> t.fallthrough <- lookup d a i'
       | SJump (JOuter _, _), Goto t ->
           t.preds <-
-            List.map (fun i -> forward_load (Array.get a i)) (Dhunk.pred d i)
+            List.map
+              (fun p ->
+                ( (match Dhunk.inst_exn d p with
+                  | If (_, JInner i', _) -> i = i'
+                  | _ -> false),
+                  forward_load (Array.get a p) ))
+              (Dhunk.pred d i)
       | DJump _, _ | SJump _, _ | Stop _, _ -> ()
       | _ -> assert false
     done;
@@ -258,9 +264,11 @@ let of_dhunk : Dhunk.t -> _ t =
 
 let abort = Die "invalid fallthrough instruction"
 
-let relink ?(taken = false) (t : [ `All ] t) (succ : [ `All ] t) =
-  (match succ with Goto g when t <> Halt -> g.preds <- t :: g.preds | _ -> ());
-  match t with
+let relink ?(taken = false) ~(pred : [ `All ] t) (succ : [ `All ] t) =
+  (match succ with
+  | Goto g when pred <> Halt -> g.preds <- (taken, pred) :: g.preds
+  | _ -> ());
+  match pred with
   | Hook t -> t.succ <- succ
   | Exec t -> t.succ <- succ
   | Assign t -> t.succ <- succ
@@ -280,7 +288,7 @@ let rec iter continue entries reloc passthrough labels pred
   match stmts with
   | [] ->
       List.iter (fun name -> S.Htbl.add entries name continue) labels;
-      relink pred continue;
+      relink ~pred continue;
       reloc
   | Label name :: stmts ->
       iter continue entries reloc passthrough (name :: labels) pred stmts
@@ -289,14 +297,14 @@ let rec iter continue entries reloc passthrough labels pred
       let last = Load { var; base; dir; addr; succ = Halt } in
       let step = define_load m last in
       List.iter (fun name -> S.Htbl.add entries name step) labels;
-      relink pred step;
+      relink ~pred step;
       iter continue entries reloc passthrough [] last stmts
   | Assign (Var var, rval) :: stmts ->
       let m, rval = extract_load [] rval in
       let last = Assign { var; rval; succ = Halt } in
       let step = define_load m last in
       List.iter (fun name -> S.Htbl.add entries name step) labels;
-      relink pred step;
+      relink ~pred step;
       iter continue entries reloc passthrough [] last stmts
   | Assign (Restrict (var, { hi; lo }), rval) :: stmts ->
       let m, rval = extract_load [] rval in
@@ -304,7 +312,7 @@ let rec iter continue entries reloc passthrough labels pred
       let last = Assign { var; rval; succ = Halt } in
       let step = define_load m last in
       List.iter (fun name -> S.Htbl.add entries name step) labels;
-      relink pred step;
+      relink ~pred step;
       iter continue entries reloc passthrough [] last stmts
   | Assign (Store (_, dir, addr, base), rval) :: stmts ->
       let m, addr = extract_load [] addr in
@@ -312,12 +320,12 @@ let rec iter continue entries reloc passthrough labels pred
       let last = Store { base; dir; addr; rval; succ = Halt } in
       let step = define_load m last in
       List.iter (fun name -> S.Htbl.add entries name step) labels;
-      relink pred step;
+      relink ~pred step;
       iter continue entries reloc passthrough [] last stmts
   | Nondet (Var var) :: stmts ->
       let step = Symbolize { var; succ = Halt } in
       List.iter (fun name -> S.Htbl.add entries name step) labels;
-      relink pred step;
+      relink ~pred step;
       iter continue entries reloc passthrough [] step stmts
   | Nondet (Restrict (var, { hi; lo })) :: stmts ->
       let size' = hi - lo + 1 in
@@ -327,7 +335,7 @@ let rec iter continue entries reloc passthrough labels pred
       let succ = Assign { var; rval; succ = Halt } in
       let step = Symbolize { var = var'; succ } in
       List.iter (fun name -> S.Htbl.add entries name step) labels;
-      relink pred step;
+      relink ~pred step;
       iter continue entries reloc passthrough [] succ stmts
   | Nondet (Store (len, dir, addr, base)) :: stmts ->
       let m, addr = extract_load [] addr in
@@ -337,12 +345,12 @@ let rec iter continue entries reloc passthrough labels pred
       let succ = Store { base; dir; addr; rval = Expr.v var'; succ = Halt } in
       let step = define_load m (Symbolize { var = var'; succ }) in
       List.iter (fun name -> S.Htbl.add entries name step) labels;
-      relink pred step;
+      relink ~pred step;
       iter continue entries reloc passthrough [] succ stmts
   | Undef (Var var) :: stmts ->
       let step = Clobber { var; succ = Halt } in
       List.iter (fun name -> S.Htbl.add entries name step) labels;
-      relink pred step;
+      relink ~pred step;
       iter continue entries reloc passthrough [] step stmts
   | Undef _ :: _ -> Options.Logger.fatal "only variables can be undefined"
   | Assume test :: stmts ->
@@ -350,21 +358,21 @@ let rec iter continue entries reloc passthrough labels pred
       let last = Assume { test; succ = Halt } in
       let step = define_load m last in
       List.iter (fun name -> S.Htbl.add entries name step) labels;
-      relink pred step;
+      relink ~pred step;
       iter continue entries reloc passthrough [] last stmts
   | Assert test :: stmts ->
       let m, test = extract_load [] test in
       let last = Assert { test; succ = Halt } in
       let step = define_load m last in
       List.iter (fun name -> S.Htbl.add entries name step) labels;
-      relink pred step;
+      relink ~pred step;
       iter continue entries reloc passthrough [] last stmts
   | It (test, target) :: stmts ->
       let m, test = extract_load [] test in
       let branch = Branch { test; taken = Halt; fallthrough = Halt } in
       let step = define_load m branch in
       List.iter (fun name -> S.Htbl.add entries name step) labels;
-      relink pred step;
+      relink ~pred step;
       iter continue entries
         ((branch, target, true) :: reloc)
         passthrough [] branch stmts
@@ -376,19 +384,19 @@ let rec iter continue entries reloc passthrough labels pred
   | Jump (Cst bv) :: stmts ->
       let goto = Goto { addr = Virtual_address.of_bitvector bv; preds = [] } in
       List.iter (fun name -> S.Htbl.add entries name goto) labels;
-      relink pred goto;
+      relink ~pred goto;
       iter continue entries reloc passthrough [] goto stmts
   | Jump target :: stmts ->
       let m, target = extract_load [] target in
       let jump = Jump target in
       let step = define_load m jump in
       List.iter (fun name -> S.Htbl.add entries name step) labels;
-      relink pred step;
+      relink ~pred step;
       iter continue entries reloc passthrough [] jump stmts
   | Halt :: stmts ->
       List.iter (fun name -> S.Htbl.add entries name Halt) labels;
       (* not needed *)
-      relink pred Halt;
+      relink ~pred Halt;
       iter continue entries reloc passthrough [] Halt stmts
 
 let rec lookup entries passthrough target =
@@ -404,7 +412,7 @@ let of_script ?(continue = abort) stmts =
   let reloc = iter continue entries [] passthrough [ "%start%" ] Halt stmts in
   List.iter
     (fun (pred, target, taken) ->
-      relink ~taken pred (lookup entries passthrough target))
+      relink ~taken ~pred (lookup entries passthrough target))
     reloc;
   S.Htbl.find entries "%start%"
 

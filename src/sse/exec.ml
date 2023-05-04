@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2022                                               *)
+(*  Copyright (C) 2016-2023                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -252,22 +252,6 @@ module Start (SF : STATE_FACTORY) (W : WORKLIST) = struct
     | String name ->
         Logger.result "@[<v 0>C string %s : %S@]" name
           (State.as_c_string ~name state)
-
-  let relink cur succ (pred : fiber) =
-    match pred with
-    | Hook t -> t.succ <- succ
-    | Exec t -> t.succ <- succ
-    | Assign t -> t.succ <- succ
-    | Clobber t -> t.succ <- succ
-    | Load t -> t.succ <- succ
-    | Store t -> t.succ <- succ
-    | Symbolize t -> t.succ <- succ
-    | Assume t -> t.succ <- succ
-    | Assert t -> t.succ <- succ
-    | Branch ({ taken; _ } as t) when taken == cur -> t.taken <- succ
-    | Branch t -> t.fallthrough <- succ
-    | Probe t -> t.succ <- succ
-    | Goto _ | Jump _ | Cut | Halt | Die _ -> ()
 
   let disasm =
     let return infos hunks usize =
@@ -637,7 +621,7 @@ module Start (SF : STATE_FACTORY) (W : WORKLIST) = struct
       State.t ->
       label ->
       Virtual_address.t ->
-      fiber list ->
+      (bool * fiber) list ->
       fiber ->
       a =
    fun mode id depth ~max_depth state scope addr preds rollback ->
@@ -650,7 +634,8 @@ module Start (SF : STATE_FACTORY) (W : WORKLIST) = struct
     with
     | Continue scope ->
         let ((Hook _ | Exec _) as succ) = scope in
-        if preds <> [] then List.iter (relink rollback succ) preds;
+        if preds <> [] then
+          List.iter (fun (taken, pred) -> Fiber.relink ~taken ~pred succ) preds;
         exec mode id depth ~max_depth state scope succ
     | Not_found -> (
         match Imap.find (Virtual_address.to_bigint addr) env.code with
@@ -667,7 +652,10 @@ module Start (SF : STATE_FACTORY) (W : WORKLIST) = struct
             in
             let scope : label = disasm addr reader in
             let ((Hook _ | Exec _) as fiber) = scope in
-            if preds <> [] then List.iter (relink rollback fiber) preds;
+            if preds <> [] then
+              List.iter
+                (fun (taken, pred) -> Fiber.relink ~taken ~pred fiber)
+                preds;
             exec mode id depth ~max_depth state scope fiber
         | RWX -> (
             match mode with
@@ -1121,7 +1109,7 @@ module Start (SF : STATE_FACTORY) (W : WORKLIST) = struct
       | [] -> state
       | files ->
           let module M :
-            Ast_builder.ENV
+            Ast_types.ENV
               with type lval := Script.LValue.t
                and type expr := Script.Expr.t = struct
             let wordsize = Kernel_options.Machine.word_size ()

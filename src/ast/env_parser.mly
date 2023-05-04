@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2022                                               */
+/*  Copyright (C) 2016-2023                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -19,9 +19,9 @@
 /*                                                                        */
 /**************************************************************************/
 
-%parameter <Ast : Ast_builder.AST>
-%parameter <Env : Ast_builder.ENV with type lval := Ast.LValue.t
-                                   and type expr := Ast.Expr.t>
+%parameter <Ast : Ast_types.AST>
+%parameter <Env : Ast_types.ENV with type lval := Ast.LValue.t
+                                      and type expr := Ast.Expr.t>
 
 %{
   open Ast

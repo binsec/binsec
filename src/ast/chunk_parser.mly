@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2022                                               */
+/*  Copyright (C) 2016-2023                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -60,11 +60,9 @@ let instr_or_control :=
 
 %public
 let instr :=
-  | ~=loc; ASSIGN; ~=iexpr; AS; id=IDENT;
+  | ~=loc; ASSIGN; ~=expr; AS; id=IDENT;
     { let size = LValue.size_of loc in
-      let expr = match iexpr with
-	| Right e -> e
-	| Left i -> Expr.constant (Bitvector.create i size) in
+      let expr = to_expr size expr in
       let name, size = match id with
 	| name, -1 -> name, size
 	| name, size' -> assert (size = size'); name, size in
@@ -134,16 +132,12 @@ let block :=
 	    Instr.label target' ];
 	  d;
 	  [ Instr.goto target; Instr.label target'' ] ] }
-  | FOR; var=id; IN; init=iexpr; TO; upto=iexpr; DO;
+  | FOR; var=id; IN; init=expr; TO; upto=expr; DO;
     d=flatten(nonempty_list(stmt));
     { let evar = LValue.to_expr var in
       let size = LValue.size_of var in
-      let init = match init with
-	| Right i -> assert (Expr.size_of i = size); i
-	| Left i -> Expr.constant @@ Bitvector.create i size in
-      let upto = match upto with
-	| Right u -> assert (Expr.size_of u = size); u
-	| Left u -> Expr.constant @@ Bitvector.create u size in
+      let init = to_expr size init in
+      let upto = to_expr size upto  in
       let target = uid () and target' = uid () in
        (* TOFIX #WEIRD: as SSE favour the "else" branch, we invert the
       construction to exit the loop faster. *)
@@ -160,25 +154,19 @@ let block :=
 	    Instr.label target'' ] ] }
   | CASE; ~=expr; IS; cases=nonempty_list(case);
     default=option(preceded(pair(ANY, COLON), flatten(nonempty_list(stmt))));
-    { let size = Expr.size_of expr in
-      let rec aux cases next stmts =
+    { let rec aux cases next stmts =
 	match cases with
 	| [] -> stmts
 	| (value, body) :: cases ->
 	   let label = uid () in
 	   aux cases label @@
 	     Instr.label label
-	     :: Instr.conditional_jump (Expr.diff value expr) next
+	     :: Instr.conditional_jump (to_bool (diff value expr)) next
 	     :: List.rev_append body stmts in
       let tail = uid () in
       let rev_stmts =
 	List.rev_map
 	  (fun (value, body) ->
-	    let value = Expr.constant
-			@@ match value with
-			   | Left i -> Bitvector.create i size
-			   | Right b -> assert (Bitvector.size_of b = size);
-					b in
 	    value, (Instr.goto tail :: List.rev body)) cases in
       let tail_stmts = [ Instr.label tail ] in
       let default, default_stmts = match default with
@@ -190,8 +178,8 @@ let block :=
       aux rev_stmts default default_stmts }
 
 let case :=
-  | ~=iconst; COLON; e=flatten(nonempty_list(stmt));
-    { iconst, e }
+  | ~=const; COLON; e=flatten(nonempty_list(stmt));
+    { const, e }
 
 let label ==
   | label=terminated(LABEL, COLON); { label }

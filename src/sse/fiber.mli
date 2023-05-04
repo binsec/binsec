@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2022                                               *)
+(*  Copyright (C) 2016-2023                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -78,7 +78,7 @@ type 'a t =
       -> [< `Branch | `All ] t
   | Goto : {
       addr : Virtual_address.t;
-      mutable preds : [ `All ] t list;
+      mutable preds : (bool * [ `All ] t) list;
     }
       -> [< `All ] t
   | Jump : Expr.t -> [< `Jump | `All ] t
@@ -129,3 +129,5 @@ val mk_enumerate :
   int ->
   [ `All ] t ->
   [ `Label ] t
+
+val relink : ?taken:bool -> pred:[ `All ] t -> [ `All ] t -> unit

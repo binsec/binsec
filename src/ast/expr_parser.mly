@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2022                                               */
+/*  Copyright (C) 2016-2023                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -18,12 +18,6 @@
 /*  for more details (enclosed in the file licenses/LGPLv2.1).            */
 /*                                                                        */
 /**************************************************************************/
-
-%{
-    type ('a, 'b) either =
-      | Left of 'a
-      | Right of 'b
-%}
 
 %token PLUS MINUS MUL UDIV SDIV UMOD SMOD
 %token EQUAL DIFF ULE ULT UGE UGT SLE SLT SGE SGT
@@ -52,6 +46,7 @@
 %left PLUS MINUS
 %left MUL UDIV SDIV UMOD SMOD AND OR XOR
 %nonassoc NOT ZEXT SEXT
+%nonassoc RANGE
 
 %%
 
@@ -62,7 +57,7 @@ let var := id=IDENT;
 
 %public
 let load :=
-  | array=LMEM; ~=addr; e=ioption(preceded(COMMA, endianness));
+  | array=LMEM; ~=address; e=ioption(preceded(COMMA, endianness));
     s=ioption(preceded(COMMA, INT)); RMEM;
     { let endianness = match e with
 	| None -> Env.endianness
@@ -70,7 +65,7 @@ let load :=
       let size = match s with
 	| None ->  1
 	| Some s -> (Z.to_int s) in
-      LValue.store (Size.Byte.create size) endianness addr ?array }
+      LValue.store (Size.Byte.create size) endianness address ?array }
 
 %public
 let loc :=
@@ -92,173 +87,118 @@ let core :=
   | ~=wrap;
     { wrap }
   | ~=loc;
-    { LValue.to_expr loc }
+    { Expr (LValue.to_expr loc) }
+  | value=INT;
+    { Int value }
   | value=CONST;
-    { Expr.constant value }
+    { Expr (Expr.constant value) }
   | symbol=SYMBOL;
     { let name, attr = symbol in
-      Env.lookup_symbol name attr }
-
-let extra :=
-  | ~=core;
-    { core }
+      Expr (Env.lookup_symbol name attr) }
   | ~=core; r=RANGE;
     { let hi = r.Interval.hi and lo = r.Interval.lo in
       assert (hi >= lo && lo >= 0); (* TODO *)
-      Expr.restrict lo hi core }
-  | ~=unop; ~=extra;
-    { unop extra }
-  | a=extra; ~=binop; b=extra;
+      restrict lo hi core }
+  | ~=unop; ~=core;
+    { unop core }
+  | a=core; ~=binop; b=core;
     { binop a b }
-
-let sugar :=
-  | ~=extra;
-    { extra }
-  | v=INT; ~=binop; ~=sugar;
-    { let size = Expr.size_of sugar in
-      let value = Expr.constant @@ Bitvector.create v size in
-      binop value sugar }
-  | ~=extra; ~=binop; v=INT;
-    { let size = Expr.size_of extra in
-      let value = Expr.constant @@ Bitvector.create v size in
-      binop extra value }
-
-let isugar ==
-  | ~=sugar;   { Right sugar }
-  | value=INT; { Left value }
 
 let wrap := LPAR; ~=expr; RPAR; { expr }
 
 let chain :=
-  | hd=isugar; tl=nonempty_list(pair(cmpop, isugar));
+  | hd=core; tl=nonempty_list(pair(cmpop, core));
     { List.fold_left
 	(fun (e, a) (op, b) ->
-	  let x, y = match a, b with
-	    | Left _, Left _ -> assert false
-	    | Left x, Right y ->
-	       Expr.constant
-	       @@ Bitvector.create x (Expr.size_of y), y
-	    | Right x, Left y ->
-	       x, Expr.constant
-		  @@ Bitvector.create y (Expr.size_of x)
-	    | Right x, Right y -> x, y in
-	  Expr.logand e @@ op x y, b)
-	(Expr.one, hd) tl |> fst }
+	  logand e @@ op a b, b)
+	(Expr Expr.one, hd) tl |> fst }
 
 let logic :=
-  | ~=sugar;
-    { sugar }
+  | ~=core;
+    { core }
   | ~=chain;
     { chain }
   | a=bool; ~=logop; b=bool;
-    { logop a b }
-
-let ilogic ==
-  | ~=logic;   { Right logic }
-  | value=INT; { Left value }
-
-%public
-let iexpr ==
-  | ~=expr;    { Right expr }
-  | value=INT; { Left value }
+    { logop (Expr a) (Expr b) }
 
 let ite :=
-  | test=bool; QMARK; branch=ilogic; COLON; default=iexpr;
-    { let branch, default = match branch, default with
-	| Left _,  Left _  -> assert false (* TODO *)
-	| Left x,  Right y ->
-	   Expr.constant (Bitvector.create x (Expr.size_of y)), y
-	| Right x, Left y  ->
-	   x, Expr.constant (Bitvector.create y (Expr.size_of x))
-	| Right x, Right y -> x, y in
-      Expr.ite test branch default }
+  | test=bool; QMARK; branch=logic; COLON; default=expr;
+    { ite test branch default }
 
 let switch :=
   | CASE; expr=logic; IS;
-    cases=rev(nonempty_list(separated_pair(iconst, COLON, iexpr)));
-    ANY; COLON; default=ilogic;
-    { let size = Expr.size_of expr in
-      let default, size' = match default with
-	| Left x ->
-	   let size' =
+    cases=rev(nonempty_list(separated_pair(const, COLON, expr)));
+    ANY; COLON; default=logic;
+    { let default = match default with
+	| Int x ->
+	   let size =
 	     List.fold_left
 	       (fun s -> function
-		 | _, Left _ -> s
-		 | _, Right y -> Expr.size_of y)
-	     (-1) cases in
-	   assert (size' <> -1); (* TODO *)
-	   Expr.constant (Bitvector.create x size'), size'
-	| Right y -> y, Expr.size_of y in
+		 | _, Int _ -> s
+		 | _, Expr y -> Expr.size_of y)
+	       (-1) cases in
+	   if size = -1 then
+	     Logger.fatal "unable to infer size for the switch case body";
+	   Expr.constant (Bitvector.create x size)
+	| Expr y -> y in
       List.fold_left
 	(fun e (k, c) ->
-	  let k = match k with
-	    | Left x -> Expr.constant (Bitvector.create x size)
-	    | Right y -> Expr.constant y in
-	  let c = match c with
-	    | Left x -> Expr.constant (Bitvector.create x size')
-	    | Right y -> y in
-	  Expr.ite (Expr.equal expr k) c e) default cases }
+	  ite (to_bool (equal expr k)) c e) (Expr default) cases }
 
 %public
 let bool :=
   | ~=logic;
-    { assert (Expr.size_of logic = 1); (* TODO *) logic }
-  | value=INT;
-    { match Z.to_int value with
-      | 0 -> Expr.zero
-      | 1 -> Expr.one
-      | _ -> assert false (* TODO *) }
+    { to_bool logic }
 
 %public
-let iconst ==
-  | value=INT;   { Left value }
-  | value=CONST; { Right value }
+let const ==
+  | value=INT;   { Int value }
+  | value=CONST; { Expr (Expr.constant value) }
 
-let addr :=
+%public
+let address :=
   | ~=expr;
-    { assert (Expr.size_of expr = Env.wordsize); (* TODO *) expr }
-  | value=INT;
-    { Expr.constant @@ Bitvector.create value Env.wordsize }
+    { to_expr Env.wordsize expr }
 
 let unop ==
-  | NOT;                 { Expr.lognot }
-  | MINUS;               { Expr.neg }
-  | size=ZEXT;           { Expr.uext size }
-  | size=SEXT;           { Expr.sext size }
+  | NOT;                 { lognot }
+  | MINUS;               { neg }
+  | size=ZEXT;           { uext size }
+  | size=SEXT;           { sext size }
 
 let binop ==
-  | PLUS;   { Expr.add }
-  | MINUS;  { Expr.sub }
-  | MUL;    { Expr.mul }
-  | UDIV;   { Expr.udiv }
-  | SDIV;   { Expr.sdiv }
-  | UMOD;   { Expr.umod }
-  | SMOD;   { Expr.smod }
-  | AND;    { Expr.logand }
-  | OR;     { Expr.logor }
-  | XOR;    { Expr.logxor }
-  | LSL;    { Expr.shift_left }
-  | LSR;    { Expr.shift_right }
-  | ASR;    { Expr.shift_right_signed }
-  | ROL;    { Expr.rotate_left }
-  | ROR;    { Expr.rotate_right }
-  | CONCAT; { Expr.append }
-  | DIFF;   { Expr.diff }
+  | PLUS;   { add }
+  | MINUS;  { sub }
+  | MUL;    { mul }
+  | UDIV;   { udiv }
+  | SDIV;   { sdiv }
+  | UMOD;   { umod }
+  | SMOD;   { smod }
+  | AND;    { logand }
+  | OR;     { logor }
+  | XOR;    { logxor }
+  | LSL;    { shift_left }
+  | LSR;    { shift_right }
+  | ASR;    { shift_right_signed }
+  | ROL;    { rotate_left }
+  | ROR;    { rotate_right }
+  | CONCAT; { append }
+  | DIFF;   { diff }
 
 let cmpop ==
-  | EQUAL;  { Expr.equal }
-  | UGE;    { Expr.uge }
-  | UGT;    { Expr.ugt }
-  | ULE;    { Expr.ule }
-  | ULT;    { Expr.ult }
-  | SGE;    { Expr.sge }
-  | SGT;    { Expr.sgt }
-  | SLE;    { Expr.sle }
-  | SLT;    { Expr.slt }
+  | EQUAL;  { equal }
+  | UGE;    { uge }
+  | UGT;    { ugt }
+  | ULE;    { ule }
+  | ULT;    { ult }
+  | SGE;    { sge }
+  | SGT;    { sgt }
+  | SLE;    { sle }
+  | SLT;    { slt }
 
 let logop ==
-  | LAND;   { Expr.logand }
-  | LOR;    { Expr.logor }
+  | LAND;   { logand }
+  | LOR;    { logor }
 
 let endianness ==
   | RARROW; { Machine.BigEndian }

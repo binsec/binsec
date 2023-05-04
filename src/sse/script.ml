@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2022                                               *)
+(*  Copyright (C) 2016-2023                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,6 +27,133 @@ module Expr = struct
   let neg = uminus
 
   let succ e = add e (constant (Bitvector.create Z.one (size_of e)))
+end
+
+module Pexpr : Ast_types.PARSER_EXPRESSION with type expr := Expr.t = struct
+  type t = Int of Z.t | Expr of Expr.t
+
+  let int_to_expr n i =
+    if Z.numbits i > n then
+      Options.Logger.fatal "integer %a does not fit in %a" Z.pp_print i
+        (fun ppf n ->
+          if n = 1 then Format.pp_print_string ppf "bool"
+          else Format.fprintf ppf "bitvector of %d bits" n)
+        n
+    else Expr.constant (Bitvector.create i n)
+
+  let to_expr n x =
+    match x with
+    | Int i -> int_to_expr n i
+    | Expr e ->
+        if Expr.size_of e <> n then
+          Options.Logger.fatal "%a was expected to be a bitvector of %d bit%s"
+            Dba_printer.Ascii.pp_bl_term e n
+            (if n = 1 then "" else "s")
+        else e
+
+  let to_bool = to_expr 1
+
+  let unary (o : Dba.Unary_op.t) x =
+    match x with
+    | Int _ ->
+        Options.Logger.fatal "unable to apply %a operator on an integer"
+          Dba_printer.Ascii.pp_unary_op o
+    | Expr e -> Expr (Expr.unary o e)
+
+  let binary (o : Dba.Binary_op.t) x y =
+    match (x, y) with
+    | Int _, Int _ ->
+        Options.Logger.fatal "unable to apply %a operator on two integers"
+          Dba_printer.Ascii.pp_binary_op o
+    | Int i, Expr e -> Expr Expr.(binary o (int_to_expr (size_of e) i) e)
+    | Expr e, Int i -> Expr Expr.(binary o e (int_to_expr (size_of e) i))
+    | Expr e, Expr e' -> Expr (Expr.binary o e e')
+
+  let add = binary Plus
+
+  let sub = binary Minus
+
+  let mul = binary Mult
+
+  let neg = unary UMinus
+
+  let udiv = binary DivU
+
+  let umod = binary ModU
+
+  let urem = binary ModU
+
+  let sdiv = binary DivS
+
+  let smod = binary ModS
+
+  let srem = binary ModS
+
+  let equal = binary Eq
+
+  let diff = binary Diff
+
+  let ule = binary LeqU
+
+  let uge = binary GeqU
+
+  let ult = binary LtU
+
+  let ugt = binary GtU
+
+  let sle = binary LeqS
+
+  let sge = binary GeqS
+
+  let slt = binary LtS
+
+  let sgt = binary GtS
+
+  let logand = binary And
+
+  let logor = binary Or
+
+  let lognot = unary Not
+
+  let logxor = binary Xor
+
+  let shift_left = binary LShift
+
+  let shift_right = binary RShiftU
+
+  let shift_right_signed = binary RShiftS
+
+  let rotate_left = binary LeftRotate
+
+  let rotate_right = binary RightRotate
+
+  let sext n x = unary (Sext n) x
+
+  let uext n x = unary (Uext n) x
+
+  let restrict lo hi x =
+    match x with
+    | Int i ->
+        let n = hi - lo + 1 in
+        Expr (Expr.constant (Bitvector.create (Z.extract i lo n) n))
+    | Expr e -> Expr (Expr.restrict lo hi e)
+
+  let append x y =
+    match (x, y) with
+    | Int _, _ | _, Int _ ->
+        Options.Logger.fatal "unable to concatenate integer without size"
+    | Expr a, Expr b -> Expr (Expr.append a b)
+
+  let ite c x y =
+    let t, e =
+      match (x, y) with
+      | Int _, Int _ ->
+          Options.Logger.fatal "unable to infer the size of ite body"
+      | Int i, Expr e -> (int_to_expr (Expr.size_of e) i, e)
+      | Expr e, Int i -> (e, int_to_expr (Expr.size_of e) i)
+      | Expr e, Expr e' -> (e, e')
+    in
+    Expr (Expr.ite c t e)
 end
 
 module LValue = Dba.LValue

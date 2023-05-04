@@ -61,7 +61,7 @@
 
 (menhir
  (modules expr_parser instr_parser chunk_parser param_parser script_parser)
- (flags --fixed-exception --external-tokens Sse_tokens)
+ (flags --fixed-exception --external-tokens Sse_tokens --strict --explain)
  (merge_into sse_parser))
 
 (ocamllex

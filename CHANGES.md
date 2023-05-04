@@ -1,3 +1,12 @@
+## 0.7.3 (2023-05-05)
+
+** Bugs
+
+  - Fix operator precedence issues in DBA parser
+  - Expected fix for a hard to reproduce overlapping text issue
+    at the end of SSE exploration
+  - Fix issues with SSE intermediate representation
+
 ## 0.7.2 (2023-04-22)
 
 ** Bugs
