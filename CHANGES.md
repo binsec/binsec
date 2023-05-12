@@ -1,3 +1,9 @@
+## 0.7.4 (2023-05-12)
+
+** Bugs
+
+  - Fix infinite loop on arm64 basic bloc disassembly
+
 ## 0.7.3 (2023-05-05)
 
 ** Bugs
