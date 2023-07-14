@@ -19,7 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Cli.Make (struct
+include Cli.Options (struct
   let shortname = "smt"
 
   let name = "Static Symbolic Execution"

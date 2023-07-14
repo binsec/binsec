@@ -79,10 +79,7 @@ let stats = Statistics.empty
 
 let show_stats ppf () = Statistics.pp ppf stats
 
-let find key kvs =
-  try List.assoc key kvs
-  with Not_found ->
-    Amd64_options.Logger.fatal "Decoder message has no %s field. Aborting." key
+let find key kvs = List.assoc key kvs
 
 (* Some conversion functions from parsed categorized value to the expected types
    in Instruction.Generic.create *)
@@ -145,7 +142,7 @@ let dummy_parse ?(etype = EParser) s =
   let lexbuf = Lexing.from_string s in
   match Parser.decoder_base Lexer.token lexbuf |> dummy_instruction with
   | i -> Error (etype, i)
-  | (exception Failure _) | (exception Parser.Error) ->
+  | (exception Not_found) | (exception Failure _) | (exception Parser.Error) ->
       Error (EMnemonic, empty_instruction)
 
 let parse_result s =
@@ -166,6 +163,7 @@ let parse_result s =
         (pos.pos_cnum - pos.pos_bol)
         (Lexing.lexeme lexbuf) s;
       dummy_parse s
+  | Not_found -> Error (EMnemonic, empty_instruction)
 
 let decode addr bytes = Amd64dba.decode ~m64:true ~addr bytes |> parse_result
 

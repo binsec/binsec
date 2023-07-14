@@ -21,8 +21,30 @@
 
 type time = { mutable sec : float }
 
-module Exploration () : Types.EXPLORATION_STATISTICS = struct
+module Exploration () : Types.EXPLORATION_STATISTICS_FULL = struct
   let paths = ref 1
+
+  let counter =
+    let halt = ref 0
+    and cut = ref 0
+    and unsatisfiable_assumption = ref 0
+    and assertion_failed = ref 0
+    and max_depth = ref 0
+    and enumeration_limit = ref 0
+    and unresolved_formula = ref 0
+    and non_executable_code = ref 0
+    and die = ref 0 in
+    fun (status : Types.status) ->
+      match status with
+      | Halt -> halt
+      | Cut -> cut
+      | Unsatisfiable_assumption -> unsatisfiable_assumption
+      | Assertion_failed -> assertion_failed
+      | Max_depth -> max_depth
+      | Enumeration_limit -> enumeration_limit
+      | Unresolved_formula -> unresolved_formula
+      | Non_executable_code -> non_executable_code
+      | Die -> die
 
   let completed_paths = ref 0
 
@@ -66,6 +88,8 @@ module Exploration () : Types.EXPLORATION_STATISTICS = struct
 
   let get_unknown_paths () = !unknown_paths
 
+  let get_status status = !(counter status)
+
   let get_total_asserts () = !total_asserts
 
   let get_failed_asserts () = !failed_asserts
@@ -80,9 +104,14 @@ module Exploration () : Types.EXPLORATION_STATISTICS = struct
 
   let add_path () = incr paths
 
-  let terminate_path () = incr completed_paths
-
-  let interrupt_path () = incr unknown_paths
+  let terminate_path (status : Types.status) =
+    incr (counter status);
+    match status with
+    | Halt | Cut | Assertion_failed | Unsatisfiable_assumption ->
+        incr completed_paths
+    | Max_depth | Enumeration_limit | Unresolved_formula | Non_executable_code
+    | Die ->
+        incr unknown_paths
 
   let add_assert () = incr total_asserts
 

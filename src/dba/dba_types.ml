@@ -36,11 +36,15 @@ module Caddress = struct
     let compare a1 a2 =
       let c = Virtual_address.compare a1.base a2.base in
       if c = 0 then a1.id - a2.id else c
+
+    let hash = Hashtbl.hash
   end
 
   include Basic_types.Collection_make.Default (X)
 
   let compare = X.compare
+
+  let hash = X.hash
 
   let create base id =
     assert (id >= 0);
@@ -440,3 +444,6 @@ type program = {
   initializations : Dba.Instr.t list;
   instructions : dbainstrmap;
 }
+
+module Var : Sigs.Collection with type t = Dba.Var.t =
+  Basic_types.Collection_make.Default (Dba.Var)

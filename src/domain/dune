@@ -1,0 +1,8 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.domains)
+ (name domains)
+ (modules :standard)
+ (private_modules common interval)
+ (libraries zarith))

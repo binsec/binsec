@@ -1,0 +1,4 @@
+(install
+ (package binsec)
+ (section bin)
+ (files make_coredump.sh))

@@ -1,0 +1,28 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.parser)
+ (name libparser)
+ (modules :standard \ dypgen_wrapper syntax_temp)
+ (flags
+  (:standard -open Binsec -w "-27-32-58"))
+ (libraries binsec dyp))
+
+(executable
+ (name dypgen_wrapper)
+ (modules dypgen_wrapper)
+ (libraries unix binsec))
+
+(rule
+ (targets syntax.mli syntax.ml syntax_temp.ml)
+ (deps
+  (:exe dypgen_wrapper.exe)
+  (:src syntax.dyp))
+ (action
+  (run
+   %{exe}
+   %{lib:dyp:META}
+   %{lib:zarith:META}
+   %{lib:binsec:META}
+   %{bin:dypgen}
+   %{src})))

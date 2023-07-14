@@ -29,7 +29,7 @@ Find the secret such that the challenge outputs `Good password!`.
 
 ```console
 $ binsec -sse -sse-script crackme.ini -sse-depth 10000 \
-  -sse-self-written-enum 1 -sse-alternative-engine core.snapshot
+  -sse-self-written-enum 1 core.snapshot
 ```
 
 # Expect

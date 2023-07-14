@@ -21,7 +21,7 @@
 
 (** Kernel general command-line options. *)
 
-include Cli.Make (struct
+include Cli.Options (struct
   let shortname = "" (* This is the only one :-) *)
 
   let name = "Kernel"
@@ -100,6 +100,7 @@ module Machine = struct
         ("amd64", Machine.amd64);
         ("arm32", Machine.(armv7 LittleEndian));
         ("aarch64", Machine.(armv8 LittleEndian));
+        ("ppc64", Machine.ppc64 BigEndian);
         ("riscv", Machine.riscv `x32);
         ("riscv64", Machine.riscv `x64);
         ("z80", Machine.z80);

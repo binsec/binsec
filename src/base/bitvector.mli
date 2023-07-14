@@ -179,6 +179,9 @@ val to_int : t -> int
 
 val to_uint : t -> int
 
+val of_bits : string -> t
+(** [of_bits s] cast an ascii string [s] to its bitvector representation. *)
+
 val of_string : string -> t
 (** [of_string s] converts a string [s] whose format respects
     ([+-])?0[xb][0-9]+ i.e., hex and bin strings

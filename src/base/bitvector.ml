@@ -285,12 +285,12 @@ let shift_right bv i = update bv (Z.shift_right (value_of bv) i)
 let shift_right_signed bv i = update bv (Z.shift_right (signed_of bv) i)
 
 let rotate_left bv i =
-  let value = value_of bv in
+  let i = i mod size_of bv and value = value_of bv in
   update bv
     (Z.logor (Z.shift_left value i) (Z.shift_right value (size_of bv - i)))
 
 let rotate_right bv i =
-  let value = value_of bv in
+  let i = i mod size_of bv and value = value_of bv in
   update bv
     (Z.logor (Z.shift_right value i) (Z.shift_left value (size_of bv - i)))
 
@@ -377,6 +377,8 @@ let to_asciistring bv : string =
 
 let to_string bv =
   if size_of bv mod 4 == 0 then to_hexstring bv else to_bitstring bv
+
+let of_bits str = create (Z.of_bits str) (8 * String.length str)
 
 let of_string str =
   let len = String.length str in

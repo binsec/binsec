@@ -23,16 +23,11 @@ default: binsec
 
 ifneq (, $(shell command -v opam 2> /dev/null))
 
-define install_deps
-	$(shell dune external-lib-deps --missing $(1) 2>&1 \
-	      | grep -e "opam install")
-endef
-
 OCAML_COMPILER ?= $(shell opam switch list | grep -m 1 -oe "ocaml-system[^ ]*")
 
 _opam:
 	opam switch create . $(OCAML_COMPILER) --no-install
-	opam install tuareg merlin ocamlformat user-setup -y
+	opam install merlin ocamlformat=0.19.0 user-setup -y
 	opam user-setup install
 	opam pin add . -n
 	opam install binsec --deps-only --with-test --with-doc -y
@@ -73,7 +68,6 @@ endif
 binsec:
 	$(call check_dune)
 	$(call apply_ocamlformat)
-	$(call install_deps,@install)
 	dune build @install
 
 install: binsec
@@ -84,12 +78,10 @@ uninstall:
 	dune uninstall $(INSTALL_FLAGS)
 
 test: binsec
-	$(call install_deps,@runtest)
 	dune build @runtest
 
 doc:
 	$(call check_dune)
-	$(call install_deps,@doc)
 	dune build @doc
 	@echo "Documentation available @ _build/default/_doc/_html/"
 

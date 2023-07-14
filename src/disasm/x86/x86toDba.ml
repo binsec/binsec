@@ -1262,37 +1262,37 @@ let mk_rhs_reg mode ereg =
   let cst = cst_of_int (nbytes_mode mode) 32 in
   Dba.(Expr.ite (expr_of_flag DF) (Expr.sub ereg cst) (Expr.add ereg cst))
 
-let repeat_instrs rep l =
+let repeat_instrs rep addr nextaddr l =
   match rep with
   | NoRep -> l
   | _ ->
-      let size = List.length l + 3 in
       let ecx = expr_of_reg32 ECX in
       let zf = expr_of_flag ZF in
       let pre_l =
         Predba.conditional_jump
           Dba.Expr.(equal ecx (zeros 32))
-          (Dba.JInner size)
+          (Dba.JOuter nextaddr)
       in
+      let self = Dba.JOuter (Dba_types.Caddress.of_virtual_address addr) in
       let post_l =
         [
           Predba.assign (lhs_of_reg32 ECX) (Dba.Expr.sub ecx (cst_of_int 1 32));
           (match rep with
           | NoRep -> assert false
-          | Rep -> Predba.static_jump (Dba.JInner 0)
-          | RepE -> Predba.conditional_jump zf (Dba.JInner 0)
-          | RepNE -> Predba.conditional_jump (Dba.Expr.lognot zf) (Dba.JInner 0));
+          | Rep -> Predba.static_jump self
+          | RepE -> Predba.conditional_jump zf self
+          | RepNE -> Predba.conditional_jump (Dba.Expr.lognot zf) self);
         ]
       in
       (* assert l does not contain Jump instructions *)
-      (pre_l :: l) @ post_l
+      pre_l :: (l @ post_l)
 
-let lift_movs mode rep sreg =
+let lift_movs mode rep addr nextaddr sreg =
   (* Segment register for ESI can be overriden : see 3-489 *)
   let esi_reg = sreg
   (* Segment register for EDI is fixed : see 3-489 *)
   and edi_reg = Some X86Types.ES in
-  repeat_instrs rep
+  repeat_instrs rep addr nextaddr
   @@ [
        Predba.assign
          (lhs_of_mem mode edi_expr ~sreg:edi_reg)
@@ -1301,26 +1301,26 @@ let lift_movs mode rep sreg =
        Predba.assign edi_lval (mk_rhs_reg mode edi_expr);
      ]
 
-let lift_lods mode rep sreg =
-  repeat_instrs rep
+let lift_lods mode rep addr nextaddr sreg =
+  repeat_instrs rep addr nextaddr
   @@ [
        Predba.assign (lhs_of_reg EAX mode) (expr_of_mem mode esi_expr ~sreg);
        Predba.assign esi_lval (mk_rhs_reg mode esi_expr);
      ]
 
-let lift_stos mode rep sreg =
-  repeat_instrs rep
+let lift_stos mode rep addr nextaddr sreg =
+  repeat_instrs rep addr nextaddr
   @@ [
        Predba.assign (lhs_of_mem mode edi_expr ~sreg) (expr_of_reg mode EAX);
        Predba.assign edi_lval (mk_rhs_reg mode edi_expr);
      ]
 
-let lift_cmps mode rep sreg =
+let lift_cmps mode rep addr nextaddr sreg =
   let sreg = match sreg with None -> Some ES | _ -> sreg in
   let gop1 = expr_of_mem mode esi_expr ~sreg in
   let gop2 = expr_of_mem mode edi_expr ~sreg in
   let res = res_expr mode in
-  repeat_instrs rep
+  repeat_instrs rep addr nextaddr
   @@ Predba.assign (res_lhs mode) (Dba.Expr.sub gop1 gop2)
      :: affect_flags_cmp gop1 gop2 res (size_mode mode)
   @ [
@@ -1328,10 +1328,10 @@ let lift_cmps mode rep sreg =
       Predba.assign edi_lval (mk_rhs_reg mode edi_expr);
     ]
 
-let lift_scas mode rep sreg =
+let lift_scas mode rep addr nextaddr sreg =
   let sreg = match sreg with None -> Some ES | _ -> sreg in
   let res = res_expr mode in
-  repeat_instrs rep
+  repeat_instrs rep addr nextaddr
   @@ Predba.assign (res_lhs mode)
        (Dba.Expr.sub (expr_of_reg mode EAX) (expr_of_mem mode edi_expr ~sreg))
      :: affect_flags_cmp (expr_of_reg mode EAX)
@@ -1558,7 +1558,7 @@ let lift_mul = lift_xmul Dba.Expr.uext affect_flags_mul None (Reg EAX)
 
 let lift_imul = lift_xmul Dba.Expr.sext affect_flags_imul
 
-let lift_xdiv div rem cond_err mode gop sreg =
+let lift_xdiv div rem ext cond_err mode gop sreg =
   let open Dba in
   let size = size_mode mode in
   let double_size = 2 * size in
@@ -1585,8 +1585,8 @@ let lift_xdiv div rem cond_err mode gop sreg =
   in
   Predba.dynamic_assert (Expr.diff src_expr (Expr.zeros size))
   :: Predba.assign div_lval rval_dividend
-  :: Predba.assign quo_lval (div div_rval (Expr.sext double_size src_expr))
-  :: Predba.assign rem_lval (rem div_rval (Expr.sext double_size src_expr))
+  :: Predba.assign quo_lval (div div_rval (ext double_size src_expr))
+  :: Predba.assign rem_lval (rem div_rval (ext double_size src_expr))
   :: Predba.dynamic_assert (cond_err quo_rval)
   :: Predba.assign (lhs_of_reg EAX mode) (Expr.restrict 0 (size - 1) quo_rval)
   :: Predba.assign lval_remainder (Expr.restrict 0 (size - 1) rem_rval)
@@ -1598,7 +1598,7 @@ let lift_div =
     let size = double_size / 2 in
     Dba.Expr.(equal (restrict size (double_size - 1) res) (zeros size))
   in
-  lift_xdiv Dba.Expr.udiv Dba.Expr.umod cond_err
+  lift_xdiv Dba.Expr.udiv Dba.Expr.umod Dba.Expr.uext cond_err
 
 let lift_idiv =
   let cond_err res =
@@ -1609,7 +1609,7 @@ let lift_idiv =
         (restrict size (double_size - 1) res)
         (sext size (bit_restrict (size - 1) res)))
   in
-  lift_xdiv Dba.Expr.sdiv Dba.Expr.smod cond_err
+  lift_xdiv Dba.Expr.sdiv Dba.Expr.smod Dba.Expr.sext cond_err
 
 let lift_cbw mode =
   match mode with
@@ -2736,7 +2736,7 @@ let lift_mv_seg_right ~dst ~src sreg =
   | Address _ -> [ Predba.assign (disas_lval16 dst sreg) (src 16) ]
   | Imm _ -> assert false
 
-let instruction_to_dba sreg nextaddr opcode instruction =
+let instruction_to_dba sreg addr nextaddr opcode instruction =
   match instruction with
   | Push (mode, genop) -> lift_push mode genop sreg
   | PushS reg -> lift_pushS reg sreg
@@ -2757,7 +2757,7 @@ let instruction_to_dba sreg nextaddr opcode instruction =
   | Shiftd (mode, shift_op, gop1, gop2, gop8) ->
       lift_shiftd mode shift_op gop1 gop2 gop8 sreg
   | Cmp (mode, gop1, gop2) -> lift_cmp mode gop1 gop2 sreg
-  | Cmps (rep, mode) -> lift_cmps mode rep sreg
+  | Cmps (rep, mode) -> lift_cmps mode rep addr nextaddr sreg
   | CmpXchg (mode, gop1, gop2) -> lift_cmpXchg mode gop1 gop2 sreg
   | Test (mode, gop1, gop2) -> lift_test mode gop1 gop2 sreg
   | Movd (xmm, pos, gop1, gop2) -> lift_movd xmm pos gop1 gop2 sreg
@@ -2765,10 +2765,10 @@ let instruction_to_dba sreg nextaddr opcode instruction =
       [ assign_xmm_zero_ext ~dst 0 63 ~src 0 63 xmm mm sreg ]
   | MovdQA (xmm, mm, gop1, gop2) | MovdQU (xmm, mm, gop1, gop2) ->
       [ assign_xmm gop1 0 127 gop2 0 127 xmm mm sreg ]
-  | Movs (rep, mode) -> lift_movs mode rep sreg
-  | Lods (rep, mode) -> lift_lods mode rep sreg
-  | Stos (rep, mode) -> lift_stos mode rep sreg
-  | Scas (rep, mode) -> lift_scas mode rep sreg
+  | Movs (rep, mode) -> lift_movs mode rep addr nextaddr sreg
+  | Lods (rep, mode) -> lift_lods mode rep addr nextaddr sreg
+  | Stos (rep, mode) -> lift_stos mode rep addr nextaddr sreg
+  | Scas (rep, mode) -> lift_scas mode rep addr nextaddr sreg
   | CMovcc (mode, cc, gop1, gop2) -> lift_cmovcc mode cc gop1 gop2 nextaddr sreg
   | Movaps (simd_sz, dst, src) -> lift_movaps ~src ~dst simd_sz sreg
   | Movlpd (mm, gop1, gop2) -> [ assign_xmm gop1 0 63 gop2 0 63 XMM mm sreg ]
@@ -2945,8 +2945,8 @@ let instruction_to_dba sreg nextaddr opcode instruction =
 
 (* End instruction_to_dba *)
 
-let aux_decode ins nextaddr sreg opcode =
-  let dba_instructions = instruction_to_dba sreg nextaddr opcode ins in
+let aux_decode ins addr nextaddr sreg opcode =
+  let dba_instructions = instruction_to_dba sreg addr nextaddr opcode ins in
   let check elem =
     try
       if not (Dba_utils.checksize_instruction elem) then
@@ -2975,7 +2975,7 @@ let decaux basic_instr addr sreg =
     Virtual_address.add_int (Size.Byte.to_int basic_instr.size) addr
     |> Dba_types.Caddress.of_virtual_address
   in
-  aux_decode basic_instr.mnemonic nextaddr sreg basic_instr.opcode
+  aux_decode basic_instr.mnemonic addr nextaddr sreg basic_instr.opcode
 
 let x86decode = X86decoder.read
 

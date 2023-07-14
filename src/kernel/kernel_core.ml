@@ -51,7 +51,7 @@ let binary_descr () =
 let version () =
   if Version.get () then (
     Logger.set_log_level "result";
-    Format.printf "Binsec version %%VERSION%%";
+    Format.printf "Binsec version %%VERSION%%\n";
     exit 0)
 
 let _ =

@@ -25,44 +25,14 @@
  (name libsse)
  (modules :standard \ sse)
  (flags
-  (:standard -open Binsec))
+  (:standard -open Binsec -w "-58"))
  (libraries
   threads
   toml
   binsec
+  libparser
   (select
    screen.ml
    from
    (curses -> screen.enabled.ml)
    (!curses -> screen.stubs.ml))))
-
-(rule
- (copy ../ast/expr_parser.mly expr_parser.mly))
-
-(rule
- (copy ../ast/instr_parser.mly instr_parser.mly))
-
-(rule
- (copy ../ast/chunk_parser.mly chunk_parser.mly))
-
-(rule
- (with-stdout-to
-  script_lexer.mll
-  (progn
-   (cat script_lexer.mll.header)
-   (cat ../ast/ast_lexer.mll.decl)
-   (cat script_lexer.mll.ext)
-   (cat ../ast/ast_lexer.mll.body))))
-
-(menhir
- (modules expr_parser instr_parser chunk_parser script_parser)
- (flags --only-tokens)
- (merge_into sse_tokens))
-
-(menhir
- (modules expr_parser instr_parser chunk_parser param_parser script_parser)
- (flags --fixed-exception --external-tokens Sse_tokens --strict --explain)
- (merge_into sse_parser))
-
-(ocamllex
- (modules script_lexer))

@@ -53,8 +53,6 @@ module Caddress : sig
 
   val reid : t -> int -> t
 
-  val equal : t -> t -> bool
-
   val pp_base : Format.formatter -> t -> unit
   (** [pp_base caddr] only print the base address of the DBA code address as
       hexadecimal, thus ignoring the [id] part
@@ -71,7 +69,7 @@ module Caddress : sig
 
   val to_virtual_address : t -> Virtual_address.t
 
-  include COMPARABLE with type t := t
+  include HASHABLE with type t := t
 end
 
 module AddressStack : sig
@@ -83,6 +81,8 @@ module AddressStack : sig
 end
 
 (** {2 DBA AST modules} *)
+
+module Var : Sigs.Collection with type t = Dba.Var.t
 
 module Expr : sig
   type t = Dba.Expr.t

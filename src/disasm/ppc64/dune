@@ -1,0 +1,17 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.ppc64decoder)
+ (name ppc64decoder)
+ (modules (:standard))
+ (library_flags
+  (:standard -linkall))
+ (flags
+  (:standard -w -3 -open Binsec))
+ (libraries
+  binsec
+  (select
+   ppc64ToDba.ml
+   from
+   (unisim_archisec.ppc64dba -> ppc64ToDba.enabled.ml)
+   (-> ppc64ToDba.disabled.ml))))

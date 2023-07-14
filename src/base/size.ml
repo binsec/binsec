@@ -66,6 +66,8 @@ module Bit = struct
 
   let bits2 = create 2
 
+  let bits4 = create 4
+
   let bits8 = create 8
 
   let bits16 = create 16
@@ -94,4 +96,18 @@ module Byte = struct
     div n b
 
   let unsafe_of_bits n = of_bitsize (create n)
+
+  let one = create 1
+
+  let two = create 2
+
+  let four = create 4
+
+  let eight = create 8
+
+  let fifteen = create 15
+
+  let sixteen = create 16
+
+  let thirtytwo = create 32
 end

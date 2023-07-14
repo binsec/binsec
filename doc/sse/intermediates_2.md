@@ -286,11 +286,9 @@ The script is available [here](../../examples/sse/crackmes/trycrackme/crackme.in
 
 Now, all we have to do is launch the following **BINSEC** command line.
 ```console
-binsec -sse -sse-script crackme.ini -sse-depth 10000 core.snapshot -sse-alternative-engine
+binsec -sse -sse-script crackme.ini -sse-depth 10000 core.snapshot
 ```
-We use two special option here:
-- `-sse-depth 10000` in order to increase the maximum trace size of the exploration from `1000` to `10000`;
-- `-sse-alternative-engine` to enable the experimental SSE engine -- offering better performance with core dump initialization.
+We use option `-sse-depth 10000` in order to increase the maximum trace size of the exploration from `1000` to `10000`.
 
 Then is the solution.
 ```console
@@ -333,8 +331,7 @@ There are other similar challenges in [crackmes examples](../../examples/sse/cra
 Let us just recap how to proceed:
 - generate a core dump with GDB, setting the `LD_BIND_NOW` environment variable;
 - identify the success and failure conditions (most likely, the output of some predefined strings);
-- identify and handle the input and output functions;
-- run **BINSEC** with the `-sse-alternative-engine` option.
+- identify and handle the input and output functions.
 
 Have a nice day :-)
 

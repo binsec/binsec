@@ -189,6 +189,8 @@ module Printer = struct
   and def = Bl of Expr.t | Bv of Expr.t | Ax of Memory.t
 
   and t = {
+    fvariables : Expr.t StTbl.t;
+    farrays : Memory.t StTbl.t;
     mutable id : Suid.t;
     bv_decl : string BvTbl.t;
     bl_cons : string BvTbl.t;
@@ -209,6 +211,8 @@ module Printer = struct
     BvTbl.add bl_cons Expr.one "true";
     BvTbl.add bv_cons Expr.one "#b1";
     {
+      fvariables = StTbl.create 16;
+      farrays = StTbl.create 4;
       id = next_id;
       bv_decl = BvTbl.create 16;
       bl_cons;
@@ -272,6 +276,7 @@ module Printer = struct
     with Not_found -> (
       match bv with
       | Var { name; size; label; _ } ->
+          StTbl.add ctx.fvariables name bv;
           let name = ctx.debug ~name ~label in
           BvTbl.add ctx.bv_cons bv name;
           if size = 1 then
@@ -342,13 +347,13 @@ module Printer = struct
           AxTbl.add ctx.ax_root ax ax;
           AxTbl.add ctx.ordered_mem ax (Queue.create ())
       | Symbol name ->
+          StTbl.add ctx.farrays name ax;
           AxTbl.add ctx.ax_cons ax name;
           AxTbl.add ctx.ax_root ax ax;
           AxTbl.add ctx.ordered_mem ax (Queue.create ())
-      | Layer { addr = Cst _; store; over; _ }
-      | Overlay { addr = Cst _; store; over; _ } ->
+      | Layer { addr = Cst _; store; over; _ } ->
           AxTbl.add ctx.ax_cons ax once;
-          Store.iter
+          Store.iter_term
             (fun _ bv ->
               visit_bv ctx bv;
               if Expr.sizeof bv > 1 then visit_bv ctx bv)
@@ -358,7 +363,7 @@ module Printer = struct
           AxTbl.add ctx.ax_root ax root;
           Queue.push (Ax ax) ctx.ordered_defs;
           let ordered_mem = AxTbl.find ctx.ordered_mem root in
-          Store.iter
+          Store.iter_term
             (fun i bv ->
               let index =
                 Format.asprintf "%a" (pp_int_as_offset ctx.word_size) i
@@ -367,11 +372,11 @@ module Printer = struct
                 (Store ((index, ctx.word_size), Expr.sizeof bv))
                 ordered_mem)
             store
-      | Layer { addr; store; over; _ } | Overlay { addr; store; over; _ } ->
+      | Layer { addr; store; over; _ } ->
           AxTbl.add ctx.ax_cons ax once;
           visit_bv ctx addr;
           visit_bv ctx addr;
-          Store.iter
+          Store.iter_term
             (fun _ bv ->
               visit_bv ctx bv;
               if Expr.sizeof bv > 1 then visit_bv ctx bv)
@@ -382,7 +387,7 @@ module Printer = struct
           Queue.push (Ax ax) ctx.ordered_defs;
           let ordered_mem = AxTbl.find ctx.ordered_mem root in
           let index = BvTbl.find ctx.bv_cons addr in
-          Store.iter
+          Store.iter_term
             (fun i bv ->
               let index =
                 Format.asprintf "(bvadd %s %a)" index
@@ -615,8 +620,8 @@ module Printer = struct
     match ax with
     | Root -> Suid.pp ppf Suid.zero
     | Symbol _ -> assert false
-    | Layer { addr; store; over; _ } | Overlay { addr; store; over; _ } ->
-        Store.iter
+    | Layer { addr; store; over; _ } ->
+        Store.iter_term
           (fun _ value ->
             for _ = 1 to Expr.sizeof value lsr 3 do
               Format.pp_print_string ppf "(store";
@@ -657,7 +662,7 @@ module Printer = struct
             print_bv ctx ppf bv;
             Format.pp_print_char ppf ')')
         in
-        Store.iter (unroll_store 0) store
+        Store.iter_term (unroll_store 0) store
 
   and print_multi_select =
     let rec print_multi_select_le ppf len ax bv size =
@@ -886,11 +891,10 @@ module Cross = struct
           in
           AxTbl.add ctx.ax_cons ax var;
           AxTbl.add ctx.ax_decl ax (Formula.mk_ax_decl var [])
-      | Memory.Layer { addr; store; over; _ }
-      | Memory.Overlay { addr; store; over; _ } ->
+      | Memory.Layer { addr; store; over; _ } ->
           AxTbl.add ctx.ax_cons ax ax_once;
           visit_bv ctx addr;
-          Store.iter (fun _ bv -> visit_bv ctx bv) store;
+          Store.iter_term (fun _ bv -> visit_bv ctx bv) store;
           visit_ax ctx over;
           Queue.push (Ax ax) ctx.ordered)
 
@@ -1021,10 +1025,9 @@ module Cross = struct
   and mk_ax_no_cons ctx ax =
     match ax with
     | Memory.Root | Memory.Symbol _ -> assert false
-    | Memory.Layer { addr; store; over; _ }
-    | Memory.Overlay { addr; store; over; _ } ->
+    | Memory.Layer { addr; store; over; _ } ->
         let addr = mk_bv ctx addr in
-        Store.fold
+        Store.fold_term
           (fun i bv store ->
             Formula.mk_store 1 store
               (Formula.mk_bv_add addr
@@ -1127,7 +1130,7 @@ module Solver () : Solver_sig.S = struct
       ctx := Some x;
       x
     in
-    Printer.visit_ax ctx Memory.Root;
+    Printer.visit_ax ctx Memory.root;
     Printer.visit_bv ctx e;
     Printer.visit_bv ctx e;
     put ctx session.formatter constraints;
@@ -1139,7 +1142,7 @@ module Solver () : Solver_sig.S = struct
       ctx := Some x;
       x
     in
-    Printer.visit_ax ctx Memory.Root;
+    Printer.visit_ax ctx Memory.root;
     put ctx session.formatter constraints
 
   let get e = (BvTbl.find (Option.get !ctx).bv_cons e, Expr.sizeof e)
@@ -1174,6 +1177,10 @@ module Solver () : Solver_sig.S = struct
         pp_bv ppf x s;
         Format.pp_print_char ppf ')')
       x
+
+  let iter_free_variables f = StTbl.iter f (Option.get !ctx).fvariables
+
+  let iter_free_arrays f = StTbl.iter f (Option.get !ctx).farrays
 
   let get_array ar =
     match AxTbl.find (Option.get !ctx).ordered_mem ar with

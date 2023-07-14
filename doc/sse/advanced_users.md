@@ -85,7 +85,7 @@ Still, if we have good reasons to think that the code being written is constant 
 The solution script is given [here](../../examples/sse/crackmes/hidden_password/crackme.ini) and the command is the following.
 ```console
 $ binsec -sse -sse-script crackme.ini -sse-depth 10000 \
-  -sse-self-written-enum 1 -sse-alternative-engine core.snapshot
+  -sse-self-written-enum 1 core.snapshot
 ```
 Then is the solution.
 ```

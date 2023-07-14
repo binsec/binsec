@@ -28,7 +28,7 @@ Nothing ground breaking, everything should work as before, except for the
 very first line of log.
 
 ```console
-$ binsec -sse -sse-script crackme.ini very_success.exe
+$ binsec -sse -sse-legacy-engine -sse-script crackme.ini very_success.exe
 [sse:info] TTY: press [space] to switch between log and monitor modes.
 ```
 Here is what we get if we have the courage to press the `space bar` on
@@ -110,9 +110,8 @@ the command-line option `-entrypoint` or the script directive
 
 :bell: The attentive readers will have noticed that most of the time
 is spent in exploration instead of reasoning in the illustrative example.  
-Although it is still experimental, in most case you will get the best out
-of BINSEC by using the new engine with the command-line option
-`-sse-alternative-engine`.  
+In most case, you will get the best out of BINSEC not using the option
+`-sse-legacy-engine`.  
 Well... here, you may not even have the time to switch between screen ;-)
 
 ### Miscellaneous

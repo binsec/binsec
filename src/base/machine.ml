@@ -26,6 +26,7 @@ type endianness = LittleEndian | BigEndian
 type isa =
   | Unknown
   | ARM of { rev : [ `v7 | `v8 ]; endianness : endianness }
+  | PPC of { bits : [ `x32 | `x64 ]; endianness : endianness }
   | RISCV of { bits : [ `x32 | `x64 | `x128 ] }
   | X86 of { bits : [ `x16 | `x32 | `x64 ] }
   | Z80
@@ -40,6 +41,7 @@ module ISA = struct
   let endianness = function
     | Unknown -> failwith unknown_msg
     | ARM { endianness; _ } -> endianness
+    | PPC { endianness; _ } -> endianness
     | RISCV _ -> LittleEndian
     | X86 _ -> LittleEndian
     | Z80 -> LittleEndian
@@ -48,6 +50,7 @@ module ISA = struct
     | Unknown -> failwith unknown_msg
     | ARM { rev = `v7; _ } -> `x32
     | ARM { rev = `v8; _ } -> `x64
+    | PPC { bits; _ } -> (bits :> bitwidth)
     | RISCV { bits; _ } -> (bits :> bitwidth)
     | X86 { bits; _ } -> (bits :> bitwidth)
     | Z80 -> `x16
@@ -55,6 +58,7 @@ module ISA = struct
   let stack_register = function
     | Unknown -> failwith unknown_msg
     | ARM _ -> "sp"
+    | PPC _ -> "r1"
     | RISCV _ -> "x2"
     | X86 _ -> "esp"
     | Z80 -> "sp"
@@ -63,6 +67,7 @@ module ISA = struct
     | Unknown -> "unknown"
     | ARM { rev = `v7; _ } -> "armv7"
     | ARM { rev = `v8; _ } -> "armv8"
+    | PPC _ -> "powerpc"
     | RISCV _ -> "risk-v"
     | X86 _ -> "x86"
     | Z80 -> "Z80"
@@ -107,6 +112,8 @@ let amd64 = X86 { bits = `x64 }
 let armv7 endianness = ARM { rev = `v7; endianness }
 
 let armv8 endianness = ARM { rev = `v8; endianness }
+
+let ppc64 endianness = PPC { bits = `x64; endianness }
 
 let riscv bits = RISCV { bits }
 

@@ -131,8 +131,8 @@ module Ehdr = struct
     (* | 0x08 -> Machine.MIPS
      * | 0x0a -> Machine.MIPS
      * | 0x12 -> Machine.SPARC
-     * | 0x14 -> Machine.PowerPC
-     * | 0x15 -> Machine.PPC64 *)
+     * | 0x14 -> Machine.PowerPC *)
+    | 0x15 -> Machine.ppc64 endianness
     | 0x28 -> Machine.armv7 endianness
     (* | 0x2b -> Machine.SPARC
      * | 0x32 -> Machine.IA64
@@ -1422,6 +1422,8 @@ type fmap = {
   mutable name : string;
 }
 
+let fmap addresses offset name = { addresses; offset; name }
+
 let files (i : Img.t) =
   let read =
     match i.header.ident.kind with
@@ -1448,3 +1450,10 @@ let files (i : Img.t) =
           files
       | _ -> result)
     [||] i.notes
+
+module Utils = struct
+  let is_ifunc (img : Img.t) (sym : Sym.t) =
+    match img.vendor with
+    | GNU _ -> ( match sym.kind with OS 10 -> true | _ -> false)
+    | _ -> false
+end

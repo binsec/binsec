@@ -36,20 +36,29 @@ let byteswap e =
   let size = Formula_utils.bv_size e in
   loop e (size - 8) (Formula.mk_bv_extract { lo = size - 8; hi = size - 1 } e)
 
-module S = Basic_types.String.Map
+module VMap = Dba_types.Var.Map
 
-module State (Solver : Smt_sig.Solver) (QS : QUERY_STATISTICS) : STATE = struct
+module State (Solver : Smt_sig.Solver) (QS : QUERY_STATISTICS) : RAW_STATE =
+struct
+  module Uid = struct
+    type t = int
+
+    let zero = 0
+
+    let succ = ( + ) 1
+
+    let compare = ( - )
+  end
+
   type t = {
-    formula : Formula.formula;
+    mutable formula : Formula.formula;
     (* SMT2 formula *)
-    vsymbols : Formula.bv_term S.t;
+    vsymbols : Formula.bv_term VMap.t;
     (* collection of visible symbols *)
     vmemory : Formula.ax_term;
     (* visible memory *)
-    fid : int;
+    mutable fid : int;
     (* unique indice counter *)
-    fvariables : Formula.bv_var list S.t;
-    (* collection of free variables *)
     fmemory : Formula.ax_var;
     (* initial memory *)
     model : Smt_model.t; (* a model that satisfy constraints *)
@@ -61,31 +70,15 @@ module State (Solver : Smt_sig.Solver) (QS : QUERY_STATISTICS) : STATE = struct
   module Value = struct
     type t = Formula.bv_term
 
+    let kind = Abstract
+
     let constant = Formula.mk_bv_cst
 
-    let lookup (v : Dba.Var.t) t =
-      try S.find v.name t.vsymbols with Not_found -> raise (Undef v)
-
-    let read ~addr bytes (dir : Machine.endianness) t =
-      let array = t.vmemory in
-      let content = Formula.mk_select bytes array addr in
-      let content =
-        match dir with LittleEndian -> content | BigEndian -> byteswap content
-      in
-      (content, t)
-
-    let select _ ~addr:_ _ _ _ = raise (Errors.not_yet_implemented "arrays")
+    let var id name size =
+      Formula.mk_bv_var (Formula.bv_var (Printf.sprintf "%s_0%d" name id) size)
 
     let ite cond then_smt else_smt =
       Formula.(mk_bv_ite (mk_bv_equal cond mk_bv_one) then_smt else_smt)
-
-    let unary e (op : Dba.Unary_op.t) =
-      match op with
-      | Not -> Formula.mk_bv_not
-      | UMinus -> Formula.mk_bv_neg
-      | Sext n -> Formula.mk_bv_sign_extend (n - Dba.Expr.size_of e)
-      | Uext n -> Formula.mk_bv_zero_extend (n - Dba.Expr.size_of e)
-      | Restrict interval -> Formula.mk_bv_extract interval
 
     let as_bv bop e1 e2 = Formula.(mk_bv_ite (bop e1 e2) mk_bv_one mk_bv_zero)
 
@@ -145,29 +138,6 @@ module State (Solver : Smt_sig.Solver) (QS : QUERY_STATISTICS) : STATE = struct
       | LeftRotate -> rotate_left
       | RightRotate -> rotate_right
 
-    let rec eval (e : Dba.Expr.t) state =
-      match e with
-      | Var { info = Symbol (_, (lazy bv)); _ } | Cst bv -> Formula.mk_bv_cst bv
-      | Var v -> lookup v state
-      | Load (bytes, dir, e, None) ->
-          let smt_e = eval e state in
-          fst (read ~addr:smt_e bytes dir state)
-      | Load _ -> raise (Errors.not_yet_implemented "arrays")
-      | Binary (bop, lop, rop) as e ->
-          Logger.debug ~level:6 "Translating binary %a"
-            Dba_printer.Ascii.pp_bl_term e;
-          let l_smt_e = eval lop state in
-          let r_smt_e = eval rop state in
-          binary bop l_smt_e r_smt_e
-      | Unary (uop, e) ->
-          let v = eval e state in
-          unary e uop v
-      | Ite (c, then_e, else_e) ->
-          let cond = eval c state in
-          let then_smt = eval then_e state in
-          let else_smt = eval else_e state in
-          ite cond then_smt else_smt
-
     let unary_op (op : Term.unary Term.operator) =
       match op with
       | Not -> Formula.BvNot
@@ -210,6 +180,19 @@ module State (Solver : Smt_sig.Solver) (QS : QUERY_STATISTICS) : STATE = struct
     let binary op e1 e2 = binary (binary_op op) e1 e2
   end
 
+  let lookup (v : Dba.Var.t) t =
+    try VMap.find v t.vsymbols with Not_found -> raise (Undef v)
+
+  let read ~addr bytes (dir : Machine.endianness) t =
+    let array = t.vmemory in
+    let content = Formula.mk_select bytes array addr in
+    let content =
+      match dir with LittleEndian -> content | BigEndian -> byteswap content
+    in
+    (content, t)
+
+  let select _ ~addr:_ _ _ _ = raise (Errors.not_yet_implemented "arrays")
+
   let empty () =
     let word_size = Kernel_options.Machine.word_size () in
     let fmemory = Formula.ax_var (memory_name ^ "_0") word_size byte_size in
@@ -217,10 +200,9 @@ module State (Solver : Smt_sig.Solver) (QS : QUERY_STATISTICS) : STATE = struct
       formula =
         Formula.empty
         |> Formula.push_back_declare @@ Formula.mk_ax_decl fmemory [];
-      vsymbols = S.empty;
+      vsymbols = VMap.empty;
       vmemory = Formula.mk_ax_var fmemory;
       fid = 1;
-      fvariables = S.empty;
       fmemory;
       model = Smt_model.empty;
     }
@@ -234,30 +216,15 @@ module State (Solver : Smt_sig.Solver) (QS : QUERY_STATISTICS) : STATE = struct
         Formula_pp.pp_varset keep;
     Formula_transformation.optimize_from_options ?is_controlled:None ~keep fm
 
-  let fresh ({ name; size; _ } : Dba.Var.t) state =
-    let v = Formula.bv_var (Printf.sprintf "%s_%d" name state.fid) size in
-    let fid = state.fid + 1 in
-    let h =
-      match S.find name state.fvariables with
-      | exception Not_found -> [ v ]
-      | h -> v :: h
-    in
-    let fvariables = S.add name h state.fvariables in
-    let vsymbols = S.add name (Formula.mk_bv_var v) state.vsymbols in
-    let formula =
-      state.formula |> Formula.push_front_declare @@ Formula.mk_bv_decl v []
-    in
-    { state with formula; vsymbols; fid; fvariables }
-
   let alloc ~array:_ _ = raise (Errors.not_yet_implemented "arrays")
 
-  let assign name value state =
+  let assign (lval : Dba.Var.t) value state =
     let value_size = Formula_utils.bv_size value in
     let var =
-      Formula.bv_var (Printf.sprintf "%s_%d" name state.fid) value_size
+      Formula.bv_var (Printf.sprintf "%s_%d" lval.name state.fid) value_size
     in
     let fid = state.fid + 1 in
-    let vsymbols = S.add name (Formula.mk_bv_var var) state.vsymbols in
+    let vsymbols = VMap.add lval (Formula.mk_bv_var var) state.vsymbols in
     let formula =
       state.formula
       |> Formula.push_front_define @@ Formula.mk_bv_def var [] value
@@ -308,12 +275,11 @@ module State (Solver : Smt_sig.Solver) (QS : QUERY_STATISTICS) : STATE = struct
   module Solver = struct
     let extract_model session vars memory =
       let model = Smt_model.create () in
-      S.iter
-        (fun _ ->
-          List.iter (fun var ->
-              Smt_model.add_var model
-                (Formula_utils.bv_var_name var)
-                (Solver.get_bv_value session (Formula.mk_bv_var var))))
+      List.iter
+        (fun var ->
+          Smt_model.add_var model
+            (Formula_utils.bv_var_name var)
+            (Solver.get_bv_value session (Formula.mk_bv_var var)))
         vars;
       Array.iter
         (fun (addr, value) -> Smt_model.add_memcell model addr value)
@@ -323,14 +289,67 @@ module State (Solver : Smt_sig.Solver) (QS : QUERY_STATISTICS) : STATE = struct
     let with_solver formula f =
       QS.Solver.start_timer ();
       let session = Solver.open_session () in
-      Formula.iter_forward (Solver.put session) formula;
-      let r = f session in
+      let vars, _ =
+        Formula.fold_forward
+          (fun entry (vars, marked) ->
+            Solver.put session entry;
+            match entry.entry_desc with
+            | Declare { decl_desc = BvDecl (bv_var, _); _ } ->
+                (bv_var :: vars, Formula.VarSet.add (BvVar bv_var) marked)
+            | Declare { decl_desc = BlDecl _ | AxDecl _; _ } -> (vars, marked)
+            | Define { def_desc = BvDef (bv_var, _, bv_term); _ } ->
+                let deps = Formula_utils.bv_term_variables bv_term in
+                ( Formula.VarSet.fold
+                    (fun var vars ->
+                      match var with
+                      | BvVar bv_var when not (Formula.VarSet.mem var marked) ->
+                          bv_var :: vars
+                      | _ -> vars)
+                    deps vars,
+                  Formula.VarSet.add (BvVar bv_var)
+                    (Formula.VarSet.union deps marked) )
+            | Define { def_desc = BlDef (bl_var, _, bl_term); _ } ->
+                let deps = Formula_utils.bl_term_variables bl_term in
+                ( Formula.VarSet.fold
+                    (fun var vars ->
+                      match var with
+                      | BvVar bv_var when not (Formula.VarSet.mem var marked) ->
+                          bv_var :: vars
+                      | _ -> vars)
+                    deps vars,
+                  Formula.VarSet.add (BlVar bl_var)
+                    (Formula.VarSet.union deps marked) )
+            | Define { def_desc = AxDef (ax_var, _, ax_term); _ } ->
+                let deps = Formula_utils.ax_term_variables ax_term in
+                ( Formula.VarSet.fold
+                    (fun var vars ->
+                      match var with
+                      | BvVar bv_var when not (Formula.VarSet.mem var marked) ->
+                          bv_var :: vars
+                      | _ -> vars)
+                    deps vars,
+                  Formula.VarSet.add (AxVar ax_var)
+                    (Formula.VarSet.union deps marked) )
+            | Assert bl_term | Assume bl_term ->
+                let deps = Formula_utils.bl_term_variables bl_term in
+                ( Formula.VarSet.fold
+                    (fun var vars ->
+                      match var with
+                      | BvVar bv_var when not (Formula.VarSet.mem var marked) ->
+                          bv_var :: vars
+                      | _ -> vars)
+                    deps vars,
+                  Formula.VarSet.union deps marked )
+            | Comment _ -> (vars, marked))
+          formula ([], Formula.VarSet.empty)
+      in
+      let r = f session vars in
       Solver.close_session session;
       QS.Solver.stop_timer ();
       r
 
-    let check_satistifiability formula vars memory =
-      with_solver formula (fun session ->
+    let check_satistifiability formula memory =
+      with_solver formula (fun session vars ->
           match Solver.check_sat session with
           | Formula.SAT ->
               QS.Solver.incr_sat ();
@@ -345,8 +364,8 @@ module State (Solver : Smt_sig.Solver) (QS : QUERY_STATISTICS) : STATE = struct
               Logger.warning ~level:0 "SMT query resulted in UNKNOWN";
               raise Unknown)
 
-    let enumerate e ?(n = 1 lsl Formula_utils.bv_size e) formula vars memory =
-      with_solver formula (fun session ->
+    let enumerate e ?(n = 1 lsl Formula_utils.bv_size e) formula memory =
+      with_solver formula (fun session vars ->
           let rec loop e' n enum =
             if n = 0 then enum
             else
@@ -373,14 +392,30 @@ module State (Solver : Smt_sig.Solver) (QS : QUERY_STATISTICS) : STATE = struct
           loop e n [])
   end
 
+  let keep state =
+    VMap.fold
+      (fun _ e k ->
+        match e with
+        | { Formula.bv_term_desc = Formula.BvFun (v, []); _ } ->
+            Formula.VarSet.add (Formula.BvVar v) k
+        | _ -> assert false)
+      state.vsymbols
+    @@
+    match state.vmemory with
+    | { Formula.ax_term_desc = Formula.AxFun (v, []); _ } ->
+        Formula.VarSet.add (Formula.AxVar v)
+        @@ Formula.VarSet.singleton (Formula.AxVar state.fmemory)
+    | _ -> assert false
+
   let get_value e state =
     let size = Formula_utils.bv_size e in
     let var = Formula.bv_var (Printf.sprintf "__value_%d" state.fid) size in
     let formula =
       state.formula |> Formula.push_front_define @@ Formula.mk_bv_def var [] e
     in
-    let keep = Formula.VarSet.singleton (Formula.BvVar var) in
+    let keep = Formula.VarSet.add (Formula.BvVar var) (keep state) in
     let formula = do_optimization ~keep formula in
+    state.formula <- Option.get (Formula.pop_front formula);
     match Formula.peek_front formula with
     | Some
         {
@@ -399,27 +434,6 @@ module State (Solver : Smt_sig.Solver) (QS : QUERY_STATISTICS) : STATE = struct
           Formula_pp.pp_bv_term e Bitvector.pp bv;
         bv
     | _ -> raise Non_unique
-
-  let keep state =
-    S.fold
-      (fun _ e k ->
-        match e with
-        | { Formula.bv_term_desc = Formula.BvFun (v, []); _ } ->
-            Formula.VarSet.add (Formula.BvVar v) k
-        | _ -> assert false)
-      state.vsymbols
-    @@ S.fold
-         (fun _ l k ->
-           List.fold_left
-             (fun k v -> Formula.VarSet.add (Formula.BvVar v) k)
-             k l)
-         state.fvariables
-    @@
-    match state.vmemory with
-    | { Formula.ax_term_desc = Formula.AxFun (v, []); _ } ->
-        Formula.VarSet.add (Formula.AxVar v)
-        @@ Formula.VarSet.singleton (Formula.AxVar state.fmemory)
-    | _ -> assert false
 
   let assume e state =
     let e = Formula.mk_bv_equal e Formula.mk_bv_one in
@@ -463,9 +477,7 @@ module State (Solver : Smt_sig.Solver) (QS : QUERY_STATISTICS) : STATE = struct
         let formula =
           Formula.push_front_assert (Formula.mk_bl_var var) formula
         in
-        match
-          Solver.check_satistifiability formula state.fvariables state.fmemory
-        with
+        match Solver.check_satistifiability formula state.fmemory with
         | Some model -> Some { state with formula; fid; model }
         | None -> None)
 
@@ -515,9 +527,8 @@ module State (Solver : Smt_sig.Solver) (QS : QUERY_STATISTICS) : STATE = struct
             formula
         in
         match
-          ( Solver.check_satistifiability formula state.fvariables state.fmemory,
-            Solver.check_satistifiability formula' state.fvariables
-              state.fmemory )
+          ( Solver.check_satistifiability formula state.fmemory,
+            Solver.check_satistifiability formula' state.fmemory )
         with
         | Some model, Some model' ->
             Both
@@ -575,9 +586,26 @@ module State (Solver : Smt_sig.Solver) (QS : QUERY_STATISTICS) : STATE = struct
                  @@ Formula.mk_bv_equal evar (Formula.mk_bv_cst bv)
             in
             (bv, { state with formula; fid; model }))
-        @@ Solver.enumerate evar ?n formula state.fvariables state.fmemory
+        @@ Solver.enumerate evar ?n formula state.fmemory
 
-  let merge _ _ = raise Non_mergeable
+  let get_a_value e t =
+    match enumerate e ~n:1 t with
+    | [ (bv, t') ] ->
+        t.fid <- t'.fid;
+        t.formula <- t'.formula;
+        bv
+    | _ -> raise Unknown
+
+  let merge ~parent:_ _ _ = raise Non_mergeable
+
+  let assertions t =
+    Formula.fold_forward
+      (fun (e : Formula.entry) r ->
+        match e with
+        | { entry_desc = Assert b; _ } ->
+            Formula.mk_bv_ite b Formula.mk_bv_one Formula.mk_bv_zero :: r
+        | _ -> r)
+      t.formula []
 
   let pp ppf state = Smt_model.pp ppf state.model
 
@@ -588,7 +616,15 @@ module State (Solver : Smt_sig.Solver) (QS : QUERY_STATISTICS) : STATE = struct
         let keep, state =
           List.fold_left
             (fun (keep, state) (e, n) ->
-              let state = assign n (Value.eval e state) state in
+              let state =
+                let value_size = Formula_utils.bv_size e in
+                let var = Formula.bv_var n value_size in
+                let formula =
+                  state.formula
+                  |> Formula.push_front_define @@ Formula.mk_bv_def var [] e
+                in
+                { state with formula }
+              in
               match Formula.peek_front state.formula with
               | Some
                   {
@@ -602,32 +638,6 @@ module State (Solver : Smt_sig.Solver) (QS : QUERY_STATISTICS) : STATE = struct
             l
         in
         Formula_pp.pp_formula ppf (do_optimization ~keep state.formula)
-
-  let as_ascii ~name state =
-    let buf = Buffer.create 16 in
-    List.iter (fun var ->
-        let name = Formula_utils.bv_var_name var in
-        match Smt_model.find_variable state.model name with
-        | None -> Buffer.add_char buf '.'
-        | Some bv ->
-            assert (Bitvector.size_of bv mod byte_size = 0);
-            let rec iter bv =
-              let size = Bitvector.size_of bv in
-              if size = byte_size then
-                Buffer.add_char buf (Bitvector.to_char bv)
-              else
-                let byte = Bitvector.extract bv { Interval.lo = 0; hi = 7 } in
-                Buffer.add_char buf (Bitvector.to_char byte);
-                iter (Bitvector.extract bv { Interval.lo = 8; hi = size - 1 })
-            in
-            iter bv)
-    @@ List.rev
-    @@ S.find name state.fvariables;
-    Buffer.contents buf
-
-  let as_c_string ~name:_ _ = raise (Errors.not_yet_implemented "arrays")
-
-  let assign ({ name; _ } : Dba.Var.t) state = assign name state
 
   let to_formula { formula; _ } = formula
 end

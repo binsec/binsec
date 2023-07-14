@@ -1,0 +1,12 @@
+(include_subdirs no)
+
+(tests
+ (names t_formula t_sequence)
+ (modules t_formula t_sequence)
+ (libraries binsec ounit2 qcheck)
+ (flags
+  (:standard -open Binsec))
+ ; bytecode tests fail to link in nix-shell
+ (modes native)
+ (action
+  (run %{test})))

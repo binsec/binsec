@@ -850,10 +850,12 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
         unary f y
     | Restrict { lo; hi }, Binary { f = Concat; x; y; _ } when sizeof y <= lo ->
         unary (Restrict { lo = lo - sizeof y; hi = hi - sizeof y }) x
-    | ( Restrict { hi; _ },
-        Binary { f = Concat; x = Binary { f = Concat; y = z; _ }; y; _ } )
-      when hi < sizeof z + sizeof y ->
-        unary f (binary Concat z y)
+    | ( Restrict { hi; lo },
+        Binary { f = Concat; x = Binary { f = Concat; _ } as x; y; _ } ) ->
+        let sz = sizeof y in
+        binary Concat
+          (unary (Restrict { hi = hi - sz; lo = 0 }) x)
+          (unary (Restrict { hi = sz - 1; lo }) y)
     | Restrict { hi; lo }, Binary { f = Concat; x = Cst bv; y; _ } ->
         let shift = sizeof y in
         binary Concat
@@ -874,6 +876,8 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     | ( Restrict { hi; lo = 0 },
         Binary { f = (Plus | Minus) as bop; x; y = Cst bv; _ } ) ->
         binary bop (unary f x) (constant (Bv.extract ~lo:0 ~hi bv))
+    | Restrict { hi; lo }, Binary { f = (And | Or) as bop; x; y = Cst bv; _ } ->
+        binary bop (unary f x) (constant (Bv.extract ~hi ~lo bv))
     (* forward ite *)
     | f, Ite { c; t = Cst bv; e; _ } ->
         ite c (constant (Bv.unary f bv)) (unary f e)
@@ -1116,6 +1120,11 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
         unary
           (Uext (sizeof x))
           (binary And y (constant (Bv.extract ~hi:(sizeof y - 1) ~lo:0 bv)))
+    | And, Binary { f = Concat; x; y; size; _ }, Cst bv ->
+        let i = sizeof y in
+        binary Concat
+          (binary And x (constant (Bv.extract ~hi:(size - 1) ~lo:i bv)))
+          (binary And y (constant (Bv.extract ~hi:(i - 1) ~lo:0 bv)))
     (* forward ite *)
     | f, Ite { c; t = Cst bv; e; _ }, (Cst bv' as y) ->
         ite c (constant (Bv.binary f bv bv')) (binary f e y)

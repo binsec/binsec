@@ -210,4 +210,10 @@ type fmap = private {
   mutable name : string;
 }
 
+val fmap : Virtual_address.t Interval.t -> int -> string -> fmap
+
 val files : Img.t -> fmap array
+
+module Utils : sig
+  val is_ifunc : Img.t -> Symbol.t -> bool
+end

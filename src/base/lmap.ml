@@ -38,6 +38,10 @@ module type S = sig
 
   val empty : t
 
+  val is_empty : t -> bool
+
+  val is_empty_between : Z.t -> Z.t -> t -> bool
+
   val singleton : Z.t -> v -> t
 
   val store : Z.t -> v -> t -> t
@@ -47,8 +51,6 @@ module type S = sig
   val iter : (Z.t -> v -> unit) -> t -> unit
 
   val rev_iter : (Z.t -> v -> unit) -> t -> unit
-
-  val iter_between : (Z.t -> v -> unit) -> Z.t -> Z.t -> t -> unit
 
   val fold : (Z.t -> v -> 'a -> 'a) -> 'a -> t -> 'a
 
@@ -138,50 +140,6 @@ module Make (E : Value) : S with type v := E.t = struct
         rev_iter f r;
         rev_iter f l
 
-  let rec d_iter_between :
-      type a. (Z.t -> E.t -> unit) -> Z.t -> Z.t -> a tree -> unit =
-   fun f k' u' t ->
-    match t with
-    | Z -> ()
-    | N { k; e } -> n_iter_between f k' u' k e Z Z
-    | LN { k; e; l } -> n_iter_between f k' u' k e l Z
-    | NR { k; e; r } -> n_iter_between f k' u' k e Z r
-    | LNR { k; e; l; r } -> n_iter_between f k' u' k e l r
-    | LR { k; l; r; _ } -> b_iter_between f k' u' k l r
-
-  and n_iter_between :
-      type a b.
-      (Z.t -> E.t -> unit) ->
-      Z.t ->
-      Z.t ->
-      Z.t ->
-      E.t ->
-      a tree ->
-      b tree ->
-      unit =
-   fun f k' u' k e l r ->
-    let u = upper_bound k e in
-    if Z.geq k k' then (
-      if Z.gt k k' then d_iter_between f k' u' l;
-      let d = distance u u' in
-      if d >= 0 then (
-        f k e;
-        if d > 0 then d_iter_between f k' u' r)
-      else f k (E.crop ~hi:(distance k u' - 1) ~lo:0 e))
-    else if Z.gt u k' then
-      let d = distance u u' in
-      if d >= 0 then (
-        f k' (E.crop ~hi:(E.len e - 1) ~lo:(distance k k') e);
-        if d > 0 then d_iter_between f k' u' r)
-      else f k (E.crop ~hi:(distance k u' - 1) ~lo:(distance k k') e)
-
-  and b_iter_between :
-      type a b.
-      (Z.t -> E.t -> unit) -> Z.t -> Z.t -> Z.t -> a tree -> b tree -> unit =
-   fun f k' u' k l r ->
-    d_iter_between f k' u' l;
-    if Z.lt k u' then d_iter_between f k' u' r
-
   let rec fold : type a. (Z.t -> E.t -> 'c -> 'c) -> 'c -> a tree -> 'c =
    fun f x t ->
     match t with
@@ -201,6 +159,27 @@ module Make (E : Value) : S with type v := E.t = struct
     | NR { k; e; r } -> f k e (rev_fold f x r)
     | LNR { k; e; l; r } -> rev_fold f (f k e (rev_fold f x r)) l
     | LR { l; r; _ } -> rev_fold f (rev_fold f x r) l
+
+  let rec d_is_empty_between : type a. Z.t -> Z.t -> a tree -> bool =
+   fun k' u' t ->
+    match t with
+    | Z -> true
+    | N { k; e } -> n_is_empty_between k' u' k e Z Z
+    | LN { k; e; l } -> n_is_empty_between k' u' k e l Z
+    | NR { k; e; r } -> n_is_empty_between k' u' k e Z r
+    | LNR { k; e; l; r } -> n_is_empty_between k' u' k e l r
+    | LR { k; l; r; _ } -> b_is_empty_between k' u' k l r
+
+  and n_is_empty_between :
+      type a b. Z.t -> Z.t -> Z.t -> E.t -> a tree -> b tree -> bool =
+   fun k' u' k e l r ->
+    if Z.lt u' k then d_is_empty_between k' u' l
+    else Z.leq (upper_bound k e) k' && d_is_empty_between k' u' r
+
+  and b_is_empty_between :
+      type a b. Z.t -> Z.t -> Z.t -> a tree -> b tree -> bool =
+   fun k' u' k l r ->
+    d_is_empty_between k' u' l && (Z.leq u' k || d_is_empty_between k' u' r)
 
   let rec map : type a. (Z.t -> E.t -> E.t) -> a tree -> a tree =
    fun f t ->
@@ -979,6 +958,10 @@ module Make (E : Value) : S with type v := E.t = struct
 
   let empty = T Z
 
+  let is_empty t = t == empty
+
+  let is_empty_between i j (T t) = d_is_empty_between i j t
+
   let singleton k e = T (N { k; e })
 
   let store k' e' (T t) =
@@ -999,8 +982,6 @@ module Make (E : Value) : S with type v := E.t = struct
   let iter f (T t) = iter f t
 
   let rev_iter f (T t) = rev_iter f t
-
-  let iter_between f k u (T t) = d_iter_between f k u t
 
   let fold f x (T t) = fold f x t
 

@@ -29,7 +29,7 @@ Find the secret such that the challenge outputs `Premium access has been activat
 # Command
 
 ```console
-$ binsec -sse -sse-script crackme.ini core.snapshot -sse-alternative-engine
+$ binsec -sse -sse-script crackme.ini core.snapshot
 ```
 
 # Expect

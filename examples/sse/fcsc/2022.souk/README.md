@@ -31,7 +31,7 @@ Tu peux valider le challenge avec ce flag !
 # Command
 
 ```console
-$ binsec -sse -sse-alternative-engine -sse-script crackme.ini \
+$ binsec -sse -sse-script crackme.ini \
          -sse-depth 100000  -sse-qmerge 100 core.snapshot
 ```
 

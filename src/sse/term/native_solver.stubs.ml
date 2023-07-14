@@ -34,6 +34,10 @@ module Solver () : Solver_sig.S = struct
 
   let neq _ _ = assert false
 
+  let iter_free_variables _ = assert false
+
+  let iter_free_arrays _ = assert false
+
   let get_array _ = assert false
 
   let get_value _ = assert false

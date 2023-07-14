@@ -58,6 +58,8 @@ module Bit : sig
 
   val bits2 : t
 
+  val bits4 : t
+
   val bits8 : t
 
   val bits16 : t
@@ -81,4 +83,18 @@ module Byte : sig
   val of_bitsize : Bit.t -> t
 
   val unsafe_of_bits : int -> t
+
+  val one : t
+
+  val two : t
+
+  val four : t
+
+  val eight : t
+
+  val fifteen : t
+
+  val sixteen : t
+
+  val thirtytwo : t
 end

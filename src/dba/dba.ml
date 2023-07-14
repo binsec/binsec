@@ -144,6 +144,8 @@ module Var : sig
   (** [temp n] creates a lvalue representing a temporary of size [n] with name
       [Format.sprintf "temp%d" n]. *)
 
+  val compare : t -> t -> int
+
   include Hashtbl.HashedType with type t := t
 
   val from_id : int -> t
@@ -191,10 +193,28 @@ end = struct
           (Flag | Temp | Register | Symbol _ | Empty) ) ->
           false
 
+    let weak_equal a b =
+      match (a, b) with
+      | (Flag | Temp | Register | Empty), (Flag | Temp | Register | Empty) ->
+          true
+      | Symbol (attr, _), Symbol (attr', _) -> attr = attr'
+      | ( (Flag | Temp | Register | Symbol _ | Empty),
+          (Flag | Temp | Register | Symbol _ | Empty) ) ->
+          false
+
     let hash = function
       | Flag -> 129913994
       | Temp -> 883721435
       | Register -> 648017920
+      | Symbol (Value, _) -> 543159235
+      | Symbol (Size, _) -> 72223805
+      | Symbol (Last, _) -> 828390822
+      | Empty -> 152507349
+
+    let weak_hash = function
+      | Flag -> 152507349
+      | Temp -> 152507349
+      | Register -> 152507349
       | Symbol (Value, _) -> 543159235
       | Symbol (Size, _) -> 72223805
       | Symbol (Last, _) -> 828390822
@@ -207,14 +227,16 @@ end = struct
     type nonrec t = t
 
     let equal t t' =
-      t.size = t'.size (* && t.info = t'.info *) && String.equal t.name t'.name
+      t.size = t'.size
+      && Tag.weak_equal t.info t'.info
+      && String.equal t.name t'.name
 
-    let hash { name; size; (* info; *) _ } =
+    let hash { name; size; info; _ } =
       Hash.(
         return
           (fold_string
-             (fold_int (* (fold_int *) (seed 0) size)
-             (* (Tag.hash info)) *) name))
+             (fold_int (fold_int (seed 0) size) (Tag.weak_hash info))
+             name))
   end)
 
   module R = Weak.Make (struct
@@ -251,6 +273,8 @@ end = struct
   let hash { id; _ } = id
 
   let equal = ( == )
+
+  let compare t t' = t.id - t'.id
 
   let from_id id =
     let t = { id; name = ""; size = 0; info = Tag.Empty } in
@@ -525,6 +549,7 @@ end = struct
   and lognot = function
     | Cst bv -> constant (Bitvector.lognot bv)
     | Unary (Unary_op.Not, e) -> e
+    | Unary (Unary_op.Sext n, e) when size_of e = 1 -> sext n (lognot e)
     | Binary (op, e1, e2) when Binary_op.has_inverse op ->
         binary (Binary_op.invert op) e1 e2
     | e -> Straight.lognot e
@@ -652,6 +677,10 @@ end = struct
     | Binary (Binary_op.Plus, e3, e4), _ when is_equal e2 e4 -> e3
     | _, Binary (Binary_op.Minus, e3, e4) when is_equal e1 e3 -> e4
     | Binary (Binary_op.Minus, e3, e4), _ when is_equal e2 e3 -> uminus e4
+    (* Masking *)
+    | Unary (Unary_op.Uext n, e3), Cst b1
+      when Bitvector.is_ones b1 && size_of e3 = 1 ->
+        sext n (lognot e3)
     (* Default *)
     | _, _ -> Straight.sub e1 e2
 
@@ -782,6 +811,8 @@ end = struct
   and equal e1 e2 =
     match (e1, e2) with
     | Cst b1, Cst b2 -> constant (Bitvector.of_bool (Bitvector.equal b1 b2))
+    | Cst b1, _ when Bitvector.is_zero b1 -> lognot e2
+    | Cst b1, _ when Bitvector.is_one b1 -> e2
     | Cst _, Binary (Binary_op.Concat, e3, e4) ->
         split_apply equal logand e1 e3 e4
     | Cst _, Unary (Unary_op.Uext n, e3) ->
@@ -798,6 +829,8 @@ end = struct
   and diff e1 e2 =
     match (e1, e2) with
     | Cst b1, Cst b2 -> constant (Bitvector.of_bool (Bitvector.diff b1 b2))
+    | Cst b1, _ when Bitvector.is_zero b1 -> e2
+    | Cst b1, _ when Bitvector.is_one b1 -> lognot e2
     | Cst _, Binary (Binary_op.Concat, e3, e4) ->
         split_apply diff logor e1 e3 e4
     | Cst _, Unary (Unary_op.Uext n, e3) ->
@@ -879,6 +912,12 @@ end = struct
         constant (Bitvector.shift_left b1 (Bitvector.to_uint b2)) (* w << 0 *)
     | _, Cst b2 when Bitvector.is_zeros b2 -> e1 (* 0 << w *)
     | Cst b1, _ when Bitvector.is_zeros b1 -> e1
+    | Binary (Concat, e3, e4), Cst b5 ->
+        let t = size_of e3 and s = Bitvector.to_uint b5 in
+        if t = s then append e4 (zeros t)
+        else if t < s then
+          append (restrict 0 (size_of e4 - 1 + t - s) e4) (zeros s)
+        else Straight.shift_left e1 e2
     | _, _ -> Straight.shift_left e1 e2
 
   and shift_right e1 e2 =

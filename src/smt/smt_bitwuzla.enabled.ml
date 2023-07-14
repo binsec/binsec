@@ -240,6 +240,8 @@ module Make () : Session = struct
             Term.Bv.of_z
               (bv_sort (Bitvector.size_of bv))
               (Bitvector.value_of bv)
+        | BvFun ({ bv_name; bv_size; _ }, []) ->
+            Term.const (bv_sort bv_size) bv_name
         | BvFun _ -> assert false
         | BvLet (defs, bv_term) -> bv_map (bind defs bindings) bv_term
         | BvUnop (op, bv_term) -> (bv_unop_map op) (bv_map bindings bv_term)

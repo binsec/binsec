@@ -22,6 +22,7 @@
 module Bv = Sexpr.Bv
 module Expr = Sexpr.Expr
 module Memory = Sexpr.Memory
+module StTbl = Sexpr.StTbl
 module BvTbl = Sexpr.BvTbl
 module AxTbl = Sexpr.AxTbl
 module NiTbl = Basic_types.Int.Htbl
@@ -43,6 +44,8 @@ module Solver () : Solver_sig.S = struct
 
   module Context = struct
     type t = {
+      fvariables : Expr.t StTbl.t;
+      farrays : Memory.t StTbl.t;
       st_cons : bv sort NiTbl.t;
       bv_cons : term BvTbl.t;
       ax_cons : memory AxTbl.t;
@@ -51,6 +54,8 @@ module Solver () : Solver_sig.S = struct
 
     let create addr_space =
       {
+        fvariables = StTbl.create 16;
+        farrays = StTbl.create 4;
         st_cons = NiTbl.create 8;
         bv_cons = BvTbl.create 128;
         ax_cons = AxTbl.create 64;
@@ -78,8 +83,7 @@ module Solver () : Solver_sig.S = struct
       let concat =
         match dir with
         | Machine.LittleEndian -> Term.Bv.append
-        | Machine.BigEndian -> assert false
-        (* TODO *)
+        | Machine.BigEndian -> Fun.flip Term.Bv.append
       in
       iter (len - 1) concat (Term.Bv.succ index) array
         (Term.Ar.select array index)
@@ -128,7 +132,9 @@ module Solver () : Solver_sig.S = struct
     with Not_found ->
       let e =
         match bv with
-        | Var { name; size; _ } -> Term.const (visit_sort ctx size) name
+        | Var { name; size; _ } ->
+            StTbl.add ctx.fvariables name bv;
+            Term.const (visit_sort ctx size) name
         | Load { len; dir; addr; label; _ } ->
             let sort = visit_sort ctx (Expr.sizeof addr) in
             let index = visit_bv ctx addr and array = visit_ax ctx sort label in
@@ -161,15 +167,19 @@ module Solver () : Solver_sig.S = struct
               (Sort.ar index (visit_sort ctx byte_size))
               Suid.(to_string zero)
         | Symbol name ->
+            StTbl.add ctx.farrays name ax;
             Term.const (Sort.ar index (visit_sort ctx byte_size)) name
-        | Layer { addr; store; over; _ } | Overlay { addr; store; over; _ } ->
+        | Layer { addr; store; over; _ } ->
             let base = visit_bv ctx addr and array = visit_ax ctx index over in
             Sexpr.Store.fold
               (fun i value array ->
-                let s = Expr.sizeof value in
-                let x = visit_bv ctx value
-                and index = Term.Bv.(add base (of_z index i)) in
-                unroll_store array index x s)
+                if Sexpr.Chunk.is_hunk value then array
+                else
+                  let value = Sexpr.Chunk.to_term value in
+                  let s = Expr.sizeof value in
+                  let x = visit_bv ctx value
+                  and index = Term.Bv.(add base (of_z index i)) in
+                  unroll_store array index x s)
               array store
       in
       AxTbl.add ctx.ax_cons ax a;
@@ -185,6 +195,10 @@ module Solver () : Solver_sig.S = struct
     put () constraints;
     e
 
+  let iter_free_variables f = StTbl.iter f ctx.fvariables
+
+  let iter_free_arrays f = StTbl.iter f ctx.farrays
+
   let get e = BvTbl.find ctx.bv_cons e
 
   let set_memory ~addr value =
@@ -192,7 +206,7 @@ module Solver () : Solver_sig.S = struct
     assert'
       (Term.equal
          (Term.Ar.select
-            (visit_ax ctx sort Memory.Root)
+            (visit_ax ctx sort Memory.root)
             (Term.Bv.of_z sort addr))
          (Term.Bv.of_z (visit_sort ctx byte_size) value))
 

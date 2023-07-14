@@ -8,6 +8,7 @@
  (libraries
   binsec
   smt
+  domains
   libsse
   (select
    native_solver.ml

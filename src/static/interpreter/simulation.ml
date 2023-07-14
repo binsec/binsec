@@ -46,9 +46,9 @@ module Directives = Builder.Any (struct
 
   let default = []
 
-  let to_string _ = "no action"
-
   let of_string s =
     let lexbuf = Lexing.from_string s in
     Parser.directives Lexer.token lexbuf
+
+  let default_str = None
 end)

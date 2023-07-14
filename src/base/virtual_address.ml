@@ -75,6 +75,8 @@ let pp ppf v =
       (v land 0xffffffffffffff)
   else Format.fprintf ppf "0x%08x" v
 
+let to_string v = Format.asprintf "%a" pp v
+
 let pp_set ppf vs =
   let open Format in
   pp_open_hovbox ppf 0;

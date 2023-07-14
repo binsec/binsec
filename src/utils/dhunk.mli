@@ -157,3 +157,7 @@ type conditional = {
 }
 
 val conditional : t -> conditional option
+
+val constant_propagation : t -> t
+
+val dead_code_elimination : t -> t

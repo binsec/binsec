@@ -47,6 +47,8 @@ val to_bigint : t -> Z.t
 
 val of_string : string -> t
 
+val to_string : t -> string
+
 val add_int : int -> t -> t
 
 val succ : t -> t

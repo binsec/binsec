@@ -19,7 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Cli.S
+include Cli.Cli_sig
 
 module Odump_file : Cli.STRING_OPT
 (** Only used in [Test] module. Sets objdump file to compare ourselves to *)

@@ -19,7 +19,24 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module X86 = struct
+module type ARCH = sig
+  val get_defs : unit -> (string * Dba.LValue.t) list
+
+  val get_arg : int -> Dba.Expr.t
+
+  val get_ret : ?syscall:bool -> unit -> Dba.LValue.t
+
+  val make_return : ?value:Dba.Expr.t -> unit -> Dhunk.t
+
+  val get_stack_pointer : unit -> Dba.Var.t * Bitvector.t
+
+  val core :
+    Loader_elf.Img.t -> Virtual_address.t * (Dba.Var.t * Dba.Expr.t) list
+
+  val max_instruction_len : Size.Byte.t
+end
+
+module X86 : ARCH = struct
   let info = Dba.Var.Tag.Register
 
   let eax = Dba.Var.create "eax" ~bitsize:Size.Bit.bits32 ~tag:info
@@ -48,7 +65,25 @@ module X86 = struct
 
   and gs = Dba.Var.create "gs" ~bitsize:Size.Bit.bits16 ~tag:info
 
+  and gs_base = Dba.Var.create "gs_base" ~bitsize:Size.Bit.bits32 ~tag:info
+
   and ss = Dba.Var.create "ss" ~bitsize:Size.Bit.bits16 ~tag:info
+
+  let xmm0 = Dba.Var.create "xmm0" ~bitsize:Size.Bit.bits128 ~tag:info
+
+  and xmm1 = Dba.Var.create "xmm1" ~bitsize:Size.Bit.bits128 ~tag:info
+
+  and xmm2 = Dba.Var.create "xmm2" ~bitsize:Size.Bit.bits128 ~tag:info
+
+  and xmm3 = Dba.Var.create "xmm3" ~bitsize:Size.Bit.bits128 ~tag:info
+
+  and xmm4 = Dba.Var.create "xmm4" ~bitsize:Size.Bit.bits128 ~tag:info
+
+  and xmm5 = Dba.Var.create "xmm5" ~bitsize:Size.Bit.bits128 ~tag:info
+
+  and xmm6 = Dba.Var.create "xmm6" ~bitsize:Size.Bit.bits128 ~tag:info
+
+  and xmm7 = Dba.Var.create "xmm7" ~bitsize:Size.Bit.bits128 ~tag:info
 
   let info = Dba.Var.Tag.Flag
 
@@ -129,11 +164,22 @@ module X86 = struct
       ("VIF", Dba.LValue.v vif);
       ("VIP", Dba.LValue.v vip);
       ("ID", Dba.LValue.v id);
+      ("xmm0", Dba.LValue.restrict xmm0 0 127);
+      ("xmm1", Dba.LValue.restrict xmm1 0 127);
+      ("xmm2", Dba.LValue.restrict xmm2 0 127);
+      ("xmm3", Dba.LValue.restrict xmm3 0 127);
+      ("xmm4", Dba.LValue.restrict xmm4 0 127);
+      ("xmm5", Dba.LValue.restrict xmm5 0 127);
+      ("xmm6", Dba.LValue.restrict xmm6 0 127);
+      ("xmm7", Dba.LValue.restrict xmm7 0 127);
     ]
+
+  let get_defs () = defs
 
   let notes img =
     Array.fold_left
-      (fun result -> function
+      (fun (entrypoint, defs) note ->
+        match note with
         | { Loader_elf.Note.name = "CORE"; kind = 1; offset = at; _ } ->
             let cursor = Loader_elf.Img.cursor ~at img in
             Loader_buf.advance cursor 0x48;
@@ -251,45 +297,98 @@ module X86 = struct
                 (Bitvector.of_int ~size:16 (Loader_buf.Read.u32 cursor))
             in
             ( entrypoint,
-              [
-                (ebx, rebx);
-                (ecx, recx);
-                (edx, redx);
-                (esi, resi);
-                (edi, redi);
-                (ebp, rebp);
-                (eax, reax);
-                (esp, resp);
-                (ds, rds);
-                (es, res);
-                (fs, rfs);
-                (gs, rgs);
-                (cs, rcs);
-                (ss, rss);
-                (cf, rcf);
-                (pf, rpf);
-                (af, raf);
-                (zf, rzf);
-                (sf, rsf);
-                (tf, rtf);
-                (if', rif);
-                (df, rdf);
-                (of', rof);
-                (iopl, riopl);
-                (nt, rnt);
-                (rf, rrf);
-                (vm, rvm);
-                (ac, rac);
-                (vif, rvif);
-                (vip, rvip);
-                (id, rid);
-              ] )
-        | _ -> result)
+              List.rev_append
+                [
+                  (ebx, rebx);
+                  (ecx, recx);
+                  (edx, redx);
+                  (esi, resi);
+                  (edi, redi);
+                  (ebp, rebp);
+                  (eax, reax);
+                  (esp, resp);
+                  (ds, rds);
+                  (es, res);
+                  (fs, rfs);
+                  (gs, rgs);
+                  (cs, rcs);
+                  (ss, rss);
+                  (cf, rcf);
+                  (pf, rpf);
+                  (af, raf);
+                  (zf, rzf);
+                  (sf, rsf);
+                  (tf, rtf);
+                  (if', rif);
+                  (df, rdf);
+                  (of', rof);
+                  (iopl, riopl);
+                  (nt, rnt);
+                  (rf, rrf);
+                  (vm, rvm);
+                  (ac, rac);
+                  (vif, rvif);
+                  (vip, rvip);
+                  (id, rid);
+                ]
+                defs )
+        | { Loader_elf.Note.name = "PIN"; kind = 0; offset = at; _ } ->
+            let cursor = Loader_elf.Img.cursor ~at img in
+            let rgs_base =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:32 (Loader_buf.Read.u32 cursor))
+            in
+            (entrypoint, (gs_base, rgs_base) :: defs)
+        | _ -> (entrypoint, defs))
       (Virtual_address.create 0, [])
       (Loader_elf.notes img)
+
+  let core = notes
+
+  let ret = Dba.LValue.v eax
+
+  let esp_l = Dba.LValue.v esp
+
+  and esp_r = Dba.Expr.v esp
+
+  and eax_l = Dba.LValue.v eax
+
+  and four = Dba.Expr.constant (Bitvector.of_int ~size:32 4)
+
+  let get_arg i =
+    Dba.Expr.load Size.Byte.four LittleEndian
+      (Dba.Expr.add esp_r
+         (Dba.Expr.constant (Bitvector.of_int ~size:32 (4 * (i + 1)))))
+
+  let get_ret ?syscall:_ () = ret
+
+  let void_return =
+    Dhunk.init 2 (function
+      | 0 -> Dba.Instr.assign esp_l (Dba.Expr.add esp_r four) 1
+      | _ ->
+          Dba.Instr.dynamic_jump ~tag:Return
+            (Dba.Expr.load Size.Byte.four LittleEndian (Dba.Expr.sub esp_r four)))
+
+  and val_return value =
+    Dhunk.init 3 (function
+      | 0 -> Dba.Instr.assign eax_l value 1
+      | 1 -> Dba.Instr.assign esp_l (Dba.Expr.add esp_r four) 2
+      | _ ->
+          Dba.Instr.dynamic_jump ~tag:Return
+            (Dba.Expr.load Size.Byte.four LittleEndian (Dba.Expr.sub esp_r four)))
+
+  let make_return ?value () =
+    match (value : Dba.Expr.t option) with
+    | None -> void_return
+    | Some (Var v) when Dba.Var.equal v eax -> void_return
+    | Some value -> val_return value
+
+  let get_stack_pointer () = (esp, Bitvector.of_int ~size:32 0xfff00000)
+
+  let max_instruction_len = Size.Byte.fifteen
 end
 
-module AMD64 = struct
+module AMD64 : ARCH = struct
   let info = Dba.Var.Tag.Register
 
   let rax = Dba.Var.create "rax" ~bitsize:Size.Bit.bits64 ~tag:info
@@ -537,6 +636,8 @@ module AMD64 = struct
       ("id", Dba.LValue.v id);
     ]
 
+  let get_defs () = defs
+
   let notes img =
     Array.fold_left
       (fun result -> function
@@ -697,33 +798,121 @@ module AMD64 = struct
         | _ -> result)
       (Virtual_address.create 0, [])
       (Loader_elf.notes img)
+
+  let core = notes
+
+  let ret = Dba.LValue.v rax
+
+  let rsp_l = Dba.LValue.v rsp
+
+  and rsp_r = Dba.Expr.v rsp
+
+  and rax_l = Dba.LValue.v rax
+
+  and rdi_r = Dba.Expr.v rdi
+
+  and rsi_r = Dba.Expr.v rsi
+
+  and rdx_r = Dba.Expr.v rdx
+
+  and rcx_r = Dba.Expr.v rcx
+
+  and r8_r = Dba.Expr.v r8
+
+  and r9_r = Dba.Expr.v r9
+
+  and eight = Dba.Expr.constant (Bitvector.of_int ~size:64 8)
+
+  let get_arg = function
+    | 0 -> rdi_r
+    | 1 -> rsi_r
+    | 2 -> rdx_r
+    | 3 -> rcx_r
+    | 4 -> r8_r
+    | 5 -> r9_r
+    | i ->
+        Dba.Expr.load Size.Byte.eight LittleEndian
+          (Dba.Expr.add rsp_r
+             (Dba.Expr.constant (Bitvector.of_int ~size:64 (8 * (i - 5)))))
+
+  let get_ret ?syscall:_ () = ret
+
+  let void_return =
+    Dhunk.init 2 (function
+      | 0 -> Dba.Instr.assign rsp_l (Dba.Expr.add rsp_r eight) 1
+      | _ ->
+          Dba.Instr.dynamic_jump ~tag:Return
+            (Dba.Expr.load Size.Byte.eight LittleEndian
+               (Dba.Expr.sub rsp_r eight)))
+
+  and val_return value =
+    Dhunk.init 3 (function
+      | 0 -> Dba.Instr.assign rax_l value 1
+      | 1 -> Dba.Instr.assign rsp_l (Dba.Expr.add rsp_r eight) 2
+      | _ ->
+          Dba.Instr.dynamic_jump ~tag:Return
+            (Dba.Expr.load Size.Byte.eight LittleEndian
+               (Dba.Expr.sub rsp_r eight)))
+
+  let make_return ?value () =
+    match (value : Dba.Expr.t option) with
+    | None -> void_return
+    | Some (Var v) when Dba.Var.equal v rax -> void_return
+    | Some value -> val_return value
+
+  let get_stack_pointer () = (rsp, Bitvector.of_int64 0x7fff000000000000L)
+
+  let max_instruction_len = Size.Byte.fifteen
 end
 
-module ARM = struct
+module ARM : ARCH = struct
+  let info = Dba.Var.Tag.Register
+
+  let r0 = Dba.Var.create "r0" ~bitsize:Size.Bit.bits32 ~tag:info
+
+  and r1 = Dba.Var.create "r1" ~bitsize:Size.Bit.bits32 ~tag:info
+
+  and r2 = Dba.Var.create "r2" ~bitsize:Size.Bit.bits32 ~tag:info
+
+  and r3 = Dba.Var.create "r3" ~bitsize:Size.Bit.bits32 ~tag:info
+
+  and r4 = Dba.Var.create "r4" ~bitsize:Size.Bit.bits32 ~tag:info
+
+  and r5 = Dba.Var.create "r5" ~bitsize:Size.Bit.bits32 ~tag:info
+
+  and r6 = Dba.Var.create "r6" ~bitsize:Size.Bit.bits32 ~tag:info
+
+  and r7 = Dba.Var.create "r7" ~bitsize:Size.Bit.bits32 ~tag:info
+
+  and r8 = Dba.Var.create "r8" ~bitsize:Size.Bit.bits32 ~tag:info
+
+  and r9 = Dba.Var.create "r9" ~bitsize:Size.Bit.bits32 ~tag:info
+
+  and r10 = Dba.Var.create "r10" ~bitsize:Size.Bit.bits32 ~tag:info
+
+  and r11 = Dba.Var.create "fp" ~bitsize:Size.Bit.bits32 ~tag:info
+
+  and r12 = Dba.Var.create "ip" ~bitsize:Size.Bit.bits32 ~tag:info
+
+  and r13 = Dba.Var.create "sp" ~bitsize:Size.Bit.bits32 ~tag:info
+
+  and r14 = Dba.Var.create "lr" ~bitsize:Size.Bit.bits32 ~tag:info
+
+  and r15 = Dba.Var.create "pc" ~bitsize:Size.Bit.bits32 ~tag:info
+
+  let info = Dba.Var.Tag.Flag
+
+  let n = Dba.Var.create "n" ~bitsize:Size.Bit.bits1 ~tag:info
+
+  and z = Dba.Var.create "z" ~bitsize:Size.Bit.bits1 ~tag:info
+
+  and c = Dba.Var.create "c" ~bitsize:Size.Bit.bits1 ~tag:info
+
+  and v = Dba.Var.create "v" ~bitsize:Size.Bit.bits1 ~tag:info
+
+  and t = Dba.Var.create "t" ~bitsize:Size.Bit.bits1 ~tag:info
+
   let defs =
-    let info = Dba.Var.Tag.Register in
-    let r0 = Dba.Var.create "r0" ~bitsize:Size.Bit.bits32 ~tag:info
-    and r1 = Dba.Var.create "r1" ~bitsize:Size.Bit.bits32 ~tag:info
-    and r2 = Dba.Var.create "r2" ~bitsize:Size.Bit.bits32 ~tag:info
-    and r3 = Dba.Var.create "r3" ~bitsize:Size.Bit.bits32 ~tag:info
-    and r4 = Dba.Var.create "r4" ~bitsize:Size.Bit.bits32 ~tag:info
-    and r5 = Dba.Var.create "r5" ~bitsize:Size.Bit.bits32 ~tag:info
-    and r6 = Dba.Var.create "r6" ~bitsize:Size.Bit.bits32 ~tag:info
-    and r7 = Dba.Var.create "r7" ~bitsize:Size.Bit.bits32 ~tag:info
-    and r8 = Dba.Var.create "r8" ~bitsize:Size.Bit.bits32 ~tag:info
-    and r9 = Dba.Var.create "r9" ~bitsize:Size.Bit.bits32 ~tag:info
-    and r10 = Dba.Var.create "r10" ~bitsize:Size.Bit.bits32 ~tag:info
-    and r11 = Dba.Var.create "fp" ~bitsize:Size.Bit.bits32 ~tag:info
-    and r12 = Dba.Var.create "ip" ~bitsize:Size.Bit.bits32 ~tag:info
-    and r13 = Dba.Var.create "sp" ~bitsize:Size.Bit.bits32 ~tag:info
-    and r14 = Dba.Var.create "lr" ~bitsize:Size.Bit.bits32 ~tag:info
-    and r15 = Dba.Var.create "pc" ~bitsize:Size.Bit.bits32 ~tag:info in
-    let info = Dba.Var.Tag.Flag in
-    let n = Dba.Var.create "n" ~bitsize:Size.Bit.bits1 ~tag:info
-    and z = Dba.Var.create "z" ~bitsize:Size.Bit.bits1 ~tag:info
-    and c = Dba.Var.create "c" ~bitsize:Size.Bit.bits1 ~tag:info
-    and v = Dba.Var.create "v" ~bitsize:Size.Bit.bits1 ~tag:info
-    and t = Dba.Var.create "t" ~bitsize:Size.Bit.bits1 ~tag:info in
     [
       ("r0", Dba.LValue.v r0);
       ("r1", Dba.LValue.v r1);
@@ -752,49 +941,137 @@ module ARM = struct
       ("v", Dba.LValue.v v);
       ("t", Dba.LValue.v t);
     ]
+
+  let core _ = raise (Errors.not_yet_implemented "arm core")
+
+  let get_defs () = defs
+
+  let r0_l = Dba.LValue.v r0
+
+  and r0_r = Dba.Expr.v r0
+
+  and r1_r = Dba.Expr.v r1
+
+  and r2_r = Dba.Expr.v r2
+
+  and r3_r = Dba.Expr.v r3
+
+  and r13_r = Dba.Expr.v r13
+
+  and r14_r = Dba.Expr.v r14
+
+  let ret = r0_l
+
+  let get_arg = function
+    | 0 -> r0_r
+    | 1 -> r1_r
+    | 2 -> r2_r
+    | 3 -> r3_r
+    | i ->
+        Dba.Expr.load Size.Byte.four LittleEndian
+          (Dba.Expr.add r13_r
+             (Dba.Expr.constant (Bitvector.of_int ~size:32 (4 * (i - 4)))))
+
+  let get_ret ?syscall:_ () = ret
+
+  let void_return = Dhunk.singleton (Dba.Instr.dynamic_jump ~tag:Return r14_r)
+
+  and val_return value =
+    Dhunk.init 2 (function
+      | 0 -> Dba.Instr.assign r0_l value 1
+      | _ -> Dba.Instr.dynamic_jump ~tag:Return r14_r)
+
+  let make_return ?value () =
+    match (value : Dba.Expr.t option) with
+    | None -> void_return
+    | Some (Var v) when Dba.Var.equal v r0 -> void_return
+    | Some value -> val_return value
+
+  let get_stack_pointer () = (r13, Bitvector.of_int ~size:32 0xfff00000)
+
+  let max_instruction_len = Size.Byte.four
 end
 
-module AARCH64 = struct
+module AARCH64 : ARCH = struct
+  let info = Dba.Var.Tag.Register
+
+  let x0 = Dba.Var.create "x0" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x1 = Dba.Var.create "x1" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x2 = Dba.Var.create "x2" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x3 = Dba.Var.create "x3" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x4 = Dba.Var.create "x4" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x5 = Dba.Var.create "x5" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x6 = Dba.Var.create "x6" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x7 = Dba.Var.create "x7" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x8 = Dba.Var.create "x8" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x9 = Dba.Var.create "x9" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x10 = Dba.Var.create "x10" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x11 = Dba.Var.create "x11" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x12 = Dba.Var.create "x12" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x13 = Dba.Var.create "x13" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x14 = Dba.Var.create "x14" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x15 = Dba.Var.create "x15" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x16 = Dba.Var.create "x16" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x17 = Dba.Var.create "x17" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x18 = Dba.Var.create "x18" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x19 = Dba.Var.create "x19" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x20 = Dba.Var.create "x20" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x21 = Dba.Var.create "x21" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x22 = Dba.Var.create "x22" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x23 = Dba.Var.create "x23" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x24 = Dba.Var.create "x24" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x25 = Dba.Var.create "x25" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x26 = Dba.Var.create "x26" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x27 = Dba.Var.create "x27" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x28 = Dba.Var.create "x28" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x29 = Dba.Var.create "x29" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and x30 = Dba.Var.create "x30" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and sp = Dba.Var.create "sp" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  let info = Dba.Var.Tag.Flag
+
+  let n = Dba.Var.create "n" ~bitsize:Size.Bit.bits1 ~tag:info
+
+  and z = Dba.Var.create "z" ~bitsize:Size.Bit.bits1 ~tag:info
+
+  and c = Dba.Var.create "c" ~bitsize:Size.Bit.bits1 ~tag:info
+
+  and v = Dba.Var.create "v" ~bitsize:Size.Bit.bits1 ~tag:info
+
+  and t = Dba.Var.create "t" ~bitsize:Size.Bit.bits1 ~tag:info
+
   let defs =
-    let info = Dba.Var.Tag.Register in
-    let x0 = Dba.Var.create "x0" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x1 = Dba.Var.create "x1" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x2 = Dba.Var.create "x2" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x3 = Dba.Var.create "x3" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x4 = Dba.Var.create "x4" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x5 = Dba.Var.create "x5" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x6 = Dba.Var.create "x6" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x7 = Dba.Var.create "x7" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x8 = Dba.Var.create "x8" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x9 = Dba.Var.create "x9" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x10 = Dba.Var.create "x10" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x11 = Dba.Var.create "x11" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x12 = Dba.Var.create "x12" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x13 = Dba.Var.create "x13" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x14 = Dba.Var.create "x14" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x15 = Dba.Var.create "x15" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x16 = Dba.Var.create "x16" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x17 = Dba.Var.create "x17" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x18 = Dba.Var.create "x18" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x19 = Dba.Var.create "x19" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x20 = Dba.Var.create "x20" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x21 = Dba.Var.create "x21" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x22 = Dba.Var.create "x22" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x23 = Dba.Var.create "x23" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x24 = Dba.Var.create "x24" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x25 = Dba.Var.create "x25" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x26 = Dba.Var.create "x26" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x27 = Dba.Var.create "x27" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x28 = Dba.Var.create "x28" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x29 = Dba.Var.create "x29" ~bitsize:Size.Bit.bits64 ~tag:info
-    and x30 = Dba.Var.create "x30" ~bitsize:Size.Bit.bits64 ~tag:info
-    and sp = Dba.Var.create "sp" ~bitsize:Size.Bit.bits64 ~tag:info in
-    let info = Dba.Var.Tag.Flag in
-    let n = Dba.Var.create "n" ~bitsize:Size.Bit.bits1 ~tag:info
-    and z = Dba.Var.create "z" ~bitsize:Size.Bit.bits1 ~tag:info
-    and c = Dba.Var.create "c" ~bitsize:Size.Bit.bits1 ~tag:info
-    and v = Dba.Var.create "v" ~bitsize:Size.Bit.bits1 ~tag:info
-    and t = Dba.Var.create "t" ~bitsize:Size.Bit.bits1 ~tag:info in
     [
       ("r0", Dba.LValue.v x0);
       ("r1", Dba.LValue.v x1);
@@ -865,15 +1142,246 @@ module AARCH64 = struct
       ("v", Dba.LValue.v v);
       ("t", Dba.LValue.v t);
     ]
+
+  let core _ = raise (Errors.not_yet_implemented "arm core")
+
+  let get_defs () = defs
+
+  let x0_l = Dba.LValue.v x0
+
+  and x0_r = Dba.Expr.v x0
+
+  and x1_r = Dba.Expr.v x1
+
+  and x2_r = Dba.Expr.v x2
+
+  and x3_r = Dba.Expr.v x3
+
+  and x4_r = Dba.Expr.v x4
+
+  and x5_r = Dba.Expr.v x5
+
+  and x6_r = Dba.Expr.v x6
+
+  and x7_r = Dba.Expr.v x7
+
+  and x30_r = Dba.Expr.v x30
+
+  and sp_r = Dba.Expr.v sp
+
+  let ret = x0_l
+
+  let get_arg = function
+    | 0 -> x0_r
+    | 1 -> x1_r
+    | 2 -> x2_r
+    | 3 -> x3_r
+    | 4 -> x4_r
+    | 5 -> x5_r
+    | 6 -> x6_r
+    | 7 -> x7_r
+    | i ->
+        Dba.Expr.load Size.Byte.four LittleEndian
+          (Dba.Expr.add sp_r
+             (Dba.Expr.constant (Bitvector.of_int ~size:64 (8 * (i - 8)))))
+
+  let get_ret ?syscall:_ () = ret
+
+  let void_return = Dhunk.singleton (Dba.Instr.dynamic_jump ~tag:Return x30_r)
+
+  and val_return value =
+    Dhunk.init 2 (function
+      | 0 -> Dba.Instr.assign x0_l value 1
+      | _ -> Dba.Instr.dynamic_jump ~tag:Return x30_r)
+
+  let make_return ?value () =
+    match (value : Dba.Expr.t option) with
+    | None -> void_return
+    | Some (Var v) when Dba.Var.equal v x0 -> void_return
+    | Some value -> val_return value
+
+  let get_stack_pointer () = (sp, Bitvector.of_int64 0x7fff000000000000L)
+
+  let max_instruction_len = Size.Byte.four
 end
 
-module RISCV = struct
-  let defs size =
-    let info = Dba.Var.Tag.Register in
-    let bitsize = Size.Bit.create size in
-    let reg name = (name, Dba.LValue.var name ~bitsize ~tag:info) in
-    List.map reg
-      [
+module PPC64 : ARCH = struct
+  let info = Dba.Var.Tag.Register
+
+  let r0 = Dba.Var.create "r0" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r1 = Dba.Var.create "r1" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r2 = Dba.Var.create "r2" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r3 = Dba.Var.create "r3" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r4 = Dba.Var.create "r4" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r5 = Dba.Var.create "r5" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r6 = Dba.Var.create "r6" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r7 = Dba.Var.create "r7" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r8 = Dba.Var.create "r8" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r9 = Dba.Var.create "r9" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r10 = Dba.Var.create "r10" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r11 = Dba.Var.create "r11" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r12 = Dba.Var.create "r12" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r13 = Dba.Var.create "r13" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r14 = Dba.Var.create "r14" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r15 = Dba.Var.create "r15" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r16 = Dba.Var.create "r16" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r17 = Dba.Var.create "r17" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r18 = Dba.Var.create "r18" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r19 = Dba.Var.create "r19" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r20 = Dba.Var.create "r20" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r21 = Dba.Var.create "r21" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r22 = Dba.Var.create "r22" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r23 = Dba.Var.create "r23" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r24 = Dba.Var.create "r24" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r25 = Dba.Var.create "r25" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r26 = Dba.Var.create "r26" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r27 = Dba.Var.create "r27" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r28 = Dba.Var.create "r28" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r29 = Dba.Var.create "r29" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r30 = Dba.Var.create "r30" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and r31 = Dba.Var.create "r31" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  and lr = Dba.Var.create "lr" ~bitsize:Size.Bit.bits64 ~tag:info
+
+  let defs =
+    [
+      ("r0", Dba.LValue.v r0);
+      ("r1", Dba.LValue.v r1);
+      ("r2", Dba.LValue.v r2);
+      ("r3", Dba.LValue.v r3);
+      ("r4", Dba.LValue.v r4);
+      ("r5", Dba.LValue.v r5);
+      ("r6", Dba.LValue.v r6);
+      ("r7", Dba.LValue.v r7);
+      ("r8", Dba.LValue.v r8);
+      ("r9", Dba.LValue.v r9);
+      ("r10", Dba.LValue.v r10);
+      ("r11", Dba.LValue.v r11);
+      ("r12", Dba.LValue.v r12);
+      ("r13", Dba.LValue.v r13);
+      ("r14", Dba.LValue.v r14);
+      ("r15", Dba.LValue.v r15);
+      ("r16", Dba.LValue.v r16);
+      ("r17", Dba.LValue.v r17);
+      ("r18", Dba.LValue.v r18);
+      ("r19", Dba.LValue.v r19);
+      ("r20", Dba.LValue.v r20);
+      ("r21", Dba.LValue.v r21);
+      ("r22", Dba.LValue.v r22);
+      ("r23", Dba.LValue.v r23);
+      ("r24", Dba.LValue.v r24);
+      ("r25", Dba.LValue.v r25);
+      ("r26", Dba.LValue.v r26);
+      ("r27", Dba.LValue.v r27);
+      ("r28", Dba.LValue.v r28);
+      ("r29", Dba.LValue.v r29);
+      ("r30", Dba.LValue.v r30);
+      ("r31", Dba.LValue.v r31);
+      ("lr", Dba.LValue.v lr);
+    ]
+
+  let core _ = raise (Errors.not_yet_implemented "ppc core")
+
+  let get_defs () = defs
+
+  let r3_l = Dba.LValue.v r3
+
+  and r3_r = Dba.Expr.v r3
+
+  and r4_r = Dba.Expr.v r4
+
+  and r5_r = Dba.Expr.v r5
+
+  and r6_r = Dba.Expr.v r6
+
+  and r7_r = Dba.Expr.v r7
+
+  and r8_r = Dba.Expr.v r8
+
+  and r9_r = Dba.Expr.v r9
+
+  and r10_r = Dba.Expr.v r10
+
+  and lr_r = Dba.Expr.v lr
+
+  and r1_r = Dba.Expr.v r1
+
+  let ret = r3_l
+
+  let get_arg = function
+    | 0 -> r3_r
+    | 1 -> r4_r
+    | 2 -> r5_r
+    | 3 -> r6_r
+    | 4 -> r7_r
+    | 5 -> r8_r
+    | 6 -> r9_r
+    | 7 -> r10_r
+    | i ->
+        Dba.Expr.load Size.Byte.four LittleEndian
+          (Dba.Expr.add r1_r
+             (Dba.Expr.constant (Bitvector.of_int ~size:64 (8 * (i - 8)))))
+
+  let get_ret ?syscall:_ () = ret
+
+  let void_return = Dhunk.singleton (Dba.Instr.dynamic_jump ~tag:Return lr_r)
+
+  and val_return value =
+    Dhunk.init 2 (function
+      | 0 -> Dba.Instr.assign r3_l value 1
+      | _ -> Dba.Instr.dynamic_jump ~tag:Return lr_r)
+
+  let make_return ?value () =
+    match (value : Dba.Expr.t option) with
+    | None -> void_return
+    | Some (Var v) when Dba.Var.equal v r3 -> void_return
+    | Some value -> val_return value
+
+  let get_stack_pointer () = (r1, Bitvector.of_int64 0x7fff000000000000L)
+
+  let max_instruction_len = Size.Byte.four
+end
+
+module RISCV (C : sig
+  val size : int
+end) : ARCH = struct
+  let registers =
+    Array.map
+      (fun name ->
+        Dba.Var.create name ~bitsize:(Size.Bit.create C.size)
+          ~tag:Dba.Var.Tag.Register)
+      [|
         "ra";
         "sp";
         "gp";
@@ -905,8 +1413,97 @@ module RISCV = struct
         "t4";
         "t5";
         "t6";
-      ]
+      |]
+
+  let reg i = Array.get registers (i - 1)
+
+  let defs =
+    Array.to_list
+      (Array.map
+         (fun (var : Dba.Var.t) -> (var.name, Dba.LValue.v var))
+         registers)
+
+  let get_defs () = defs
+
+  let core _ = raise (Errors.not_yet_implemented "RISC V core")
+
+  let a0 = reg 10
+
+  let a0_l = Dba.LValue.v a0
+
+  and a0_r = Dba.Expr.v a0
+
+  and a1_r = Dba.Expr.v (reg 11)
+
+  and a2_r = Dba.Expr.v (reg 12)
+
+  and a3_r = Dba.Expr.v (reg 13)
+
+  and a4_r = Dba.Expr.v (reg 14)
+
+  and a5_r = Dba.Expr.v (reg 15)
+
+  and a6_r = Dba.Expr.v (reg 16)
+
+  and a7_r = Dba.Expr.v (reg 17)
+
+  and ra_r = Dba.Expr.v (reg 1)
+
+  and sp_r = Dba.Expr.v (reg 2)
+
+  let bytesize = Size.Byte.create (C.size / 8)
+
+  let ret = a0_l
+
+  let get_arg = function
+    | 0 -> a0_r
+    | 1 -> a1_r
+    | 2 -> a2_r
+    | 3 -> a3_r
+    | 4 -> a4_r
+    | 5 -> a5_r
+    | 6 -> a6_r
+    | 7 -> a7_r
+    | i ->
+        Dba.Expr.load bytesize LittleEndian
+          (Dba.Expr.add sp_r
+             (Dba.Expr.constant
+                (Bitvector.of_int ~size:C.size (C.size / 8 * (i - 8)))))
+
+  let get_ret ?syscall:_ () = ret
+
+  let void_return = Dhunk.singleton (Dba.Instr.dynamic_jump ~tag:Return ra_r)
+
+  and val_return value =
+    Dhunk.init 2 (function
+      | 0 -> Dba.Instr.assign a0_l value 1
+      | _ -> Dba.Instr.dynamic_jump ~tag:Return ra_r)
+
+  let make_return ?value () =
+    match (value : Dba.Expr.t option) with
+    | None -> void_return
+    | Some (Var v) when Dba.Var.equal v a0 -> void_return
+    | Some value -> val_return value
+
+  let get_stack_pointer () =
+    ( reg 2,
+      match C.size with
+      | 32 -> Bitvector.of_int ~size:32 0xfff00000
+      | 64 -> Bitvector.of_int64 0x7fff000000000000L
+      | _ ->
+          raise
+            (Errors.not_yet_implemented "incomplete architecture definition") )
+
+  let max_instruction_len = Size.Byte.four
 end
+
+module RISCV32 = RISCV (struct
+  let size = 32
+end)
+
+module RISCV64 = RISCV (struct
+  let size = 64
+end)
 
 module Z80 = struct
   let defs =
@@ -918,35 +1515,63 @@ module Z80 = struct
     Array.fold_right add Z80_arch.registers16
       (Array.fold_right add Z80_arch.registers8
          (Array.fold_right add Z80_arch.flags []))
+
+  let get_defs () = defs
+
+  let get_arg _ = raise (Errors.not_yet_implemented "Z80 calling convention")
+
+  let get_ret ?syscall:_ () =
+    raise (Errors.not_yet_implemented "Z80 calling convention")
+
+  let make_return ?value:_ () =
+    raise (Errors.not_yet_implemented "Z80 calling convention")
+
+  let get_stack_pointer () =
+    raise (Errors.not_yet_implemented "Z80 definitions")
+
+  let core _ = raise (Errors.not_yet_implemented "Z80 core")
+
+  let max_instruction_len = Size.Byte.four
 end
 
-let get_defs () =
+let get_arch () : (module ARCH) =
   match Kernel_options.Machine.isa () with
-  | X86 { bits = `x32 } -> X86.defs
-  | X86 { bits = `x64 } -> AMD64.defs
-  | ARM { rev = `v7; _ } -> ARM.defs
-  | ARM { rev = `v8; _ } -> AARCH64.defs
-  | RISCV { bits = `x32 } -> RISCV.defs 32
-  | RISCV { bits = `x64 } -> RISCV.defs 64
-  | Z80 -> Z80.defs
+  | X86 { bits = `x32 } -> (module X86)
+  | X86 { bits = `x64 } -> (module AMD64)
+  | ARM { rev = `v7; endianness = LittleEndian } -> (module ARM)
+  | ARM { rev = `v8; endianness = LittleEndian } -> (module AARCH64)
+  | PPC { bits = `x64; _ } -> (module PPC64)
+  | RISCV { bits = `x32 } -> (module RISCV32)
+  | RISCV { bits = `x64 } -> (module RISCV64)
+  | Z80 -> (module Z80)
   | _ ->
       (* TODO *)
       raise (Errors.not_yet_implemented "incomplete architecture definition")
+
+let get_defs () =
+  let module A = (val get_arch ()) in
+  A.get_defs ()
+
+let get_arg i =
+  let module A = (val get_arch ()) in
+  A.get_arg i
+
+let get_ret ?syscall () =
+  let module A = (val get_arch ()) in
+  A.get_ret ?syscall ()
+
+let make_return ?value () =
+  let module A = (val get_arch ()) in
+  A.make_return ?value ()
 
 let core img =
-  match Kernel_options.Machine.isa () with
-  | X86 { bits = `x32 } -> X86.notes img
-  | X86 { bits = `x64 } -> AMD64.notes img
-  | _ -> raise (Errors.not_yet_implemented "core dump")
-(* TODO *)
+  let module A = (val get_arch ()) in
+  A.core img
+
+let get_stack_pointer () =
+  let module A = (val get_arch ()) in
+  A.get_stack_pointer ()
 
 let max_instruction_len () =
-  let b4 = Size.Byte.create 4 and b15 = Size.Byte.create 15 in
-  match Kernel_options.Machine.isa () with
-  | X86 _ -> b15
-  | ARM _ -> b4
-  | RISCV _ -> b4
-  | Z80 -> b4
-  | _ ->
-      (* TODO *)
-      raise (Errors.not_yet_implemented "incomplete architecture definition")
+  let module A = (val get_arch ()) in
+  A.max_instruction_len

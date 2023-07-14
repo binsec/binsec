@@ -38,6 +38,10 @@ module type S = sig
 
   val empty : t
 
+  val is_empty : t -> bool
+
+  val is_empty_between : Z.t -> Z.t -> t -> bool
+
   val singleton : Z.t -> v -> t
 
   val store : Z.t -> v -> t -> t
@@ -47,8 +51,6 @@ module type S = sig
   val iter : (Z.t -> v -> unit) -> t -> unit
 
   val rev_iter : (Z.t -> v -> unit) -> t -> unit
-
-  val iter_between : (Z.t -> v -> unit) -> Z.t -> Z.t -> t -> unit
 
   val fold : (Z.t -> v -> 'a -> 'a) -> 'a -> t -> 'a
 

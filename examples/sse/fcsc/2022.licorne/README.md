@@ -47,13 +47,13 @@ Congrats! You can use the flag FCSC{bddb83056668ad24731c28bd35161a7d90923d7a887e
 
 ### Method 1:
 ```console
-$ binsec -sse -sse-alternative-engine -sse-depth 10000 \
+$ binsec -sse -sse-depth 10000 \
          -sse-script crackme1.ini core1.snapshot
 ```
 
 ### Method 2:
 ```console
-$ binsec -sse -sse-alternative-engine -sse-depth 1000000000 \
+$ binsec -sse -sse-depth 1000000000 \
          -sse-script crackme2.ini -sse-self-written-enum 1 \
 		 core2.snapshot
 ```

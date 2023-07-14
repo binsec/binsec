@@ -46,11 +46,13 @@ let get_state () =
        '-sse-legacy-engine' to restore the previous one.";
   if LegacyEngine.get () then
     (module Sse_symbolic.State ((val Smt_solver.get_solver ())) : STATE_FACTORY)
-  else (module Senv.State ((val Senv.get_solver_factory ())) : STATE_FACTORY)
+  else
+    (module Senv.State (Domains.Interval) ((val Senv.get_solver_factory ()))
+    : STATE_FACTORY)
 
 let run () =
   if is_enabled () && Kernel_options.ExecFile.is_set () then
-    let module S = Exec.Start ((val get_state ())) ((val get_worklist ())) in
-    ()
+    let module R = Exec.Run ((val get_state ())) ((val get_worklist ())) () in
+    R.unit
 
 let _ = Cli.Boot.enlist ~name:"SSE" ~f:run

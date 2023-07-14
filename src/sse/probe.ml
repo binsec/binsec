@@ -22,7 +22,6 @@
 open Types
 
 type t =
-  | Print of Output.t
   | Enumerate of {
       enum : Expr.t;
       id : int;

@@ -22,8 +22,6 @@
 module Bv = Bitvector
 module BiMap = Basic_types.BigInt.Map
 
-exception Non_mergeable = Types.Non_mergeable
-
 module rec Expr : (Term.S with type a := string and type b := Memory.t) =
   Term.Make
     (struct
@@ -40,23 +38,35 @@ module rec Expr : (Term.S with type a := string and type b := Memory.t) =
 and Chunk : sig
   include Lmap.Value
 
-  type buffer =
+  type hunk =
     (int, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
 
-  val of_buf : buffer -> t
+  type kind = Hunk of hunk | Term of Expr.t
 
-  val of_expr : Expr.t -> t
+  val inspect : t -> kind
 
-  val to_expr : t -> Expr.t
+  val of_hunk : hunk -> t
 
-  val is_exported : t -> bool
+  val of_term : Expr.t -> t
 
-  val equal : t -> t -> bool
+  val to_term : t -> Expr.t
+
+  (** low level API *)
+
+  val is_hunk : t -> bool
+
+  val is_term : t -> bool
+
+  val unsafe_to_hunk : t -> hunk
+
+  val unsafe_to_term : t -> Expr.t
 end = struct
   type t
 
-  type buffer =
+  type hunk =
     (int, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
+
+  type kind = Hunk of hunk | Term of Expr.t
 
   external is_unboxed : t -> bool = "%obj_is_int"
 
@@ -66,41 +76,49 @@ end = struct
 
   external of_bv : Bv.t -> t = "%identity"
 
-  external to_expr : t -> Expr.t = "%identity"
+  external unsafe_to_term : t -> Expr.t = "%identity"
 
-  external of_expr : Expr.t -> t = "%identity"
+  external of_term : Expr.t -> t = "%identity"
 
-  external to_buf : t -> buffer = "%identity"
+  external unsafe_to_hunk : t -> hunk = "%identity"
 
-  external of_buf : buffer -> t = "%identity"
+  external of_hunk : hunk -> t = "%identity"
 
-  let is_buf x = Obj.tag (Obj.repr x) = Obj.custom_tag
+  let is_hunk x = Obj.tag (Obj.repr x) = Obj.custom_tag
+
+  let is_term x = is_unboxed x || not (is_hunk x)
 
   let of_bv bv =
-    if still_unboxed bv then of_bv bv else of_expr (Expr.constant bv)
+    if still_unboxed bv then of_bv bv else of_term (Expr.constant bv)
+
+  let inspect x =
+    if is_unboxed x then Term (Expr.constant (to_bv x))
+    else if is_hunk x then Hunk (unsafe_to_hunk x)
+    else Term (unsafe_to_term x)
 
   let equal x y =
     x == y
     || (not (is_unboxed x))
-       && (not (is_buf x))
+       && (not (is_hunk x))
        && (not (is_unboxed y))
-       && (not (is_buf y))
-       && Expr.is_equal (to_expr x) (to_expr y)
+       && (not (is_hunk y))
+       && Expr.is_equal (unsafe_to_term x) (unsafe_to_term y)
 
   let len x =
     if is_unboxed x then Bv.size_of (to_bv x) lsr 3
-    else if is_buf x then Bigarray.Array1.dim (to_buf x)
-    else Expr.sizeof (to_expr x) lsr 3
+    else if is_hunk x then Bigarray.Array1.dim (unsafe_to_hunk x)
+    else Expr.sizeof (unsafe_to_term x) lsr 3
 
   let crop ~lo ~hi x =
-    if is_buf x then of_buf (Bigarray.Array1.sub (to_buf x) lo (hi - lo + 1))
+    if is_hunk x then
+      of_hunk (Bigarray.Array1.sub (unsafe_to_hunk x) lo (hi - lo + 1))
     else
       let lo = lo lsl 3 and hi = (hi lsl 3) + 7 in
       if is_unboxed x then of_bv (Bv.extract (to_bv x) { lo; hi })
-      else of_expr (Expr.restrict ~lo ~hi (to_expr x))
+      else of_term (Expr.restrict ~lo ~hi (unsafe_to_term x))
 
-  let buf_to_bv x =
-    let x = to_buf x in
+  let hunk_to_bv x =
+    let x = unsafe_to_hunk x in
     let s = Bigarray.Array1.dim x in
     Bv.create
       (Z.of_bits
@@ -111,32 +129,29 @@ end = struct
   let concat x y =
     if is_unboxed x then
       if is_unboxed y then of_bv (Bv.append (to_bv x) (to_bv y))
-      else if is_buf y then of_bv (Bv.append (to_bv x) (buf_to_bv y))
-      else of_expr (Expr.append (Expr.constant (to_bv x)) (to_expr y))
-    else if is_buf x then
-      if is_unboxed y then of_bv (Bv.append (buf_to_bv x) (to_bv y))
-      else if is_buf y then of_bv (Bv.append (buf_to_bv x) (buf_to_bv y))
-      else of_expr (Expr.append (Expr.constant (buf_to_bv x)) (to_expr y))
+      else if is_hunk y then of_bv (Bv.append (to_bv x) (hunk_to_bv y))
+      else of_term (Expr.append (Expr.constant (to_bv x)) (unsafe_to_term y))
+    else if is_hunk x then
+      if is_unboxed y then of_bv (Bv.append (hunk_to_bv x) (to_bv y))
+      else if is_hunk y then of_bv (Bv.append (hunk_to_bv x) (hunk_to_bv y))
+      else
+        of_term (Expr.append (Expr.constant (hunk_to_bv x)) (unsafe_to_term y))
     else if is_unboxed y then
-      of_expr (Expr.append (to_expr x) (Expr.constant (to_bv y)))
-    else if is_buf y then
-      of_expr (Expr.append (to_expr x) (Expr.constant (buf_to_bv y)))
-    else of_expr (Expr.append (to_expr x) (to_expr y))
+      of_term (Expr.append (unsafe_to_term x) (Expr.constant (to_bv y)))
+    else if is_hunk y then
+      of_term (Expr.append (unsafe_to_term x) (Expr.constant (hunk_to_bv y)))
+    else of_term (Expr.append (unsafe_to_term x) (unsafe_to_term y))
 
-  let to_expr x =
+  let to_term x =
     if is_unboxed x then Expr.constant (to_bv x)
-    else if is_buf x then Expr.constant (buf_to_bv x)
-    else to_expr x
+    else if is_hunk x then Expr.constant (hunk_to_bv x)
+    else unsafe_to_term x
 
-  let of_expr (x : Expr.t) = match x with Cst bv -> of_bv bv | x -> of_expr x
-
-  let is_exported x = not (is_buf x)
+  let of_term (x : Expr.t) = match x with Cst bv -> of_bv bv | x -> of_term x
 end
 
 and Store : sig
-  type t
-
-  val empty : t
+  include Lmap.S with type v := Chunk.t
 
   val singleton : Bv.t -> Chunk.t -> t
 
@@ -144,14 +159,9 @@ and Store : sig
 
   val select : (Z.t -> int -> Chunk.t) -> Bv.t -> int -> t -> Chunk.t
 
-  val iter : (Z.t -> Expr.t -> unit) -> t -> unit
+  val iter_term : (Z.t -> Expr.t -> unit) -> t -> unit
 
-  val fold : (Z.t -> Expr.t -> 'a -> 'a) -> 'a -> t -> 'a
-
-  val map : (Z.t -> Chunk.t -> Chunk.t) -> t -> t
-
-  val merge :
-    (Z.t -> Chunk.t option -> Chunk.t option -> Chunk.t option) -> t -> t -> t
+  val fold_term : (Z.t -> Expr.t -> 'a -> 'a) -> 'a -> t -> 'a
 end = struct
   include Lmap.Make (Chunk)
 
@@ -186,12 +196,13 @@ end = struct
       Chunk.concat (select f Z.zero o t) (select f z (s - o) t)
     else select f z s t
 
-  let iter f t =
-    iter (fun k v -> if Chunk.is_exported v then f k (Chunk.to_expr v)) t
+  let iter_term f t =
+    iter (fun k v -> if not (Chunk.is_hunk v) then f k (Chunk.to_term v)) t
 
-  let fold f b t =
+  let fold_term f b t =
     fold
-      (fun k v b -> if Chunk.is_exported v then f k (Chunk.to_expr v) b else b)
+      (fun k v b ->
+        if not (Chunk.is_hunk v) then f k (Chunk.to_term v) b else b)
       b t
 end
 
@@ -200,7 +211,6 @@ and Memory : sig
     | Root
     | Symbol of string
     | Layer of { id : int; over : t; addr : Expr.t; store : Store.t }
-    | Overlay of { id : int; over : t; addr : Expr.t; store : Store.t }
 
   val compare : t -> t -> int
 
@@ -208,41 +218,23 @@ and Memory : sig
 
   val hash : t -> int
 
-  val source : addr:Expr.t -> len:int -> Loader_buf.t -> t -> t
+  val root : t
 
-  val write : addr:Expr.t -> Expr.t -> Expr.endianness -> t -> t
+  val fresh : string -> t
 
-  val read : addr:Expr.t -> int -> Expr.endianness -> t -> Expr.t * t
-
-  val merge : Expr.t -> t -> t -> t
-
-  val bswap : Expr.t -> Expr.t
+  val layer : Expr.t -> Store.t -> t -> t
 end = struct
-  let bswap =
-    let rec iter e i r =
-      if i = 0 then r
-      else
-        iter e (i - 8) (Expr.append (Expr.restrict ~hi:(i - 1) ~lo:(i - 8) e) r)
-    in
-    fun e ->
-      let size = Expr.sizeof e in
-      assert (size land 0x7 = 0);
-      iter e (size - 8) (Expr.restrict ~hi:(size - 1) ~lo:(size - 8) e)
-
   type t =
     | Root
     | Symbol of string
     | Layer of { id : int; over : t; addr : Expr.t; store : Store.t }
-    | Overlay of { id : int; over : t; addr : Expr.t; store : Store.t }
-
-  exception Writeback of (Expr.t * t)
 
   let id = ref 0
 
   let hash = function
     | Root -> 0
     | Symbol name -> Hashtbl.hash name
-    | Layer { id; _ } | Overlay { id; _ } -> id
+    | Layer { id; _ } -> id
 
   let compare t t' = hash t - hash t'
 
@@ -250,165 +242,16 @@ end = struct
     match (t, t') with
     | Root, Root -> true
     | Symbol id, Symbol id' -> id = id'
-    | ( (Layer { id; _ } | Overlay { id; _ }),
-        (Layer { id = id'; _ } | Overlay { id = id'; _ }) ) ->
-        id = id'
-    | ( (Root | Symbol _ | Layer _ | Overlay _),
-        (Root | Symbol _ | Layer _ | Overlay _) ) ->
-        false
+    | Layer { id; _ }, Layer { id = id'; _ } -> id = id'
+    | (Root | Symbol _ | Layer _), (Root | Symbol _ | Layer _) -> false
 
-  let rebase (addr : Expr.t) =
-    match addr with
-    | Cst bv -> (Expr.zeros (Bv.size_of bv), bv)
-    | Binary { f = Plus; x; y = Cst bv; _ } -> (x, bv)
-    | Binary { f = Minus; x; y = Cst bv; _ } -> (x, Bv.neg bv)
-    | _ -> (addr, Bv.zeros (Expr.sizeof addr))
+  let root = Root
 
-  let blit offset buf len over =
-    let s = Bigarray.Array1.dim buf in
-    if len <= s then
-      let buf = Bigarray.Array1.sub buf 0 len in
-      Store.store offset (Chunk.of_buf buf) over
-    else
-      let buf' =
-        Bigarray.Array1.create Bigarray.int8_unsigned Bigarray.C_layout (len - s)
-      in
-      Bigarray.Array1.fill buf' 0;
-      if s = 0 then Store.store offset (Chunk.of_buf buf') over
-      else
-        Store.store (Bv.add_int offset s) (Chunk.of_buf buf')
-          (Store.store offset (Chunk.of_buf buf) over)
+  let fresh name = Symbol name
 
-  let fill addr len orig over =
-    let addr, offset = rebase addr in
+  let layer addr store over =
     incr id;
-    Overlay { id = !id; over; addr; store = blit offset orig len Store.empty }
-
-  let source ~addr ~len orig over =
-    match over with
-    | Root | Symbol _ | Layer _ -> fill addr len orig over
-    | Overlay { id = id'; addr = addr'; store = store'; over = over' } -> (
-        match Expr.sub addr addr' with
-        | Expr.Cst bv ->
-            let store = blit bv orig len store' in
-            incr id;
-            Overlay { id = !id; over = over'; addr = addr'; store }
-        | _ ->
-            fill addr len orig
-              (Layer { id = id'; addr = addr'; store = store'; over = over' }))
-
-  let overlay addr value over =
-    let addr, offset = rebase addr in
-    incr id;
-    Overlay
-      {
-        id = !id;
-        over;
-        addr;
-        store = Store.singleton offset (Chunk.of_expr value);
-      }
-
-  let write ~addr value (dir : Expr.endianness) over =
-    let value =
-      match dir with LittleEndian -> value | BigEndian -> bswap value
-    in
-    match over with
-    | Root | Symbol _ | Layer _ -> overlay addr value over
-    | Overlay { id = id'; addr = addr'; store = store'; over = over' } -> (
-        match Expr.sub addr addr' with
-        | Expr.Cst bv ->
-            let store = Store.store bv (Chunk.of_expr value) store' in
-            incr id;
-            Overlay { id = !id; over = over'; addr = addr'; store }
-        | _ ->
-            overlay addr value
-              (Layer { id = id'; addr = addr'; store = store'; over = over' }))
-
-  let rec read ~addr bytes (dir : Expr.endianness) memory =
-    match memory with
-    | Root | Symbol _ -> Expr.load bytes dir addr memory
-    | Layer { id; addr = addr'; store; over }
-    | Overlay { id; addr = addr'; store; over } -> (
-        match Expr.sub addr addr' with
-        | Expr.Cst bv -> (
-            let miss i s =
-              Chunk.of_expr
-                (read ~addr:(Expr.addz addr' i) s Expr.LittleEndian over)
-            in
-            let bytes = Chunk.to_expr (Store.select miss bv bytes store) in
-            match dir with LittleEndian -> bytes | BigEndian -> bswap bytes)
-        | _ -> (
-            let bytes = Expr.load bytes dir addr memory in
-            match memory with
-            | Overlay _ ->
-                raise_notrace
-                  (Writeback (bytes, Layer { id; addr = addr'; store; over }))
-            | _ -> bytes))
-
-  let rec merge c t t' =
-    if t == t' then t
-    else
-      match (t, t') with
-      | Overlay { over; addr; store; _ }, t' when over == t' ->
-          incr id;
-          let id = !id
-          and store =
-            Store.map
-              (fun offset chunk ->
-                if Chunk.is_exported chunk then
-                  let value = Chunk.to_expr chunk in
-                  let size = Expr.sizeof value in
-                  Chunk.of_expr
-                    (Expr.ite c value
-                       (read ~addr:(Expr.addz addr offset) (size / 8)
-                          LittleEndian over))
-                else raise_notrace Non_mergeable)
-              store
-          in
-          Overlay { id; over; addr; store }
-      | t, Overlay { over; _ } when t == over -> merge (Expr.lognot c) t' t
-      | ( Overlay { over; addr; store; _ },
-          Overlay { over = over'; addr = addr'; store = store'; _ } )
-        when Expr.is_equal addr addr' && over == over' ->
-          incr id;
-          let id = !id
-          and store =
-            Store.merge
-              (fun offset o0 o1 ->
-                match (o0, o1) with
-                | Some c0, Some c1 ->
-                    if Chunk.equal c0 c1 then o0
-                    else
-                      Some
-                        (Chunk.of_expr
-                           (Expr.ite c (Chunk.to_expr c0) (Chunk.to_expr c1)))
-                | Some c0, None ->
-                    let value = Chunk.to_expr c0 in
-                    let size = Expr.sizeof value in
-                    Some
-                      (Chunk.of_expr
-                         (Expr.ite c value
-                            (read ~addr:(Expr.addz addr offset) (size / 8)
-                               LittleEndian over)))
-                | None, Some c1 ->
-                    let value = Chunk.to_expr c1 in
-                    let size = Expr.sizeof value in
-                    Some
-                      (Chunk.of_expr
-                         (Expr.ite c
-                            (read ~addr:(Expr.addz addr offset) (size / 8)
-                               LittleEndian over)
-                            value))
-                | None, None -> None)
-              store store'
-          in
-          Overlay { id; over; addr; store }
-      | ( (Root | Symbol _ | Layer _ | Overlay _),
-          (Root | Symbol _ | Layer _ | Overlay _) ) ->
-          raise_notrace Non_mergeable
-
-  let read ~addr bytes dir memory =
-    try (read ~addr bytes dir memory, memory) with Writeback r -> r
+    Layer { id = !id; over; addr; store }
 end
 
 module BvTbl = Hashtbl.Make (struct
@@ -428,38 +271,35 @@ module I = Map.Make (struct
   let compare x y = -Z.compare x y
 end)
 
-module Model = struct
-  type t = Bv.t BvTbl.t * char BiTbl.t * char BiTbl.t StTbl.t
+let bswap =
+  let rec iter e i r =
+    if i = 0 then r
+    else
+      iter e (i - 8) (Expr.append (Expr.restrict ~hi:(i - 1) ~lo:(i - 8) e) r)
+  in
+  fun e ->
+    let size = Expr.sizeof e in
+    assert (size land 0x7 = 0);
+    iter e (size - 8) (Expr.restrict ~hi:(size - 1) ~lo:(size - 8) e)
 
-  let empty () = (BvTbl.create 0, BiTbl.create 0, StTbl.create 0)
+module Model = struct
+  type t =
+    Expr.t StTbl.t * Bv.t BvTbl.t * char BiTbl.t * char BiTbl.t StTbl.t * int
+
+  let empty addr_space =
+    (StTbl.create 0, BvTbl.create 0, BiTbl.create 0, StTbl.create 0, addr_space)
 
   let maybe_pp_char ppf c =
     if String_utils.is_char_printable c then Format.fprintf ppf " (%c)" c
 
   let pp_variables ppf vars values =
-    if S.is_empty vars = false then (
+    if StTbl.length vars > 0 then (
       Format.pp_print_string ppf "# Variables";
       Format.pp_print_cut ppf ();
-      S.iter
-        (fun name list ->
-          let list = List.rev list in
-          Format.fprintf ppf "%s : @[<hov>%a@]@ " name
-            (Format.pp_print_list ~pp_sep:Format.pp_print_space (fun ppf var ->
-                 match BvTbl.find values var with
-                 | exception Not_found -> Format.pp_print_string ppf "--"
-                 | bv -> Bitvector.pp_hex_or_bin ppf bv))
-            list;
-          match list with
-          | var :: _ :: _ when Expr.sizeof var = 8 ->
-              Format.pp_print_string ppf "  [as ascii] ";
-              List.iter
-                (fun var ->
-                  match BvTbl.find values var with
-                  | exception Not_found -> Format.pp_print_string ppf "."
-                  | bv -> Format.pp_print_char ppf (Bitvector.to_char bv))
-                list;
-              Format.pp_print_space ppf ()
-          | _ -> ())
+      StTbl.iter
+        (fun name value ->
+          Format.fprintf ppf "%s : %a@ " name Bitvector.pp_hex_or_bin
+            (BvTbl.find values value))
         vars)
 
   let pp_int_as_bv ppf x = function
@@ -488,10 +328,14 @@ module Model = struct
       let img = Kernel_functions.get_img () in
       let noname = "" in
       let section_name addr =
-        let address = Virtual_address.to_int (Virtual_address.of_bigint addr) in
-        match Loader_utils.find_section_by_address ~address img with
-        | None -> noname
-        | Some section -> Loader.Section.name section
+        try
+          let address =
+            Virtual_address.to_int (Virtual_address.of_bigint addr)
+          in
+          match Loader_utils.find_section_by_address ~address img with
+          | None -> noname
+          | Some section -> Loader.Section.name section
+        with Virtual_address.Non_canonical_form -> noname
       in
       let pp_section ppf name =
         if name == noname then Format.pp_print_string ppf "unamed section"
@@ -516,8 +360,11 @@ module Model = struct
         Format.fprintf ppf " : %02x %a@ " (Char.code byte) maybe_pp_char byte)
     @@ BiTbl.fold I.add array I.empty
 
-  let pp ppf vars addr_space (values, memory, arrays) =
-    if S.is_empty vars && BiTbl.length memory = 0 && StTbl.length arrays = 0
+  let pp ppf (vars, values, memory, arrays, addr_space) =
+    if
+      StTbl.length vars = 0
+      && BiTbl.length memory = 0
+      && StTbl.length arrays = 0
     then Format.fprintf ppf "@[<h>--- Empty model ---@]"
     else (
       Format.fprintf ppf "@[<v 0>--- Model ---@ ";
@@ -532,29 +379,41 @@ module Model = struct
         arrays;
       Format.pp_close_box ppf ())
 
-  let rec eval ((vars, _, _) as m) = function
+  let rec eval
+      ?(symbols =
+        fun e -> Bitvector.create (Z.of_int (Expr.hash e)) (Expr.sizeof e))
+      ?(memory = fun _ _ -> '\x00') ((vars, values, _, _, _) as m) = function
     | Expr.Cst bv -> bv
     | e -> (
-        try BvTbl.find vars e
+        try BvTbl.find values e
         with Not_found ->
-          let size = Expr.sizeof e in
           let value =
             match e with
             | Expr.Cst _ -> assert false
-            | Expr.Var _ -> Bitvector.create (Z.of_int (Expr.hash e)) size
+            | Expr.Var { name; _ } ->
+                StTbl.add vars name e;
+                symbols e
             | Expr.Load { addr; len; dir; label; _ } ->
-                eval_load m (eval m addr) len dir label
-            | Expr.Unary { f; x; _ } -> Term.Bv.unary f (eval m x)
+                eval_load ~symbols ~memory m
+                  (eval ~symbols ~memory m addr)
+                  len dir label
+            | Expr.Unary { f; x; _ } ->
+                Term.Bv.unary f (eval ~symbols ~memory m x)
             | Expr.Binary { f; x; y; _ } ->
-                Term.Bv.binary f (eval m x) (eval m y)
+                Term.Bv.binary f
+                  (eval ~symbols ~memory m x)
+                  (eval ~symbols ~memory m y)
             | Expr.Ite { c; t; e; _ } ->
-                if Bv.zero = eval m c then eval m e else eval m t
+                if Bv.zero = eval ~symbols ~memory m c then
+                  eval ~symbols ~memory m e
+                else eval ~symbols ~memory m t
           in
-          BvTbl.add vars e value;
+          BvTbl.add values e value;
           value)
 
-  and eval_load ((_, cache, arrays) as t) ptr len dir (memory : Memory.t) =
-    match memory with
+  and eval_load ~symbols ~memory ((_, _, cache, arrays, addr_size) as t) ptr len
+      dir (memory_term : Memory.t) =
+    match memory_term with
     | Root ->
         let index =
           match dir with
@@ -565,8 +424,12 @@ module Model = struct
         in
         let bits =
           String.init len (fun i ->
-              try BiTbl.find cache (Bv.value_of (index i))
-              with Not_found -> '\x00')
+              let x = Bv.value_of (index i) in
+              try BiTbl.find cache x
+              with Not_found ->
+                let byte = memory memory_term (Bv.create x addr_size) in
+                BiTbl.add cache x byte;
+                byte)
         in
         Bv.create (Z.of_bits bits) (len lsl 3)
     | Symbol n ->
@@ -579,25 +442,37 @@ module Model = struct
         in
         let bits =
           String.init len (fun i ->
-              try BiTbl.find (StTbl.find arrays n) (Bv.value_of (index i))
-              with Not_found -> '\x00')
+              let x = Bv.value_of (index i)
+              and arr =
+                try StTbl.find arrays n
+                with Not_found ->
+                  let arr = BiTbl.create 16 in
+                  StTbl.add arrays n arr;
+                  arr
+              in
+              try BiTbl.find arr x
+              with Not_found ->
+                let byte = memory memory_term (Bv.create x addr_size) in
+                BiTbl.add arr x byte;
+                byte)
         in
         Bv.create (Z.of_bits bits) (len lsl 3)
-    | Layer { addr; store; over; _ } | Overlay { addr; store; over; _ } ->
-        let addr = eval t addr in
+    | Layer { addr; store; over; _ } ->
+        let addr = eval ~symbols ~memory t addr in
         let size = Bv.size_of addr in
         let offset = Bv.sub ptr addr in
         let miss i s =
-          Chunk.of_expr
+          Chunk.of_term
             (Expr.load s Expr.LittleEndian
                (Expr.constant (Bv.add addr (Bv.create i size)))
                over)
         in
-        let bytes = Chunk.to_expr (Store.select miss offset len store) in
+        let bytes = Chunk.to_term (Store.select miss offset len store) in
         let bytes =
-          match dir with
-          | LittleEndian -> bytes
-          | BigEndian -> Memory.bswap bytes
+          match dir with LittleEndian -> bytes | BigEndian -> bswap bytes
         in
-        eval t bytes
+        eval ~symbols ~memory t bytes
 end
+
+module BvSet = Set.Make (Expr)
+module BvMap = Map.Make (Expr)

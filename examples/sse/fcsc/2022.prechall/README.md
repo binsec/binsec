@@ -29,7 +29,7 @@ Le flag est:
 # Command
 
 ```console
-$ binsec -sse -sse-alternative-engine -sse-script crackme.ini fcsc.8xp
+$ binsec -sse -sse-script crackme.ini fcsc.8xp
 ```
 
 # Expect

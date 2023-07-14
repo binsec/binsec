@@ -34,6 +34,7 @@
   | ":="                      { ASSIGN }
   | "goto"                    { GOTO }
   | "jump"                    { JUMP }
+  | "return"                  { RETURN }
   | "halt"                    { HALT }
   | "abort"                   { ABORT }
   | "undef"                   { UNDEF }
@@ -126,7 +127,7 @@
 	     	    ((String.length s + Bool.to_int (z <> "")) * 8)) }
   | space+          { token lexbuf }
   | '#' [^'\n']* '\n'
-  | "\n"            { Lexing.new_line lexbuf; token lexbuf }
+  | "\n"            { Lexing.new_line lexbuf; NEWLINE }
   | eof             { EOF }
   | _
       {

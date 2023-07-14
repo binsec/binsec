@@ -30,8 +30,9 @@
 %token WHILE DO
 %token FOR IN TO
 %token AS
-%token SEMICOLON END
+%token SEMICOLON END NEWLINE
 %token ABORT
+%token RETURN
 
 %token <string> LABEL
 
@@ -39,24 +40,38 @@
 
 %public
 let chunk :=
-  | stmts=flatten(list(stmt));
+  | stmts=flatten(nonempty_list(stmt));
+    { stmts }
+  | stmts=append(append(flatten(list(stmt)),
+                        terminated(control, separator)),
+                 loption(append(labelled, chunk)));
     { stmts }
 
 %public
 let stmt :=
-  | ~=label; SEMICOLON;
+  | ~=label; separator;
     { [ Instr.label label ] }
-  | label=ioption(label); instr=instr_or_control; option(SEMICOLON);
+  | label=ioption(label); instr=instr_or_block; separator;
     { match label with
       | None -> instr
       | Some ident -> Instr.label ident :: instr
     }
 
-let instr_or_control :=
+let separator :=
+  | SEMICOLON;
+    {}
+  | NEWLINE;
+    {}
+
+let labelled :=
+  | ~=label;
+    { [ Instr.label label ] }
+
+let instr_or_block :=
   | ~=instr;
     { instr }
-  | ~=control;
-    { control }
+  | ~=block; END;
+    { block }
 
 %public
 let instr :=
@@ -88,25 +103,25 @@ let instr :=
 let control :=
   | GOTO; target=LABEL;
     { [ Instr.goto target ] }
-  | ~=block; END;
-    { block }
   | ~=terminator; { [ terminator ] }
   | ABORT;
     { [ Instr.dynamic_assert Expr.zero; Instr.halt ] }
+  | RETURN; value=option(expr);
+    { let value = Option.map (to_expr Env.wordsize) value in
+      Instr.of_dhunk (Isa_helper.make_return ?value ()) }
 
 let id := id=IDENT;
     { let name, size = id in
       Env.lookup name size }
 
 let block :=
-  | IF; ~=bool; THEN; t=flatten(nonempty_list(stmt));
+  | IF; ~=bool; THEN; t=chunk;
     { let target = uid () in
       List.concat
 	[ [ Instr.conditional_jump (Expr.lognot bool) target ];
 	  t;
 	  [ Instr.label target ] ] }
-  | IF; ~=bool; THEN; t=flatten(nonempty_list(stmt));
-    ELSE; e=flatten(nonempty_list(stmt));
+  | IF; ~=bool; THEN; t=chunk; ELSE; e=chunk;
     { let target = uid () and target' = uid () in
       List.concat
 	[ [ Instr.conditional_jump (Expr.lognot bool) target ];
@@ -114,7 +129,7 @@ let block :=
 	  [ Instr.goto target'; Instr.label target ];
 	  e;
 	  [ Instr.label target' ] ] }
-  | WHILE; ~=bool; DO; d=flatten(nonempty_list(stmt));
+  | WHILE; ~=bool; DO; d=chunk;
     { let target = uid () and target' = uid () in
       (*
       List.concat
@@ -132,8 +147,7 @@ let block :=
 	    Instr.label target' ];
 	  d;
 	  [ Instr.goto target; Instr.label target'' ] ] }
-  | FOR; var=id; IN; init=expr; TO; upto=expr; DO;
-    d=flatten(nonempty_list(stmt));
+  | FOR; var=id; IN; init=expr; TO; upto=expr; DO; d=chunk;
     { let evar = LValue.to_expr var in
       let size = LValue.size_of var in
       let init = to_expr size init in
@@ -153,7 +167,7 @@ let block :=
 	    Instr.goto target;
 	    Instr.label target'' ] ] }
   | CASE; ~=expr; IS; cases=nonempty_list(case);
-    default=option(preceded(pair(ANY, COLON), flatten(nonempty_list(stmt))));
+    default=option(preceded(pair(ANY, COLON), chunk));
     { let rec aux cases next stmts =
 	match cases with
 	| [] -> stmts

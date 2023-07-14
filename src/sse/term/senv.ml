@@ -40,6 +40,7 @@ let get_solver_factory () =
   match Smt_options.SMTSolver.get () with
   | (Smt_options.Auto | Smt_options.Bitwuzla_native) when Smt_bitwuzla.available
     ->
+      Logger.debug "Use native Bitwuzla binding.";
       (module Native_solver.Solver : Solver_sig.FACTORY)
   | Auto -> (
       try
@@ -51,6 +52,7 @@ let get_solver_factory () =
   | Bitwuzla_native ->
       Logger.fatal "Native bitwuzla binding is required but not available."
   | solver when Prover.ping (map solver) ->
+      Logger.debug "Found %a in the path." Prover.pp (map solver);
       Solver.set (map solver);
       (module Smt2_solver.Solver : Solver_sig.FACTORY)
   | solver ->
@@ -73,35 +75,46 @@ type 'a test = 'a Types.test =
   | Both of { t : 'a; f : 'a }
 
 (* utils *)
-let byte_size = Natural.to_int Basic_types.Constants.bytesize
 
 module BiMap = Basic_types.BigInt.Map
 module NiTbl = Basic_types.Int.Htbl
-module Sname = Suid
 open Sexpr
 module BiItM = Imap
-module BvSet = Set.Make (Expr)
 module S = Basic_types.String.Map
 module I = Basic_types.Int.Map
 module R = Basic_types.Int.Htbl
+module K = Basic_types.Int.Set
 
-module State (F : Solver_sig.FACTORY) (QS : Types.QUERY_STATISTICS) = struct
+type _ Types.value += Term : Sexpr.Expr.t Types.value
+
+module State
+    (D : Domains.S)
+    (F : Solver_sig.FACTORY)
+    (QS : Types.QUERY_STATISTICS) =
+struct
+  module Uid = struct
+    type t = Suid.t
+
+    let zero = Suid.incr Suid.zero
+    (* zero is reserved for initial memory *)
+
+    let succ = Suid.incr
+
+    let compare = Suid.compare
+  end
+
   type t = {
     constraints : Expr.t list;
     (* reversed sequence of assertions *)
-    constset : BvSet.t;
+    mutable deps : BvSet.t BvMap.t;
+    mutable domains : D.t BvMap.t;
+    mutable anchors : K.t;
     vsymbols : Expr.t I.t;
     (* collection of visible symbols *)
     varrays : Memory.t S.t;
     (* collection of visible arrays *)
     vmemory : Memory.t;
     (* visible memory *)
-    fid : Sname.t;
-    (* unique indice counter *)
-    fvariables : Expr.t list S.t;
-    (* collection of free variables *)
-    farrays : Memory.t S.t;
-    (* collection of free array *)
     ilocs : (Z.t * Loader_buf.t) BiItM.t;
     (* set of initialized memory locations *)
     alocs : (Z.t * char) list ref;
@@ -109,80 +122,95 @@ module State (F : Solver_sig.FACTORY) (QS : Types.QUERY_STATISTICS) = struct
     model : Model.t; (* a model that satisfy constraints *)
   }
 
-  let pp ppf state =
-    Model.pp ppf state.fvariables
-      (Kernel_options.Machine.word_size ())
-      state.model
+  module C : Ai.CONTEXT with type t = t and type v := D.t = struct
+    type nonrec t = t
+
+    let add_dependency t ~parent e =
+      t.deps <-
+        BvMap.add e
+          (BvSet.add parent
+             (try BvMap.find e t.deps with Not_found -> BvSet.empty))
+          t.deps
+
+    let find_dependency t e = BvMap.find e t.deps
+
+    let add t e v = t.domains <- BvMap.add e v t.domains
+
+    let find t e = BvMap.find e t.domains
+  end
+
+  module Overapprox : Memory_manager.CONTEXT with type t = t and type v := D.t =
+  struct
+    include Ai.Make (D) (C)
+
+    let anchor t (m : Memory.t) =
+      match m with
+      | Root | Symbol _ -> ()
+      | Layer { id; _ } -> t.anchors <- K.add id t.anchors
+
+    let anchored t (m : Memory.t) =
+      match m with
+      | Root | Symbol _ -> true
+      | Layer { id; _ } -> K.mem id t.anchors
+  end
+
+  module MMU = Memory_manager.Make (D) (Overapprox)
+
+  let pp ppf state = Model.pp ppf state.model
 
   let empty () =
     {
       constraints = [];
-      constset = BvSet.empty;
+      deps = BvMap.empty;
+      domains = BvMap.empty;
+      anchors = K.empty;
       vsymbols = I.empty;
       varrays = S.empty;
-      vmemory = Memory.Root;
-      fid = Sname.(incr zero);
-      (* zero is reserved for initial memory *)
-      fvariables = S.empty;
-      farrays = S.empty;
+      vmemory = Memory.root;
       ilocs = BiItM.empty;
       alocs = ref [];
-      model = Model.empty ();
+      model = Model.empty (Kernel_options.Machine.word_size ());
     }
-
-  let fresh ({ id; name; size; _ } : Types.Var.t) state =
-    let v = Expr.var (Sname.to_string state.fid) size name in
-    let fid = Sname.incr state.fid in
-    let h =
-      match S.find name state.fvariables with
-      | exception Not_found -> [ v ]
-      | h -> v :: h
-    in
-    let fvariables = S.add name h state.fvariables in
-    let vsymbols = I.add id v state.vsymbols in
-    { state with vsymbols; fid; fvariables }
 
   let alloc ~array state =
-    let symbol = Memory.Symbol array in
-    {
-      state with
-      varrays = S.add array symbol state.varrays;
-      farrays = S.add array symbol state.farrays;
-    }
+    let symbol = Memory.fresh array in
+    { state with varrays = S.add array symbol state.varrays }
 
   let assign ({ id; _ } : Types.Var.t) value state =
     { state with vsymbols = I.add id value state.vsymbols }
 
   let write ~addr value dir state =
-    { state with vmemory = Memory.write ~addr value dir state.vmemory }
+    let vmemory = MMU.write state ~addr value dir state.vmemory in
+    { state with vmemory }
 
   let store name ~addr value dir state =
     try
       let ar = S.find name state.varrays in
-      {
-        state with
-        varrays = S.add name (Memory.write ~addr value dir ar) state.varrays;
-      }
+      let varrays =
+        S.add name (MMU.write state ~addr value dir ar) state.varrays
+      in
+      { state with varrays }
     with Not_found -> raise_notrace (Uninterp name)
 
+  let lookup ({ id; _ } as var : Types.Var.t) t =
+    try I.find id t.vsymbols with Not_found -> raise_notrace (Undef var)
+
   let read ~addr bytes dir state =
-    let bytes, vmemory = Memory.read ~addr bytes dir state.vmemory in
-    if state.vmemory == vmemory then (bytes, state)
-    else (bytes, { state with vmemory })
+    let bytes = MMU.read state ~addr bytes dir state.vmemory in
+    (bytes, state)
 
   let select name ~addr bytes dir state =
     try
       let array = S.find name state.varrays in
-      let bytes, array' = Memory.read ~addr bytes dir array in
-      if array == array' then (bytes, state)
-      else (bytes, { state with varrays = S.add name array' state.varrays })
+      let bytes = MMU.read state ~addr bytes dir array in
+      (bytes, state)
     with Not_found -> raise_notrace (Uninterp name)
 
   let memcpy ~addr len orig state =
     let base = Bv.value_of addr in
     let ilocs = BiItM.add ~base len (Bv.value_of addr, orig) state.ilocs in
     let vmemory =
-      Memory.source ~addr:(Expr.constant addr) ~len orig state.vmemory
+      MMU.source state ~addr:(Expr.constant addr) ~len orig state.vmemory
     in
     { state with ilocs; vmemory }
 
@@ -190,7 +218,7 @@ module State (F : Solver_sig.FACTORY) (QS : Types.QUERY_STATISTICS) = struct
     type result = Unsat | Sat of t
 
     let extract_memory state =
-      match Solver.get_array Memory.Root with
+      match Solver.get_array Memory.root with
       | (exception Not_found) | [||] -> (BiTbl.create 0, !(state.alocs))
       | assignment ->
           let memory = BiTbl.create (Array.length assignment) in
@@ -224,25 +252,21 @@ module State (F : Solver_sig.FACTORY) (QS : Types.QUERY_STATISTICS) = struct
             assignment;
           array
 
-    let extract_arrays state =
+    let extract_arrays () =
       let arrays = StTbl.create 5 in
-      S.iter
-        (fun name symbol -> StTbl.add arrays name (extract_array symbol))
-        state.farrays;
+      Solver.iter_free_arrays (fun name symbol ->
+          StTbl.add arrays name (extract_array symbol));
       arrays
 
-    let extract_vars state =
-      let vars = BvTbl.create 32 in
-      S.iter
-        (fun _ ->
-          List.iter (fun bv ->
-              match Solver.get bv with
-              | exception Not_found -> ()
-              | x ->
-                  BvTbl.add vars bv
-                    (Bitvector.create Solver.(get_value x) (Expr.sizeof bv))))
-        state.fvariables;
-      vars
+    let extract_vars () =
+      let vars = StTbl.create 8 and values = BvTbl.create 32 in
+      Solver.iter_free_variables (fun name bv ->
+          StTbl.add vars name bv;
+          BvTbl.add values bv
+            (Bitvector.create
+               Solver.(get_value (Solver.get bv))
+               (Expr.sizeof bv)));
+      (vars, values)
 
     let rec force_lazy_init alocs state =
       if alocs == !(state.alocs) = false then
@@ -274,42 +298,53 @@ module State (F : Solver_sig.FACTORY) (QS : Types.QUERY_STATISTICS) = struct
                 let x = Solver.get_value expr in
                 let b = Bv.create x size in
                 let cond = Expr.equal e (Expr.constant b) in
+                let vars, values = extract_vars () in
                 let state' =
                   {
                     state with
                     constraints = cond :: state.constraints;
-                    constset = BvSet.add cond state.constset;
-                    model = (extract_vars state, memory, extract_arrays state);
+                    model =
+                      ( vars,
+                        values,
+                        memory,
+                        extract_arrays (),
+                        Kernel_options.Machine.word_size () );
                   }
                 in
+                ignore (Overapprox.eval state' cond);
+                Overapprox.refine state' cond D.one;
                 Solver.neq expr x;
                 iter state e expr size (n - 1) ((b, state') :: enum)
       in
       fun e ?(n = (1 lsl Expr.sizeof e) - 1) ?(except = []) state ->
         let size = Expr.sizeof e in
-        let expr = Solver.bind state.fid e state.constraints in
+        let expr = Solver.bind Uid.zero e state.constraints in
         List.iter
           (fun (addr, value) ->
             Solver.set_memory ~addr (Z.of_int (Char.code value)))
           !(state.alocs);
-        let init =
-          let bv = Model.eval state.model e in
-          if List.mem bv except then []
-          else (
-            QS.Preprocess.incr_const ();
-            Solver.neq expr (Bitvector.value_of bv);
-            let cond = Expr.equal e (Expr.constant bv) in
-            [
-              ( bv,
-                {
-                  state with
-                  constraints = cond :: state.constraints;
-                  constset = BvSet.add cond state.constset;
-                } );
-            ])
-        in
-        List.iter (fun bv -> Solver.neq expr (Bitvector.value_of bv)) except;
-        iter state e expr size (n - 1) init
+        let d = Overapprox.eval state e in
+        match D.project ~size d with
+        | Point z ->
+            let bv = Bv.create z size in
+            if List.mem bv except then [] else [ (bv, state) ]
+        | Top | Seq _ ->
+            let init =
+              let bv = Model.eval state.model e in
+              if List.mem bv except then []
+              else (
+                QS.Preprocess.incr_const ();
+                Solver.neq expr (Bitvector.value_of bv);
+                let cond = Expr.equal e (Expr.constant bv) in
+                let state =
+                  { state with constraints = cond :: state.constraints }
+                in
+                ignore (Overapprox.eval state cond);
+                Overapprox.refine state cond D.one;
+                [ (bv, state) ])
+            in
+            List.iter (fun bv -> Solver.neq expr (Bitvector.value_of bv)) except;
+            iter state e expr size (n - 1) init
 
     let check_sat =
       let rec check_sat_true state =
@@ -323,14 +358,20 @@ module State (F : Solver_sig.FACTORY) (QS : Types.QUERY_STATISTICS) = struct
               state.alocs := alocs;
               check_sat_true state)
             else
+              let vars, values = extract_vars () in
               Sat
                 {
                   state with
-                  model = (extract_vars state, memory, extract_arrays state);
+                  model =
+                    ( vars,
+                      values,
+                      memory,
+                      extract_arrays (),
+                      Kernel_options.Machine.word_size () );
                 }
       in
       fun state ->
-        Solver.put state.fid state.constraints;
+        Solver.put Uid.zero state.constraints;
         List.iter
           (fun (addr, value) ->
             Solver.set_memory ~addr (Z.of_int (Char.code value)))
@@ -347,41 +388,39 @@ module State (F : Solver_sig.FACTORY) (QS : Types.QUERY_STATISTICS) = struct
     else if Expr.is_equal cond Expr.zero then (
       QS.Preprocess.incr_unsat ();
       None)
-    else if BvSet.mem cond state.constset then (
-      QS.Preprocess.incr_sat ();
-      Some state)
-    else if BvSet.mem (Expr.lognot cond) state.constset then (
-      QS.Preprocess.incr_unsat ();
-      None)
     else
-      let state =
-        {
-          state with
-          constraints = cond :: state.constraints;
-          constset = BvSet.add cond state.constset;
-        }
-      in
-      if Bitvector.zero = Model.eval state.model cond then (
-        QS.Solver.start_timer ();
-        let open Engine (F ()) in
-        let r =
-          match check_sat state with
-          | exception Unknown ->
-              QS.Solver.incr_err ();
-              raise Unknown
-          | Unsat ->
-              QS.Solver.incr_unsat ();
-              None
-          | Sat state ->
-              QS.Solver.incr_sat ();
-              Some state
-        in
-        close ();
-        QS.Solver.stop_timer ();
-        r)
-      else (
+      let d = Overapprox.eval state cond in
+      if D.included ~size:1 d D.zero then (
+        QS.Preprocess.incr_unsat ();
+        None)
+      else if D.included ~size:1 d D.one then (
         QS.Preprocess.incr_sat ();
-        Some state)
+        Some { state with constraints = cond :: state.constraints })
+      else
+        let state = { state with constraints = cond :: state.constraints } in
+        if Bitvector.zero = Model.eval state.model cond then (
+          QS.Solver.start_timer ();
+          let open Engine (F ()) in
+          let r =
+            match check_sat state with
+            | exception Unknown ->
+                QS.Solver.incr_err ();
+                raise Unknown
+            | Unsat ->
+                QS.Solver.incr_unsat ();
+                None
+            | Sat state ->
+                QS.Solver.incr_sat ();
+                Overapprox.refine state cond D.one;
+                Some state
+          in
+          close ();
+          QS.Solver.stop_timer ();
+          r)
+        else (
+          QS.Preprocess.incr_sat ();
+          Overapprox.refine state cond D.one;
+          Some state)
 
   let test cond state =
     if Expr.is_equal cond Expr.one then (
@@ -390,48 +429,50 @@ module State (F : Solver_sig.FACTORY) (QS : Types.QUERY_STATISTICS) = struct
     else if Expr.is_equal cond Expr.zero then (
       QS.Preprocess.incr_unsat ();
       False state)
-    else if BvSet.mem cond state.constset then (
-      QS.Preprocess.incr_sat ();
-      True state)
-    else if BvSet.mem (Expr.lognot cond) state.constset then (
-      QS.Preprocess.incr_unsat ();
-      False state)
     else
-      let t =
-        {
-          state with
-          constraints = cond :: state.constraints;
-          constset = BvSet.add cond state.constset;
-        }
-      in
-      let ncond = Expr.lognot cond in
-      let f =
-        {
-          state with
-          constraints = ncond :: state.constraints;
-          constset = BvSet.add ncond state.constset;
-        }
-      in
-      let e = Model.eval state.model cond in
-      let s = if Bv.is_zero e then t else f in
-      QS.Solver.start_timer ();
-      let open Engine (F ()) in
-      let r =
-        match check_sat s with
-        | exception Unknown ->
-            QS.Solver.incr_err ();
-            raise Unknown
-        | Unsat ->
-            QS.Solver.incr_unsat ();
-            if Bv.is_zero e then False f else True t
-        | Sat state ->
-            QS.Solver.incr_sat ();
-            if Bv.is_zero e then Both { t = state; f }
-            else Both { t; f = state }
-      in
-      close ();
-      QS.Solver.stop_timer ();
-      r
+      let d = Overapprox.eval state cond in
+      if D.included ~size:1 d D.zero then (
+        QS.Preprocess.incr_unsat ();
+        False { state with constraints = Expr.lognot cond :: state.constraints })
+      else if D.included ~size:1 d D.one then (
+        QS.Preprocess.incr_sat ();
+        True { state with constraints = cond :: state.constraints })
+      else
+        let t = { state with constraints = cond :: state.constraints } in
+        let f =
+          { state with constraints = Expr.lognot cond :: state.constraints }
+        in
+        let e = Model.eval state.model cond in
+        let s =
+          if Bv.is_zero e then (
+            Overapprox.refine f cond D.zero;
+            t)
+          else (
+            Overapprox.refine t cond D.one;
+            f)
+        in
+        QS.Solver.start_timer ();
+        let open Engine (F ()) in
+        let r =
+          match check_sat s with
+          | exception Unknown ->
+              QS.Solver.incr_err ();
+              raise Unknown
+          | Unsat ->
+              QS.Solver.incr_unsat ();
+              if Bv.is_zero e then False f else True t
+          | Sat state ->
+              QS.Solver.incr_sat ();
+              if Bv.is_zero e then (
+                Overapprox.refine state cond D.one;
+                Both { t = state; f })
+              else (
+                Overapprox.refine state cond D.zero;
+                Both { t; f = state })
+        in
+        close ();
+        QS.Solver.stop_timer ();
+        r
 
   let enumerate =
     let with_solver e ?n ?except state =
@@ -460,23 +501,28 @@ module State (F : Solver_sig.FACTORY) (QS : Types.QUERY_STATISTICS) = struct
               ( bv,
                 {
                   state with
-                  constraints = cond :: state.constraints;
-                  constset = BvSet.add cond state.constset;
+                  constraints = cond :: state.constraints (* TODO domains ?? *);
                 } );
             ])
       | _, _ -> with_solver e ?n ~except state
 
-  let merge t t' =
+  let merge ~parent t t' =
     if t == t' then t
-    else if
-      t.fid = t'.fid
-      && t.fvariables == t'.fvariables
-      && t.farrays == t'.farrays && t.ilocs == t'.ilocs
-    then
+    else if t.ilocs == t'.ilocs then
       match (t.constraints, t'.constraints) with
       | c :: constraints, c' :: constraints'
         when constraints == constraints' && Expr.is_equal c (Expr.lognot c') ->
-          let constset = BvSet.remove c t.constset
+          let domains = parent.domains
+          and anchors = K.union t.anchors t'.anchors
+          and deps =
+            BvMap.merge
+              (fun _ o o' ->
+                match (o, o') with
+                | None, None -> assert false
+                | None, Some _ -> o'
+                | Some _, None -> o
+                | Some d, Some d' -> Some (BvSet.union d d'))
+              t.deps t'.deps
           and vsymbols =
             if t.vsymbols == t'.vsymbols then t.vsymbols
             else
@@ -495,26 +541,22 @@ module State (F : Solver_sig.FACTORY) (QS : Types.QUERY_STATISTICS) = struct
               S.merge
                 (fun _ o0 o1 ->
                   match (o0, o1) with
-                  | Some a0, Some a1 -> Some (Memory.merge c a0 a1)
+                  | Some a0, Some a1 -> Some (MMU.merge parent c a0 a1)
                   | (Some _ | None), (Some _ | None) ->
                       raise_notrace Non_mergeable)
                 t.varrays t'.varrays
-          and vmemory = Memory.merge c t.vmemory t'.vmemory
-          and fid = t.fid
-          and fvariables = t.fvariables
-          and farrays = t.farrays
+          and vmemory = MMU.merge parent c t.vmemory t'.vmemory
           and ilocs = t.ilocs
           and alocs = t.alocs
           and model = t.model in
           {
             constraints;
-            constset;
+            deps;
+            domains;
+            anchors;
             vsymbols;
             varrays;
             vmemory;
-            fid;
-            fvariables;
-            farrays;
             ilocs;
             alocs;
             model;
@@ -525,104 +567,47 @@ module State (F : Solver_sig.FACTORY) (QS : Types.QUERY_STATISTICS) = struct
   module Value = struct
     type t = Expr.t
 
+    let kind = Term
+
     let constant = Expr.constant
 
-    let lookup ({ id; _ } as var : Types.Var.t) t =
-      try I.find id t.vsymbols with Not_found -> raise_notrace (Undef var)
-
-    let read = read
-
-    let select = select
+    let var id name size = Expr.var (name ^ Suid.to_string id) size name
 
     let unary = Expr.unary
 
     let binary = Expr.binary
 
     let ite = Expr.ite
-
-    let uop e = function
-      | Dba.Unary_op.Not -> Term.Not
-      | Dba.Unary_op.UMinus -> Term.Minus
-      | Dba.Unary_op.Sext n -> Term.Sext (n - Dba.Expr.size_of e)
-      | Dba.Unary_op.Uext n -> Term.Uext (n - Dba.Expr.size_of e)
-      | Dba.Unary_op.Restrict interval -> Term.Restrict interval
-
-    let bop op =
-      let open Dba.Binary_op in
-      match op with
-      | Plus -> Term.Plus
-      | Minus -> Term.Minus
-      | Mult -> Term.Mul
-      | DivU -> Term.Udiv
-      | DivS -> Term.Sdiv
-      | ModU -> Term.Umod
-      | ModS -> Term.Smod
-      | Eq -> Term.Eq
-      | Diff -> Term.Diff
-      | LeqU -> Term.Ule
-      | LtU -> Term.Ult
-      | GeqU -> Term.Uge
-      | GtU -> Term.Ugt
-      | LeqS -> Term.Sle
-      | LtS -> Term.Slt
-      | GeqS -> Term.Sge
-      | GtS -> Term.Sgt
-      | Xor -> Term.Xor
-      | And -> Term.And
-      | Or -> Term.Or
-      | Concat -> Term.Concat
-      | LShift -> Term.Lsl
-      | RShiftU -> Term.Lsr
-      | RShiftS -> Term.Asr
-      | LeftRotate -> Term.Rol
-      | RightRotate -> Term.Ror
-
-    let rec eval (e : Types.Expr.t) t =
-      match e with
-      | Cst bv | Var { info = Symbol (_, (lazy bv)); _ } -> constant bv
-      | Var var -> lookup var t
-      | Load (len, dir, addr, None) -> fst (read ~addr:(eval addr t) len dir t)
-      | Load (len, dir, addr, Some name) ->
-          fst (select name ~addr:(eval addr t) len dir t)
-      | Unary (f, x) -> unary (uop x f) (eval x t)
-      | Binary (f, x, y) -> binary (bop f) (eval x t) (eval y t)
-      | Ite (c, r, e) -> ite (eval c t) (eval r t) (eval e t)
   end
+
+  let assertions t = t.constraints
 
   let get_value (e : Expr.t) _ =
     match e with Cst bv -> bv | _ -> raise_notrace Non_unique
 
-  let pp_smt (target : Types.target) ppf t =
+  let get_a_value (e : Expr.t) t = Model.eval t.model e
+
+  let pp_smt (target : Expr.t Types.target) ppf t =
     let module P = Smt2_solver.Printer in
-    let ctx =
-      P.create ~debug:(fun ~name ~label -> label ^ name) ~next_id:t.fid ()
-    in
+    let ctx = P.create ~next_id:Uid.zero () in
     (* visit assertions *)
     List.iter (P.visit_bl ctx) t.constraints;
     (* visit terms *)
     let defs =
       match target with
       | Some defs ->
-          let rec proceed defs t =
-            try
-              List.map
-                (fun (expr, name) ->
-                  let expr = Value.eval expr t in
-                  P.visit_bv ctx expr;
-                  (expr, name))
-                defs
-            with
-            | Undef var -> proceed defs (fresh var t)
-            | Uninterp array -> proceed defs (alloc ~array t)
-          in
-          proceed defs t
+          List.iter (fun (e, _) -> P.visit_bv ctx e) defs;
+          defs
       | None ->
           P.visit_ax ctx t.vmemory;
           List.rev
             (I.fold
                (fun id expr defs ->
-                 P.visit_bv ctx expr;
-                 (expr, (Dba.Var.from_id id).name) :: defs)
+                 match Dba.Var.from_id id with
+                 | exception Not_found -> defs
+                 | { name; _ } ->
+                     P.visit_bv ctx expr;
+                     (expr, name) :: defs)
                t.vsymbols [])
     in
     Format.pp_open_vbox ppf 0;
@@ -654,43 +639,9 @@ module State (F : Solver_sig.FACTORY) (QS : Types.QUERY_STATISTICS) = struct
       t.constraints;
     Format.pp_close_box ppf ()
 
-  let as_ascii ~name t =
-    let buf = Buffer.create 16 in
-    List.iter (fun var ->
-        assert (Expr.sizeof var mod byte_size = 0);
-        let rec iter bv =
-          let size = Bitvector.size_of bv in
-          if size = byte_size then Buffer.add_char buf (Bitvector.to_char bv)
-          else
-            let byte = Bitvector.extract bv { Interval.lo = 0; hi = 7 } in
-            Buffer.add_char buf (Bitvector.to_char byte);
-            iter (Bitvector.extract bv { Interval.lo = 8; hi = size - 1 })
-        in
-        iter (Model.eval t.model var))
-    @@ List.rev @@ S.find name t.fvariables;
-    Buffer.contents buf
-
-  let as_c_string ~name t =
-    try
-      let ar = S.find name t.varrays in
-      let buf = Buffer.create 16 in
-      let rec iter addr =
-        let byte =
-          Model.eval t.model (fst (Memory.read ~addr 1 Machine.LittleEndian ar))
-        in
-        if Bitvector.is_zeros byte then Buffer.contents buf
-        else (
-          Buffer.add_char buf (Bitvector.to_char byte);
-          iter (Expr.addi addr 1))
-      in
-      iter (Expr.zeros (Kernel_options.Machine.word_size ()))
-    with Not_found -> ""
-
   let to_formula t =
     let module C = Smt2_solver.Cross in
-    let ctx =
-      C.create ~debug:(fun ~name ~label -> label ^ name) ~next_id:t.fid ()
-    in
+    let ctx = C.create ~next_id:Uid.zero () in
     List.iter (C.assert_bl ctx) t.constraints;
     C.define_ax ctx "memory" t.vmemory;
     I.iter

@@ -69,6 +69,8 @@ module type S = sig
 
     val sleb128 : cursor -> s64
 
+    val bytes : cursor -> int -> string
+
     val fixed_string : cursor -> int -> string
 
     val zero_string : string -> cursor -> ?maxlen:int -> unit -> string
@@ -94,6 +96,8 @@ module type S = sig
     val uleb128 : cursor -> u64
 
     val sleb128 : cursor -> s64
+
+    val bytes : cursor -> int -> string
 
     val fixed_string : cursor -> int -> string
 
@@ -324,6 +328,8 @@ module Make (B : Bufferable) = struct
       let v, _ = sleb128 t in
       v
 
+    let bytes = string_init
+
     let fixed_string t length =
       let buffer = t.buffer in
       let position = t.position in
@@ -400,6 +406,11 @@ module Make (B : Bufferable) = struct
       let v, s = sleb128 t in
       advance t s;
       v
+
+    let bytes t length =
+      let result = Peek.bytes t length in
+      advance t length;
+      result
 
     let fixed_string t length =
       let result = Peek.fixed_string t length in

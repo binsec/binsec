@@ -26,7 +26,7 @@ module Output_smt : Cli.STRING_OPT
 module Trace_file : Cli.STRING_OPT
 
 module Concretize_regs :
-  Cli.CHECKABLE with type t = [ `All | `Stack | `Register of string ] list
+  Cli.GENERIC with type t = [ `All | `Stack | `Register of string ] list
 
 module Concretize_mem :
   Cli.GENERIC with type t = [ `No | `Exact | `Approximate of int ]

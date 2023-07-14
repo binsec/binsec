@@ -22,14 +22,15 @@
 module Bv = Bitvector
 module BiMap = Basic_types.BigInt.Map
 
-module rec Expr : (Term.S with type a := string and type b := Memory.t)
+module rec Expr : sig
+  include Term.S with type a := string and type b := Memory.t
+end
 
 and Memory : sig
-  type t =
+  type t = private
     | Root
     | Symbol of string
     | Layer of { id : int; over : t; addr : Expr.t; store : Store.t }
-    | Overlay of { id : int; over : t; addr : Expr.t; store : Store.t }
 
   val compare : t -> t -> int
 
@@ -37,21 +38,54 @@ and Memory : sig
 
   val hash : t -> int
 
-  val source : addr:Expr.t -> len:int -> Loader_buf.t -> t -> t
+  val root : t
 
-  val write : addr:Expr.t -> Expr.t -> Expr.endianness -> t -> t
+  val fresh : string -> t
 
-  val read : addr:Expr.t -> int -> Expr.endianness -> t -> Expr.t * t
-
-  val merge : Expr.t -> t -> t -> t
+  val layer : Expr.t -> Store.t -> t -> t
 end
 
 and Store : sig
+  include Lmap.S with type v := Chunk.t
+
+  val singleton : Bv.t -> Chunk.t -> t
+
+  val store : Bv.t -> Chunk.t -> t -> t
+
+  val select : (Z.t -> int -> Chunk.t) -> Bv.t -> int -> t -> Chunk.t
+
+  val iter_term : (Z.t -> Expr.t -> unit) -> t -> unit
+
+  val fold_term : (Z.t -> Expr.t -> 'a -> 'a) -> 'a -> t -> 'a
+end
+
+and Chunk : sig
   type t
 
-  val iter : (Z.t -> Expr.t -> unit) -> t -> unit
+  type hunk =
+    (int, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
 
-  val fold : (Z.t -> Expr.t -> 'a -> 'a) -> 'a -> t -> 'a
+  type kind = Hunk of hunk | Term of Expr.t
+
+  val inspect : t -> kind
+
+  val of_hunk : hunk -> t
+
+  val of_term : Expr.t -> t
+
+  val to_term : t -> Expr.t
+
+  val equal : t -> t -> bool
+
+  (** low level API *)
+
+  val is_hunk : t -> bool
+
+  val is_term : t -> bool
+
+  val unsafe_to_hunk : t -> hunk
+
+  val unsafe_to_term : t -> Expr.t
 end
 
 module BvTbl : Hashtbl.S with type key = Expr.t
@@ -63,12 +97,23 @@ module BiTbl : Hashtbl.S with type key = Z.t
 module StTbl : Hashtbl.S with type key = string
 
 module Model : sig
-  type t = Bv.t BvTbl.t * char BiTbl.t * char BiTbl.t StTbl.t
+  type t =
+    Expr.t StTbl.t * Bv.t BvTbl.t * char BiTbl.t * char BiTbl.t StTbl.t * int
 
-  val empty : unit -> t
+  val empty : int -> t
 
-  val eval : t -> Expr.t -> Bv.t
+  val eval :
+    ?symbols:(Expr.t -> Bitvector.t) ->
+    ?memory:(Memory.t -> Bitvector.t -> char) ->
+    t ->
+    Expr.t ->
+    Bv.t
 
-  val pp :
-    Format.formatter -> Expr.t list Basic_types.String.Map.t -> int -> t -> unit
+  val pp : Format.formatter -> t -> unit
 end
+
+module BvSet : Set.S with type elt := Expr.t
+
+module BvMap : Map.S with type key := Expr.t
+
+val bswap : Expr.t -> Expr.t

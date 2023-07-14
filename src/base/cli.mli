@@ -29,17 +29,13 @@ module type GENERIC = sig
 
   val get : unit -> t
 
+  val is_set : unit -> bool
+
   val is_default : unit -> bool
 end
 
-module type CHECKABLE = sig
-  include GENERIC
-
-  val is_set : unit -> bool
-end
-
 module type GENERIC_OPT = sig
-  include CHECKABLE
+  include GENERIC
 
   val get_opt : unit -> t option
 end
@@ -51,18 +47,18 @@ module type BOOLEAN = GENERIC with type t = bool
 module type INTEGER = GENERIC with type t = int
 (** {5 Integer parameters} *)
 
-module type INTEGER_SET = CHECKABLE with type t = Basic_types.Int.Set.t
+module type INTEGER_SET = GENERIC with type t = Basic_types.Int.Set.t
 
-module type INTEGER_LIST = CHECKABLE with type t = int list
+module type INTEGER_LIST = GENERIC with type t = int list
 
 module type INTEGER_OPT = GENERIC_OPT with type t = int
 
 module type FLOAT = GENERIC with type t = float
 (** {5 Floating-point parameters} *)
 
-module type FLOAT_SET = CHECKABLE with type t = Basic_types.Float.Set.t
+module type FLOAT_SET = GENERIC with type t = Basic_types.Float.Set.t
 
-module type FLOAT_LIST = CHECKABLE with type t = float list
+module type FLOAT_LIST = GENERIC with type t = float list
 
 module type FLOAT_OPT = GENERIC_OPT with type t = float
 
@@ -71,9 +67,9 @@ module type STRING = GENERIC with type t = string
 
 module type STRING_OPT = GENERIC_OPT with type t = string
 
-module type STRING_SET = CHECKABLE with type t = Basic_types.String.Set.t
+module type STRING_SET = GENERIC with type t = Basic_types.String.Set.t
 
-module type STRING_LIST = CHECKABLE with type t = string list
+module type STRING_LIST = GENERIC with type t = string list
 
 (** {3 Builder functors for command-line parameters} *)
 
@@ -103,7 +99,9 @@ end
 module type DETAILED_CLI_DECL = sig
   include DEFAULTED_CLI_DECL
 
-  include Sigs.STRINGIFIABLE with type t := t
+  include Sigs.STR_INJECTIBLE with type t := t
+
+  val default_str : string option
 end
 
 module type S = sig
@@ -230,7 +228,7 @@ module type Cli_sig = sig
       include CLI_DECL
 
       include Sigs.STR_INJECTIBLE
-    end) : CHECKABLE with type t = P.t list
+    end) : GENERIC with type t = P.t list
   end
 end
 

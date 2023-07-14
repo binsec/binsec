@@ -56,6 +56,29 @@ module Output = struct
     | Value of format * Expr.t
     | Stream of string
     | String of string
+
+  let format_str = function
+    | Bin -> "bin"
+    | Dec -> "dec"
+    | Hex -> "hexa"
+    | Ascii -> "ascii"
+
+  let pp ppf = function
+    | Model -> Format.pp_print_string ppf "model"
+    | Formula -> Format.pp_print_string ppf "formula"
+    | Slice defs ->
+        Format.fprintf ppf "formula for %a"
+          (Format.pp_print_list
+             ~pp_sep:(fun ppf () -> Format.pp_print_string ppf ", ")
+             (fun ppf (expr, name) ->
+               Format.fprintf ppf "%a as %s" Dba_printer.Ascii.pp_bl_term expr
+                 name))
+          defs
+    | Value (fmt, e) ->
+        Format.fprintf ppf "%s %a" (format_str fmt) Dba_printer.Ascii.pp_bl_term
+          e
+    | Stream name -> Format.fprintf ppf "ascii stream %s" name
+    | String name -> Format.fprintf ppf "c string %s" name
 end
 
 exception Unknown
@@ -70,7 +93,7 @@ exception Non_mergeable
 
 type 'a test = True of 'a | False of 'a | Both of { t : 'a; f : 'a }
 
-type target = (Expr.t * string) list option
+type 'a target = ('a * string) list option
 
 type size = Term.size
 
@@ -112,35 +135,55 @@ and 'a operator = 'a Term.operator =
   | Sge : binary operator
   | Sgt : binary operator
 
+type _ value = ..
+
+type _ value += Abstract : _ value
+
+module type UID = sig
+  type t
+
+  val zero : t
+
+  val succ : t -> t
+
+  val compare : t -> t -> int
+end
+
 module type VALUE = sig
   type t
   (** Symbolic value *)
 
+  type id
+
   type state
+
+  val kind : t value
 
   val constant : Bitvector.t -> t
 
-  val lookup : Var.t -> state -> t
-
-  val read : addr:t -> int -> Machine.endianness -> state -> t * state
-
-  val select :
-    string -> addr:t -> int -> Machine.endianness -> state -> t * state
+  val var : id -> string -> int -> t
 
   val unary : unary operator -> t -> t
 
   val binary : binary operator -> t -> t -> t
 
   val ite : t -> t -> t -> t
-
-  val eval : Expr.t -> state -> t
 end
 
-module type STATE = sig
+module type RAW_STATE = sig
   type t
   (** Symbolic state *)
 
-  module Value : VALUE with type state := t
+  module Uid : UID
+
+  module Value : VALUE with type id := Uid.t and type state := t
+
+  val lookup : Var.t -> t -> Value.t
+
+  val read : addr:Value.t -> int -> Machine.endianness -> t -> Value.t * t
+
+  val select :
+    string -> addr:Value.t -> int -> Machine.endianness -> t -> Value.t * t
 
   val empty : unit -> t
 
@@ -150,10 +193,10 @@ module type STATE = sig
 
   val get_value : Value.t -> t -> Bitvector.t
 
+  val get_a_value : Value.t -> t -> Bitvector.t
+
   val enumerate :
     Value.t -> ?n:int -> ?except:Bitvector.t list -> t -> (Bitvector.t * t) list
-
-  val fresh : Var.t -> t -> t
 
   val alloc : array:string -> t -> t
 
@@ -165,18 +208,37 @@ module type STATE = sig
 
   val memcpy : addr:Bitvector.t -> int -> Loader_buf.t -> t -> t
 
-  val merge : t -> t -> t
+  val merge : parent:t -> t -> t -> t
+
+  val assertions : t -> Value.t list
 
   val pp : Format.formatter -> t -> unit
 
-  val pp_smt : target -> Format.formatter -> t -> unit
-
-  val as_ascii : name:string -> t -> string
-
-  val as_c_string : name:string -> t -> string
+  val pp_smt : Value.t target -> Format.formatter -> t -> unit
 
   val to_formula : t -> Formula.formula
 end
+
+type _ key
+
+module type STATE = sig
+  include RAW_STATE
+
+  val id : Uid.t key
+
+  val symbols : Value.t list S.Map.t key
+end
+
+type status =
+  | Halt
+  | Cut
+  | Unsatisfiable_assumption
+  | Assertion_failed
+  | Max_depth
+  | Enumeration_limit
+  | Unresolved_formula
+  | Non_executable_code
+  | Die
 
 module type EXPLORATION_STATISTICS = sig
   val get_paths : unit -> int
@@ -186,6 +248,8 @@ module type EXPLORATION_STATISTICS = sig
   val get_unknown_paths : unit -> int
 
   val get_pending_paths : unit -> int
+
+  val get_status : status -> int
 
   val get_total_asserts : unit -> int
 
@@ -201,13 +265,19 @@ module type EXPLORATION_STATISTICS = sig
 
   val get_time : unit -> float
 
+  val pp : Format.formatter -> unit -> unit
+
+  val to_toml : unit -> Toml.Types.table
+end
+
+module type EXPLORATION_STATISTICS_FULL = sig
+  include EXPLORATION_STATISTICS
+
   val reset : unit -> unit
 
   val add_path : unit -> unit
 
-  val terminate_path : unit -> unit
-
-  val interrupt_path : unit -> unit
+  val terminate_path : status -> unit
 
   val add_assert : unit -> unit
 
@@ -220,10 +290,6 @@ module type EXPLORATION_STATISTICS = sig
   val add_instructions : int -> unit
 
   val register_address : Virtual_address.t -> unit
-
-  val pp : Format.formatter -> unit -> unit
-
-  val to_toml : unit -> Toml.Types.table
 end
 
 module type QUERY_STATISTICS = sig
@@ -274,7 +340,7 @@ module type QUERY_STATISTICS = sig
   val pp : Format.formatter -> unit -> unit
 end
 
-module type STATE_FACTORY = functor (QS : QUERY_STATISTICS) -> STATE
+module type STATE_FACTORY = functor (QS : QUERY_STATISTICS) -> RAW_STATE
 
 module type WORKLIST = sig
   type 'a t

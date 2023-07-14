@@ -28,8 +28,7 @@ Find the secret such that the challenge outputs `Access granted`.
 # Command
 
 ```console
-$ binsec -sse -sse-script crackme.ini \
-  -sse-alternative-engine core.snapshot
+$ binsec -sse -sse-script crackme.ini core.snapshot
 ```
 
 # Expect

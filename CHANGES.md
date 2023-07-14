@@ -1,3 +1,19 @@
+## 0.8.0 (2023-07-14)
+
+** Features
+
+- Add symbolic execution monitoring mechanism
+
+** Documentation
+
+  - Add the tutorial ["Checking *constant-time* security property"](doc/sse/relse.md)
+  - Add the tutorial ["Monitoring the symbolic execution with a custom plugin"](doc/sse/plugins.md)
+  
+** Examples
+
+  - Add a [shadow stack](src/sse/plugin/shadow_stack.ml) SSE plugin
+  - Add a re-implementation of the [relational symbolic engine](src/sse/plugin/checkct.ml)
+
 ## 0.7.4 (2023-05-12)
 
 ** Bugs
@@ -18,7 +34,7 @@
 ** Bugs
 
   - Backport fixes for SSE intermediate representation
-
+  
 ## 0.7.1 (2023-02-14)
 
 ** Features

@@ -23,15 +23,6 @@ module L = Logger.Make (struct
   let name = "cli"
 end)
 
-(* indicates whether we already have parsed cli arguments *)
-let done_parsing = ref false
-
-let after_parsing v =
-  if !done_parsing then v
-  else
-    let bt = Printexc.get_callstack 10 |> Printexc.raw_backtrace_to_string in
-    L.fatal "getting the value of an option before cli argument parsing@.%s" bt
-
 (* Possible actions for a command line argument.contents.
    Either you parse one argument or you do not.
    One could imagine a generalization of that to *n* arguments
@@ -40,6 +31,19 @@ type action = Scan of (string -> unit) | Unit of (unit -> unit)
 
 (* Generic helper functions for modules below *)
 let prefix s = if s = "" then s else "-" ^ s
+
+let cmp_plugin =
+  let rec cmp switch plugin ls lp i =
+    if i = lp then i = ls || String.get switch (i + 1) = '-'
+    else
+      i <> ls
+      &&
+      match (String.get switch (i + 1), String.get plugin i) with
+      | '-', '_' -> cmp switch plugin ls lp (i + 1)
+      | s, p -> s = p && cmp switch plugin ls lp (i + 1)
+  in
+  fun switch plugin ->
+    cmp switch plugin (String.length switch - 1) (String.length plugin) 0
 
 let mk_opt path = List.fold_left (fun acc name -> prefix name ^ acc) "" path
 
@@ -285,17 +289,13 @@ module type GENERIC = sig
 
   val get : unit -> t
 
+  val is_set : unit -> bool
+
   val is_default : unit -> bool
 end
 
-module type CHECKABLE = sig
-  include GENERIC
-
-  val is_set : unit -> bool
-end
-
 module type GENERIC_OPT = sig
-  include CHECKABLE
+  include GENERIC
 
   val get_opt : unit -> t option
 end
@@ -306,9 +306,9 @@ module type BOOLEAN = GENERIC with type t = bool
 
 module type INTEGER = GENERIC with type t = int
 
-module type INTEGER_SET = CHECKABLE with type t = Basic_types.Int.Set.t
+module type INTEGER_SET = GENERIC with type t = Basic_types.Int.Set.t
 
-module type INTEGER_LIST = CHECKABLE with type t = int list
+module type INTEGER_LIST = GENERIC with type t = int list
 
 module type INTEGER_OPT = GENERIC_OPT with type t = int
 
@@ -316,9 +316,9 @@ module type INTEGER_OPT = GENERIC_OPT with type t = int
 
 module type FLOAT = GENERIC with type t = float
 
-module type FLOAT_SET = CHECKABLE with type t = Basic_types.Float.Set.t
+module type FLOAT_SET = GENERIC with type t = Basic_types.Float.Set.t
 
-module type FLOAT_LIST = CHECKABLE with type t = float list
+module type FLOAT_LIST = GENERIC with type t = float list
 
 module type FLOAT_OPT = GENERIC_OPT with type t = float
 
@@ -328,9 +328,9 @@ module type STRING = GENERIC with type t = string
 
 module type STRING_OPT = GENERIC_OPT with type t = string
 
-module type STRING_SET = CHECKABLE with type t = Basic_types.String.Set.t
+module type STRING_SET = GENERIC with type t = Basic_types.String.Set.t
 
-module type STRING_LIST = CHECKABLE with type t = string list
+module type STRING_LIST = GENERIC with type t = string list
 
 module type CLI_DECL = sig
   val name : string
@@ -342,17 +342,11 @@ end
 module Listify (S : Sigs.STR_INJECTIBLE) = struct
   type t = S.t list
 
-  let (value : t ref) = ref []
+  let default = []
 
-  let set v = value := v
+  let of_string s = String_utils.cli_split s |> List.map S.of_string
 
-  let get () = after_parsing !value
-
-  let is_set () = !value <> []
-
-  let is_default () = !value = []
-
-  let of_string s = String_utils.cli_split s |> List.map S.of_string |> set
+  let default_str = None
 end
 
 module type DECL = sig
@@ -372,7 +366,9 @@ end
 module type DETAILED_CLI_DECL = sig
   include DEFAULTED_CLI_DECL
 
-  include Sigs.STRINGIFIABLE with type t := t
+  include Sigs.STR_INJECTIBLE with type t := t
+
+  val default_str : string option
 end
 
 module type Cli_sig = sig
@@ -491,7 +487,7 @@ module type Cli_sig = sig
       include CLI_DECL
 
       include Sigs.STR_INJECTIBLE
-    end) : CHECKABLE with type t = P.t list
+    end) : GENERIC with type t = P.t list
   end
 end
 
@@ -534,9 +530,15 @@ module Generic_make (D : DECL) = struct
 
     let default = Logger.get_debug_level ()
 
-    let set v = Logger.set_debug_level v
+    let is_set = ref false
+
+    let set v =
+      is_set := true;
+      Logger.set_debug_level v
 
     let get () = Logger.get_debug_level ()
+
+    let is_set () = !is_set
 
     let is_default () = get () = default
 
@@ -556,13 +558,18 @@ module Generic_make (D : DECL) = struct
 
     let default = "info"
 
+    let is_set = ref false
+
     let value = ref default
 
     let set v =
+      is_set := true;
       value := v;
       Logger.set_log_level v
 
     let get () = !value
+
+    let is_set () = !is_set
 
     let is_default () = !value = default
 
@@ -594,6 +601,8 @@ module Generic_make (D : DECL) = struct
 
     let get () = !value
 
+    let is_set () = !value
+
     let is_default () = not !value
 
     let key = "quiet"
@@ -618,6 +627,7 @@ module Generic_make (D : DECL) = struct
       let spec =
         Unit
           (fun () ->
+            Plugins.Plugins.Plugins.load_all ();
             Cli.pp Format.std_formatter ();
             exit 0)
       in
@@ -661,13 +671,23 @@ module Generic_make (D : DECL) = struct
 
       let default = P.default
 
+      let is_set = ref false
+
       let value = ref P.default
 
-      let set v = value := v
+      let set v =
+        is_set := true;
+        value := v
 
-      let get () = after_parsing !value
+      let get () = !value
 
-      let doc = Printf.sprintf "%s [%s]" P.doc (P.to_string P.default)
+      let is_set () = !is_set
+
+      let doc =
+        Format.asprintf "%s%a" P.doc
+          (Format.pp_print_option (fun ppf str ->
+               Format.fprintf ppf " [%s]" str))
+          P.default_str
 
       let spec = Scan (fun s -> set @@ P.of_string s)
 
@@ -676,6 +696,41 @@ module Generic_make (D : DECL) = struct
       let cspec = Cli_spec.simple ~key ~doc ~spec
 
       let is_default () = !value = default
+
+      let _ = extend cspec
+    end
+
+    module Any_opt (P : sig
+      include CLI_DECL
+
+      include Sigs.STR_INJECTIBLE
+    end) =
+    struct
+      type t = P.t
+
+      let is_set = ref false
+
+      let value = ref None
+
+      let set v =
+        is_set := true;
+        value := Some v
+
+      let get () = Option.get !value
+
+      let get_opt () = !value
+
+      let is_set () = !is_set
+
+      let doc = Format.asprintf "%s" P.doc
+
+      let spec = Scan (fun s -> set @@ P.of_string s)
+
+      let key = P.name
+
+      let cspec = Cli_spec.simple ~key ~doc ~spec
+
+      let is_default () = !value = None
 
       let _ = extend cspec
     end
@@ -690,9 +745,15 @@ module Generic_make (D : DECL) = struct
 
       let value = ref P.default
 
-      let set v = value := v
+      let is_set = ref false
 
-      let get () = after_parsing !value
+      let set v =
+        is_set := true;
+        value := v
+
+      let get () = !value
+
+      let is_set () = !is_set
 
       let doc = Printf.sprintf "%s [%b]" P.doc P.default
 
@@ -730,107 +791,51 @@ module Generic_make (D : DECL) = struct
 
       val default : int
     end) =
-    struct
+    Any (struct
       type t = int
 
-      let value = ref P.default
+      include P
 
-      let set v = value := v
+      let of_string = int_of_string
 
-      let get () = after_parsing !value
-
-      let doc = Printf.sprintf "%s [%d]" P.doc P.default
-
-      and spec = Scan (fun s -> int_of_string s |> set)
-
-      and key = P.name
-
-      let is_default () = !value = P.default
-
-      let cspec = Cli_spec.simple ~key ~doc ~spec
-
-      let _ = extend cspec
-    end
+      let default_str = Some (string_of_int default)
+    end)
 
     module Integer_option (P : sig
       include CLI_DECL
     end) =
-    struct
+    Any_opt (struct
       type t = int
 
-      let default = None
+      include P
 
-      let value = ref default
+      let of_string = int_of_string
+    end)
 
-      let set v = value := Some v
-
-      let is_set () = !value <> default
-
-      let is_default () = !value = default
-
-      let get () =
-        assert (is_set ());
-        after_parsing @@ match !value with None -> assert false | Some v -> v
-
-      let get_opt () = after_parsing !value
-
-      let key = P.name
-
-      and spec = Scan (fun s -> int_of_string s |> set)
-
-      and doc = P.doc
-
-      let cspec = Cli_spec.simple ~key ~spec ~doc
-
-      let _ = extend cspec
-    end
-
-    module Integer_set (P : CLI_DECL) = struct
+    module Integer_set (P : CLI_DECL) = Any (struct
       type t = Basic_types.Int.Set.t
 
-      let value = ref Basic_types.Int.Set.empty
+      include P
 
-      let is_set () = not (Basic_types.Int.Set.is_empty !value)
-
-      let set v = value := v
-
-      let get () = after_parsing !value
-
-      let is_default () = Basic_types.Int.Set.is_empty !value
+      let default = Basic_types.Int.Set.empty
 
       let of_string s =
         let rexp = Str.regexp sep in
         Str.split rexp s |> List.map int_of_string
-        |> Basic_types.Int.Set.of_list |> set
+        |> Basic_types.Int.Set.of_list
 
-      let key = P.name
+      let default_str = None
+    end)
 
-      and spec = Scan of_string
-
-      and doc = P.doc
-
-      let cspec = Cli_spec.simple ~key ~spec ~doc
-
-      let _ = extend cspec
-    end
-
-    module Integer_list (P : CLI_DECL) = struct
+    module Integer_list (P : CLI_DECL) = Any (struct
       include Listify (struct
         type t = int
 
         let of_string = int_of_string
       end)
 
-      let key = P.name
-
-      and spec = Scan of_string
-
-      and doc = P.doc
-
-      let cspec = Cli_spec.simple ~key ~spec ~doc
-
-      let _ = extend cspec
-    end
+      include P
+    end)
 
     module Zero (P : CLI_DECL) = struct
       include Integer (struct
@@ -845,212 +850,98 @@ module Generic_make (D : DECL) = struct
 
       val default : float
     end) =
-    struct
+    Any (struct
       type t = float
 
-      let value = ref P.default
+      include P
 
-      let set v = value := v
+      let of_string = float_of_string
 
-      let get () = after_parsing !value
-
-      let is_default () = !value = P.default
-
-      let key = P.name
-
-      and spec = Scan (fun s -> float_of_string s |> set)
-
-      and doc = Printf.sprintf "%s [%f]" P.doc P.default
-
-      let cspec = Cli_spec.simple ~key ~spec ~doc
-
-      let _ = extend cspec
-    end
+      let default_str = Some (string_of_float default)
+    end)
 
     module Float_option (P : sig
       include CLI_DECL
     end) =
-    struct
+    Any_opt (struct
       type t = float
 
-      let default = None
+      include P
 
-      let value = ref default
+      let of_string = float_of_string
+    end)
 
-      let set v = value := Some v
-
-      let is_set () = !value <> default
-
-      let is_default () = !value = default
-
-      let get () =
-        assert (is_set ());
-        after_parsing @@ match !value with None -> assert false | Some v -> v
-
-      let get_opt () = after_parsing !value
-
-      let key = P.name
-
-      and spec = Scan (fun s -> float_of_string s |> set)
-
-      and doc = P.doc
-
-      let cspec = Cli_spec.simple ~key ~spec ~doc
-
-      let _ = extend cspec
-    end
-
-    module Float_set (P : CLI_DECL) = struct
+    module Float_set (P : CLI_DECL) = Any (struct
       type t = Basic_types.Float.Set.t
 
-      let value = ref Basic_types.Float.Set.empty
+      include P
 
-      let is_set () = not (Basic_types.Float.Set.is_empty !value)
-
-      let set v = value := v
-
-      let get () = after_parsing !value
-
-      let is_default () = Basic_types.Float.Set.is_empty !value
+      let default = Basic_types.Float.Set.empty
 
       let of_string s =
         let rexp = Str.regexp sep in
         Str.split rexp s |> List.map float_of_string
-        |> Basic_types.Float.Set.of_list |> set
+        |> Basic_types.Float.Set.of_list
 
-      let key = P.name
+      let default_str = None
+    end)
 
-      and spec = Scan of_string
-
-      and doc = P.doc
-
-      let cspec = Cli_spec.simple ~key ~spec ~doc
-
-      let _ = extend cspec
-    end
-
-    module Float_list (P : CLI_DECL) = struct
+    module Float_list (P : CLI_DECL) = Any (struct
       include Listify (struct
         type t = float
 
         let of_string = float_of_string
       end)
 
-      let key = P.name
-
-      and spec = Scan of_string
-
-      and doc = P.doc
-
-      let cspec = Cli_spec.simple ~key ~spec ~doc
-
-      let _ = extend cspec
-    end
+      include P
+    end)
 
     module String (P : sig
       include CLI_DECL
 
       val default : string
     end) =
-    struct
+    Any (struct
       type t = string
 
-      let value = ref P.default
+      include P
 
-      let set v = value := v
+      let of_string = Fun.id
 
-      let get () = after_parsing !value
+      let default_str = Some default
+    end)
 
-      let is_default () = !value = P.default
-
-      let key = P.name
-
-      and spec = Scan set
-
-      and doc = Printf.sprintf "%s [%s]" P.doc P.default
-
-      let cspec = Cli_spec.simple ~key ~spec ~doc
-
-      let _ = extend cspec
-    end
-
-    module String_option (P : CLI_DECL) = struct
+    module String_option (P : CLI_DECL) = Any_opt (struct
       type t = string
 
-      let default = None
+      include P
 
-      let value = ref default
+      let of_string = Fun.id
+    end)
 
-      let set v = value := Some v
-
-      let is_set () = !value <> default
-
-      let is_default () = !value = default
-
-      let get () =
-        assert (is_set ());
-        after_parsing @@ match !value with None -> assert false | Some v -> v
-
-      let get_opt () = after_parsing !value
-
-      let key = P.name
-
-      and spec = Scan set
-
-      and doc = P.doc
-
-      let cspec = Cli_spec.simple ~key ~spec ~doc
-
-      let _ = extend cspec
-    end
-
-    module String_list (P : CLI_DECL) = struct
+    module String_list (P : CLI_DECL) = Any (struct
       include Listify (struct
         type t = string
 
-        let of_string s = s
+        let of_string = Fun.id
       end)
 
-      let key = P.name
+      include P
+    end)
 
-      and spec = Scan of_string
-
-      and doc = P.doc
-
-      let cspec = Cli_spec.simple ~key ~spec ~doc
-
-      let _ = extend cspec
-    end
-
-    module String_set (P : CLI_DECL) = struct
+    module String_set (P : CLI_DECL) = Any (struct
       type t = Basic_types.String.Set.t
+
+      include P
 
       let default = Basic_types.String.Set.empty
 
-      let value = ref default
-
-      let is_set () = not (Basic_types.String.Set.is_empty !value)
-
-      let set v = value := v
-
-      let get () = after_parsing !value
-
-      let is_default () = Basic_types.String.Set.is_empty !value
-
       let of_string s =
         let rexp = Str.regexp sep in
-        Str.split rexp s |> Basic_types.String.Set.of_list |> set
+        Str.split rexp s |> Basic_types.String.Set.of_list
 
-      let key = P.name
-
-      and spec = Scan of_string
-
-      and doc = P.doc
-
-      let cspec = Cli_spec.simple ~key ~spec ~doc
-
-      let _ = extend cspec
-    end
+      let default_str = None
+    end)
 
     module String_choice (P : sig
       include CLI_DECL
@@ -1059,37 +950,17 @@ module Generic_make (D : DECL) = struct
 
       val choices : string list
     end) =
-    struct
+    Any (struct
       type t = string
 
-      let choices =
-        assert (List.mem P.default P.choices);
-        List.map S.lowercase_ascii P.choices
+      include P
 
-      let value = ref P.default
+      let of_string s =
+        let name = S.lowercase_ascii s in
+        if List.mem name choices then name else scan_error s (One_of choices)
 
-      let set v = value := v
-
-      let get () = after_parsing !value
-
-      let is_default () = !value = P.default
-
-      let values = Values.one_of choices
-
-      let doc = Printf.sprintf "%s [%s]" P.doc P.default
-
-      and key = P.name
-
-      and spec =
-        Scan
-          (fun s ->
-            let name = S.lowercase_ascii s in
-            if List.mem name choices then set name else scan_error s values)
-
-      let cspec = Cli_spec.create ~values ~key ~spec ~doc
-
-      let _ = extend cspec
-    end
+      let default_str = Some default
+    end)
 
     (* The fact that we use Arg.Symbol might be too restrictive.
        Using regexp to specify the choices might be more relevant in some
@@ -1105,38 +976,16 @@ module Generic_make (D : DECL) = struct
 
       val default : t
     end) =
-    struct
-      type t = P.t
+    Any (struct
+      include P
 
-      let value = ref P.default
+      let of_string s =
+        let name = S.lowercase_ascii s in
+        if List.mem name choices then of_string name
+        else scan_error s (One_of choices)
 
-      let set v = value := v
-
-      let get () = after_parsing !value
-
-      let is_default () = !value = P.default
-      (* Relying on polymorphic equality for all types t might not be the best
-         choice. In the past, on abstract types, this application could create
-         runtime errors.
-
-         For now, it is enough
-      *)
-
-      let set_string s = set (P.of_string s)
-
-      let values = Values.one_of P.choices
-
-      let doc = Printf.sprintf "%s [%s]" P.doc (P.to_string P.default)
-
-      and key = P.name
-
-      and spec =
-        Scan (fun s -> try set_string s with _ -> scan_error s values)
-
-      let cspec = Cli_spec.create ~values ~key ~spec ~doc
-
-      let _ = extend cspec
-    end
+      let default_str = Some (to_string default)
+    end)
 
     module Variant_choice_assoc (P : sig
       include CLI_DECL
@@ -1177,19 +1026,10 @@ module Generic_make (D : DECL) = struct
 
       include Sigs.STR_INJECTIBLE
     end) =
-    struct
+    Any (struct
+      include P
       include Listify (P)
-
-      let key = P.name
-
-      and spec = Scan of_string
-
-      and doc = P.doc
-
-      let cspec = Cli_spec.simple ~key ~spec ~doc
-
-      let _ = extend cspec
-    end
+    end)
   end
 end
 
@@ -1268,6 +1108,7 @@ module Parse = struct
   let level = 3
 
   let fail_on switch =
+    Plugins.Plugins.Plugins.load_all ();
     Format.eprintf
       "@[<v 0>%s: unknown option %s@ Valid command-line switches are:@ %a@]@."
       Sys.argv.(0) switch Cli.pp ();
@@ -1289,8 +1130,8 @@ module Parse = struct
     let len = Array.length cli_options in
     L.debug ~level "Got %d args -- parsing now ..." len;
     let stack = Stack.create () in
-    let args = Cli.args () in
-    let rec arg_loop ~last_action i =
+    let plugins = Basic_types.String.Htbl.create 4 in
+    let rec arg_loop args ~last_action i =
       if i < len then (
         let open Argv in
         let switch = cli_options.(i) in
@@ -1300,7 +1141,7 @@ module Parse = struct
           | { spec = Unit f; _ } as action ->
               L.debug ~level "Setting %s" switch;
               f ();
-              arg_loop ~last_action:(Some action) (i + 1)
+              arg_loop args ~last_action:(Some action) (i + 1)
           | { spec = Scan f; doc; _ } as action ->
               let j = i + 1 in
               let arg = cli_options.(j) in
@@ -1312,9 +1153,25 @@ module Parse = struct
                    ~e:(Cli_parse_error ("Error parsing option " ^ switch))
                    "@[<v 5>Error parsing %s %s@.%s@.%s@]" switch arg
                    (Printexc.to_string e) doc);
-              arg_loop ~last_action:(Some action) (j + 1)
+              arg_loop args ~last_action:(Some action) (j + 1)
           | exception Not_found ->
-              if switch.[0] = '-' then fail_on switch
+              if switch.[0] = '-' then (
+                L.debug
+                  "@[<h>unknow switch %S; looking in available plugins [ %a ]@]"
+                  switch
+                  (Format.pp_print_list ~pp_sep:Format.pp_print_space
+                     Format.pp_print_string)
+                  (Plugins.Plugins.Plugins.list ());
+                match
+                  List.find (cmp_plugin switch)
+                    (Plugins.Plugins.Plugins.list ())
+                with
+                | plugin when not (Basic_types.String.Htbl.mem plugins plugin)
+                  ->
+                    Basic_types.String.Htbl.add plugins plugin ();
+                    Plugins.Plugins.Plugins.load plugin;
+                    arg_loop (Cli.args ()) ~last_action i
+                | (exception Not_found) | _ -> fail_on switch)
               else (
                 (match origin with
                 | Command_line ->
@@ -1345,7 +1202,7 @@ module Parse = struct
                           ~e:
                             (Cli_parse_error ("Unkown error at value " ^ switch))
                           "Got value %s. Don't know what to do." switch));
-                arg_loop ~last_action:None (i + 1))
+                arg_loop args ~last_action:None (i + 1))
         with
         | Cli_parse_error _ as e -> raise e
         | Invalid_argument _ ->
@@ -1365,7 +1222,7 @@ module Parse = struct
       | Config_file -> 0
       (* we need start right away *)
     in
-    arg_loop ~last_action:None start_index;
+    arg_loop (Cli.args ()) ~last_action:None start_index;
     (* Get back the rest of possible file names *)
     Stack.fold (fun acc s -> s :: acc) [] stack
 
@@ -1464,14 +1321,9 @@ module Parse = struct
     in
     read_loop 0 "";
     close_in ic;
-    let res = run_on ~origin:Config_file (unstack stack) in
-    done_parsing := true;
-    res
+    run_on ~origin:Config_file (unstack stack)
 
-  let run () =
-    let res = run_on ~origin:Command_line Sys.argv in
-    done_parsing := true;
-    res
+  let run () = run_on ~origin:Command_line Sys.argv
 end
 
 let parse = Parse.run

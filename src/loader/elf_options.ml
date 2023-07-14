@@ -19,7 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Cli.Make (struct
+include Cli.Options (struct
   let shortname = "elf"
 
   let name = "Elf loader"

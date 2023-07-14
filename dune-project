@@ -5,7 +5,7 @@
 
 (name binsec)
 
-(version "0.7.4")
+(version "0.8.0")
 (maintainers "BINSEC <binsec@saxifrage.saclay.cea.fr>")
 (authors
   "Adel Djoudi"
@@ -35,7 +35,7 @@
 
 (package
  (name binsec)
- (sites (share utils))
+ (sites (share utils) (lib plugins))
  (synopsis "Semantic analysis of binary executables")
  (description "
 BINSEC aims at developing an open-source platform filling the gap between formal
@@ -53,11 +53,12 @@ BINSEC is developed at CEA List in scientfic collaboration with Verimag and LORI
 
 An overview of some BINSEC features can be found in our SSPREW'17 tutorial.")
  (depends
-  (ocaml (and (>= 4.09) (< 5)))
+  (ocaml (and (>= 4.11) (< 5)))
   (menhir (and :build (>= 20181113)))
   (ocamlgraph (>= 1.8.5))
   (zarith (>= 1.4))
   dune-site
+  grain_dypgen
   (toml (>= 6))
   (ounit2 (and :with-test (>= 2)))
   (qcheck (and :with-test (>= 0.7))))
@@ -68,7 +69,8 @@ An overview of some BINSEC features can be found in our SSPREW'17 tutorial.")
   bitwuzla)
  (conflicts
   (llvm (< 6.0.0))
-  (bitwuzla (< 1.0.4)))
+  (bitwuzla (< 1.0.4))
+  (unisim_archisec (< 0.0.6)))
  (tags
   ("binary code analysis"
     "symbolic execution"

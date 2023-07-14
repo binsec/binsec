@@ -21,4 +21,10 @@
 
 val get_solver_factory : unit -> (module Solver_sig.FACTORY)
 
-module State (F : Solver_sig.FACTORY) : Types.STATE_FACTORY
+module State
+    (D : Domains.S)
+    (F : Solver_sig.FACTORY)
+    (QS : Types.QUERY_STATISTICS) :
+  Types.RAW_STATE with type Value.t = Sexpr.Expr.t
+
+type _ Types.value += Term : Sexpr.Expr.t Types.value

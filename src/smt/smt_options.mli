@@ -21,7 +21,7 @@
 
 (** Definition of command-line & programmatic options for SSE *)
 
-include Cli.S
+include Cli.Cli_sig
 
 type solver =
   | Auto  (** try to use the best SMT solver available; in order *)

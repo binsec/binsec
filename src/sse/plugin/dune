@@ -1,0 +1,29 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.sse.shadow_stack)
+ (name shadow_stack)
+ (modules shadow_stack)
+ (flags
+  (:standard -open Binsec -open Libsse -w "-58"))
+ (libraries libsse))
+
+(plugin
+ (name shadow_stack)
+ (libraries binsec.sse.shadow_stack)
+ (site
+  (binsec plugins)))
+
+(library
+ (public_name binsec.sse.checkct)
+ (name checkct)
+ (modules checkct)
+ (flags
+  (:standard -open Binsec -open Libsse -open Libterm -w "-58"))
+ (libraries libsse libterm))
+
+(plugin
+ (name checkct)
+ (libraries binsec.sse.checkct)
+ (site
+  (binsec plugins)))

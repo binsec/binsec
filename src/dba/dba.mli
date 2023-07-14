@@ -126,6 +126,8 @@ module Var : sig
   (** [temp n] creates a lvalue representing a temporary of size [n] with name
       [Format.sprintf "temp%d" n]. *)
 
+  val compare : t -> t -> int
+
   include Hashtbl.HashedType with type t := t
 
   val from_id : int -> t

@@ -185,7 +185,7 @@ end
 open Program
 
 (* Should it be here ? *)
-let simplify_block = Simplification_dba_block.Constant_propagation.eval
+let simplify_block = Dhunk.constant_propagation
 
 (* Add a block to the program in construction.
    This block is simplified.
@@ -744,8 +744,6 @@ let run () =
         vset)
     parameters.Infos.entry_points;
   let program = disassemble parameters in
-  (* let simplified_program =
-     on_instructions Simplification_dba.simplify_dba program in *)
   if OpcodeOutputFile.is_set () then
     Print_utils.pp_to_file ~filename:(OpcodeOutputFile.get ()) Program.pp
       program

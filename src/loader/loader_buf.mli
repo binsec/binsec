@@ -76,8 +76,11 @@ module type S = sig
 
     val sleb128 : cursor -> s64
 
+    val bytes : cursor -> int -> string
+    (** [bytes t len] peeks a string of exactly [len] bytes from [t] *)
+
     val fixed_string : cursor -> int -> string
-    (** [fixed_string t len] peeks a string of exactly [len] bytes from [t] *)
+    (** [fixed_string t len] peeks a string of maximum [len] bytes from [t] *)
 
     val zero_string : string -> cursor -> ?maxlen:int -> unit -> string
     (** [zero_string msg t ?maxlen ()] peeks a zero-terminated string from [t],
@@ -106,8 +109,12 @@ module type S = sig
 
     val sleb128 : cursor -> s64
 
+    val bytes : cursor -> int -> string
+    (** [bytes t len] reads a string of exactly [len] bytes from [t] *)
+
     val fixed_string : cursor -> int -> string
-    (** [fixed_string t len] reads a string of exactly [len] bytes from [t] *)
+    (** [fixed_string t len] reads a string of maximum [len] bytes from [t],
+        then advance to exactly [len] bytes. *)
 
     val zero_string : string -> cursor -> ?maxlen:int -> unit -> string
     (** [zero_string msg t ?maxlen ()] reads a zero-terminated string from [t],

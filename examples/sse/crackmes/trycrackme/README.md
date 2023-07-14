@@ -28,8 +28,7 @@ Find the secret such that the challenge outputs `[+] Correct key!`.
 # Command
 
 ```console
-$ binsec -sse -sse-script crackme.ini -sse-depth 10000 \
-  -sse-alternative-engine core.snapshot
+$ binsec -sse -sse-script crackme.ini -sse-depth 10000 core.snapshot
 ```
 
 # Expect

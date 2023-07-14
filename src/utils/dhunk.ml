@@ -948,3 +948,153 @@ let conditional g =
               }
         | _ -> None)
     | _ -> None
+
+module Constant_propagation = struct
+  open Dba
+
+  module Env = struct
+    include Basic_types.String.Map
+
+    let eq = ( = )
+    (* Maybe this is not the right equality for region * Bv.t type *)
+
+    (* Test if env1 contains env2 *)
+    let contains env1 env2 =
+      let mem vname cst =
+        match find vname env1 with
+        | v -> eq v cst
+        | exception Not_found -> false
+      in
+      for_all mem env2
+
+    let add vname cst env =
+      match find vname env with
+      | v -> if eq v cst then env else remove vname env
+      | exception Not_found -> add vname cst env
+  end
+
+  let rec eval_expr env = function
+    | Dba.Expr.Var v as e -> (
+        match Basic_types.String.Map.find v.name env with
+        | bv -> Expr.constant bv
+        | exception Not_found -> e)
+    | Dba.Expr.Load (sz, en, e, array) ->
+        let sz = Size.Byte.create sz in
+        Expr.load sz en (eval_expr env e) ?array
+    | Dba.Expr.Cst _ as e -> e
+    | Dba.Expr.Unary (uop, e) -> Expr.unary uop (eval_expr env e)
+    | Dba.Expr.Binary (bop, e1, e2) ->
+        Expr.binary bop (eval_expr env e1) (eval_expr env e2)
+    | Dba.Expr.Ite (c, e1, e2) ->
+        Expr.ite (eval_expr env c) (eval_expr env e1) (eval_expr env e2)
+
+  let eval_instruction penv i =
+    match i with
+    | Dba.Instr.Assign (lv, e, id) -> Instr.assign lv (eval_expr penv e) id
+    | Dba.Instr.DJump (e, tag) -> Instr.dynamic_jump ~tag (eval_expr penv e)
+    | Dba.Instr.If (c, jt, id) -> Instr.ite (eval_expr penv c) jt id
+    | Dba.Instr.Assert (c, id) -> Instr._assert (eval_expr penv c) id
+    | Dba.Instr.Assume (c, id) -> Instr.assume (eval_expr penv c) id
+    | ( Dba.Instr.Undef _ | Dba.Instr.Nondet _ | Dba.Instr.Stop _
+      | Dba.Instr.SJump _ ) as instr ->
+        instr
+
+  let gather_propagations ?(env = Env.empty) block =
+    (* All elements are initialized at None *)
+    let envs = to_list block |> List.map (fun _ -> None) |> Array.of_list in
+    let should_propagate env id =
+      match envs.(id) with
+      | None -> true (* this index was never visited *)
+      | Some e -> not (Env.contains env e)
+    in
+    let mark_env env idx = envs.(idx) <- Some env in
+    let remove lval env =
+      match Dba_types.LValue.name_of lval with
+      | Some vname -> Basic_types.String.Map.remove vname env
+      | None -> env
+    in
+    let rec loop env idx =
+      if should_propagate env idx then (
+        mark_env env idx;
+        match inst block idx with
+        | None -> env
+        | Some i -> (
+            match i with
+            | Dba.Instr.Assign (Dba.LValue.Var { name; _ }, Dba.Expr.Cst v, idx')
+              ->
+                loop (Env.add name v env) idx'
+            | Dba.Instr.If (_, Dba.JInner idx1, idx2) ->
+                loop (loop env idx1) idx2
+            | Dba.Instr.Nondet (lv, id) -> loop (remove lv env) id
+            | Dba.Instr.Assert (_, id)
+            | Dba.Instr.Assume (_, id)
+            | Dba.Instr.Undef (_, id)
+            | Dba.Instr.Assign (_, _, id)
+            | Dba.Instr.SJump (Dba.JInner id, _)
+            | Dba.Instr.If (_, Dba.JOuter _, id) ->
+                loop env id
+            | Dba.Instr.SJump (Dba.JOuter _, _)
+            | Dba.Instr.DJump _ | Dba.Instr.Stop _ ->
+                env))
+      else env
+    in
+    ignore (loop env (start block));
+    envs
+
+  let do_propagations block propagation_envs =
+    mapi
+      ~f:(fun i instruction ->
+        match propagation_envs.(i) with
+        | None -> instruction
+        | Some env ->
+            if Basic_types.String.Map.is_empty env then instruction
+            else eval_instruction env instruction)
+      block
+
+  let eval block =
+    Logger.debug ~level:5 "@[<v 0>Prepropagation@ %a@]" pp block;
+    let b = gather_propagations block |> do_propagations block in
+    Logger.debug ~level:5 "@[<v 0>Post-propagation@ %a@]" pp b;
+    b
+end
+
+let constant_propagation = Constant_propagation.eval
+
+module DC_elimination = struct
+  module M = Basic_types.Int.Map
+  module S = Basic_types.Int.Set
+
+  let fetch target src p =
+    let alias = try src :: M.find src p with Not_found -> [ src ] in
+    try M.add target (List.append alias (M.find target p)) p
+    with Not_found -> M.add target alias p
+
+  let eval block =
+    let rec collect b n r m p w =
+      match S.min_elt w with
+      | exception Not_found -> (n, r, m)
+      | i when M.mem i m -> collect b n r m p (S.remove i w)
+      | i -> (
+          match inst_exn b i with
+          | Dba.Instr.SJump (Dba.JInner goto, _) ->
+              collect b n r m (fetch goto i p) S.(add goto (remove i w))
+          | inst ->
+              let m =
+                try List.fold_left (fun m i -> M.add i n m) m (M.find i p)
+                with Not_found -> m
+              in
+              collect b (n + 1) (M.add n i r) (M.add i n m) p
+                (List.fold_left
+                   (fun w -> function
+                     | Dba.JOuter _ -> w
+                     | Dba.JInner id -> S.add id w)
+                   (S.remove i w)
+                   (Dba_types.Instruction.successors inst)))
+    in
+    let n, r, m = collect block 0 M.empty M.empty M.empty (S.singleton 0) in
+    let inner i = try M.find i m with Not_found -> i in
+    init n (fun i ->
+        Dba_types.Instruction.reloc ~inner (inst_exn block (M.find i r)))
+end
+
+let dead_code_elimination = DC_elimination.eval

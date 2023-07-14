@@ -163,17 +163,22 @@ Names in script file are not case-sensitive. So writing `eax` or `EAX` behaves t
 ## DBA Instruction
 
 ```
-     <chunk> ::= [ <bloc> ] <terminator>
-      <bloc> ::= [<label> ":"] <stmt> [;] ..
-<terminator> ::= "jump" "at" <e> | "halt"
-      <stmt> ::= <instr> | <if> | <for> | <while> | <switch>
-	    <if> ::= "if" <e> "then" <bloc> ["else" <bloc>] "end"
-	   <for> ::= "for" <var> "in" <e> "to" <e> "do" <bloc> "end"
-	 <while> ::= "while" <e> "do" <bloc> "end"
-	<switch> ::= "case" <e> "is" (<cst> ":" <bloc>) .. "end"
-	 <instr> ::= <assign> | "assert" <e> | "assume" <e> | "goto" <label>
+     <chunk> ::= <lbl-stmt> ..
+  <lbl-stmt> ::= [<label> ":"] <stmt> (";" | "\n")
+      <stmt> ::= <instr> | <if> | <for> | <while> | <switch> | <terminator>
+        <if> ::= "if" <e> "then" <chunk> ["else" <chunk>] "end"
+       <for> ::= "for" <var> "in" <e> "to" <e> "do" <chunk> "end"
+     <while> ::= "while" <e> "do" <chunk> "end"
+    <switch> ::= "case" <e> "is" (<cst> ":" <chunk>) .. "end"
+     <instr> ::= <assign> | "assert" <e> | "assume" <e> | "goto" <label>
+<terminator> ::= "jump" "at" <e> | "halt" | "return" [ <e> ]
     <assign> ::= <lv> ":=" (<e> | "undef" | "nondet") ["as" <var>]
+     <label> ::= "." <ident>
 ```
+
+The next instruction after a `<terminator>`, if any, must have a label.
+
+Note that even the last instruction of a chunk, before the "end" keyword, must be terminated by either a semicolon or a newline.
 
 #### Deterministic assignment *lval* `:=` *expr*
   (e.g. `eax := 4`)
@@ -205,6 +210,15 @@ Names in script file are not case-sensitive. So writing `eax` or `EAX` behaves t
 #### While loop `while` *bool* `do` *stmts* `end`
   (e.g. `while @[esi] <> 0 do esi := esi + 1 end`)
   
+#### Jump to address `jump` `at` *expr*
+  (e.g. `jump at @[rsp, 8]`)
+  
+#### Stop execution `halt`
+  (e.g. `halt`)
+  
+#### Return to the caller `return` *[expr]*
+  (e.g. `return 0`)
+  
 ## SSE Script
 
 ```
@@ -216,7 +230,8 @@ Names in script file are not case-sensitive. So writing `eax` or `EAX` behaves t
            | "load" <mem> "from" "file" 
            | "load" "section" <section> "from" "file" 
            | "load" "sections" <section> ["," <section> ..] "from" "file"
-           | "replace" <e> "by" <chunk> "end"
+           | "replace" <e> ["(" <ident> ["," <ident> ..] ")"] "by" <chunk> "end"
+           | "with" "concrete" "stack" "pointer"
 <goal> ::= "reach" <e> [<n> "times"] ["such" "that" <e>] ["then" <action> ["and" <action> ..]]
            | "cut" "at" <e> ["if" <e>]
            | "at" <e> ("assume" | "assert") <e>
@@ -244,8 +259,14 @@ Names in script file are not case-sensitive. So writing `eax` or `EAX` behaves t
 #### Initialize specific memory from file `load` *memory-access* `from` `file`
   (e.g. `load @[0x4000, 256] from file`)
   
+#### Make the stack pointer concrete with an architecture-appropriate value `with` `concrete` `stack` `pointer`
+  (e.g. `with concrete stack pointer`)
+  
 #### Set a DBA stub `replace` *addr* `by` *chunk* `end`
   (e.g. `replace <printf> by esp := esp + 4; jump at @[esp - 4] end`)
+  
+#### Set a DBA stub with arguments `replace` *addr* `(` *arg* `,` *arg* .. `)` `by` *chunk* `end`
+  (e.g. `replace <fgets> (ptr, size, _) by return ptr end`)
   
 #### Set reach target `reach` *addr [n* `times`*] [*`such` `that` *bool] [*`then` *actions]*
   (e.g. `reach 0x4000 such that al = 0 then print ecx`)
@@ -279,7 +300,8 @@ Names in script file are not case-sensitive. So writing `eax` or `EAX` behaves t
 
 ## `<goal>` Semantics
 
-If multiple `<goals>` are defined at the same position the execution order of the goals is the following: `assume`, `assert`, `enumerate`, `reach` then `cut`. Here is a description of the effect of these goals:
+If multiple `<goals>` are defined at the same position they are executed in the order they are defined in the script, before the instruction or its `replace`ment.
+Here is a description of the effect of these goals:
 
 #### `assume`
 

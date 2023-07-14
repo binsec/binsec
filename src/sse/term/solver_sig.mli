@@ -34,6 +34,10 @@ module type S = sig
 
   val bind : Suid.t -> Expr.t -> Expr.t list -> term
 
+  val iter_free_variables : (string -> Expr.t -> unit) -> unit
+
+  val iter_free_arrays : (string -> Memory.t -> unit) -> unit
+
   val get : Expr.t -> term
 
   val check_sat : unit -> result
