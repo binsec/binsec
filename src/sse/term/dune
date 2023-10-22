@@ -14,4 +14,6 @@
    native_solver.ml
    from
    (bitwuzla -> native_solver.enabled.ml)
-   (!bitwuzla -> native_solver.stubs.ml))))
+   (!bitwuzla -> native_solver.stubs.ml)))
+ (instrumentation
+  (backend landmarks)))

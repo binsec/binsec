@@ -37,6 +37,191 @@ module Loc = Ast.Loc
 module Expr = Ast.Expr
 module Instr = Ast.Instr
 
+exception Inference_failure of Expr.t loc
+
+exception Invalid_size of Expr.t loc * int * int
+
+exception Invalid_operation of Expr.t loc
+
+let pp_pos ppf (pos : Lexing.position) =
+  try
+    let ic = open_in pos.pos_fname in
+    let rec scan ic lnum r =
+      let line = input_line ic in
+      let len = String.length line in
+      if len < r then scan ic (lnum + 1) (r - len - 1)
+      else
+        Format.fprintf ppf "(line %d, column %d in %s)@ %S@ %s^" lnum r
+          pos.pos_fname line
+          (String.make (r + 1) ' ')
+    in
+    scan ic 1 pos.pos_cnum
+  with Sys_error _ | End_of_file -> ()
+
+let _ =
+  Printexc.register_printer (function
+    | Inference_failure (e, pos) ->
+        Some
+          (Format.asprintf "@[<v>Unable to infer the size of %a %a@]" Expr.pp e
+             pp_pos pos)
+    | Invalid_size ((e, pos), size, expect) ->
+        Some
+          (Format.asprintf "@[<v>Invalid size for %a (expected %d, got %d) %a@]"
+             Expr.pp e expect size pp_pos pos)
+    | Invalid_operation (e, pos) ->
+        Some
+          (Format.asprintf "@[<v>Invalid operation in %a %a@]" Expr.pp e pp_pos
+             pos)
+    | _ -> None)
+
+let rec eval_expr ?size ((e, p) as t : Expr.t loc) env =
+  let e =
+    match e with
+    | Int z -> (
+        match size with
+        | None -> raise (Inference_failure t)
+        | Some size ->
+            (if Z.numbits z > size then
+             let line = p.pos_lnum and column = p.pos_cnum - p.pos_bol - 1 in
+             Options.Logger.warning
+               "integer %a (line %d, column %d) does not fit in a bitvector of \
+                %d bit%s"
+               Z.pp_print z line column size
+               (if size > 1 then "s" else ""));
+            Dba.Expr.constant (Bitvector.create z size))
+    | Bv bv -> Dba.Expr.constant bv
+    | Symbol ((name, attr), _) -> env.lookup_symbol name attr
+    | Loc (Sub ({ hi; lo }, loc), _) ->
+        Dba.Expr.restrict lo hi
+          (Dba.LValue.to_expr (eval_loc ?size:None loc env))
+    | Loc loc -> Dba.LValue.to_expr (eval_loc ?size loc env)
+    | Unary (op, x) ->
+        let size =
+          match op with Restrict _ | Uext _ | Sext _ -> None | _ -> size
+        in
+        Dba.Expr.unary op (eval_expr ?size x env)
+    | Binary (op, x, y) ->
+        let x, y = eval_binary ?size ~op x y env in
+        Dba.Expr.binary op x y
+    | Ite (q, x, y) ->
+        let q = eval_expr ~size:1 q env in
+        let x, y = eval_binary ?size x y env in
+        Dba.Expr.ite q x y
+  in
+  Option.iter
+    (fun size ->
+      let size' = Dba.Expr.size_of e in
+      if size' <> size then raise (Invalid_size (t, size', size)))
+    size;
+  e
+
+and eval_binary ?(first = true) ?size ?op x y env =
+  match
+    eval_expr
+      ?size:
+        (match op with
+        | None -> size
+        | Some
+            ( Plus | Minus | Mult | DivU | DivS | ModU | ModS | Or | And | Xor
+            | LShift | RShiftU | RShiftS | LeftRotate | RightRotate ) ->
+            size
+        | Some _ -> None)
+      x env
+  with
+  | x ->
+      ( x,
+        eval_expr
+          ?size:
+            (match op with
+            | Some Concat -> (
+                match size with
+                | None -> None
+                | Some size -> Some (size - Dba.Expr.size_of x))
+            | None | Some _ -> Some (Dba.Expr.size_of x))
+          y env )
+  | exception Inference_failure _ when first ->
+      let y, x = eval_binary ~first:false ?size ?op y x env in
+      (x, y)
+
+and eval_int ((e, _) as t : Expr.t loc) env =
+  match e with
+  | Int z ->
+      if not (Z.fits_int z) then raise (Invalid_operation t);
+      Z.to_int z
+  | Bv bv ->
+      if not (Z.fits_int (Bitvector.signed_of bv)) then
+        raise (Invalid_operation t);
+      Bitvector.to_int bv
+  | Symbol ((name, attr), _) -> (
+      match env.lookup_symbol name attr with
+      | Var { info = Symbol (_, (lazy bv)); _ } ->
+          if not (Z.fits_int (Bitvector.value_of bv)) then
+            raise (Invalid_operation t);
+          Bitvector.to_uint bv
+      | _ -> raise (Invalid_operation t))
+  | Unary (UMinus, x) -> -eval_int x env
+  | Binary (Plus, x, y) -> eval_int x env + eval_int y env
+  | Binary (Minus, x, y) -> eval_int x env - eval_int y env
+  | Binary (Mult, x, y) -> eval_int x env * eval_int y env
+  | Binary (DivS, x, y) -> eval_int x env / eval_int y env
+  | Loc _ | Unary _ | Binary _ | Ite _ -> raise (Invalid_operation t)
+
+and declare_var name size env =
+  let var = Dba.Var.create name ~bitsize:(Size.Bit.create size) ~tag:Empty in
+  env.define var;
+  Dba.LValue.v var
+
+and eval_var ?size ((_, p) as t) name (annot : Ast.Size.t) env =
+  let lval =
+    try env.lookup name
+    with Not_found -> (
+      match annot with
+      | Explicit size -> declare_var name size env
+      | Sizeof lval ->
+          let lval = eval_loc lval env in
+          declare_var name (Dba.LValue.size_of lval) env
+      | Eval expr ->
+          let size = eval_int expr env in
+          if size < 0 then raise (Invalid_operation expr);
+          declare_var name size env
+      | Implicit -> (
+          match size with
+          | None -> raise (Inference_failure (Expr.loc t, p))
+          | Some size -> declare_var name size env))
+  in
+  Option.iter
+    (fun size ->
+      let size' = Dba.LValue.size_of lval in
+      if size' <> size then raise (Invalid_size ((Expr.loc t, p), size', size)))
+    size;
+  lval
+
+and eval_loc ?size ((l, p) as t : Loc.t loc) env =
+  let lval =
+    match l with
+    | Var (name, annot) -> eval_var ?size t name annot env
+    | Load (len, endianness, addr, array) ->
+        let endianness =
+          Option.fold ~none:env.endianness ~some:Fun.id endianness
+        in
+        let addr = eval_expr ~size:env.wordsize addr env in
+        Dba.LValue.store (Size.Byte.create len) endianness addr ?array
+    | Sub ({ hi; lo }, ((Var (name, annot), _) as t')) -> (
+        match eval_var ?size t' name annot env with
+        | Var var -> Dba.LValue.restrict var lo hi
+        | Restrict (var, { hi = hi'; lo = lo' }) ->
+            if hi' > hi + lo' then raise (Inference_failure (Expr.loc t, p));
+            Dba.LValue.restrict var (lo + lo') (hi + lo')
+        | _ -> raise (Invalid_operation (Expr.loc t, p)))
+    | Sub _ -> raise (Invalid_operation (Expr.loc t, p))
+  in
+  Option.iter
+    (fun size ->
+      let size' = Dba.LValue.size_of lval in
+      if size' <> size then raise (Invalid_size ((Expr.loc t, p), size', size)))
+    size;
+  lval
+
 module Output = struct
   type format = Types.Output.format = Bin | Dec | Hex | Ascii
 
@@ -47,6 +232,16 @@ module Output = struct
     | Value of format * Expr.t loc
     | Stream of string
     | String of string
+
+  let eval env (t : t) : Types.Output.t =
+    match t with
+    | Model -> Model
+    | Formula -> Formula
+    | Slice values ->
+        Slice (List.map (fun (e, name) -> (eval_expr e env, name)) values)
+    | Value (fmt, e) -> Value (fmt, eval_expr e env)
+    | Stream name -> Stream name
+    | String name -> String name
 
   let format_str = function
     | Bin -> "bin"
@@ -72,6 +267,7 @@ end
 
 type Ast.Obj.t +=
   | Int of int
+  | Int_list of int list
   | Format of Output.format
   | Output of Output.t
   | Output_list of Output.t list
@@ -90,6 +286,7 @@ type Ast.Instr.t +=
   | Argument of Loc.t loc * int  (** [lval] := arg([i]) *)
   | Return of Expr.t loc option  (** return [rval] *)
   | Cut of Expr.t loc option
+  | Print of Output.t
   | Reach of int * Expr.t loc option * Output.t list
   | Enumerate of int * Expr.t loc
 
@@ -101,6 +298,7 @@ type Ast.t +=
   | Concretize_stack_pointer
   | Import_symbols of Symbol.t loc list * string
   | Hook of Expr.t loc list * Instr.t list * bool
+  | Decode of Binstream.t * Instr.t list
   | Init of Instr.t list
   | Explore_all
 
@@ -135,6 +333,9 @@ let () =
                 (fun (test, _) -> Format.fprintf ppf " if %a" Expr.pp test)
                 guard)
             guard;
+          true
+      | Print output ->
+          Format.fprintf ppf "print %a" Output.pp output;
           true
       | Enumerate (n, (rval, _)) ->
           Format.fprintf ppf "enumerate%s %a%a"
@@ -210,6 +411,9 @@ let pp ppf decl =
   | Hook (addr, stmts, _) ->
       Format.fprintf ppf "@[<v>@[<v 2>hook %a by@ %a@]@ end@]" pp_exprs addr
         pp_stmts stmts
+  | Decode (opcode, stmts) ->
+      Format.fprintf ppf "@[<v>@[<v 2>hook opcode %a by@ %a@]@ end@]"
+        Binstream.pp opcode pp_stmts stmts
   | Init stmts -> Format.fprintf ppf "@[<v>%a@]" pp_stmts stmts
   | Explore_all -> Format.pp_print_string ppf "explore all"
   | _ -> resolve_pp ppf decl !decl_printers
@@ -237,6 +441,8 @@ let grammar :
   [
     Dyp.Bind_to_cons
       [
+        ("byte", "Obj");
+        ("byte_rev_list", "Obj");
         ("key_value", "Obj");
         ("comma_separated_key_value_rev_list", "Obj");
         ("options", "Obj");
@@ -267,6 +473,30 @@ let grammar :
       ];
     Dyp.Add_rules
       [
+        ( ( "byte",
+            [
+              Dyp.Regexp
+                (Dyp.RE_Seq [ Dyp.RE_Name "hexdigit"; Dyp.RE_Name "hexdigit" ]);
+            ],
+            "default_priority",
+            [] ),
+          fun _ -> function
+            | [ Syntax.Lexeme_matched byte ] ->
+                (Syntax.Obj (Int (Z.to_int (Z.of_string_base 16 byte))), [])
+            | _ -> assert false );
+        ( ("byte_rev_list", [], "default_priority", []),
+          fun _ _ -> (Syntax.Obj (Int_list []), []) );
+        ( ( "byte_rev_list",
+            [
+              Dyp.Non_ter ("byte_rev_list", No_priority);
+              Dyp.Non_ter ("byte", No_priority);
+            ],
+            "default_priority",
+            [] ),
+          fun _ -> function
+            | [ Syntax.Obj (Int_list bytes); Syntax.Obj (Int byte) ] ->
+                (Syntax.Obj (Int_list (byte :: bytes)), [])
+            | _ -> assert false );
         ( ( "key_value",
             [ Dyp.Non_ter ("qident", No_priority) ],
             "default_priority",
@@ -718,6 +948,13 @@ let grammar :
           fun _ -> function
             | [ _; Syntax.Expr expr ] -> (Syntax.Stmt [ Instr.Assert expr ], [])
             | _ -> assert false );
+        ( ( "fallthrough",
+            [ Dyp.Non_ter ("output", No_priority) ],
+            "default_priority",
+            [] ),
+          fun _ -> function
+            | [ Syntax.Obj (Output output) ] -> (Syntax.Instr (Print output), [])
+            | _ -> assert false );
         ( ( "decl",
             [
               Dyp.Regexp (RE_String "starting");
@@ -818,6 +1055,23 @@ let grammar :
             "default_priority",
             [] ),
           fun _ _ -> (Syntax.Decl Concretize_stack_pointer, []) );
+        ( ( "decl",
+            [
+              Dyp.Regexp (RE_String "replace");
+              Dyp.Regexp (RE_String "opcode");
+              Dyp.Non_ter ("byte_rev_list", No_priority);
+              Dyp.Regexp (RE_String "by");
+              Dyp.Non_ter ("stmts", No_priority);
+              Dyp.Regexp (RE_String "end");
+            ],
+            "default_priority",
+            [] ),
+          fun _ -> function
+            | [ _; _; Syntax.Obj (Int_list bytes); _; Syntax.Stmt stmts; _ ] ->
+                ( Syntax.Decl
+                    (Decode (Binstream.of_list (List.rev bytes), stmts)),
+                  [] )
+            | _ -> assert false );
         ( ( "decl",
             [
               Dyp.Regexp (RE_String "replace");
@@ -998,21 +1252,6 @@ let grammar :
       ];
   ]
 
-let pp_pos ppf (pos : Lexing.position) =
-  try
-    let ic = open_in pos.pos_fname in
-    let rec scan ic lnum r =
-      let line = input_line ic in
-      let len = String.length line in
-      if len < r then scan ic (lnum + 1) (r - len - 1)
-      else
-        Format.fprintf ppf "(line %d, column %d in %s)@ %S@ %s^" lnum r
-          pos.pos_fname line
-          (String.make (r + 1) ' ')
-    in
-    scan ic 1 pos.pos_cnum
-  with Sys_error _ | End_of_file -> ()
-
 let try_and_parse grammar_extensions lexbuf =
   let pilot =
     Dyp.update_pp (Syntax.pp ()) (List.concat (grammar :: grammar_extensions))
@@ -1067,176 +1306,6 @@ let read_files gramma_extensions files =
     ~finally:(fun () ->
       match !file_stream with Opened (ic, _) -> close_in ic | _ -> ())
     (fun () -> try_and_parse gramma_extensions (Option.get !lexbuf))
-
-exception Inference_failure of Expr.t loc
-
-exception Invalid_size of Expr.t loc * int * int
-
-exception Invalid_operation of Expr.t loc
-
-let _ =
-  Printexc.register_printer (function
-    | Inference_failure (e, pos) ->
-        Some
-          (Format.asprintf "@[<v>Unable to infer the size of %a %a@]" Expr.pp e
-             pp_pos pos)
-    | Invalid_size ((e, pos), size, expect) ->
-        Some
-          (Format.asprintf "@[<v>Invalid size for %a (expected %d, got %d) %a@]"
-             Expr.pp e expect size pp_pos pos)
-    | Invalid_operation (e, pos) ->
-        Some
-          (Format.asprintf "@[<v>Invalid operation in %a %a@]" Expr.pp e pp_pos
-             pos)
-    | _ -> None)
-
-let rec eval_expr ?size ((e, p) as t : Expr.t loc) env =
-  let e =
-    match e with
-    | Int z -> (
-        match size with
-        | None -> raise (Inference_failure t)
-        | Some size ->
-            (if Z.numbits z > size then
-             let line = p.pos_lnum and column = p.pos_cnum - p.pos_bol - 1 in
-             Options.Logger.warning
-               "integer %a (line %d, column %d) does not fit in a bitvector of \
-                %d bit%s"
-               Z.pp_print z line column size
-               (if size > 1 then "s" else ""));
-            Dba.Expr.constant (Bitvector.create z size))
-    | Bv bv -> Dba.Expr.constant bv
-    | Symbol ((name, attr), _) -> env.lookup_symbol name attr
-    | Loc (Sub ({ hi; lo }, loc), _) ->
-        Dba.Expr.restrict lo hi
-          (Dba.LValue.to_expr (eval_loc ?size:None loc env))
-    | Loc loc -> Dba.LValue.to_expr (eval_loc ?size loc env)
-    | Unary (op, x) ->
-        let size =
-          match op with Restrict _ | Uext _ | Sext _ -> None | _ -> size
-        in
-        Dba.Expr.unary op (eval_expr ?size x env)
-    | Binary (op, x, y) ->
-        let x, y = eval_binary ?size ~op x y env in
-        Dba.Expr.binary op x y
-    | Ite (q, x, y) ->
-        let q = eval_expr ~size:1 q env in
-        let x, y = eval_binary ?size x y env in
-        Dba.Expr.ite q x y
-  in
-  Option.iter
-    (fun size ->
-      let size' = Dba.Expr.size_of e in
-      if size' <> size then raise (Invalid_size (t, size', size)))
-    size;
-  e
-
-and eval_binary ?(first = true) ?size ?op x y env =
-  match
-    eval_expr
-      ?size:
-        (match op with
-        | None -> size
-        | Some
-            ( Plus | Minus | Mult | DivU | DivS | ModU | ModS | Or | And | Xor
-            | LShift | RShiftU | RShiftS | LeftRotate | RightRotate ) ->
-            size
-        | Some _ -> None)
-      x env
-  with
-  | x ->
-      ( x,
-        eval_expr
-          ?size:
-            (match op with
-            | Some Concat -> (
-                match size with
-                | None -> None
-                | Some size -> Some (size - Dba.Expr.size_of x))
-            | None | Some _ -> Some (Dba.Expr.size_of x))
-          y env )
-  | exception Inference_failure _ when first ->
-      let y, x = eval_binary ~first:false ?size ?op y x env in
-      (x, y)
-
-and eval_int ((e, _) as t : Expr.t loc) env =
-  match e with
-  | Int z ->
-      if not (Z.fits_int z) then raise (Invalid_operation t);
-      Z.to_int z
-  | Bv bv ->
-      if not (Z.fits_int (Bitvector.signed_of bv)) then
-        raise (Invalid_operation t);
-      Bitvector.to_int bv
-  | Symbol ((name, attr), _) -> (
-      match env.lookup_symbol name attr with
-      | Var { info = Symbol (_, (lazy bv)); _ } ->
-          if not (Z.fits_int (Bitvector.value_of bv)) then
-            raise (Invalid_operation t);
-          Bitvector.to_uint bv
-      | _ -> raise (Invalid_operation t))
-  | Unary (UMinus, x) -> -eval_int x env
-  | Binary (Plus, x, y) -> eval_int x env + eval_int y env
-  | Binary (Minus, x, y) -> eval_int x env - eval_int y env
-  | Binary (Mult, x, y) -> eval_int x env * eval_int y env
-  | Binary (DivS, x, y) -> eval_int x env / eval_int y env
-  | Loc _ | Unary _ | Binary _ | Ite _ -> raise (Invalid_operation t)
-
-and declare_var name size env =
-  let var = Dba.Var.create name ~bitsize:(Size.Bit.create size) ~tag:Empty in
-  env.define var;
-  Dba.LValue.v var
-
-and eval_var ?size ((_, p) as t) name (annot : Ast.Size.t) env =
-  let lval =
-    try env.lookup name
-    with Not_found -> (
-      match annot with
-      | Explicit size -> declare_var name size env
-      | Sizeof lval ->
-          let lval = eval_loc lval env in
-          declare_var name (Dba.LValue.size_of lval) env
-      | Eval expr ->
-          let size = eval_int expr env in
-          if size < 0 then raise (Invalid_operation expr);
-          declare_var name size env
-      | Implicit -> (
-          match size with
-          | None -> raise (Inference_failure (Expr.loc t, p))
-          | Some size -> declare_var name size env))
-  in
-  Option.iter
-    (fun size ->
-      let size' = Dba.LValue.size_of lval in
-      if size' <> size then raise (Invalid_size ((Expr.loc t, p), size', size)))
-    size;
-  lval
-
-and eval_loc ?size ((l, p) as t : Loc.t loc) env =
-  let lval =
-    match l with
-    | Var (name, annot) -> eval_var ?size t name annot env
-    | Load (len, endianness, addr, array) ->
-        let endianness =
-          Option.fold ~none:env.endianness ~some:Fun.id endianness
-        in
-        let addr = eval_expr ~size:env.wordsize addr env in
-        Dba.LValue.store (Size.Byte.create len) endianness addr ?array
-    | Sub ({ hi; lo }, ((Var (name, annot), _) as t')) -> (
-        match eval_var ?size t' name annot env with
-        | Var var -> Dba.LValue.restrict var lo hi
-        | Restrict (var, { hi = hi'; lo = lo' }) ->
-            if hi' > hi + lo' then raise (Inference_failure (Expr.loc t, p));
-            Dba.LValue.restrict var (lo + lo') (hi + lo')
-        | _ -> raise (Invalid_operation (Expr.loc t, p)))
-    | Sub _ -> raise (Invalid_operation (Expr.loc t, p))
-  in
-  Option.iter
-    (fun size ->
-      let size' = Dba.LValue.size_of lval in
-      if size' <> size then raise (Invalid_size ((Expr.loc t, p), size', size)))
-    size;
-  lval
 
 (* include Cli.Make (struct *)
 (*   let shortname = "ast" *)

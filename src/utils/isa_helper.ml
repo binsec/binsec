@@ -22,13 +22,15 @@
 module type ARCH = sig
   val get_defs : unit -> (string * Dba.LValue.t) list
 
-  val get_arg : int -> Dba.Expr.t
+  val get_arg : ?syscall:bool -> int -> Dba.Expr.t
 
   val get_ret : ?syscall:bool -> unit -> Dba.LValue.t
 
   val make_return : ?value:Dba.Expr.t -> unit -> Dhunk.t
 
   val get_stack_pointer : unit -> Dba.Var.t * Bitvector.t
+
+  val get_shortlived_flags : unit -> Dba.Var.t list
 
   val core :
     Loader_elf.Img.t -> Virtual_address.t * (Dba.Var.t * Dba.Expr.t) list
@@ -173,6 +175,10 @@ module X86 : ARCH = struct
       ("xmm6", Dba.LValue.restrict xmm6 0 127);
       ("xmm7", Dba.LValue.restrict xmm7 0 127);
     ]
+
+  let shortlived_flags = [ cf; pf; af; zf; sf; of' ]
+
+  let get_shortlived_flags () = shortlived_flags
 
   let get_defs () = defs
 
@@ -353,12 +359,34 @@ module X86 : ARCH = struct
 
   and eax_l = Dba.LValue.v eax
 
+  and ebx_r = Dba.Expr.v ebx
+
+  and ecx_r = Dba.Expr.v ecx
+
+  and edx_r = Dba.Expr.v edx
+
+  and esi_r = Dba.Expr.v esi
+
+  and edi_r = Dba.Expr.v edi
+
+  and ebp_r = Dba.Expr.v ebp
+
   and four = Dba.Expr.constant (Bitvector.of_int ~size:32 4)
 
-  let get_arg i =
-    Dba.Expr.load Size.Byte.four LittleEndian
-      (Dba.Expr.add esp_r
-         (Dba.Expr.constant (Bitvector.of_int ~size:32 (4 * (i + 1)))))
+  let get_arg ?(syscall = false) i =
+    if syscall then
+      match i with
+      | 0 -> ebx_r
+      | 1 -> ecx_r
+      | 2 -> edx_r
+      | 3 -> esi_r
+      | 4 -> edi_r
+      | 5 -> ebp_r
+      | _ -> raise (Invalid_argument "syscall")
+    else
+      Dba.Expr.load Size.Byte.four LittleEndian
+        (Dba.Expr.add esp_r
+           (Dba.Expr.constant (Bitvector.of_int ~size:32 (4 * (i + 1)))))
 
   let get_ret ?syscall:_ () = ret
 
@@ -636,6 +664,10 @@ module AMD64 : ARCH = struct
       ("id", Dba.LValue.v id);
     ]
 
+  let shortlived_flags = [ cf; pf; af; zf; sf; of' ]
+
+  let get_shortlived_flags () = shortlived_flags
+
   let get_defs () = defs
 
   let notes img =
@@ -821,19 +853,32 @@ module AMD64 : ARCH = struct
 
   and r9_r = Dba.Expr.v r9
 
+  and r10_r = Dba.Expr.v r10
+
   and eight = Dba.Expr.constant (Bitvector.of_int ~size:64 8)
 
-  let get_arg = function
-    | 0 -> rdi_r
-    | 1 -> rsi_r
-    | 2 -> rdx_r
-    | 3 -> rcx_r
-    | 4 -> r8_r
-    | 5 -> r9_r
-    | i ->
-        Dba.Expr.load Size.Byte.eight LittleEndian
-          (Dba.Expr.add rsp_r
-             (Dba.Expr.constant (Bitvector.of_int ~size:64 (8 * (i - 5)))))
+  let get_arg ?(syscall = false) i =
+    if syscall then
+      match i with
+      | 0 -> rdi_r
+      | 1 -> rsi_r
+      | 2 -> rdx_r
+      | 3 -> r10_r
+      | 4 -> r8_r
+      | 5 -> r9_r
+      | _ -> raise (Invalid_argument "syscall")
+    else
+      match i with
+      | 0 -> rdi_r
+      | 1 -> rsi_r
+      | 2 -> rdx_r
+      | 3 -> rcx_r
+      | 4 -> r8_r
+      | 5 -> r9_r
+      | i ->
+          Dba.Expr.load Size.Byte.eight LittleEndian
+            (Dba.Expr.add rsp_r
+               (Dba.Expr.constant (Bitvector.of_int ~size:64 (8 * (i - 5)))))
 
   let get_ret ?syscall:_ () = ret
 
@@ -942,6 +987,8 @@ module ARM : ARCH = struct
       ("t", Dba.LValue.v t);
     ]
 
+  let get_shortlived_flags () = []
+
   let core _ = raise (Errors.not_yet_implemented "arm core")
 
   let get_defs () = defs
@@ -962,7 +1009,9 @@ module ARM : ARCH = struct
 
   let ret = r0_l
 
-  let get_arg = function
+  let get_arg ?(syscall = false) i =
+    if syscall then raise (Errors.not_yet_implemented "syscall");
+    match i with
     | 0 -> r0_r
     | 1 -> r1_r
     | 2 -> r2_r
@@ -1143,6 +1192,8 @@ module AARCH64 : ARCH = struct
       ("t", Dba.LValue.v t);
     ]
 
+  let get_shortlived_flags () = []
+
   let core _ = raise (Errors.not_yet_implemented "arm core")
 
   let get_defs () = defs
@@ -1171,7 +1222,9 @@ module AARCH64 : ARCH = struct
 
   let ret = x0_l
 
-  let get_arg = function
+  let get_arg ?(syscall = false) i =
+    if syscall then raise (Errors.not_yet_implemented "syscall");
+    match i with
     | 0 -> x0_r
     | 1 -> x1_r
     | 2 -> x2_r
@@ -1311,6 +1364,8 @@ module PPC64 : ARCH = struct
       ("lr", Dba.LValue.v lr);
     ]
 
+  let get_shortlived_flags () = []
+
   let core _ = raise (Errors.not_yet_implemented "ppc core")
 
   let get_defs () = defs
@@ -1339,7 +1394,9 @@ module PPC64 : ARCH = struct
 
   let ret = r3_l
 
-  let get_arg = function
+  let get_arg ?(syscall = false) i =
+    if syscall then raise (Errors.not_yet_implemented "syscall");
+    match i with
     | 0 -> r3_r
     | 1 -> r4_r
     | 2 -> r5_r
@@ -1423,6 +1480,8 @@ end) : ARCH = struct
          (fun (var : Dba.Var.t) -> (var.name, Dba.LValue.v var))
          registers)
 
+  let get_shortlived_flags () = []
+
   let get_defs () = defs
 
   let core _ = raise (Errors.not_yet_implemented "RISC V core")
@@ -1455,7 +1514,9 @@ end) : ARCH = struct
 
   let ret = a0_l
 
-  let get_arg = function
+  let get_arg ?(syscall = false) i =
+    if syscall then raise (Errors.not_yet_implemented "syscall");
+    match i with
     | 0 -> a0_r
     | 1 -> a1_r
     | 2 -> a2_r
@@ -1516,9 +1577,12 @@ module Z80 = struct
       (Array.fold_right add Z80_arch.registers8
          (Array.fold_right add Z80_arch.flags []))
 
+  let get_shortlived_flags () = []
+
   let get_defs () = defs
 
-  let get_arg _ = raise (Errors.not_yet_implemented "Z80 calling convention")
+  let get_arg ?syscall:_ _ =
+    raise (Errors.not_yet_implemented "Z80 calling convention")
 
   let get_ret ?syscall:_ () =
     raise (Errors.not_yet_implemented "Z80 calling convention")
@@ -1552,9 +1616,9 @@ let get_defs () =
   let module A = (val get_arch ()) in
   A.get_defs ()
 
-let get_arg i =
+let get_arg ?syscall i =
   let module A = (val get_arch ()) in
-  A.get_arg i
+  A.get_arg ?syscall i
 
 let get_ret ?syscall () =
   let module A = (val get_arch ()) in
@@ -1571,6 +1635,10 @@ let core img =
 let get_stack_pointer () =
   let module A = (val get_arch ()) in
   A.get_stack_pointer ()
+
+let get_shortlived_flags () =
+  let module A = (val get_arch ()) in
+  A.get_shortlived_flags ()
 
 let max_instruction_len () =
   let module A = (val get_arch ()) in

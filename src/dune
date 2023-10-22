@@ -35,7 +35,9 @@
  (libraries str bigarray ocamlgraph zarith dune-site dune-site.plugins)
  (foreign_stubs
   (language c)
-  (names :standard)))
+  (names :standard))
+ (instrumentation
+  (backend landmarks)))
 
 (generate_sites_module
  (module runtime)

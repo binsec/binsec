@@ -122,7 +122,7 @@ end = struct
     let s = Bigarray.Array1.dim x in
     Bv.create
       (Z.of_bits
-         (String.init (Bigarray.Array1.dim x) (fun i ->
+         (String.init s (fun i ->
               Char.unsafe_chr (Bigarray.Array1.unsafe_get x i))))
       (s lsl 3)
 
@@ -379,10 +379,13 @@ module Model = struct
         arrays;
       Format.pp_close_box ppf ())
 
-  let rec eval
-      ?(symbols =
-        fun e -> Bitvector.create (Z.of_int (Expr.hash e)) (Expr.sizeof e))
-      ?(memory = fun _ _ -> '\x00') ((vars, values, _, _, _) as m) = function
+  let default_value e =
+    Bitvector.create (Z.of_int (Expr.hash e)) (Expr.sizeof e)
+
+  let default_memory _ _ = '\x00'
+
+  let rec eval ?(symbols = default_value) ?(memory = default_memory)
+      ((vars, values, _, _, _) as m) = function
     | Expr.Cst bv -> bv
     | e -> (
         try BvTbl.find values e

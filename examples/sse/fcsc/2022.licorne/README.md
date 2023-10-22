@@ -57,6 +57,7 @@ $ binsec -sse -sse-depth 1000000000 \
          -sse-script crackme2.ini -sse-self-written-enum 1 \
 		 core2.snapshot
 ```
+:information_source: Speed up with `-sse-cse` or `-sse-jit`.
 
 # Expect
 

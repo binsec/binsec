@@ -398,7 +398,7 @@ struct
         Some { state with constraints = cond :: state.constraints })
       else
         let state = { state with constraints = cond :: state.constraints } in
-        if Bitvector.zero = Model.eval state.model cond then (
+        if Bitvector.is_zero (Model.eval state.model cond) then (
           QS.Solver.start_timer ();
           let open Engine (F ()) in
           let r =
@@ -585,7 +585,33 @@ struct
   let get_value (e : Expr.t) _ =
     match e with Cst bv -> bv | _ -> raise_notrace Non_unique
 
-  let get_a_value (e : Expr.t) t = Model.eval t.model e
+  let get_a_value e t = Model.eval t.model e
+
+  let expect (e : Expr.t) bv t =
+    let r =
+      match e with
+      | Cst bv' -> bv'
+      | Var _ ->
+          Model.eval
+            ~symbols:(fun e' ->
+              if Expr.is_equal e e' then bv else Model.default_value e')
+            t.model e
+      | Load { len; addr; label; _ } ->
+          let addr = Model.eval t.model addr in
+          let len = Bitvector.of_int len ~size:(Bitvector.size_of addr) in
+          Model.eval
+            ~memory:(fun arr ptr ->
+              if Memory.equal label arr then
+                let delta = Bitvector.sub ptr addr in
+                if Bitvector.ult delta len then
+                  let lo = 8 * Bitvector.to_uint delta in
+                  Bitvector.to_char (Bitvector.extract bv { hi = lo + 7; lo })
+                else Model.default_memory arr ptr
+              else Model.default_memory arr ptr)
+            t.model e
+      | Unary _ | Binary _ | Ite _ -> Model.eval t.model e
+    in
+    if Bitvector.diff r bv then None else Some t
 
   let pp_smt (target : Expr.t Types.target) ppf t =
     let module P = Smt2_solver.Printer in
@@ -600,6 +626,7 @@ struct
           defs
       | None ->
           P.visit_ax ctx t.vmemory;
+          S.iter (fun _ arr -> P.visit_ax ctx arr) t.varrays;
           List.rev
             (I.fold
                (fun id expr defs ->
@@ -617,16 +644,24 @@ struct
     P.pp_print_defs ppf ctx;
     List.iter
       (fun (bv, name) ->
-        Format.fprintf ppf "@[<h>(define-fun %s () (_ BitVec %d)@ " name
+        Format.fprintf ppf "@[<h>(define-fun |%s| () (_ BitVec %d)@ " name
           (Expr.sizeof bv);
         P.pp_print_bv ctx ppf bv;
         Format.fprintf ppf ")@]@ ")
       defs;
-    if target = None then
+    if target = None then (
       Format.fprintf ppf
-        "@[<h>(define-fun memory () (Array (_ BitVec %d) (_ BitVec 8))@ %a)@]"
+        "@[<h>(define-fun |memory| () (Array (_ BitVec %d) (_ BitVec 8))@ %a)@]"
         (Kernel_options.Machine.word_size ())
         (P.pp_print_ax ctx) t.vmemory;
+      S.iter
+        (fun name arr ->
+          Format.fprintf ppf
+            "@[<h>(define-fun |%s| () (Array (_ BitVec %d) (_ BitVec 8))@ %a)@]"
+            name
+            (Kernel_options.Machine.word_size ())
+            (P.pp_print_ax ctx) arr)
+        t.varrays);
     (* print assertions *)
     List.iter
       (fun bl ->
@@ -644,6 +679,9 @@ struct
     let ctx = C.create ~next_id:Uid.zero () in
     List.iter (C.assert_bl ctx) t.constraints;
     C.define_ax ctx "memory" t.vmemory;
+    S.iter
+      (fun name arr -> C.define_ax ctx (Format.sprintf "|%s|" name) arr)
+      t.varrays;
     I.iter
       (fun id expr -> C.define_bv ctx (Dba.Var.from_id id).name expr)
       t.vsymbols;

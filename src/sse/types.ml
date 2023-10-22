@@ -210,6 +210,8 @@ module type RAW_STATE = sig
 
   val merge : parent:t -> t -> t -> t
 
+  val expect : Value.t -> Bitvector.t -> t -> t option
+
   val assertions : t -> Value.t list
 
   val pp : Format.formatter -> t -> unit

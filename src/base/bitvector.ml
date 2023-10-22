@@ -158,9 +158,13 @@ let is_zero bv = equal bv zero
 
 let is_one bv = equal bv one
 
-let is_zeros bv = equal bv (zeros (size_of bv))
+let is_zeros bv =
+  if is_unboxed bv then unsafe_to_int (unsafe_to_unboxed bv) lsr 10 = 0
+  else Z.equal (unsafe_to_boxed bv).unsigned Z.zero
 
-let is_ones bv = equal bv (ones (size_of bv))
+let is_ones bv =
+  if is_unboxed bv then unsafe_to_int (unsafe_to_unboxed bv) lsr 10 = 1
+  else Z.equal (unsafe_to_boxed bv).unsigned Z.one
 
 let is_fill bv = equal bv (fill (size_of bv))
 
@@ -194,14 +198,16 @@ let signed_compare (f : Z.t -> Z.t -> bool) bv1 bv2 msg =
   else f (signed_of bv1) (signed_of bv2)
 
 let unsigned_apply (f : Z.t -> Z.t -> Z.t) bv1 bv2 msg =
-  if size_of bv1 <> size_of bv2 then
+  let size = size_of bv1 in
+  if size <> size_of bv2 then
     raise (Operands_size_conflict (binop_error bv1 bv2 msg))
-  else update bv1 (f (value_of bv1) (value_of bv2))
+  else create (f (value_of bv1) (value_of bv2)) size
 
 let signed_apply (f : Z.t -> Z.t -> Z.t) bv1 bv2 msg =
-  if size_of bv1 <> size_of bv2 then
+  let size = size_of bv1 in
+  if size <> size_of bv2 then
     raise (Operands_size_conflict (binop_error bv1 bv2 msg))
-  else update bv1 (f (signed_of bv1) (signed_of bv2))
+  else create (f (signed_of bv1) (signed_of bv2)) size
 
 (* Comparison *)
 

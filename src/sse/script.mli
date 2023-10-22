@@ -48,11 +48,14 @@ module Output : sig
     | Stream of string
     | String of string
 
+  val eval : env -> t -> Types.Output.t
+
   val pp : Format.formatter -> t -> unit
 end
 
 type Ast.Obj.t +=
   | Int of int
+  | Int_list of int list
   | Format of Output.format
   | Output of Output.t
   | Output_list of Output.t list
@@ -71,6 +74,7 @@ type Ast.Instr.t +=
   | Argument of Loc.t loc * int  (** [lval] := arg([i]) *)
   | Return of Expr.t loc option  (** return [rval] *)
   | Cut of Expr.t loc option
+  | Print of Output.t
   | Reach of int * Expr.t loc option * Output.t list
   | Enumerate of int * Expr.t loc
 
@@ -82,6 +86,7 @@ type Ast.t +=
   | Concretize_stack_pointer
   | Import_symbols of Symbol.t loc list * string
   | Hook of Expr.t loc list * Instr.t list * bool
+  | Decode of Binstream.t * Instr.t list
   | Init of Instr.t list
   | Explore_all
 

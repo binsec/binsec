@@ -8,10 +8,15 @@ https://github.com/binsec/binsec.
 Dependencies can be automatically installed via
 [*opam*](https://opam.ocaml.org/doc/Install.html).  
 ```bash
-$ opam install dune menhir grain_dypgen ocamlgraph zarith toml
+$ opam install dune menhir grain_dypgen ocamlgraph zarith toml landmarks-ppx
 $ opam install bitwuzla # optional -- for native SMT solver binding
 $ opam install unisim_archisec # optional -- for x86-64, ARMv7 and ARMv8
 $ opam install curses # optional -- for real time summary window
+```
+
+`jitpsi` dependency could be clonned directly in this repository.
+```bash
+$ git clone https://github.com/recoules/jitpsi.git
 ```
 
 ##### System

@@ -42,8 +42,8 @@ let get_worklist () =
 let get_state () =
   if AlternativeEngine.get () then
     Logger.warning
-      "'-sse-alternative-engine' is now the default behavior. Use \
-       '-sse-legacy-engine' to restore the previous one.";
+      "'-sse-alternative-engine' is now the default behavior. Use '-sse-engine \
+       Legacy' to restore the previous one.";
   if LegacyEngine.get () then
     (module Sse_symbolic.State ((val Smt_solver.get_solver ())) : STATE_FACTORY)
   else

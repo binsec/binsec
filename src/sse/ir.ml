@@ -139,6 +139,8 @@ module type GRAPH = sig
 
   val node : t -> vertex -> node
 
+  val is_new_vertex : t -> vertex -> bool
+
   val iter_new_vertex : (vertex -> unit) -> t -> unit
 
   val iter_entries : (vertex -> unit) -> t -> unit

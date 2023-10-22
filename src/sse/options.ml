@@ -25,6 +25,24 @@ include Cli.Make (struct
   let name = "Static Symbolic Execution"
 end)
 
+module Cse = Builder.False (struct
+  let name = "cse"
+
+  let doc = "Enable Common Subexpression Elimination optimization"
+end)
+
+module Jit = Builder.False (struct
+  let name = "jit"
+
+  let doc = "Enable Just In Time compilation optimization"
+end)
+
+module KillFlagsAtReturn = Builder.True (struct
+  let name = "kill-flags-at-return"
+
+  let doc = "Optimistically ignore flags at function return"
+end)
+
 module AlternativeEngine = Builder.False (struct
   let name = "alternative-engine"
 

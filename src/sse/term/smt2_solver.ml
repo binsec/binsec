@@ -166,11 +166,18 @@ let pp_int_as_bv ppf x = function
   | 24 -> Format.fprintf ppf "#x%06x" (x land 0xffffff)
   | 28 -> Format.fprintf ppf "#x%07x" (x land 0xfffffff)
   | 32 -> Format.fprintf ppf "#x%08x" (x land 0xffffffff)
-  | sz when x < 0 ->
-      Format.fprintf ppf "(_ bv%a %d)" Z.pp_print
-        (Z.extract (Z.of_int x) 0 sz)
-        sz
-  | sz -> Format.fprintf ppf "(_ bv%d %d)" x sz
+  | 64 ->
+      if x < 0 then
+        Format.fprintf ppf "#x%x%015x"
+          ((x asr 59) land 0xf)
+          (x land 0x0fffffffffffffff)
+      else Format.fprintf ppf "#x%016x" x
+  | sz ->
+      if x < 0 then
+        Format.fprintf ppf "(_ bv%a %d)" Z.pp_print
+          (Z.extract (Z.of_int x) 0 sz)
+          sz
+      else Format.fprintf ppf "(_ bv%d %d)" x sz
 
 let pp_bv ppf value size =
   try pp_int_as_bv ppf (Z.to_int value) size
@@ -355,8 +362,11 @@ module Printer = struct
           AxTbl.add ctx.ax_cons ax once;
           Store.iter_term
             (fun _ bv ->
-              visit_bv ctx bv;
-              if Expr.sizeof bv > 1 then visit_bv ctx bv)
+              match bv with
+              | Cst _ -> ()
+              | _ ->
+                  visit_bv ctx bv;
+                  if Expr.sizeof bv > 8 then visit_bv ctx bv)
             store;
           visit_ax ctx over;
           let root = AxTbl.find ctx.ax_root over in
@@ -378,8 +388,11 @@ module Printer = struct
           visit_bv ctx addr;
           Store.iter_term
             (fun _ bv ->
-              visit_bv ctx bv;
-              if Expr.sizeof bv > 1 then visit_bv ctx bv)
+              match bv with
+              | Cst _ -> ()
+              | _ ->
+                  visit_bv ctx bv;
+                  if Expr.sizeof bv > 8 then visit_bv ctx bv)
             store;
           visit_ax ctx over;
           let root = AxTbl.find ctx.ax_root over in
@@ -651,16 +664,25 @@ module Printer = struct
           else pp_bv ppf i addr_space;
           Format.pp_print_space ppf ();
           let size = Expr.sizeof bv in
-          if size > 8 then (
-            Format.fprintf ppf "((_ extract %d %d)" (lo + 7) lo;
-            Format.pp_print_space ppf ();
-            print_bv ctx ppf bv;
-            Format.pp_print_string ppf "))";
-            let lo' = lo + 8 in
-            if lo' < size then unroll_store lo' (Z.succ i) bv)
-          else (
-            print_bv ctx ppf bv;
-            Format.pp_print_char ppf ')')
+          match bv with
+          | Cst c when size > 8 ->
+              pp_bv ppf (Bv.value_of (Bv.extract c { hi = lo + 7; lo })) 8;
+              Format.pp_print_char ppf ')';
+              let lo' = lo + 8 in
+              if lo' < size then unroll_store lo' (Z.succ i) bv
+          | Cst c ->
+              pp_bv ppf (Bv.value_of c) 8;
+              Format.pp_print_char ppf ')'
+          | _ when size > 8 ->
+              Format.fprintf ppf "((_ extract %d %d)" (lo + 7) lo;
+              Format.pp_print_space ppf ();
+              print_bv ctx ppf bv;
+              Format.pp_print_string ppf "))";
+              let lo' = lo + 8 in
+              if lo' < size then unroll_store lo' (Z.succ i) bv
+          | _ ->
+              print_bv ctx ppf bv;
+              Format.pp_print_char ppf ')'
         in
         Store.iter_term (unroll_store 0) store
 

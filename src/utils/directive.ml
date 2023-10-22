@@ -32,8 +32,7 @@ end
 module Choice = struct
   type side = Consequent | Alternative
 
-  type t = { alternate : bool; (* Alternate side *)
-                               mutable side : side }
+  type t = { alternate : bool; (* Alternate side *) mutable side : side }
 
   let invert = function Consequent -> Alternative | Alternative -> Consequent
 

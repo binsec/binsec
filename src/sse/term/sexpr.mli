@@ -109,6 +109,10 @@ module Model : sig
     Expr.t ->
     Bv.t
 
+  val default_value : Expr.t -> Bitvector.t
+
+  val default_memory : Memory.t -> Bitvector.t -> char
+
   val pp : Format.formatter -> t -> unit
 end
 

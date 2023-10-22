@@ -23,8 +23,9 @@ type numeral = string
 (** Concrete parse tree for SMT-LIB Formulas. *)
 
 type constant =
-  | CstNumeral of numeral (* Better to use a string than an int here as
-                           * int_of_string can fail *)
+  | CstNumeral of numeral
+  (* Better to use a string than an int here as
+   * int_of_string can fail *)
   | CstDecimal of string
   | CstDecimalSize of string * string
   | CstHexadecimal of string

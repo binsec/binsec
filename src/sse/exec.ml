@@ -141,9 +141,9 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
   }
 
   and 'a mode =
-    | Default : unit mode
-    | Linear : State.t mode
-    | Merge : thunk mode
+    | Forking : unit mode
+    | Single : State.t mode
+    | Merging : thunk mode
 
   type section =
     | RX of { base : Virtual_address.t; size : int; content : Loader_buf.t }
@@ -167,6 +167,18 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
   let env : t =
     let img = Kernel_functions.get_img () in
     let transient = TransientEnum.get () > 0 in
+    let sections = Loader.Img.sections img in
+    let sections =
+      if Array.length sections = 0 then
+        match img with
+        | ELF img' ->
+            Array.map
+              (fun s -> Loader.ELF s)
+              (Loader_elf.segments_as_sections
+                 (Loader_elf.program_headers img'))
+        | _ -> sections
+      else sections
+    in
     let rocache_size, _cache_size, code =
       Array.fold_left
         (fun (rocache, cache, code) s ->
@@ -213,7 +225,7 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
               cache + delta,
               Imap.add ~base:(Z.of_int pos) size section code )
           else (rocache, cache, code))
-        (0, 0, Imap.empty) (Loader.Img.sections img)
+        (0, 0, Imap.empty) sections
     in
     let arrays = S.Htbl.create 7 in
     S.Htbl.add arrays "@" A.default;
@@ -322,6 +334,11 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
     | String name ->
         Logger.result "@[<v 0>C string %s : %S@]" name (c_string name state)
 
+  let rec app f state path =
+    try f state with
+    | Undef var -> app f (Eval.fresh var state path) path
+    | Uninterp array -> app f (State.alloc ~array state) path
+
   let rec exec :
       type a.
       a mode ->
@@ -348,14 +365,14 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
           exec mode path depth ~max_depth state addr succ
         else
           match mode with
-          | Default ->
+          | Forking ->
               Logger.warning "@[<hov>Cut path %d (max depth) %@ %a@]"
                 (Path.id path) Virtual_address.pp addr;
               Exploration_stats.terminate_path Max_depth;
               Path.terminate path Max_depth;
-              yield Default ~max_depth
-          | Linear -> state
-          | Merge -> { path; depth; ip; state; fiber })
+              yield Forking ~max_depth
+          | Single -> state
+          | Merging -> { path; depth; ip; state; fiber })
     | Symbolize { var; succ } ->
         exec mode path depth ~max_depth (Eval.fresh var state path) ip succ
     | Assign { var; rval; succ } ->
@@ -407,20 +424,23 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
         yield mode ~max_depth
     | Halt -> (
         match mode with
-        | Default ->
+        | Forking ->
             Exploration_stats.terminate_path Halt;
             Path.terminate path Halt;
             Logger.debug ~level:0 "@[<hov>End of path %d %@ %a@]" (Path.id path)
               Virtual_address.pp ip;
             yield mode ~max_depth
-        | Linear -> state
-        | Merge -> { path; depth; ip; state; fiber })
+        | Single -> state
+        | Merging -> { path; depth; ip; state; fiber })
     | Die msg ->
         Exploration_stats.terminate_path Die;
         Path.terminate path Die;
         Logger.error "@[<hov>Cut path %d (uninterpreted %S) %@ %a@]"
           (Path.id path) msg Virtual_address.pp ip;
         yield mode ~max_depth
+    | JShift { f; succ } ->
+        exec mode path depth ~max_depth (app f state path) ip succ
+    | JBranch _ as fiber -> jite mode path depth ~max_depth state ip fiber
 
   and assume :
       type a.
@@ -434,14 +454,14 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
       a =
    fun mode path depth ~max_depth state ip (Assume { test; succ } as fiber) ->
     match mode with
-    | Merge -> (
-        match Eval.get_value test state path with
+    | Merging -> (
+        match Eval.get_value test state with
         | exception Non_unique -> { path; depth; ip; state; fiber }
         | x ->
             if Bitvector.is_one x then
               exec mode path depth ~max_depth state ip succ
             else { path; depth; ip; state; fiber = Cut })
-    | Linear | Default -> (
+    | Forking | Single -> (
         match Eval.assume test state path with
         | exception Unknown ->
             Exploration_stats.terminate_path Unresolved_formula;
@@ -468,9 +488,8 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
       a =
    fun mode path depth ~max_depth state ip (Assert { test; succ } as fiber) ->
     match mode with
-    | Linear -> assert false
-    | Merge -> (
-        match Eval.get_value test state path with
+    | Merging -> (
+        match Eval.get_value test state with
         | exception Non_unique -> { path; depth; ip; state; fiber }
         | x ->
             Exploration_stats.add_assert ();
@@ -481,7 +500,7 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
                 Virtual_address.pp ip State.pp state;
               Exploration_stats.add_failed_assert ();
               { path; depth; ip; state; fiber = Cut }))
-    | Default -> (
+    | Forking | Single -> (
         Exploration_stats.add_assert ();
         match Eval.test test state path with
         | exception Unknown ->
@@ -516,36 +535,35 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
        (Branch { test; taken; fallthrough; _ } as fiber) ->
     Exploration_stats.add_branch ();
     match mode with
-    | Linear -> assert false
-    | Merge -> (
-        match Eval.get_value test state path with
+    | Single ->
+        let x, state = List.hd (Eval.split_on ~n:1 test state path) in
+        exec Single path depth ~max_depth state ip
+          (if Bitvector.is_one x then taken else fallthrough)
+    | Merging -> (
+        match Eval.get_value test state with
         | exception Non_unique -> { path; depth; ip; state; fiber }
         | x ->
-            exec Merge path depth ~max_depth state ip
+            exec Merging path depth ~max_depth state ip
               (if Bitvector.is_one x then taken else fallthrough))
-    | Default -> (
+    | Forking -> (
         let parent = state in
         match Eval.test test state path with
         | exception Unknown ->
             Exploration_stats.terminate_path Unresolved_formula;
             Path.terminate path Unresolved_formula;
             yield mode ~max_depth
-        | True state ->
-            add { path; depth; ip; state; fiber = taken };
-            yield mode ~max_depth
-        | False state ->
-            add { path; depth; ip; state; fiber = fallthrough };
-            yield mode ~max_depth
+        | True state -> exec Forking path depth ~max_depth state ip taken
+        | False state -> exec Forking path depth ~max_depth state ip fallthrough
         | Both { t = state; f = state' } ->
             let k = QMerge.get () in
             if k > 0 then (
               let path' = Path.fork path in
               let taken =
-                exec Merge path depth ~max_depth:(depth + k) state ip taken
+                exec Merging path depth ~max_depth:(depth + k) state ip taken
               in
               Path.set State.id (Path.get State.id path) path';
               let fallthrough =
-                exec Merge path' depth ~max_depth:(depth + k) state' ip
+                exec Merging path' depth ~max_depth:(depth + k) state' ip
                   fallthrough
               in
               if taken.ip == fallthrough.ip && taken.fiber == fallthrough.fiber
@@ -620,15 +638,19 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
     in
     Exploration_stats.add_branch ();
     match mode with
-    | Linear -> assert false
-    | Merge -> (
-        match Eval.get_value target state path with
+    | Single ->
+        let x, state = List.hd (Eval.split_on ~n:1 target state path) in
+        goto Single path depth ~max_depth state ip
+          (Virtual_address.of_bitvector x)
+          fiber
+    | Merging -> (
+        match Eval.get_value target state with
         | exception Non_unique -> { path; depth; ip; state; fiber }
         | x ->
             goto mode path depth ~max_depth state ip
               (Virtual_address.of_bitvector x)
               fiber)
-    | Default -> (
+    | Forking -> (
         match Eval.split_on target ~n state path with
         | [] | (exception Unknown) ->
             Exploration_stats.terminate_path Unresolved_formula;
@@ -684,9 +706,8 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
             exec mode path depth ~max_depth state ip fiber
         | None -> (
             match mode with
-            | Linear -> assert false
-            | Merge -> { path; depth; ip; state; fiber = rollback }
-            | Default ->
+            | Merging -> { path; depth; ip; state; fiber = rollback }
+            | Forking | Single ->
                 transient_instruction mode path depth ~max_depth state addr))
 
   and transient_instruction :
@@ -699,7 +720,12 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
       Virtual_address.t ->
       a =
    fun mode path depth ~max_depth state addr ->
-    let n = TransientEnum.get () in
+    let n =
+      match mode with
+      | Forking -> TransientEnum.get ()
+      | Single -> 1
+      | Merging -> assert false
+    in
     let hooks = Virtual_address.Map.find_opt addr env.whooks in
     let handle path depth (omap : fiber OMap.t) addr (bv, state) =
       let opcode = Bitvector.to_asciistring bv in
@@ -801,9 +827,8 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
     | Reach { n = 0; _ } -> exec mode path depth ~max_depth state ip succ
     | Reach ({ id = tid; n; guard; actions } as r) -> (
         match mode with
-        | Linear -> assert false
-        | Merge -> { path; depth; ip; state; fiber }
-        | Default -> (
+        | Merging -> { path; depth; ip; state; fiber }
+        | Forking | Single -> (
             match Eval.assume guard state path with
             | None -> exec mode path depth ~max_depth state ip succ
             | Some state' ->
@@ -820,7 +845,90 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
                   if n = 1 then (
                     I.Htbl.remove env.tasks tid;
                     if I.Htbl.length env.tasks = 0 then raise_notrace Halt));
-                exec Default path depth ~max_depth state ip succ))
+                exec mode path depth ~max_depth state ip succ))
+
+  and jite :
+      type a.
+      a mode ->
+      Path.t ->
+      int ->
+      max_depth:int ->
+      State.t ->
+      Virtual_address.t ->
+      [ `JBranch ] Fiber.t ->
+      a =
+   fun mode path depth ~max_depth state ip
+       (JBranch { f; taken; fallthrough; _ } as fiber) ->
+    let state, test = app f state path in
+    Exploration_stats.add_branch ();
+    match mode with
+    | Single ->
+        let x, state = List.hd (State.enumerate ~n:1 test state) in
+        exec Single path depth ~max_depth state ip
+          (if Bitvector.is_one x then taken else fallthrough)
+    | Merging -> (
+        match State.get_value test state with
+        | exception Non_unique -> { path; depth; ip; state; fiber }
+        | x ->
+            exec Merging path depth ~max_depth state ip
+              (if Bitvector.is_one x then taken else fallthrough))
+    | Forking -> (
+        let parent = state in
+        match State.test test state with
+        | exception Unknown ->
+            Exploration_stats.terminate_path Unresolved_formula;
+            Path.terminate path Unresolved_formula;
+            yield mode ~max_depth
+        | True state -> exec Forking path depth ~max_depth state ip taken
+        | False state -> exec Forking path depth ~max_depth state ip fallthrough
+        | Both { t = state; f = state' } ->
+            let k = QMerge.get () in
+            if k > 0 then (
+              let path' = Path.fork path in
+              let taken =
+                exec Merging path depth ~max_depth:(depth + k) state ip taken
+              in
+              Path.set State.id (Path.get State.id path) path';
+              let fallthrough =
+                exec Merging path' depth ~max_depth:(depth + k) state' ip
+                  fallthrough
+              in
+              if taken.ip == fallthrough.ip && taken.fiber == fallthrough.fiber
+              then
+                match Path.merge path path' with
+                | None ->
+                    add taken;
+                    Exploration_stats.add_path ();
+                    add fallthrough;
+                    yield mode ~max_depth
+                | Some path'' -> (
+                    match State.merge ~parent taken.state fallthrough.state with
+                    | exception Non_mergeable ->
+                        add taken;
+                        Exploration_stats.add_path ();
+                        add fallthrough;
+                        yield mode ~max_depth
+                    | state ->
+                        exec mode path''
+                          (max taken.depth fallthrough.depth)
+                          ~max_depth state taken.ip taken.fiber)
+              else (
+                add taken;
+                Exploration_stats.add_path ();
+                add fallthrough;
+                yield mode ~max_depth))
+            else (
+              add { path; depth; ip; state; fiber = taken };
+              Exploration_stats.add_path ();
+              add
+                {
+                  path = Path.fork path;
+                  depth;
+                  ip;
+                  state = state';
+                  fiber = fallthrough;
+                };
+              yield mode ~max_depth))
 
   let initialize_state () =
     let state = State.empty () in
@@ -956,7 +1064,7 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
       let init =
         Dcode.script ~task:env.tasks entry ~fallthrough:false init parser_env
       in
-      exec Linear path 0 ~max_depth:max_int state entry init
+      exec Single path 0 ~max_depth:max_int state entry init
     in
     let from_core path prehook state =
       match Kernel_functions.get_img () with
@@ -1257,7 +1365,7 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
                         Script.eval_expr ~size:parser_env.wordsize addr
                           parser_env
                       in
-                      let bv = Eval.get_value addr state path in
+                      let bv = Eval.get_value addr state in
                       Logger.debug ~level:40
                         "the entrypoint address %a resolves to %a"
                         Dba_printer.Ascii.pp_bl_term addr
@@ -1298,7 +1406,7 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
                             Script.eval_expr ~size:parser_env.wordsize addr
                               parser_env
                           in
-                          let bv = Eval.get_value addr state path in
+                          let bv = Eval.get_value addr state in
                           Logger.debug ~level:40
                             "the memory initializer address %a resolves to %a"
                             Dba_printer.Ascii.pp_bl_term addr Bitvector.pp bv;
@@ -1342,7 +1450,7 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
                             Script.eval_expr ~size:parser_env.wordsize addr
                               parser_env
                           in
-                          let bv = Eval.get_value addr state path in
+                          let bv = Eval.get_value addr state in
                           Logger.debug ~level:40
                             "the stub address %a resolves to %a"
                             Dba_printer.Ascii.pp_bl_term addr
@@ -1356,6 +1464,15 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
                              value"
                             anchor)
                       addresses;
+                    state
+                | Script.Decode (opcode, stmts) ->
+                    Dcode.register_opcode_hook (fun reader ->
+                        if
+                          Binstream.fold
+                            (fun byte eq -> eq && Lreader.Read.u8 reader = byte)
+                            opcode true
+                        then Some (stmts, parser_env)
+                        else None);
                     state
                 | Script.Init i -> set path state i
                 | Script.Explore_all ->
@@ -1444,7 +1561,7 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
             ignore (Unix.alarm timeout))
           (Timeout.get_opt ());
         Screen.init ();
-        exec Default path 0 ~max_depth:(MaxDepth.get ()) state
+        exec Forking path 0 ~max_depth:(MaxDepth.get ()) state
           Virtual_address.zero entry
       with
       | Halt | Sys.Break -> halt ()

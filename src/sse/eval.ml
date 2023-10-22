@@ -88,10 +88,9 @@ module Make (Path : Path.S) (State : STATE) = struct
     | Undef var -> safe_eval e (fresh var state path) path
     | Uninterp array -> safe_eval e (State.alloc ~array state) path
 
-  let rec get_value e state path =
-    try State.get_value (eval e state) state with
-    | Undef var -> get_value e (fresh var state path) path
-    | Uninterp array -> get_value e (State.alloc ~array state) path
+  let get_value e state =
+    try State.get_value (eval e state) state
+    with Undef _ | Uninterp _ -> raise_notrace Non_unique
 
   let rec assume e state path =
     try State.assume (eval e state) state with

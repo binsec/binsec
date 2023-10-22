@@ -27,9 +27,12 @@ val get_defs : unit -> (string * Dba.LValue.t) list
     Not complete yet.
 *)
 
-val get_arg : int -> Dba.Expr.t
+val get_arg : ?syscall:bool -> int -> Dba.Expr.t
 (** [get_arg n]
     return the standard location of the [n]th argument of a function.
+
+    If [syscall] is [true], it returns the syscall calling convention instead.
+    (Meaningfull for x86 only for now)
 *)
 
 val get_ret : ?syscall:bool -> unit -> Dba.LValue.t
@@ -50,6 +53,15 @@ val make_return : ?value:Dba.Expr.t -> unit -> Dhunk.t
 val get_stack_pointer : unit -> Dba.Var.t * Bitvector.t
 (** [get_a_stack_pointer ()]
     returns the stack pointer and a possible initialization for it.
+*)
+
+val get_shortlived_flags : unit -> Dba.Var.t list
+(** [get_shortlived_flags ()]
+    returns the set of architecture flags which are recomputed on almost
+    every instruction.
+
+    These flags are very likely to not be alive passed the return of
+    a function.
 *)
 
 val core : Loader_elf.Img.t -> Virtual_address.t * (Dba.Var.t * Dba.Expr.t) list

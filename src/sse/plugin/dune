@@ -27,3 +27,17 @@
  (libraries binsec.sse.checkct)
  (site
   (binsec plugins)))
+
+(library
+ (public_name binsec.sse.syscall_replay)
+ (name syscall_replay)
+ (modules syscall_replay)
+ (flags
+  (:standard -open Binsec -open Libsse -w "-58"))
+ (libraries libsse))
+
+(plugin
+ (name syscall_replay)
+ (libraries binsec.sse.syscall_replay)
+ (site
+  (binsec plugins)))

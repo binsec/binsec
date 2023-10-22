@@ -22,7 +22,14 @@
 open Types
 
 module type S = sig
-  type builtin
+  type path
+
+  and state
+
+  and value
+
+  type builtin =
+    Virtual_address.t -> path -> int -> state -> (state, Types.status) Result.t
 
   type 'a t =
     | Debug : { msg : string; mutable succ : [ `All ] t } -> [< `All ] t
@@ -81,7 +88,22 @@ module type S = sig
         mutable succ : [ `All ] t;
       }
         -> [< `Probe | `All ] t
-    | Builtin : { f : builtin; mutable succ : [ `All ] t } -> [ `All ] t
+    | Builtin : {
+        f : builtin;
+        mutable succ : [ `All ] t;
+      }
+        -> [< `Builtin | `All ] t
     | Cut : [< `All ] t
     | Die : string -> [< `All ] t
+    | JShift : {
+        mutable f : state -> state;
+        mutable succ : [ `All ] t;
+      }
+        -> [< `JShift | `All ] t
+    | JBranch : {
+        mutable f : state -> state * value;
+        mutable taken : [ `All ] t;
+        mutable fallthrough : [ `All ] t;
+      }
+        -> [< `JBranch | `All ] t
 end

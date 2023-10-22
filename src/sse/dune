@@ -27,6 +27,7 @@
  (flags
   (:standard -open Binsec -w "-58"))
  (libraries
+  jitpsi
   threads
   toml
   binsec
@@ -35,4 +36,6 @@
    screen.ml
    from
    (curses -> screen.enabled.ml)
-   (!curses -> screen.stubs.ml))))
+   (!curses -> screen.stubs.ml)))
+ (instrumentation
+  (backend landmarks)))

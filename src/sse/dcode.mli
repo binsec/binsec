@@ -25,12 +25,9 @@ module Make
     (State : Types.STATE) : sig
   module Fiber :
     Fiber.S
-      with type builtin :=
-            Virtual_address.t ->
-            Path.t ->
-            int ->
-            State.t ->
-            (State.t, Types.status) Result.t
+      with type path := Path.t
+       and type state := State.t
+       and type value := State.Value.t
 
   type t
 
@@ -81,4 +78,7 @@ module Make
   end
 
   val register_callback : (module CALLBACK) -> unit
+
+  val register_opcode_hook :
+    (Lreader.t -> (Script.Instr.t list * Script.env) option) -> unit
 end

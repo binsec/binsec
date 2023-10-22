@@ -192,6 +192,8 @@ include
 
 val program_headers : Img.t -> Phdr.t array
 
+val segments_as_sections : Phdr.t array -> Section.t array
+
 module Rel : sig
   type t = { offset : int; kind : int; symbol : Sym.t; addend : int option }
 

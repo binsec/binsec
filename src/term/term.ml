@@ -67,40 +67,121 @@ type _ operator =
   | Sge : binary operator
   | Sgt : binary operator
 
-let pp_op : type a. Format.formatter -> a operator -> unit =
- fun ppf -> function
-  | Minus -> Format.pp_print_char ppf '-'
-  | Not -> Format.pp_print_char ppf '!'
-  | Sext n -> Format.fprintf ppf "sext +%d" n
-  | Uext n -> Format.fprintf ppf "uext +%d" n
-  | Restrict { lo; hi } ->
-      if lo = hi then Format.fprintf ppf "select %d" lo
-      else Format.fprintf ppf "select <%d .. %d>" hi lo
-  | Plus -> Format.pp_print_char ppf '+'
-  | Mul -> Format.pp_print_char ppf '*'
-  | Udiv -> Format.pp_print_string ppf "udiv"
-  | Sdiv -> Format.pp_print_string ppf "sdiv"
-  | Umod -> Format.pp_print_string ppf "umod"
-  | Smod -> Format.pp_print_string ppf "smod"
-  | Or -> Format.pp_print_string ppf "or"
-  | And -> Format.pp_print_string ppf "and"
-  | Xor -> Format.pp_print_string ppf "xor"
-  | Concat -> Format.pp_print_string ppf "::"
-  | Lsl -> Format.pp_print_string ppf "lsl"
-  | Lsr -> Format.pp_print_string ppf "lsr"
-  | Asr -> Format.pp_print_string ppf "asr"
-  | Rol -> Format.pp_print_string ppf "rol"
-  | Ror -> Format.pp_print_string ppf "ror"
-  | Eq -> Format.pp_print_char ppf '='
-  | Diff -> Format.pp_print_string ppf "<>"
-  | Ule -> Format.pp_print_string ppf "ule"
-  | Ult -> Format.pp_print_string ppf "ult"
-  | Uge -> Format.pp_print_string ppf "uge"
-  | Ugt -> Format.pp_print_string ppf "ugt"
-  | Sle -> Format.pp_print_string ppf "sle"
-  | Slt -> Format.pp_print_string ppf "slt"
-  | Sge -> Format.pp_print_string ppf "sge"
-  | Sgt -> Format.pp_print_string ppf "sgt"
+module Op = struct
+  type 'a t = 'a operator
+
+  external to_int : 'a t -> int = "%identity"
+
+  let equal : type a b. a t -> b t -> bool =
+   fun t t' ->
+    match (t, t') with
+    | ( ( Not | Plus | Minus | Mul | Udiv | Umod | Sdiv | Smod | Or | And | Xor
+        | Concat | Lsl | Lsr | Asr | Rol | Ror | Eq | Diff | Ule | Ult | Uge
+        | Ugt | Sle | Slt | Sge | Sgt ),
+        ( Not | Plus | Minus | Mul | Udiv | Umod | Sdiv | Smod | Or | And | Xor
+        | Concat | Lsl | Lsr | Asr | Rol | Ror | Eq | Diff | Ule | Ult | Uge
+        | Ugt | Sle | Slt | Sge | Sgt ) ) ->
+        to_int t = to_int t'
+    | Sext n, Sext n' | Uext n, Uext n' -> n = n'
+    | Restrict { hi; lo }, Restrict { hi = hi'; lo = lo' } ->
+        hi = hi' && lo = lo'
+    | ( ( Not | Sext _ | Uext _ | Restrict _ | Plus | Minus | Mul | Udiv | Umod
+        | Sdiv | Smod | Or | And | Xor | Concat | Lsl | Lsr | Asr | Rol | Ror
+        | Eq | Diff | Ule | Ult | Uge | Ugt | Sle | Slt | Sge | Sgt ),
+        ( Not | Sext _ | Uext _ | Restrict _ | Plus | Minus | Mul | Udiv | Umod
+        | Sdiv | Smod | Or | And | Xor | Concat | Lsl | Lsr | Asr | Rol | Ror
+        | Eq | Diff | Ule | Ult | Uge | Ugt | Sle | Slt | Sge | Sgt ) ) ->
+        false
+
+  let compare : type a b. a t -> b t -> int =
+   fun t t' ->
+    match (t, t') with
+    | ( ( Not | Plus | Minus | Mul | Udiv | Umod | Sdiv | Smod | Or | And | Xor
+        | Concat | Lsl | Lsr | Asr | Rol | Ror | Eq | Diff | Ule | Ult | Uge
+        | Ugt | Sle | Slt | Sge | Sgt ),
+        ( Not | Plus | Minus | Mul | Udiv | Umod | Sdiv | Smod | Or | And | Xor
+        | Concat | Lsl | Lsr | Asr | Rol | Ror | Eq | Diff | Ule | Ult | Uge
+        | Ugt | Sle | Slt | Sge | Sgt ) ) ->
+        to_int t - to_int t'
+    | Sext n, Sext n' | Uext n, Uext n' -> n - n'
+    | Restrict { hi; lo }, Restrict { hi = hi'; lo = lo' } ->
+        let d = hi - hi' in
+        if d = 0 then lo - lo' else d
+    | ( ( Not | Plus | Minus | Mul | Udiv | Umod | Sdiv | Smod | Or | And | Xor
+        | Concat | Lsl | Lsr | Asr | Rol | Ror | Eq | Diff | Ule | Ult | Uge
+        | Ugt | Sle | Slt | Sge | Sgt ),
+        Sext _ ) ->
+        -1
+    | ( Sext _,
+        ( Not | Plus | Minus | Mul | Udiv | Umod | Sdiv | Smod | Or | And | Xor
+        | Concat | Lsl | Lsr | Asr | Rol | Ror | Eq | Diff | Ule | Ult | Uge
+        | Ugt | Sle | Slt | Sge | Sgt ) ) ->
+        1
+    | ( ( Not | Plus | Minus | Mul | Udiv | Umod | Sdiv | Smod | Or | And | Xor
+        | Concat | Lsl | Lsr | Asr | Rol | Ror | Eq | Diff | Ule | Ult | Uge
+        | Ugt | Sle | Slt | Sge | Sgt | Sext _ ),
+        Uext _ ) ->
+        -1
+    | ( Uext _,
+        ( Not | Plus | Minus | Mul | Udiv | Umod | Sdiv | Smod | Or | And | Xor
+        | Concat | Lsl | Lsr | Asr | Rol | Ror | Eq | Diff | Ule | Ult | Uge
+        | Ugt | Sle | Slt | Sge | Sgt | Sext _ ) ) ->
+        1
+    | ( ( Not | Plus | Minus | Mul | Udiv | Umod | Sdiv | Smod | Or | And | Xor
+        | Concat | Lsl | Lsr | Asr | Rol | Ror | Eq | Diff | Ule | Ult | Uge
+        | Ugt | Sle | Slt | Sge | Sgt | Sext _ | Uext _ ),
+        Restrict _ ) ->
+        -1
+    | ( Restrict _,
+        ( Not | Plus | Minus | Mul | Udiv | Umod | Sdiv | Smod | Or | And | Xor
+        | Concat | Lsl | Lsr | Asr | Rol | Ror | Eq | Diff | Ule | Ult | Uge
+        | Ugt | Sle | Slt | Sge | Sgt | Sext _ | Uext _ ) ) ->
+        1
+
+  let hash : type a. a t -> int =
+   fun t ->
+    match t with
+    | Sext _ | Uext _ | Restrict _ -> Hashtbl.hash t
+    | Not | Plus | Minus | Mul | Udiv | Umod | Sdiv | Smod | Or | And | Xor
+    | Concat | Lsl | Lsr | Asr | Rol | Ror | Eq | Diff | Ule | Ult | Uge | Ugt
+    | Sle | Slt | Sge | Sgt ->
+        to_int t
+
+  let pp : type a. Format.formatter -> a operator -> unit =
+   fun ppf -> function
+    | Minus -> Format.pp_print_char ppf '-'
+    | Not -> Format.pp_print_char ppf '!'
+    | Sext n -> Format.fprintf ppf "sext +%d" n
+    | Uext n -> Format.fprintf ppf "uext +%d" n
+    | Restrict { lo; hi } ->
+        if lo = hi then Format.fprintf ppf "select %d" lo
+        else Format.fprintf ppf "select <%d .. %d>" hi lo
+    | Plus -> Format.pp_print_char ppf '+'
+    | Mul -> Format.pp_print_char ppf '*'
+    | Udiv -> Format.pp_print_string ppf "udiv"
+    | Sdiv -> Format.pp_print_string ppf "sdiv"
+    | Umod -> Format.pp_print_string ppf "umod"
+    | Smod -> Format.pp_print_string ppf "smod"
+    | Or -> Format.pp_print_string ppf "or"
+    | And -> Format.pp_print_string ppf "and"
+    | Xor -> Format.pp_print_string ppf "xor"
+    | Concat -> Format.pp_print_string ppf "::"
+    | Lsl -> Format.pp_print_string ppf "lsl"
+    | Lsr -> Format.pp_print_string ppf "lsr"
+    | Asr -> Format.pp_print_string ppf "asr"
+    | Rol -> Format.pp_print_string ppf "rol"
+    | Ror -> Format.pp_print_string ppf "ror"
+    | Eq -> Format.pp_print_char ppf '='
+    | Diff -> Format.pp_print_string ppf "<>"
+    | Ule -> Format.pp_print_string ppf "ule"
+    | Ult -> Format.pp_print_string ppf "ult"
+    | Uge -> Format.pp_print_string ppf "uge"
+    | Ugt -> Format.pp_print_string ppf "ugt"
+    | Sle -> Format.pp_print_string ppf "sle"
+    | Slt -> Format.pp_print_string ppf "slt"
+    | Sge -> Format.pp_print_string ppf "sge"
+    | Sgt -> Format.pp_print_string ppf "sgt"
+end
 
 type (_, 'a, 'b) t =
   | Var : {
@@ -114,7 +195,7 @@ type (_, 'a, 'b) t =
       hash : int;
       len : size;
       dir : endianness;
-      addr : ([ `Exp ], 'a, 'b) t;
+      mutable addr : ([ `Exp ], 'a, 'b) t;
       label : 'b;
     }
       -> ([< `Mem | `Loc | `Exp ], 'a, 'b) t
@@ -123,25 +204,25 @@ type (_, 'a, 'b) t =
       hash : int;
       size : size;
       f : unary operator;
-      x : ([ `Exp ], 'a, 'b) t;
+      mutable x : ([ `Exp ], 'a, 'b) t;
     }
-      -> ([ `Exp ], 'a, 'b) t
+      -> ([< `Unary | `Exp ], 'a, 'b) t
   | Binary : {
       hash : int;
       size : size;
       f : binary operator;
-      x : ([ `Exp ], 'a, 'b) t;
-      y : ([ `Exp ], 'a, 'b) t;
+      mutable x : ([ `Exp ], 'a, 'b) t;
+      mutable y : ([ `Exp ], 'a, 'b) t;
     }
-      -> ([ `Exp ], 'a, 'b) t
+      -> ([< `Binary | `Exp ], 'a, 'b) t
   | Ite : {
       hash : int;
       size : size;
-      c : ([ `Exp ], 'a, 'b) t;
-      t : ([ `Exp ], 'a, 'b) t;
-      e : ([ `Exp ], 'a, 'b) t;
+      mutable c : ([ `Exp ], 'a, 'b) t;
+      mutable t : ([ `Exp ], 'a, 'b) t;
+      mutable e : ([ `Exp ], 'a, 'b) t;
     }
-      -> ([ `Exp ], 'a, 'b) t
+      -> ([< `Ite | `Exp ], 'a, 'b) t
 
 let rec pp : type k. Format.formatter -> (k, 'a, 'b) t -> unit =
  fun ppf -> function
@@ -149,9 +230,9 @@ let rec pp : type k. Format.formatter -> (k, 'a, 'b) t -> unit =
   | Load { len; dir; addr; _ } ->
       Format.fprintf ppf "%@[%a]%d%a" pp addr len pp_endiannesss dir
   | Cst bv -> Bitvector.pp_hex_or_bin ppf bv
-  | Unary { f; x; _ } -> Format.fprintf ppf "@[(%a %a)@]" pp_op f pp x
+  | Unary { f; x; _ } -> Format.fprintf ppf "@[(%a %a)@]" Op.pp f pp x
   | Binary { f; x; y; _ } ->
-      Format.fprintf ppf "@[(%a %a %a)@]" pp_op f pp x pp y
+      Format.fprintf ppf "@[(%a %a %a)@]" Op.pp f pp x pp y
   | Ite { c; t; e; _ } -> Format.fprintf ppf "@[(%a ? %a : %a)@]" pp c pp t pp e
 
 let to_string t = Format.asprintf "%a" pp t
@@ -171,9 +252,6 @@ let sizeof : type k. (k, _, _) t -> int = function
   | Load { len; _ } -> byte_size * len
   | Var { size; _ } -> size
   | Unary { size; _ } -> size
-  | Binary { f = Eq | Diff | Ule | Ult | Uge | Ugt | Sle | Slt | Sge | Sgt; _ }
-    ->
-      1
   | Binary { size; _ } -> size
   | Ite { size; _ } -> size
 
@@ -314,7 +392,7 @@ module type S = sig
         hash : int;
         len : size;
         dir : endianness;
-        addr : ([ `Exp ], 'a, 'b) term;
+        mutable addr : ([ `Exp ], 'a, 'b) term;
         label : 'b;
       }
         -> ([< `Mem | `Loc | `Exp ], 'a, 'b) term
@@ -323,25 +401,25 @@ module type S = sig
         hash : int;
         size : size;
         f : unary operator;
-        x : ([ `Exp ], 'a, 'b) term;
+        mutable x : ([ `Exp ], 'a, 'b) term;
       }
-        -> ([ `Exp ], 'a, 'b) term
+        -> ([< `Unary | `Exp ], 'a, 'b) term
     | Binary : {
         hash : int;
         size : size;
         f : binary operator;
-        x : ([ `Exp ], 'a, 'b) term;
-        y : ([ `Exp ], 'a, 'b) term;
+        mutable x : ([ `Exp ], 'a, 'b) term;
+        mutable y : ([ `Exp ], 'a, 'b) term;
       }
-        -> ([ `Exp ], 'a, 'b) term
+        -> ([< `Binary | `Exp ], 'a, 'b) term
     | Ite : {
         hash : int;
         size : size;
-        c : ([ `Exp ], 'a, 'b) term;
-        t : ([ `Exp ], 'a, 'b) term;
-        e : ([ `Exp ], 'a, 'b) term;
+        mutable c : ([ `Exp ], 'a, 'b) term;
+        mutable t : ([ `Exp ], 'a, 'b) term;
+        mutable e : ([ `Exp ], 'a, 'b) term;
       }
-        -> ([ `Exp ], 'a, 'b) term
+        -> ([< `Ite | `Exp ], 'a, 'b) term
 
   type t = ([ `Exp ], a, b) term
 
@@ -533,7 +611,7 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
         hash : int;
         len : size;
         dir : endianness;
-        addr : ([ `Exp ], 'a, 'b) term;
+        mutable addr : ([ `Exp ], 'a, 'b) term;
         label : 'b;
       }
         -> ([< `Mem | `Loc | `Exp ], 'a, 'b) term
@@ -542,140 +620,190 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
         hash : int;
         size : size;
         f : unary operator;
-        x : ([ `Exp ], 'a, 'b) term;
+        mutable x : ([ `Exp ], 'a, 'b) term;
       }
-        -> ([ `Exp ], 'a, 'b) term
+        -> ([< `Unary | `Exp ], 'a, 'b) term
     | Binary : {
         hash : int;
         size : size;
         f : binary operator;
-        x : ([ `Exp ], 'a, 'b) term;
-        y : ([ `Exp ], 'a, 'b) term;
+        mutable x : ([ `Exp ], 'a, 'b) term;
+        mutable y : ([ `Exp ], 'a, 'b) term;
       }
-        -> ([ `Exp ], 'a, 'b) term
+        -> ([< `Binary | `Exp ], 'a, 'b) term
     | Ite : {
         hash : int;
         size : size;
-        c : ([ `Exp ], 'a, 'b) term;
-        t : ([ `Exp ], 'a, 'b) term;
-        e : ([ `Exp ], 'a, 'b) term;
+        mutable c : ([ `Exp ], 'a, 'b) term;
+        mutable t : ([ `Exp ], 'a, 'b) term;
+        mutable e : ([ `Exp ], 'a, 'b) term;
       }
-        -> ([ `Exp ], 'a, 'b) term
+        -> ([< `Ite | `Exp ], 'a, 'b) term
 
   type t = ([ `Exp ], A.t, B.t) term
 
   let hash = hash
 
-  let rec is_equal t t' =
-    t == t'
-    || hash t = hash t'
-       &&
-       match (t, t') with
-       | Cst bv, Cst bv' -> Bv.equal bv bv'
-       | ( Var { name; size; label; _ },
-           Var { name = name'; size = size'; label = label'; _ } ) ->
-           size = size' && name = name' && A.equal label label'
-       | ( Load { len; dir; addr; label; _ },
-           Load { len = len'; dir = dir'; addr = addr'; label = label'; _ } ) ->
-           len = len' && dir = dir' && is_equal addr addr'
-           && B.equal label label'
-       | Unary { f; x; _ }, Unary { f = f'; x = x'; _ } ->
-           f = f' && is_equal x x'
-       | Binary { f; x; y; _ }, Binary { f = f'; x = x'; y = y'; _ } ->
-           f = f' && is_equal x x' && is_equal y y'
-       | Ite { c; t; e; _ }, Ite { c = c'; t = t'; e = e'; _ } ->
-           is_equal c c' && is_equal t t' && is_equal e e'
-       | _, _ -> false
+  external ( <! ) : 'a -> 'a -> bool = "cstubs_hashcons_older" [@@noalloc]
+
+  let set_load_addr : ([ `Mem ], A.t, B.t) term -> t -> unit =
+   fun (Load r) e -> r.addr <- e
+
+  and set_unary_x : ([ `Unary ], A.t, B.t) term -> t -> unit =
+   fun (Unary r) e -> r.x <- e
+
+  and set_binary_x : ([ `Binary ], A.t, B.t) term -> t -> unit =
+   fun (Binary r) e -> r.x <- e
+
+  and set_binary_y : ([ `Binary ], A.t, B.t) term -> t -> unit =
+   fun (Binary r) e -> r.y <- e
+
+  and set_ite_c : ([ `Ite ], A.t, B.t) term -> t -> unit =
+   fun (Ite r) e -> r.c <- e
+
+  and set_ite_t : ([ `Ite ], A.t, B.t) term -> t -> unit =
+   fun (Ite r) e -> r.t <- e
+
+  and set_ite_e : ([ `Ite ], A.t, B.t) term -> t -> unit =
+   fun (Ite r) e -> r.e <- e
+
+  let is_equal =
+    let rec is_equal_match t t' =
+      match (t, t') with
+      | Cst bv, Cst bv' -> Bv.equal bv bv'
+      | Var r, Var r' ->
+          r.hash = r'.hash && r.size = r'.size
+          && String.equal r.name r'.name
+          && A.equal r.label r'.label
+      | (Load r as l), (Load r' as l') ->
+          r.hash = r'.hash && r.len = r'.len && r.dir = r'.dir
+          && is_equal_unify r.addr r'.addr set_load_addr l l'
+          && B.equal r.label r'.label
+      | (Unary r as u), (Unary r' as u') ->
+          r.hash = r'.hash && r.f = r'.f
+          && is_equal_unify r.x r'.x set_unary_x u u'
+      | (Binary r as b), (Binary r' as b') ->
+          r.hash = r'.hash && r.f = r'.f
+          && is_equal_unify r.x r'.x set_binary_x b b'
+          && is_equal_unify r.y r'.y set_binary_y b b'
+      | (Ite r as i), (Ite r' as i') ->
+          r.hash = r'.hash
+          && is_equal_unify r.c r'.c set_ite_c i i'
+          && is_equal_unify r.t r'.t set_ite_t i i'
+          && is_equal_unify r.e r'.e set_ite_e i i'
+      | _, _ -> false
+    and is_equal_unify :
+        type a.
+        t ->
+        t ->
+        ((a, A.t, B.t) term -> t -> unit) ->
+        (a, A.t, B.t) term ->
+        (a, A.t, B.t) term ->
+        bool =
+     fun t t' f p p' ->
+      t == t'
+      || is_equal_match t t'
+         &&
+         (if t <! t' then f p' t else f p t';
+          true)
+    in
+    fun t t' -> t == t' || is_equal_match t t'
 
   let compare =
-    let rec order t t' =
+    let rec compare_match t t' =
+      match (t, t') with
+      | Cst bv, Cst bv' -> Bv.compare bv bv'
+      | Cst _, Load _ -> -1
+      | Cst _, Unary _ -> -1
+      | Cst _, Binary _ -> -1
+      | Cst _, Ite _ -> -1
+      | Cst _, Var _ -> -1
+      | Load _, Cst _ -> 1
+      | (Load r as l), (Load r' as l') ->
+          let d = r.len - r'.len in
+          if d <> 0 then d
+          else
+            let d = compare r.dir r'.dir in
+            if d <> 0 then d
+            else
+              let d = compare_unify r.addr r'.addr set_load_addr l l' in
+              if d <> 0 then d else B.compare r.label r'.label
+      | Load _, Unary _ -> -1
+      | Load _, Binary _ -> -1
+      | Load _, Ite _ -> -1
+      | Load _, Var _ -> -1
+      | Unary _, Cst _ -> 1
+      | Unary _, Load _ -> 1
+      | (Unary r as u), (Unary r' as u') ->
+          let d = Op.compare r.f r'.f in
+          if d <> 0 then d
+          else
+            let d = r.size - r'.size in
+            if d <> 0 then d else compare_unify r.x r'.x set_unary_x u u'
+      | Unary _, Binary _ -> -1
+      | Unary _, Ite _ -> -1
+      | Unary _, Var _ -> -1
+      | Binary _, Cst _ -> 1
+      | Binary _, Load _ -> 1
+      | Binary _, Unary _ -> 1
+      | (Binary r as b), (Binary r' as b') ->
+          let d = Op.compare r.f r'.f in
+          if d <> 0 then d
+          else
+            let d = r.size - r'.size in
+            if d <> 0 then d
+            else
+              let d = r.hash - r'.hash in
+              if d <> 0 then d
+              else
+                let d = compare_unify r.x r'.x set_binary_x b b' in
+                if d <> 0 then d else compare_unify r.y r'.y set_binary_y b b'
+      | Binary _, Ite _ -> -1
+      | Binary _, Var _ -> -1
+      | Ite _, Cst _ -> 1
+      | Ite _, Load _ -> 1
+      | Ite _, Unary _ -> 1
+      | Ite _, Binary _ -> 1
+      | (Ite r as i), (Ite r' as i') ->
+          let d = r.size - r'.size in
+          if d <> 0 then d
+          else
+            let d = r.hash - r'.hash in
+            if d <> 0 then d
+            else
+              let d = compare_unify r.c r'.c set_ite_c i i' in
+              if d <> 0 then d
+              else
+                let d = compare_unify r.t r'.t set_ite_t i i' in
+                if d <> 0 then d else compare_unify r.e r'.e set_ite_e i i'
+      | Ite _, Var _ -> -1
+      | Var _, Cst _ -> 1
+      | Var _, Load _ -> 1
+      | Var _, Unary _ -> 1
+      | Var _, Binary _ -> 1
+      | Var _, Ite _ -> 1
+      | Var r, Var r' ->
+          let d = r.size - r'.size in
+          if d <> 0 then d
+          else
+            let d = String.compare r.name r'.name in
+            if d <> 0 then d else A.compare r.label r'.label
+    and compare_unify :
+        type a.
+        t ->
+        t ->
+        ((a, A.t, B.t) term -> t -> unit) ->
+        (a, A.t, B.t) term ->
+        (a, A.t, B.t) term ->
+        int =
+     fun t t' f p p' ->
       if t == t' then 0
       else
-        match (t, t') with
-        | Cst bv, Cst bv' -> Bv.compare bv bv'
-        | Cst _, Load _ -> -1
-        | Cst _, Unary _ -> -1
-        | Cst _, Binary _ -> -1
-        | Cst _, Ite _ -> -1
-        | Cst _, Var _ -> -1
-        | Load _, Cst _ -> 1
-        | ( Load { len; dir; addr; label; _ },
-            Load { len = len'; dir = dir'; addr = addr'; label = label'; _ } )
-          ->
-            let d = len - len' in
-            if d <> 0 then d
-            else
-              let d = compare dir dir' in
-              if d <> 0 then d
-              else
-                let d = order addr addr' in
-                if d <> 0 then d else B.compare label label'
-        | Load _, Unary _ -> -1
-        | Load _, Binary _ -> -1
-        | Load _, Ite _ -> -1
-        | Load _, Var _ -> -1
-        | Unary _, Cst _ -> 1
-        | Unary _, Load _ -> 1
-        | Unary { f; x; size; _ }, Unary { f = f'; x = x'; size = size'; _ } ->
-            let d = compare f f' in
-            if d <> 0 then d
-            else
-              let d = size - size' in
-              if d <> 0 then d else order x x'
-        | Unary _, Binary _ -> -1
-        | Unary _, Ite _ -> -1
-        | Unary _, Var _ -> -1
-        | Binary _, Cst _ -> 1
-        | Binary _, Load _ -> 1
-        | Binary _, Unary _ -> 1
-        | ( Binary { hash; f; x; y; size; _ },
-            Binary { hash = hash'; f = f'; x = x'; y = y'; size = size'; _ } )
-          ->
-            let d = compare f f' in
-            if d <> 0 then d
-            else
-              let d = size - size' in
-              if d <> 0 then d
-              else
-                let d = hash - hash' in
-                if d <> 0 then d
-                else
-                  let d = order x x' in
-                  if d <> 0 then d else order y y'
-        | Binary _, Ite _ -> -1
-        | Binary _, Var _ -> -1
-        | Ite _, Cst _ -> 1
-        | Ite _, Load _ -> 1
-        | Ite _, Unary _ -> 1
-        | Ite _, Binary _ -> 1
-        | ( Ite { hash; c; t; e; size; _ },
-            Ite { hash = hash'; c = c'; t = t'; e = e'; size = size'; _ } ) ->
-            let d = size - size' in
-            if d <> 0 then d
-            else
-              let d = hash - hash' in
-              if d <> 0 then d
-              else
-                let d = order c c' in
-                if d <> 0 then d
-                else
-                  let d = order t t' in
-                  if d <> 0 then d else order e e'
-        | Ite _, Var _ -> -1
-        | Var _, Cst _ -> 1
-        | Var _, Load _ -> 1
-        | Var _, Unary _ -> 1
-        | Var _, Binary _ -> 1
-        | Var _, Ite _ -> 1
-        | ( Var { name; size; label; _ },
-            Var { name = name'; size = size'; label = label'; _ } ) ->
-            let d = size - size' in
-            if d <> 0 then d
-            else
-              let d = String.compare name name' in
-              if d <> 0 then d else A.compare label label'
+        let d = compare_match t t' in
+        if d = 0 then if t <! t' then f p' t else f p t';
+        d
     in
-    order
+    fun t t' -> if t == t' then 0 else compare_match t t'
 
   let sizeof = sizeof
 
@@ -721,7 +849,12 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
       }
 
   let mk_binary f x y =
-    let size = match f with Concat -> sizeof x + sizeof y | _ -> sizeof x in
+    let size =
+      match f with
+      | Eq | Diff | Ule | Ult | Uge | Ugt | Sle | Slt | Sge | Sgt -> 1
+      | Concat -> sizeof x + sizeof y
+      | _ -> sizeof x
+    in
     Binary
       {
         f;
@@ -777,18 +910,18 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     | Minus, Unary { f = Minus; x; _ } -> x
     | Minus, x when sizeof x = 1 -> x
     (* inversion *)
-    | Minus, Binary { f = Minus; x; y; _ } -> binary Minus y x
-    | Not, Binary { f = Eq; x; y; _ } -> binary Diff x y
-    | Not, Binary { f = Diff; x; y; _ } -> binary Eq x y
-    | Not, Binary { f = Ule; x; y; _ } -> binary Ugt x y
-    | Not, Binary { f = Ult; x; y; _ } -> binary Uge x y
-    | Not, Binary { f = Uge; x; y; _ } -> binary Ult x y
-    | Not, Binary { f = Ugt; x; y; _ } -> binary Ule x y
-    | Not, Binary { f = Sle; x; y; _ } -> binary Sgt x y
-    | Not, Binary { f = Slt; x; y; _ } -> binary Sge x y
-    | Not, Binary { f = Sge; x; y; _ } -> binary Slt x y
-    | Not, Binary { f = Sgt; x; y; _ } ->
-        binary Sle x y (* TODO: more to come like de morgan's law, etc.. *)
+    | Minus, Binary { f = Minus; x; y; size; _ } -> binary Minus y x size
+    | Not, Binary { f = Eq; x; y; size; _ } -> binary Diff x y size
+    | Not, Binary { f = Diff; x; y; size; _ } -> binary Eq x y size
+    | Not, Binary { f = Ule; x; y; size; _ } -> binary Ugt x y size
+    | Not, Binary { f = Ult; x; y; size; _ } -> binary Uge x y size
+    | Not, Binary { f = Uge; x; y; size; _ } -> binary Ult x y size
+    | Not, Binary { f = Ugt; x; y; size; _ } -> binary Ule x y size
+    | Not, Binary { f = Sle; x; y; size; _ } -> binary Sgt x y size
+    | Not, Binary { f = Slt; x; y; size; _ } -> binary Sge x y size
+    | Not, Binary { f = Sge; x; y; size; _ } -> binary Slt x y size
+    | Not, Binary { f = Sgt; x; y; size; _ } ->
+        binary Sle x y size (* TODO: more to come like de morgan's law, etc.. *)
     (* combining *)
     | Uext n, Unary { f = Uext p; x; _ } | Sext n, Unary { f = Uext p; x; _ } ->
         unary (Uext (n + p)) x
@@ -856,16 +989,19 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
         binary Concat
           (unary (Restrict { hi = hi - sz; lo = 0 }) x)
           (unary (Restrict { hi = sz - 1; lo }) y)
+          (hi - sz + 1)
     | Restrict { hi; lo }, Binary { f = Concat; x = Cst bv; y; _ } ->
         let shift = sizeof y in
         binary Concat
           (constant (Bv.extract ~hi:(hi - shift) ~lo:0 bv))
           (unary (Restrict { hi = shift - 1; lo }) x)
+          (hi - shift + 1)
     | Restrict { hi; lo }, Binary { f = Concat; x; y = Cst bv; _ } ->
         let shift = Bv.size_of bv in
         binary Concat
           (unary (Restrict { hi = hi - shift; lo = 0 }) x)
           (constant (Bv.extract ~hi:(shift - 1) ~lo bv))
+          (hi - shift + 1)
     (* TODO: more to come when term is "splitable" -- eg. t land cst *)
     (* elimination *)
     | Restrict { hi; lo = 0 }, Binary { f = And; x; y = Cst bv; _ }
@@ -874,10 +1010,25 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
            hi < s && s = Z.popcount v ->
         unary f x
     | ( Restrict { hi; lo = 0 },
-        Binary { f = (Plus | Minus) as bop; x; y = Cst bv; _ } ) ->
-        binary bop (unary f x) (constant (Bv.extract ~lo:0 ~hi bv))
-    | Restrict { hi; lo }, Binary { f = (And | Or) as bop; x; y = Cst bv; _ } ->
-        binary bop (unary f x) (constant (Bv.extract ~hi ~lo bv))
+        Binary
+          {
+            f = (Plus | Minus) as bop;
+            x =
+              (Unary { f = Uext _ | Sext _; _ } | Binary { f = Concat; _ }) as x;
+            y = Cst bv;
+            _;
+          } ) ->
+        binary bop (unary f x) (constant (Bv.extract ~lo:0 ~hi bv)) (hi + 1)
+    | ( Restrict { hi; lo },
+        Binary
+          {
+            f = (And | Or) as bop;
+            x =
+              (Unary { f = Uext _ | Sext _; _ } | Binary { f = Concat; _ }) as x;
+            y = Cst bv;
+            _;
+          } ) ->
+        binary bop (unary f x) (constant (Bv.extract ~hi ~lo bv)) (hi - lo + 1)
     (* forward ite *)
     | f, Ite { c; t = Cst bv; e; _ } ->
         ite c (constant (Bv.unary f bv)) (unary f e)
@@ -886,34 +1037,36 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     (* default case *)
     | _, _ -> mk_unary f x
 
-  and binary f x y =
+  and binary f x y sx =
     match (f, x, y) with
     (* safety pattern guard *)
     (* TODO: move outside of the rec pattern if the rewriter is trusted *)
-    | _, _, _ when f <> Concat && sizeof x <> sizeof y ->
-        abort @@ mk_binary f x y
+    (* | _, _, _ when f <> Concat && sizeof x <> sizeof y -> *)
+    (*     abort @@ mk_binary f x y *)
     (* special boolean replacement *)
-    | (Plus, _, _ | Minus, _, _) when sizeof x = 1 -> binary Xor x y
+    | (Plus, _, _ | Minus, _, _) when sx = 1 -> binary Xor x y sx
     (* constant folding *)
     | _, Cst x, Cst y -> constant (Bv.binary f x y)
     | Plus, Binary { f = Plus; x = a; y = Cst b; _ }, Cst c ->
-        binary Plus a (constant (Bv.binary Plus b c))
+        binary Plus a (constant (Bv.binary Plus b c)) sx
     | Plus, Binary { f = Minus; x = a; y = Cst b; _ }, Cst c ->
-        binary Minus a (constant (Bv.binary Minus b c))
+        binary Minus a (constant (Bv.binary Minus b c)) sx
     | Minus, Binary { f = Plus; x = a; y = Cst b; _ }, Cst c ->
-        binary Plus a (constant (Bv.binary Minus b c))
+        binary Plus a (constant (Bv.binary Minus b c)) sx
     | Minus, Binary { f = Minus; x = a; y = Cst b; _ }, Cst c ->
-        binary Minus a (constant (Bv.binary Plus b c))
+        binary Minus a (constant (Bv.binary Plus b c)) sx
     | ((Plus | Minus) as f), Binary { f = Minus; x = Cst a; y = b; _ }, Cst c ->
-        binary Minus (constant (Bv.binary f a c)) b
+        binary Minus (constant (Bv.binary f a c)) b sx
     | Plus, a, Cst bv when Bv.is_neg bv && not (Bv.is_min_sbv bv) ->
-        binary Minus a (constant (Bv.neg bv))
+        binary Minus a (constant (Bv.neg bv)) sx
     | Minus, a, Cst bv when Bv.is_neg bv && not (Bv.is_min_sbv bv) ->
-        binary Plus a (constant (Bv.neg bv))
+        binary Plus a (constant (Bv.neg bv)) sx
     | Concat, Cst bv, Binary { f = Concat; x = Cst bv'; y; _ } ->
-        binary Concat (constant (Bv.append bv bv')) y
+        let sz = Bv.size_of bv' in
+        binary Concat (constant (Bv.append bv bv')) y (sx + sz)
     | Concat, Binary { f = Concat; x; y = Cst bv; _ }, Cst bv' ->
-        binary Concat x (constant (Bv.append bv bv'))
+        let sz = Bv.size_of bv in
+        binary Concat x (constant (Bv.append bv bv')) (sx - sz)
     (* identity *)
     | Plus, x, Cst bv
     | Minus, x, Cst bv
@@ -955,19 +1108,19 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
         unary (Sext size) (unary (Restrict { hi = size - 1; lo = size - 1 }) x)
     (* factorisation *)
     | Plus, a, b when compare a b = 0 ->
-        binary Mul a (constant (Bv.of_int ~size:(sizeof a) 2))
+        binary Mul a (constant (Bv.of_int ~size:(sizeof a) 2)) sx
     (* commutativity -- keep sorted *)
     (* special cases for + - *)
     | Plus, a, Binary { f = Minus; x = b; y = c; _ } when compare a b < 0 ->
-        binary Minus (binary Plus b a) c
+        binary Minus (binary Plus b a sx) c sx
     | Plus, Binary { f = Minus; x = a; y = b; _ }, c when compare b c < 0 ->
-        binary Minus (binary Plus a c) b
+        binary Minus (binary Plus a c sx) b sx
     | Plus, Binary { f = Minus; _ }, c -> mk_binary Plus x c
     | Minus, Binary { f = Plus; x = a; y = b; _ }, c when compare b c < 0 ->
-        binary Plus (binary Minus a c) b
+        binary Plus (binary Minus a c sx) b sx
     | Minus, Binary { f = Minus; x = a; y = b; _ }, c when compare b c < 0 ->
-        binary Minus (binary Minus a c) b
-    | Plus, Unary { f = Minus; x = a; _ }, b -> binary Minus b a
+        binary Minus (binary Minus a c sx) b sx
+    | Plus, Unary { f = Minus; x = a; _ }, b -> binary Minus b a sx
     (* generic chained *)
     | Plus, Binary { f = Plus; x = a; y = b; _ }, c
     | Mul, Binary { f = Mul; x = a; y = b; _ }, c
@@ -975,7 +1128,7 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     | Or, Binary { f = Or; x = a; y = b; _ }, c
     | Xor, Binary { f = Xor; x = a; y = b; _ }, c
       when compare b c < 0 ->
-        binary f (binary f a c) b
+        binary f (binary f a c sx) b sx
     | Plus, Binary { f = Plus; _ }, c
     | Mul, Binary { f = Mul; _ }, c
     | And, Binary { f = And; _ }, c
@@ -991,7 +1144,7 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     | Eq, _, _
     | Diff, _, _
       when compare x y < 0 ->
-        binary f y x
+        binary f y x sx
     (* associativity *)
     | Plus, a, Binary { f = Plus; x = b; y = c; _ }
     | Mul, a, Binary { f = Mul; x = b; y = c; _ }
@@ -999,7 +1152,7 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     | Or, a, Binary { f = Or; x = b; y = c; _ }
     | Xor, a, Binary { f = Xor; x = b; y = c; _ }
     | Concat, a, Binary { f = Concat; x = b; y = c; _ } ->
-        binary f (binary f a b) c
+        binary f (binary f a b sx) c (sx + sizeof b)
     (* trivial condition *)
     | (Eq, a, b | Ule, a, b | Uge, a, b | Sle, a, b | Sge, a, b)
       when compare a b = 0 ->
@@ -1019,56 +1172,65 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     | Eq, Unary { f = Uext _; x = a; _ }, Cst bv (* see check above *)
     | Diff, Unary { f = Uext _; x = a; _ }, Cst bv ->
         (* see check above *)
-        binary f a (constant (Bv.extract ~lo:0 ~hi:(sizeof a - 1) bv))
+        let sa = sizeof a in
+        binary f a (constant (Bv.extract ~lo:0 ~hi:(sa - 1) bv)) sa
     | Eq, Unary { f = Not; x = a; _ }, Unary { f = Not; x = b; _ }
     | Eq, Unary { f = Minus; x = a; _ }, Unary { f = Minus; x = b; _ }
     | Diff, Unary { f = Not; x = a; _ }, Unary { f = Not; x = b; _ }
     | Diff, Unary { f = Minus; x = a; _ }, Unary { f = Minus; x = b; _ } ->
-        binary f a b
+        binary f a b sx
     | Eq, Unary { f = Uext _; x = a; _ }, Unary { f = Uext _; x = b; _ }
     | Eq, Unary { f = Sext _; x = a; _ }, Unary { f = Sext _; x = b; _ }
     | Diff, Unary { f = Uext _; x = a; _ }, Unary { f = Uext _; x = b; _ }
     | Diff, Unary { f = Sext _; x = a; _ }, Unary { f = Sext _; x = b; _ }
       when sizeof a = sizeof b ->
-        binary f a b
+        binary f a b (sizeof a)
     (* split condition *)
     | Eq, Binary { f = Concat; x = a; y = b; _ }, Cst bv ->
+        let sb = sizeof b in
         binary And
           (binary Eq a
-             (constant (Bv.extract ~lo:(sizeof b) ~hi:(Bv.size_of bv - 1) bv)))
-          (binary Eq b (constant (Bv.extract ~lo:0 ~hi:(sizeof b - 1) bv)))
+             (constant (Bv.extract ~lo:sb ~hi:(Bv.size_of bv - 1) bv))
+             (sx - sb))
+          (binary Eq b (constant (Bv.extract ~lo:0 ~hi:(sb - 1) bv)) sb)
+          1
     | Diff, Binary { f = Concat; x = a; y = b; _ }, Cst bv ->
+        let sb = sizeof b in
         binary Or
           (binary Diff a
-             (constant (Bv.extract ~lo:(sizeof b) ~hi:(Bv.size_of bv - 1) bv)))
-          (binary Diff b (constant (Bv.extract ~lo:0 ~hi:(sizeof b - 1) bv)))
+             (constant (Bv.extract ~lo:sb ~hi:(Bv.size_of bv - 1) bv))
+             (sx - sb))
+          (binary Diff b (constant (Bv.extract ~lo:0 ~hi:(sb - 1) bv)) sb)
+          1
     | Eq, Binary { f = Concat; x = a; y = b; _ }, Unary { f = Uext _; x = c; _ }
       when sizeof b = sizeof c ->
-        binary And (binary Eq a (zeros (sizeof a))) (binary Eq b c)
+        let sa = sizeof a in
+        binary And (binary Eq a (zeros sa) sa) (binary Eq b c (sx - sa)) 1
     | ( Diff,
         Binary { f = Concat; x = a; y = b; _ },
         Unary { f = Uext _; x = c; _ } )
       when sizeof b = sizeof c ->
-        binary Or (binary Diff a (zeros (sizeof a))) (binary Diff b c)
+        let sa = sizeof a in
+        binary Or (binary Diff a (zeros sa) sa) (binary Diff b c (sx - sa)) 1
     | ( Eq,
         Binary { f = Concat; x = a; y = b; _ },
         Binary { f = Concat; x = c; y = d; _ } )
       when sizeof b = sizeof d ->
-        binary And (binary Eq a c) (binary Eq b d)
+        binary And (binary Eq a c (sizeof a)) (binary Eq b d (sizeof b)) 1
     | ( Diff,
         Binary { f = Concat; x = a; y = b; _ },
         Binary { f = Concat; x = c; y = d; _ } )
       when sizeof b = sizeof d ->
-        binary Or (binary Diff a c) (binary Diff b d)
+        binary Or (binary Diff a c (sizeof a)) (binary Diff b d (sizeof b)) 1
     (* TODO: possibly more to come *)
     (* inversion *)
     | Minus, a, Cst bv when Bv.is_one bv -> unary Not a
     | Xor, a, Cst bv when Bv.is_fill bv -> unary Not a
-    | Minus, a, Unary { f = Minus; x = b; _ } -> binary Plus a b
+    | Minus, a, Unary { f = Minus; x = b; _ } -> binary Plus a b sx
     | Minus, a, Binary { f = Plus; x = b; y = c; _ } ->
-        binary Minus (binary Minus a b) c
+        binary Minus (binary Minus a b sx) c sx
     | Minus, a, Binary { f = Minus; x = b; y = c; _ } ->
-        binary Plus (binary Minus a b) c
+        binary Plus (binary Minus a b sx) c sx
     (* bit masking *)
     | Minus, Unary { f = Uext n; x; _ }, Cst b when sizeof x = 1 && Bv.is_ones b
       ->
@@ -1076,21 +1238,24 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     (* concatenation normalization -- extension on top *)
     | Concat, Cst bv, a when Bv.is_zeros bv -> unary (Uext (Bv.size_of bv)) a
     | Concat, Unary { f = Uext n; x = a; _ }, b ->
-        unary (Uext n) (binary Concat a b)
+        unary (Uext n) (binary Concat a b (sizeof a))
     | Concat, Unary { f = Sext n; x = a; _ }, b ->
-        unary (Sext n) (binary Concat a b)
+        unary (Sext n) (binary Concat a b (sizeof a))
     | ( Or,
         Binary { f = Lsl; x = a; y = Cst bv; _ },
         Unary { f = Uext n; x = b; _ } )
       when sizeof b = Bv.to_uint bv ->
-        binary Concat (unary (Restrict { lo = 0; hi = n - 1 }) a) b
+        binary Concat (unary (Restrict { lo = 0; hi = n - 1 }) a) b n
     | Or, Binary { f = Lsl; x = a; y = Cst bv; size; _ }, Cst bv' ->
         let shift = Bv.to_uint bv in
+        let sz = size - shift in
         binary Concat
           (binary Or
-             (unary (Restrict { hi = size - shift - 1; lo = 0 }) a)
-             (constant (Bv.extract ~hi:(size - 1) ~lo:shift bv')))
+             (unary (Restrict { hi = sz - 1; lo = 0 }) a)
+             (constant (Bv.extract ~hi:(size - 1) ~lo:shift bv'))
+             sz)
           (constant (Bv.extract ~hi:(shift - 1) ~lo:0 bv'))
+          sz
     (* TODO!!: chain!! *)
     (* revert -- stitch adjacent part *)
     | ( Concat,
@@ -1112,35 +1277,41 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
            let s = Z.numbits v in
            sizeof x <= s && s = Z.popcount v ->
         u
-    | And, Unary { f = Uext _ as f; x; _ }, Cst bv ->
+    | And, Unary { f = Uext n as f; x; _ }, Cst bv ->
         unary f
-          (binary And x (constant (Bv.extract ~hi:(sizeof x - 1) ~lo:0 bv)))
-    | And, Binary { f = Concat; x; y; _ }, Cst bv
+          (binary And x
+             (constant (Bv.extract ~hi:(sizeof x - 1) ~lo:0 bv))
+             (sx - n))
+    | And, Binary { f = Concat; y; _ }, Cst bv
       when Z.numbits (Bv.value_of bv) <= sizeof y ->
+        let sz = sizeof y in
         unary
-          (Uext (sizeof x))
-          (binary And y (constant (Bv.extract ~hi:(sizeof y - 1) ~lo:0 bv)))
+          (Uext (sx - sz))
+          (binary And y (constant (Bv.extract ~hi:(sz - 1) ~lo:0 bv)) sz)
     | And, Binary { f = Concat; x; y; size; _ }, Cst bv ->
         let i = sizeof y in
         binary Concat
-          (binary And x (constant (Bv.extract ~hi:(size - 1) ~lo:i bv)))
-          (binary And y (constant (Bv.extract ~hi:(i - 1) ~lo:0 bv)))
+          (binary And x
+             (constant (Bv.extract ~hi:(size - 1) ~lo:i bv))
+             (size - i))
+          (binary And y (constant (Bv.extract ~hi:(i - 1) ~lo:0 bv)) i)
+          (size - i)
     (* forward ite *)
     | f, Ite { c; t = Cst bv; e; _ }, (Cst bv' as y) ->
-        ite c (constant (Bv.binary f bv bv')) (binary f e y)
+        ite c (constant (Bv.binary f bv bv')) (binary f e y sx)
     | f, Ite { c; t; e = Cst bv; _ }, (Cst bv' as y) ->
-        ite c (binary f t y) (constant (Bv.binary f bv bv'))
+        ite c (binary f t y sx) (constant (Bv.binary f bv bv'))
     | f, (Cst bv as x), Ite { c; t = Cst bv'; e; _ } ->
-        ite c (constant (Bv.binary f bv bv')) (binary f x e)
+        ite c (constant (Bv.binary f bv bv')) (binary f x e sx)
     | f, (Cst bv as x), Ite { c; t; e = Cst bv'; _ } ->
-        ite c (binary f x t) (constant (Bv.binary f bv bv'))
+        ite c (binary f x t sx) (constant (Bv.binary f bv bv'))
     (* basic equation *)
     | Eq, Binary { f = Plus; x; y = Cst bv; _ }, Cst bv' ->
-        binary Eq x (constant (Bv.sub bv' bv))
+        binary Eq x (constant (Bv.sub bv' bv)) sx
     | Eq, Binary { f = Minus; x; y = Cst bv; _ }, Cst bv' ->
-        binary Eq x (constant (Bv.add bv' bv))
+        binary Eq x (constant (Bv.add bv' bv)) sx
     | Eq, Binary { f = Minus; x = Cst bv; y; _ }, Cst bv' ->
-        binary Eq y (constant (Bv.sub bv bv')) (* default case *)
+        binary Eq y (constant (Bv.sub bv bv')) sx (* default case *)
     | _, _, _ -> mk_binary f x y
 
   and ite c t e =
@@ -1149,6 +1320,10 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
         abort @@ mk_ite c t e
     | Cst bv, t, _ when Bv.is_one bv -> t
     | Cst bv, _, e when Bv.is_zero bv -> e
+    | c, Cst bv, e when Bv.is_one bv -> binary Or c e 1
+    | c, Cst bv, e when Bv.is_zero bv -> binary And (unary Not c) e 1
+    | c, t, Cst bv when Bv.is_one bv -> binary Or (unary Not c) t 1
+    | c, t, Cst bv when Bv.is_zero bv -> binary And c t 1
     | _, t, e when compare t e = 0 -> t
     | c, Cst bv, Cst bv' when Bv.is_fill bv && Bv.is_zeros bv' ->
         unary (Sext (Bv.size_of bv - 1)) c
@@ -1156,6 +1331,11 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
         unary (Sext (Bv.size_of bv - 1)) (unary Not c)
     | Unary { f = Not; x = c; _ }, t, e -> ite c e t
     | _, _, _ -> mk_ite c t e
+
+  let binary f x y =
+    let sx = sizeof x and sy = sizeof y in
+    if f <> Concat && sx <> sy then abort @@ mk_binary f x y;
+    binary f x y sx
 
   let lognot t = unary Not t
 

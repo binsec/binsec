@@ -23,6 +23,12 @@
 
 include Cli.S
 
+module Cse : Cli.BOOLEAN
+
+module Jit : Cli.BOOLEAN
+
+module KillFlagsAtReturn : Cli.BOOLEAN
+
 module AlternativeEngine : Cli.BOOLEAN
 
 module LegacyEngine : Cli.BOOLEAN

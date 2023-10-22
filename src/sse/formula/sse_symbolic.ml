@@ -607,6 +607,8 @@ struct
         | _ -> r)
       t.formula []
 
+  let expect _ _ _ = None
+
   let pp ppf state = Smt_model.pp ppf state.model
 
   let pp_smt slice ppf state =

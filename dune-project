@@ -5,7 +5,7 @@
 
 (name binsec)
 
-(version "0.8.0")
+(version "0.8.0-jit")
 (maintainers "BINSEC <binsec@saxifrage.saclay.cea.fr>")
 (authors
   "Adel Djoudi"
@@ -53,13 +53,14 @@ BINSEC is developed at CEA List in scientfic collaboration with Verimag and LORI
 
 An overview of some BINSEC features can be found in our SSPREW'17 tutorial.")
  (depends
-  (ocaml (and (>= 4.11) (< 5)))
+  (ocaml (and (>= 4.14) (< 5)))
   (menhir (and :build (>= 20181113)))
   (ocamlgraph (>= 1.8.5))
   (zarith (>= 1.4))
   dune-site
   grain_dypgen
   (toml (>= 6))
+  landmarks-ppx
   (ounit2 (and :with-test (>= 2)))
   (qcheck (and :with-test (>= 0.7))))
  (depopts

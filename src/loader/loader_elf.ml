@@ -468,11 +468,12 @@ module Shdr = struct
 
   let read_all t header =
     let sections = Array.init header.Ehdr.shnum (read t header) in
-    let shstrndx = sections.(header.Ehdr.shstrndx) in
-    Array.iteri
-      (fun i s ->
-        sections.(i) <- { s with idx = i; name = with_name t shstrndx s })
-      sections;
+    (if header.Ehdr.shstrndx <> 0 then
+     let shstrndx = sections.(header.Ehdr.shstrndx) in
+     Array.iteri
+       (fun i s ->
+         sections.(i) <- { s with idx = i; name = with_name t shstrndx s })
+       sections);
     sections
 
   let contains addr section =
@@ -1413,6 +1414,25 @@ module Address = Loader_buf.Make (struct
 end)
 
 let program_headers i = i.Img.phdrs
+
+let segments_as_sections phdrs =
+  Array.mapi
+    (fun idx ({ kind; flags; offset; vaddr; memsz; align; _ } : Phdr.t) ->
+      {
+        Shdr.dummy with
+        idx;
+        name = string_of_int idx;
+        kind = (match kind with 1 -> PROGBITS | _ -> NULL);
+        flags =
+          ((* X *) (flags land 0b001) lsl 2)
+          lor ((* W *) (flags land 0b010) lsr 1)
+          lor ((* R *) (flags land 0b100) lsr 1);
+        addr = vaddr;
+        offset;
+        size = memsz;
+        addralign = align;
+      })
+    phdrs
 
 let notes = Img.notes
 

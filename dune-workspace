@@ -1,0 +1,11 @@
+(lang dune 2.9)
+
+(context default)
+(context
+ (default
+  (name bench)
+  (profile bench)
+  (instrument_with landmarks)
+  (env
+    (_ (env-vars ("OCAML_LANDMARKS" "threads,format=json,output=temporary")))))
+)

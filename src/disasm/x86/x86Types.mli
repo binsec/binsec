@@ -107,8 +107,9 @@ type flag =
   | TF
   | SF (* Sign: The highest bit is 1 or 0 *)
   | ZF (* Zero: the result is zero *)
-  | AF (* Adjust/Auxilary: overflow or under flow on the 8 lower bits, used in
-          BCD calculation *)
+  | AF
+  (* Adjust/Auxilary: overflow or under flow on the 8 lower bits, used in
+     BCD calculation *)
   | PF (* Parity: number of set bits in lower byte is even or odd *)
   | CF
 (* Carry: Overflow in unsigned calculation *)

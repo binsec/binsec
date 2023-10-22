@@ -28,12 +28,9 @@ module Make
     (State : STATE) : sig
   module Fiber :
     Fiber.S
-      with type builtin :=
-            Virtual_address.t ->
-            Path.t ->
-            int ->
-            State.t ->
-            (State.t, Types.status) Result.t
+      with type path := Path.t
+       and type state := State.t
+       and type value := State.Value.t
 
   type t
 
@@ -84,6 +81,9 @@ module Make
   end
 
   val register_callback : (module CALLBACK) -> unit
+
+  val register_opcode_hook :
+    (Lreader.t -> (Script.Instr.t list * Script.env) option) -> unit
 end = struct
   module type CALLBACK = sig
     val instruction_callback :
@@ -104,6 +104,13 @@ end = struct
   end
 
   module Fiber = struct
+    type builtin =
+      Virtual_address.t ->
+      Path.t ->
+      int ->
+      State.t ->
+      (State.t, Types.status) Result.t
+
     type 'a t =
       | Debug : { msg : string; mutable succ : [ `All ] t } -> [< `All ] t
       | Print : { output : Output.t; mutable succ : [ `All ] t } -> [< `All ] t
@@ -162,17 +169,23 @@ end = struct
         }
           -> [< `Probe | `All ] t
       | Builtin : {
-          f :
-            Virtual_address.t ->
-            Path.t ->
-            int ->
-            State.t ->
-            (State.t, Types.status) Result.t;
+          f : builtin;
           mutable succ : [ `All ] t;
         }
-          -> [ `All ] t
+          -> [< `Builtin | `All ] t
       | Cut : [< `All ] t
       | Die : string -> [< `All ] t
+      | JShift : {
+          mutable f : State.t -> State.t;
+          mutable succ : [ `All ] t;
+        }
+          -> [< `JShift | `All ] t
+      | JBranch : {
+          mutable f : State.t -> State.t * State.Value.t;
+          mutable taken : [ `All ] t;
+          mutable fallthrough : [ `All ] t;
+        }
+          -> [< `JBranch | `All ] t
 
     let relink ?(taken = false) ~(pred : [ `All ] t) (succ : [ `All ] t) =
       match pred with
@@ -191,6 +204,9 @@ end = struct
       | Probe t -> t.succ <- succ
       | Builtin t -> t.succ <- succ
       | Goto _ | Jump _ | Cut | Halt | Die _ -> ()
+      | JShift t -> t.succ <- succ
+      | JBranch t when taken -> t.taken <- succ
+      | JBranch t -> t.fallthrough <- succ
   end
 
   module Var = struct
@@ -228,6 +244,7 @@ end = struct
     mutable last : Instruction.t option;
     mutable sinks : I.Set.t;
     killset : Var.Set.t I.Htbl.t;
+    task : unit I.Htbl.t;
     fibers : [ `All ] Fiber.t I.Htbl.t;
   }
 
@@ -338,6 +355,8 @@ end = struct
 
     let nb_edges { preds; _ } =
       I.Htbl.fold (fun _ preds n -> n + List.length preds) preds 0
+
+    let is_new_vertex { n; _ } vertex = vertex >= n
 
     let out_degree { nodes; _ } vertex =
       match I.Htbl.find nodes vertex with
@@ -589,6 +608,10 @@ end = struct
     | exec :: callbacks -> (
         match exec p with None -> resolve_builtin p callbacks | Some f -> f)
 
+  let opcode_hook = ref []
+
+  let register_opcode_hook hook = opcode_hook := hook :: !opcode_hook
+
   let analyze_fallthrough kind killset =
     match kind with
     | Nop | Debug _ | Instruction _ | Hook _ -> killset
@@ -702,10 +725,6 @@ end = struct
     D.output_graph oc t;
     close_out oc;
     filename
-
-  (* let f = _export_to_file t in *)
-  (* ignore (Sys.command (Format.sprintf "xdot %s" f)); *)
-  (* ignore (Sys.command (Format.sprintf "rm %s" f)); *)
 
   let add_dhunk t todo vertex hunk =
     let next = ref (vertex + Dhunk.length hunk) in
@@ -829,32 +848,6 @@ end = struct
           (fun var -> ignore (G.insert_before t vertex (Forget var)))
           temps)
       !exits
-
-  let rec disasm t todo =
-    if not (Virtual_address.Map.is_empty !todo) then (
-      let addr, tolink = Virtual_address.Map.choose !todo in
-      todo := Virtual_address.Map.remove addr !todo;
-      let pos' = Virtual_address.diff addr t.base in
-      if pos' < 0 || pos' >= t.size then disasm t todo
-      else
-        let pos = Lreader.get_pos t.reader in
-        if pos > pos' then Lreader.rewind t.reader (pos - pos')
-        else Lreader.advance t.reader (pos' - pos);
-        let inst, _ = Disasm_core.decode_from t.reader addr in
-        t.last <- Some inst;
-        Stats.register_address addr;
-        let hunk = Instruction.hunk inst in
-        let vertex = I.Htbl.length t.nodes in
-        add_node t vertex
-          (Fallthrough { kind = Instruction inst; succ = vertex + 1 });
-        if not (Virtual_address.Htbl.mem t.entries addr) then
-          Virtual_address.Htbl.add t.entries addr vertex;
-        List.iter
-          (fun (pred, tag) ->
-            add_node t pred (Goto { target = addr; tag; succ = Some vertex }))
-          tolink;
-        add_dhunk t todo (vertex + 1) hunk;
-        disasm t todo)
 
   let mk_label =
     let n = ref Suid.zero in
@@ -1006,7 +999,7 @@ end = struct
             incr vertex)
       hunk
 
-  let add_script t todo task addr stmts env fallthrough =
+  let add_script t todo addr stmts env fallthrough target =
     let vertex = ref (I.Htbl.length t.nodes) in
     let labels = S.Htbl.create 16
     and tolink = S.Htbl.create 16
@@ -1146,36 +1139,29 @@ end = struct
             add_node t !vertex (Terminator Cut);
             incr vertex
         | Script.Reach (n, guard, actions) ->
-            let tid = I.Htbl.length task in
-            I.Htbl.add task tid ();
+            let tid = I.Htbl.length t.task in
+            I.Htbl.add t.task tid ();
             let guard =
               Option.fold ~none:Dba.Expr.one
                 ~some:(fun test -> Script.eval_expr ~size:1 test env)
                 guard
             in
-            let actions =
-              List.map
-                (fun (output : Script.Output.t) : Output.t ->
-                  match output with
-                  | Model -> Model
-                  | Formula -> Formula
-                  | Slice values ->
-                      Slice
-                        (List.map
-                           (fun (e, name) -> (Script.eval_expr e env, name))
-                           values)
-                  | Value (fmt, e) -> Value (fmt, Script.eval_expr e env)
-                  | Stream name -> Stream name
-                  | String name -> String name)
-                actions
-            in
+            let actions = List.map (Script.Output.eval env) actions in
             add_node t !vertex
               (Fallthrough
                  { kind = Reach { tid; n; guard; actions }; succ = !vertex + 1 });
             incr vertex
+        | Script.Print output ->
+            add_node t !vertex
+              (Fallthrough
+                 {
+                   kind = Print (Script.Output.eval env output);
+                   succ = !vertex + 1;
+                 });
+            incr vertex
         | Script.Enumerate (n, enum) ->
-            let tid = I.Htbl.length task in
-            I.Htbl.add task tid ();
+            let tid = I.Htbl.length t.task in
+            I.Htbl.add t.task tid ();
             let enum = Script.eval_expr enum env in
             add_node t !vertex
               (Fallthrough
@@ -1246,9 +1232,11 @@ end = struct
       tolink;
     if stmts = [] || I.Htbl.mem t.preds !vertex then (
       exits := I.Set.add !vertex !exits;
-      if fallthrough then (
-        add_node t !vertex (Goto { target = addr; tag = Default; succ = None });
-        push todo addr !vertex Default)
+      if fallthrough then
+        if Virtual_address.equal addr target then (
+          add_node t !vertex (Goto { target; tag = Default; succ = None });
+          push todo addr !vertex Default)
+        else make_goto t todo !vertex target Default
       else add_node t !vertex (Terminator Halt));
     I.Set.iter
       (fun vertex ->
@@ -1257,7 +1245,7 @@ end = struct
           !temps)
       !exits
 
-  let add_hook t todo task addr anchor stmts env fallthrough =
+  let add_hook t todo addr anchor stmts env fallthrough =
     let vertex = I.Htbl.length t.nodes in
     let succ = vertex + 1 in
     let info = Format.sprintf "hook at %s" anchor in
@@ -1271,7 +1259,59 @@ end = struct
          (Virtual_address.Map.find addr !todo);
        todo := Virtual_address.Map.remove addr !todo
      with Not_found -> ());
-    add_script t todo task addr stmts env fallthrough
+    add_script t todo addr stmts env fallthrough addr
+
+  let rec resolve_decode t todo addr pos decoders =
+    match decoders with
+    | [] ->
+        let inst, _ = Disasm_core.decode_from t.reader addr in
+        t.last <- Some inst;
+        let hunk = Instruction.hunk inst in
+        let vertex = I.Htbl.length t.nodes in
+        add_node t vertex
+          (Fallthrough { kind = Instruction inst; succ = vertex + 1 });
+        add_dhunk t todo (vertex + 1) hunk;
+        vertex
+    | decode :: decoders -> (
+        match decode t.reader with
+        | None ->
+            Lreader.rewind t.reader (Lreader.get_pos t.reader - pos);
+            resolve_decode t todo addr pos decoders
+        | Some (stmts, env) ->
+            let pos' = Lreader.get_pos t.reader in
+            let vertex = I.Htbl.length t.nodes in
+            let succ = vertex + 1 in
+            let opcode = Lreader.get_slice t.reader ~lo:pos ~hi:(pos' - 1) in
+            let info =
+              Format.asprintf "hook for opcode %a" Binstream.pp
+                (Binstream.of_bytes (Bytes.unsafe_to_string opcode))
+            in
+            add_node t vertex (Fallthrough { kind = Hook { addr; info }; succ });
+            add_script t todo addr stmts env true
+              (Virtual_address.add_int (Bytes.length opcode) addr);
+            vertex)
+
+  let rec disasm t todo =
+    if not (Virtual_address.Map.is_empty !todo) then (
+      let addr, tolink = Virtual_address.Map.choose !todo in
+      todo := Virtual_address.Map.remove addr !todo;
+      let pos' = Virtual_address.diff addr t.base in
+      if pos' < 0 || pos' >= t.size then disasm t todo
+      else
+        let pos = Lreader.get_pos t.reader in
+        if pos > pos' then Lreader.rewind t.reader (pos - pos')
+        else Lreader.advance t.reader (pos' - pos);
+        let vertex =
+          resolve_decode t todo addr (Lreader.get_pos t.reader) !opcode_hook
+        in
+        if not (Virtual_address.Htbl.mem t.entries addr) then
+          Virtual_address.Htbl.add t.entries addr vertex;
+        List.iter
+          (fun (pred, tag) ->
+            add_node t pred (Goto { target = addr; tag; succ = Some vertex }))
+          tolink;
+        Stats.register_address addr;
+        disasm t todo)
 
   let extract_loads =
     let rec fold m (e : Expr.t) =
@@ -1401,6 +1441,7 @@ end = struct
         last = None;
         sinks = I.Set.empty;
         killset = I.Htbl.create size;
+        task;
         fibers = I.Htbl.create (size / 15);
       }
     in
@@ -1411,7 +1452,7 @@ end = struct
           (fun addr hooks ->
             List.iter
               (fun (anchor, script) ->
-                add_hook t todo task addr anchor script env true)
+                add_hook t todo addr anchor script env true)
               hooks)
           hooks)
       hooks;
@@ -1498,10 +1539,10 @@ end = struct
       Queue.push vertex todo;
       Queue.push (pred, taken, vertex) reloc
 
-  let commit_addr addr n pred =
+  let commit_addr ?taken addr n pred =
     if n > 0 then (
       let step = Fiber.Step { addr; n; succ = Halt } in
-      Fiber.relink ~pred
+      Fiber.relink ?taken ~pred
         (if debug_level >= 39 then
          Fiber.Debug { msg = Format.sprintf "step %d" n; succ = step }
         else step);
@@ -1636,11 +1677,248 @@ end = struct
         line t todo reloc addr n vars tail succ
     | Goto { succ = None; _ } | Terminator _ ->
         Fiber.relink ~pred:(commit addr n vars pred) (fst (decorate_fiber node))
-    | Branch { target; fallthrough; _ } ->
+    | Branch { test; target; fallthrough } ->
+        let node, target, fallthrough =
+          match test with
+          | Unary (Not, test) ->
+              ( Branch { test; target = fallthrough; fallthrough = target },
+                fallthrough,
+                target )
+          | _ -> (node, target, fallthrough)
+        in
         let head, tail = decorate_fiber node in
         Fiber.relink ~pred:(commit addr n vars pred) head;
         link t todo reloc tail true target;
         link t todo reloc tail false fallthrough
+
+  module Opt () = struct
+    module Env = Cse.Env
+
+    let commit_state t env pred vertex =
+      let env =
+        Var.Set.fold
+          (fun var env -> Env.forget var env)
+          (I.Htbl.find t.killset vertex)
+          env
+      in
+      List.fold_left
+        (fun pred kind ->
+          let head, tail = decorate_fiber (Fallthrough { kind; succ = 0 }) in
+          Fiber.relink ~pred head;
+          tail)
+        pred (Cse.commit env)
+
+    let commit t addr n env pred vertex =
+      commit_addr addr n (commit_state t env pred vertex)
+
+    let rec line t todo reloc addr n env pred vertex =
+      try
+        let fiber = I.Htbl.find t.fibers vertex in
+        Fiber.relink ~pred:(commit t addr n env pred vertex) fiber
+      with Not_found -> (
+        match G.pred t vertex with
+        | _ :: _ :: _ ->
+            Queue.push vertex todo;
+            Queue.push (commit t addr n env pred vertex, false, vertex) reloc
+        | _ -> baseline t todo reloc addr n env pred vertex)
+
+    and baseline t todo reloc addr n env pred vertex =
+      let node = G.node t vertex in
+      match node with
+      | Fallthrough { kind = Nop; succ } | Goto { succ = Some succ; _ } ->
+          line t todo reloc addr n env pred succ
+      | Fallthrough { kind = Instruction inst; succ } ->
+          let pred = make_label node pred in
+          line t todo reloc (Instruction.address inst) (n + 1) env pred succ
+      | Fallthrough { kind = Hook { addr; _ }; succ } ->
+          let pred = make_label node pred in
+          let step = Fiber.Step { addr; n; succ = Halt } in
+          Fiber.relink ~pred step;
+          line t todo reloc addr 0 env step succ
+      | Fallthrough
+          {
+            kind =
+              Assign { var; _ } | Clobber var | Load { var; _ } | Symbolize var;
+            succ;
+          }
+        when Var.Set.mem var (I.Htbl.find t.killset succ) ->
+          line t todo reloc addr n env pred succ
+      | Fallthrough { kind = Assign { var; rval }; succ } ->
+          line t todo reloc addr n (Env.assign var rval env) pred succ
+      | Fallthrough { kind = Clobber var; succ } ->
+          line t todo reloc addr n (Env.clobber var env) pred succ
+      | Fallthrough { kind = Forget var; succ } ->
+          line t todo reloc addr n (Env.forget var env) pred succ
+      | Fallthrough { kind = Load { var; base; dir; addr = ptr }; succ } ->
+          line t todo reloc addr n (Env.load var base dir ptr env) pred succ
+      | Fallthrough { kind = Store { base; dir; addr = ptr; rval }; succ } ->
+          line t todo reloc addr n
+            (Env.store base dir ~addr:ptr rval env)
+            pred succ
+      | Fallthrough { succ; _ } ->
+          let pred = commit_state t env pred vertex in
+          let head, tail = decorate_fiber node in
+          Fiber.relink ~pred head;
+          line t todo reloc addr n Env.empty tail succ
+      | Goto { succ = None; _ } | Terminator _ ->
+          Fiber.relink
+            ~pred:(commit t addr n env pred vertex)
+            (fst (decorate_fiber node))
+      | Branch { test; target; fallthrough } ->
+          let node, target, fallthrough =
+            match test with
+            | Unary (Not, test) ->
+                ( Branch { test; target = fallthrough; fallthrough = target },
+                  fallthrough,
+                  target )
+            | _ -> (node, target, fallthrough)
+          in
+          let head, tail = decorate_fiber node in
+          Fiber.relink ~pred:(commit t addr n env pred vertex) head;
+          link t todo reloc tail true target;
+          link t todo reloc tail false fallthrough
+
+    let run t todo reloc pred vertex =
+      baseline t todo reloc Virtual_address.zero 0 Env.empty pred vertex
+  end
+
+  module Jopt () = struct
+    module Env = Jit.Env (State)
+
+    let commit_state t env pred vertex =
+      let env =
+        Var.Set.fold
+          (fun var env -> Env.forget var env)
+          (I.Htbl.find t.killset vertex)
+          env
+      in
+      if Env.is_empty env then pred
+      else
+        let rec bundle : [ `JShift ] Fiber.t = JShift { f; succ = Halt }
+        and f state =
+          let f' = Env.commit env in
+          let (JShift r) = bundle in
+          r.f <- f';
+          f' state
+        in
+        let (JShift _ as succ) = bundle in
+        let head =
+          if debug_level >= 40 then Fiber.Debug { msg = "jit bundle"; succ }
+          else succ
+        in
+        Fiber.relink ~pred head;
+        succ
+
+    let commit t addr n env pred vertex =
+      commit_addr addr n (commit_state t env pred vertex)
+
+    let rec line t todo reloc addr n env pred vertex =
+      try
+        let fiber = I.Htbl.find t.fibers vertex in
+        Fiber.relink ~pred:(commit t addr n env pred vertex) fiber
+      with Not_found -> (
+        match G.pred t vertex with
+        | _ :: _ :: _ ->
+            Queue.push vertex todo;
+            Queue.push (commit t addr n env pred vertex, false, vertex) reloc
+        | _ -> baseline t todo reloc addr n env pred vertex)
+
+    and baseline t todo reloc addr n env pred vertex =
+      let node = G.node t vertex in
+      match node with
+      | Fallthrough { kind = Nop; succ } | Goto { succ = Some succ; _ } ->
+          line t todo reloc addr n env pred succ
+      | Fallthrough { kind = Instruction inst; succ } ->
+          let pred = make_label node pred in
+          line t todo reloc (Instruction.address inst) (n + 1) env pred succ
+      | Fallthrough { kind = Hook { addr; _ }; succ } ->
+          let pred = make_label node pred in
+          let step = Fiber.Step { addr; n; succ = Halt } in
+          Fiber.relink ~pred step;
+          line t todo reloc addr 0 env step succ
+      | Fallthrough
+          {
+            kind =
+              Assign { var; _ } | Clobber var | Load { var; _ } | Symbolize var;
+            succ;
+          }
+        when Var.Set.mem var (I.Htbl.find t.killset succ) ->
+          line t todo reloc addr n env pred succ
+      | Fallthrough { kind = Assign { var; rval }; succ } ->
+          line t todo reloc addr n (Env.assign var rval env) pred succ
+      | Fallthrough { kind = Clobber var; succ } ->
+          line t todo reloc addr n (Env.clobber var env) pred succ
+      | Fallthrough { kind = Forget var; succ } ->
+          line t todo reloc addr n (Env.forget var env) pred succ
+      | Fallthrough { kind = Load { var; base; dir; addr = ptr }; succ } ->
+          line t todo reloc addr n (Env.load var base dir ptr env) pred succ
+      | Fallthrough { kind = Store { base; dir; addr = ptr; rval }; succ } ->
+          line t todo reloc addr n
+            (Env.store base dir ~addr:ptr rval env)
+            pred succ
+      | Fallthrough { succ; _ } ->
+          let pred = commit_state t env pred vertex in
+          let head, tail = decorate_fiber node in
+          Fiber.relink ~pred head;
+          line t todo reloc addr n Env.empty tail succ
+      | Goto { succ = None; _ } | Terminator _ ->
+          Fiber.relink
+            ~pred:(commit t addr n env pred vertex)
+            (fst (decorate_fiber node))
+      | Branch { test; target; fallthrough } ->
+          let env, test, target, fallthrough =
+            match Env.eval test env with
+            | Unary { f = Not; x = test; _ }, env ->
+                (env, test, fallthrough, target)
+            | test, env -> (env, test, target, fallthrough)
+          in
+          let env =
+            Var.Set.fold
+              (fun var env -> Env.forget var env)
+              (I.Htbl.find t.killset vertex)
+              env
+          in
+          let pred =
+            let rec bundle : [ `JBranch ] Fiber.t =
+              JBranch { f; taken = Halt; fallthrough = Halt }
+            and f state =
+              let f' = Env.compute test env in
+              let (JBranch r) = bundle in
+              r.f <- f';
+              f' state
+            in
+            let (JBranch _ as succ) = bundle in
+            let head =
+              if debug_level >= 40 then Fiber.Debug { msg = "jit bundle"; succ }
+              else succ
+            in
+            Fiber.relink ~pred head;
+            succ
+          in
+          let tail0 = commit_addr ~taken:false addr n pred
+          and tail1 = commit_addr ~taken:true addr n pred in
+          link t todo reloc tail0 false fallthrough;
+          link t todo reloc tail1 true target
+
+    let run t todo reloc pred vertex =
+      baseline t todo reloc Virtual_address.zero 0 Env.empty pred vertex
+  end
+
+  let assemble =
+    if Options.Jit.get () then
+      let module O = Jopt () in
+      fun t todo reloc pred vertex ->
+        if not t.volatile then O.run t todo reloc pred vertex
+        else
+          baseline t todo reloc Virtual_address.zero 0 Var.Map.empty pred vertex
+    else if Options.Cse.get () then
+      let module O = Opt () in
+      fun t todo reloc pred vertex ->
+        if not t.volatile then O.run t todo reloc pred vertex
+        else
+          baseline t todo reloc Virtual_address.zero 0 Var.Map.empty pred vertex
+    else fun t todo reloc pred vertex ->
+      baseline t todo reloc Virtual_address.zero 0 Var.Map.empty pred vertex
 
   let rec closure t todo reloc =
     if Queue.is_empty todo then
@@ -1655,7 +1933,7 @@ end = struct
       let placeholder : [ `Assume ] Fiber.t =
         Assume { test = Expr.one; succ = Halt }
       in
-      baseline t todo reloc Virtual_address.zero 0 Var.Map.empty
+      assemble t todo reloc
         (let (Assume _ as head) = placeholder in
          head)
         vertex;
@@ -1703,6 +1981,7 @@ end = struct
         last = None;
         sinks = I.Set.empty;
         killset = I.Htbl.create 16;
+        task;
         fibers = I.Htbl.create 1;
       }
     in
@@ -1711,7 +1990,7 @@ end = struct
     Virtual_address.Htbl.add t.entries addr 0;
     add_script t
       (ref Virtual_address.Map.empty)
-      task addr script env fallthrough;
+      addr script env fallthrough addr;
     process t;
     get t addr
 end
