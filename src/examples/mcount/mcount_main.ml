@@ -23,7 +23,6 @@ open Mcount_options
 
 (* Extend the list below with the desired prefixes *)
 let prefixes = [ "rep"; "repz"; "lock" ]
-
 let is_prefix w = List.mem w prefixes
 
 (* Heuristic function in charge of "guessing" the basename of the mnemonic we

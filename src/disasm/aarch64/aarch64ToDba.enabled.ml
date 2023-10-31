@@ -44,7 +44,6 @@ module Statistics = struct
     }
 
   let add_bytes bytes h = String.Htbl.add h bytes ()
-
   let size h = String.Htbl.length h
 
   let size_unique h =
@@ -63,11 +62,8 @@ module Statistics = struct
     Hashtbl.replace t.decoded i ()
 
   let incr_invalid_size t = incr t.invalid_size
-
   let incr_parse_failed t = incr t.parse_failed
-
   let incr_errors opcode t = add_bytes opcode t.other_errors
-
   let incr_not_implemented opcode t = add_bytes opcode t.not_implemented
 
   let pp ppf t =
@@ -80,7 +76,6 @@ module Statistics = struct
 end
 
 let stats = Statistics.empty
-
 let show_stats ppf () = Statistics.pp ppf stats
 
 let find key kvs =

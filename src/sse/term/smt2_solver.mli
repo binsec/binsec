@@ -30,19 +30,12 @@ module Printer : sig
     t
 
   val visit_bl : t -> Sexpr.Expr.t -> unit
-
   val visit_bv : t -> Sexpr.Expr.t -> unit
-
   val visit_ax : t -> Sexpr.Memory.t -> unit
-
   val pp_print_decls : Format.formatter -> t -> unit
-
   val pp_print_defs : Format.formatter -> t -> unit
-
   val pp_print_bl : t -> Format.formatter -> Sexpr.Expr.t -> unit
-
   val pp_print_bv : t -> Format.formatter -> Sexpr.Expr.t -> unit
-
   val pp_print_ax : t -> Format.formatter -> Sexpr.Memory.t -> unit
 end
 
@@ -57,11 +50,8 @@ module Cross : sig
     t
 
   val assert_bl : t -> Sexpr.Expr.t -> unit
-
   val define_bv : t -> string -> Sexpr.Expr.t -> unit
-
   val define_ax : t -> string -> Sexpr.Memory.t -> unit
-
   val to_formula : t -> Formula.formula
 end
 

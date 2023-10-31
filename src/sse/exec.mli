@@ -21,7 +21,6 @@
 
 module type EXTENSION = sig
   type path
-
   and state
 
   val initialization_callback : (path -> state -> state) option
@@ -46,7 +45,6 @@ module type EXTENSION = sig
     option
 
   val builtin_printer : (Format.formatter -> Ir.builtin -> bool) option
-
   val at_exit_callback : (unit -> unit) option
 end
 
@@ -63,7 +61,6 @@ module type PLUGIN = sig
     list
 
   val instruction_printer : (Format.formatter -> Ast.Instr.t -> bool) option
-
   val declaration_printer : (Format.formatter -> Ast.t -> bool) option
 
   val extension :

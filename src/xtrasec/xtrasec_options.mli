@@ -20,9 +20,7 @@
 (**************************************************************************)
 
 include Cli.S
-
 module Output_smt : Cli.STRING_OPT
-
 module Trace_file : Cli.STRING_OPT
 
 module Concretize_regs :

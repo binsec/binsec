@@ -24,32 +24,24 @@ module Logger = Logger.Make (struct
 end)
 
 let available = true
-
 let queries = ref 0
 
 type time = { mutable sec : float }
 
 let cumulated_time = { sec = 0. }
-
 let query_stat () = !queries
-
 let time_stat () = cumulated_time.sec
 
 module type Session = sig
   val put_entry : Formula.entry -> unit
-
   val bv_lookup : Formula.bv_term -> Bitvector.t
-
   val ax_lookup : Formula.ax_term -> (Bitvector.t * Bitvector.t) array
-
   val check_sat : timeout:int -> Formula.status
-
   val close : unit -> unit
 end
 
 module Make () : Session = struct
   include Bitwuzla.Incremental ()
-
   module BlH = Formula.BlTermHashtbl
   module BvH = Formula.BvTermHashtbl
   module AxH = Formula.AxTermHashtbl
@@ -59,18 +51,13 @@ module Make () : Session = struct
     type t = int * int
 
     let equal = ( = )
-
     let hash = Hashtbl.hash
   end)
 
   let bl_mapping = BlH.create 64
-
   let bv_mapping = BvH.create 64
-
   let ax_mapping = AxH.create 64
-
   let bv_sort = I.create 32
-
   let ax_sort = P.create 8
 
   let bv_sort sz =

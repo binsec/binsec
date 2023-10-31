@@ -21,19 +21,16 @@
 
 include Cli.Make (struct
   let shortname = "sim2"
-
   let name = "Simulation"
 end)
 
 module MemoryFile = Builder.String_option (struct
   let name = "memory"
-
   let doc = "set file containing the initial (concrete) memory state"
 end)
 
 module InitFile = Builder.String_option (struct
   let name = "init"
-
   let doc = "set dba file containing arbitrary initialisation instructions"
 end)
 
@@ -41,9 +38,7 @@ module Directives = Builder.Any (struct
   type t = Directive.t list
 
   let name = "goals"
-
   let doc = "Set simulation goals"
-
   let default = []
 
   let of_string s =

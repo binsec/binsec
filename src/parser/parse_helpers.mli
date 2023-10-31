@@ -20,11 +20,8 @@
 (**************************************************************************)
 
 val incr_address : Dba.address -> unit
-
 val cur_address : unit -> int
-
 val patch_expr_size : Dba.Expr.t -> int -> Dba.Expr.t
-
 val expr_of_name : string -> Dba.Expr.t
 
 module Initialization : sig
@@ -66,7 +63,6 @@ module Message : sig
     type t = Int of Z.t | Str of string
 
     val vstr : string -> t
-
     val vint : string -> t
   end
 end

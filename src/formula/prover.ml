@@ -61,28 +61,40 @@ let executable = function
 
 let name_of = executable
 
+let check_version = function
+  | Bitwuzla -> (
+      fun version ->
+        try
+          Scanf.fscanf version "%d.%d.%d%s" (fun major minor _fix _ ->
+              major > 0 || minor >= 2)
+        with Scanf.Scan_failure _ | Failure _ | End_of_file -> false)
+  | _ -> Fun.const true
+(* TODO ? *)
+
 let ping solver =
   let cout =
     Unix.open_process_in (Printf.sprintf "%s --version" (executable solver))
   in
   try
-    ignore (input_line cout);
-    match Unix.close_process_in cout with WEXITED 0 -> true | _ -> false
+    let check = check_version solver cout in
+    match Unix.close_process_in cout with WEXITED 0 -> check | _ -> false
   with End_of_file | Sys_error _ ->
     ignore (Unix.close_process_in cout);
     false
 
 let default_arguments = function
-  | Boolector | Bitwuzla -> [ "-m"; "-x" ]
+  | Boolector -> [ "-m"; "-x" ]
+  | Bitwuzla -> [ "-m"; "--bv-output-format"; "16" ]
   | CVC4 -> [ "--lang=smt2"; "--produce-models" ]
   | Z3 -> [ "--smt2" ]
   | Yices -> []
 
 let incremental_a = function
-  | Boolector | Bitwuzla -> "-i"
-  | CVC4 -> "--incremental"
-  | Z3 -> "-in"
-  | Yices -> "--incremental"
+  | Bitwuzla -> []
+  | Boolector -> [ "-i" ]
+  | CVC4 -> [ "--incremental" ]
+  | Z3 -> [ "-in" ]
+  | Yices -> [ "--incremental" ]
 
 let arguments prover =
   match Formula_options.Solver.Options.get_opt () with
@@ -90,8 +102,8 @@ let arguments prover =
   | None -> default_arguments prover
 
 let timeout_s time = function
-  | Boolector | Bitwuzla | Yices -> time
-  | Z3 | CVC4 -> 1000 * time
+  | Boolector | Yices -> time
+  | Bitwuzla | Z3 | CVC4 -> 1000 * time
 
 let time_switch time prover =
   assert (time > 0);
@@ -107,6 +119,6 @@ let add_switch_if p new_switches switches =
 
 let command ?(incremental = false) timeout prover =
   executable prover :: arguments prover
-  |> add_switch_if incremental (fun () -> [ incremental_a prover ])
+  |> add_switch_if incremental (fun () -> incremental_a prover)
   |> add_switch_if (timeout > 0) (fun () -> time_switch timeout prover)
   |> Array.of_list

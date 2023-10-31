@@ -24,7 +24,6 @@ module type Common = sig
   type t
 
   val create : Z.t -> int -> t
-
   val create_from_tuple : Z.t * int -> t
 
   (*
@@ -32,21 +31,13 @@ module type Common = sig
   val update: t -> Z.t -> t
 *)
   val value_of : t -> Z.t
-
   val signed_of : t -> Z.t
-
   val size_of : t -> int
-
   val compare : t -> t -> int
-
   val hash : t -> int
-
   val zero : t (* zero = { value = 0; size = 1 } *)
-
   val one : t (* one  = { value = 1; size = 1 } *)
-
   val zeros : int -> t (* zeros n = { value = 0; size = n } *)
-
   val ones : int -> t (* ones  n = { value = 1; size = n } *)
 
   val fill : ?lo:int -> ?hi:int -> int -> t
@@ -61,7 +52,6 @@ module type Common = sig
       [one]) *)
 
   val is_zeros : t -> bool
-
   val is_ones : t -> bool
 
   val is_fill : t -> bool
@@ -69,7 +59,6 @@ module type Common = sig
       equal to [zeros n] (resp. [ones n]) *)
 
   val max_ubv : int -> t
-
   val max_sbv : int -> t
 
   val min_sbv : int -> t
@@ -77,7 +66,6 @@ module type Common = sig
       the biggest possible unsigned (resp. signed) value for its size *)
 
   val is_max_ubv : t -> bool
-
   val is_max_sbv : t -> bool
 
   val is_min_sbv : t -> bool
@@ -92,21 +80,13 @@ module type Common = sig
   include Sigs.ARITHMETIC with type t := t
 
   val pow : t -> t -> t
-
   val succ : t -> t
-
   val pred : t -> t
-
   val add_int : t -> int -> t
-
   val umax : t -> t -> t
-
   val umin : t -> t -> t
-
   val smax : t -> t -> t
-
   val smin : t -> t -> t
-
   val is_neg : t -> bool
 
   val is_pos : t -> bool
@@ -119,23 +99,14 @@ module type Common = sig
   include Sigs.BITWISE with type t := t
 
   val reduce : t -> int -> t
-
   val extend : t -> int -> t
-
   val extend_signed : t -> int -> t
-
   val extend_unsafe : t -> int -> t
-
   val num_bits : t -> int
-
   val get_bit : t -> int -> bool
-
   val set_bit : t -> int -> t
-
   val clear_bit : t -> int -> t
-
   val flip_bit : t -> int -> t
-
   val append : t -> t -> t
 
   val concat : t list -> t
@@ -156,11 +127,8 @@ val rand : int -> t
 (** [rand sz] creates a bitvector of size sz with random value *)
 
 val of_bool : bool -> t
-
 val to_bool : t -> bool (* to_bool t = not (is_zero t) *)
-
 val of_char : char -> t
-
 val to_char : t -> char
 
 val of_int32 : int32 -> t
@@ -172,11 +140,8 @@ val of_int64 : int64 -> t
 (** [of_int64 n] creates a bitvector of size 64 and value [n] *)
 
 val to_int64 : t -> int64
-
 val of_int : size:int -> int -> t
-
 val to_int : t -> int
-
 val to_uint : t -> int
 
 val of_bits : string -> t

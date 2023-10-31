@@ -21,12 +21,10 @@
 
 include Cli.Options (struct
   let name = "Risc-V"
-
   let shortname = "rv"
 end)
 
 module Odump_file = Builder.String_option (struct
   let name = "odfile"
-
   let doc = "Test with this obdjump file"
 end)

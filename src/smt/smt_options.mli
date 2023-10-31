@@ -33,9 +33,6 @@ type solver =
   | Yices_smtlib  (** yices external process *)
 
 module SMTSolver : Cli.GENERIC with type t = solver
-
 module KeepGoing : Cli.BOOLEAN
-
 module SMT_dir : Cli.STRING_OPT
-
 module SMT_log_directory : Cli.STRING

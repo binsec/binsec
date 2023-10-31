@@ -43,7 +43,6 @@ open X86_options
 open X86Types
 
 let bitsize_of_xmm_mm = function XMM -> 128 | MM -> 64
-
 let bytesize_of_xmm_mm = function XMM -> 16 | MM -> 8
 
 let bytesize_of_simd_size = function
@@ -581,9 +580,7 @@ let rotate_op_to_string = function
   | Rcr -> "rcr"
 
 let shiftd_op_to_string = function Shld -> "shld" | Shrd -> "shrd"
-
 let _rotate_op_to_in = function Rol -> 0 | Ror -> 1 | Rcl -> 2 | Rcr -> 3
-
 let _shift_op_to_int = function Shl -> 4 | Shr -> 5 | Sar -> 7
 
 let int_to_rotate_op = function
@@ -606,7 +603,6 @@ let int_to_shift_op = function
 type modrm_byte = { rm : int; modb : int; reg : int }
 
 let mask3 = 7
-
 let mask2 = 3
 
 let read_modrm_byte byte =
@@ -768,7 +764,6 @@ let read_modrm_xmm address_mode lr =
   read_rm int_to_xmm_reg lr
 
 let read_rm8_with_spare = read_rm32_with_spare int_to_reg8
-
 let read_rm16_with_spare = read_rm32_with_spare int_to_reg16
 
 let string_of_register_restrict name low high =
@@ -822,5 +817,4 @@ let reg_to_extract (name : string) : string * int * int =
   | _ -> failwith ("reg_to_extract unknown register: " ^ name)
 
 let switch_default_data_mode = function `M16 -> `M32 | `M32 -> `M16
-
 let switch_address_mode = function A16 -> A32 | A32 -> A16

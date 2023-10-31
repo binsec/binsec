@@ -24,16 +24,13 @@ exception WrongInitializationSize of Dba.address * Dba.Instr.t
 module Logger = Kernel_options.Logger
 
 let cur_address = ref 0
-
 let incr_address addr = cur_address := addr.Dba.id + 1
-
 let cur_address () = !cur_address
 
 module Declarations = struct
   module SH = Basic_types.String.Htbl
 
   let declarations : (Dba.size * Dba.Var.Tag.t) SH.t = SH.create 16
-
   let add name size opttags = SH.add declarations name (size, opttags)
 end
 
@@ -216,7 +213,6 @@ module Message = struct
     type t = Int of Z.t | Str of string
 
     let vstr v = Str v
-
     let vint v = Int (Z.of_string v)
   end
 end
@@ -242,7 +238,6 @@ module Initialization = struct
   type t = { controlled : bool; operation : operation }
 
   let create ~controlled ~operation = { controlled; operation }
-
   let assume e = create ~controlled:false ~operation:(Assumption e)
 
   let assign ?identifier ?(controlled = true) lval rval =

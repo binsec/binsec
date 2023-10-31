@@ -23,25 +23,15 @@ module type Accessor = sig
   type t
 
   val u8 : t -> int
-
   val i8 : t -> int
-
   val u16 : t -> int
-
   val i16 : t -> int
-
   val i32 : t -> int32
-
   val i64 : t -> int64
-
   val bv8 : t -> Bitvector.t
-
   val bv16 : t -> Bitvector.t
-
   val bv32 : t -> Bitvector.t
-
   val bv64 : t -> Bitvector.t
-
   val read : t -> int -> Bitvector.t
 end
 
@@ -86,9 +76,7 @@ let of_nibbles =
   fun ?endianness ?at str -> create ?endianness ?at get str
 
 let pp ppf (Cursor { pos; _ }) = Format.fprintf ppf "%@%x" pos
-
 let set_endianness (Cursor t) e = t.endianness <- e
-
 let get_pos (Cursor t) = t.pos
 
 let rewind (Cursor t) n =
@@ -109,19 +97,12 @@ module Peek : Accessor with type t := t = struct
 
   (* unsigned 8 bits int *)
   let u8 (Cursor { get; content; pos; _ }) = get content pos
-
   let u16 t = Bytes.get_uint16_le (read t 2) 0
-
   let i8 t = (u8 t lxor 0x80) - 0x80
-
   let i16 t = (u16 t lxor 0x8000) - 0x8000
-
   let i32 t = Bytes.get_int32_le (read t 4) 0
-
   let i64 t = Bytes.get_int64_le (read t 8) 0
-
   let bv8 t = Bitvector.of_int ~size:8 (u8 t)
-
   let bv16 t = Bitvector.of_int ~size:16 (u16 t)
 
   let bv32 t =
@@ -147,23 +128,14 @@ module Read : Accessor with type t := t = struct
 
   (* unsigned 8 bits int *)
   let u8 = advance Peek.u8 1
-
   let u16 = advance Peek.u16 2
-
   let i8 = advance Peek.i8 1
-
   let i16 = advance Peek.i16 2
-
   let i32 = advance Peek.i32 4
-
   let i64 = advance Peek.i64 8
-
   let bv8 = advance Peek.bv8 1
-
   let bv16 = advance Peek.bv16 2
-
   let bv32 = advance Peek.bv32 4
-
   let bv64 = advance Peek.bv64 8
 end
 

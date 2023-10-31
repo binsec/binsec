@@ -32,7 +32,6 @@ type entry = {
 }
 
 let addresses { addresses; _ } = addresses
-
 let cfa { cfa; _ } = cfa
 
 let rule x { registers; _ } =

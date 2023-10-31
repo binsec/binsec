@@ -21,9 +21,7 @@
 
 (* Hand-written parser for pintrace output.  *)
 type parsed_ins = { count : int; addr : int; code : string }
-
 type read_or_write = Read | Written
-
 type mem = { read_or_write : read_or_write; address : Virtual_address.t }
 
 type line =

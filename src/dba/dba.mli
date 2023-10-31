@@ -148,16 +148,13 @@ module Expr : sig
   (* sugar operator *)
 
   val size_of : t -> int
-
   val is_equal : t -> t -> bool
-
   val is_constant : t -> bool
 
   val var : ?tag:Var.Tag.t -> string -> int -> t
   (** {2 Constructors} *)
 
   val v : Var.t -> t
-
   val temporary : size:int -> string -> t
 
   val constant : Bitvector.t -> t
@@ -175,36 +172,25 @@ module Expr : sig
    *)
 
   val one : t
-
   val zero : t
-
   val _true : t
-
   val _false : t
 
   val binary : Binary_op.t -> t -> t -> t
   (** {3 Binary expressions} *)
 
   val add : t -> t -> t
-
   val sub : t -> t -> t
-
   val mul : t -> t -> t
-
   val smod : t -> t -> t
-
   val umod : t -> t -> t
-
   val udiv : t -> t -> t
-
   val sdiv : t -> t -> t
-
   val append : t -> t -> t
 
   include Sigs.COMPARISON with type t := t and type boolean = t
 
   val unary : Unary_op.t -> t -> t
-
   val uminus : t -> t
 
   include Sigs.EXTENDED_LOGICAL with type t := t
@@ -216,7 +202,6 @@ module Expr : sig
   (** [uext sz e] performs an unsigned extension expression [e] to size [sz] *)
 
   val shift_left : t -> t -> t
-
   val shift_right : t -> t -> t
 
   val shift_right_signed : t -> t -> t
@@ -249,7 +234,6 @@ module Expr : sig
 end
 
 type exprs = Expr.t list
-
 type printable = Exp of Expr.t | Str of string
 
 module LValue : sig
@@ -275,7 +259,6 @@ module LValue : sig
   *)
 
   val temporary : string -> Size.Bit.t -> t
-
   val _restrict : string -> Size.Bit.t -> int -> int -> t
 
   val _bit_restrict : string -> Size.Bit.t -> int -> t
@@ -284,9 +267,7 @@ module LValue : sig
    *)
 
   val restrict : Var.t -> int -> int -> t
-
   val bit_restrict : Var.t -> int -> t
-
   val store : ?array:string -> Size.Byte.t -> Machine.endianness -> Expr.t -> t
 
   val temp : Size.Bit.t -> t
@@ -328,11 +309,8 @@ module Jump_target : sig
   type 'a t = 'a jump_target
 
   val outer : address -> 'a t
-
   val inner : 'a -> 'a t
-
   val is_inner : 'a t -> bool
-
   val is_outer : 'a t -> bool
 end
 
@@ -357,24 +335,14 @@ module Instr : sig
       l-value [lv], going to DBA instruction successor [id] *)
 
   val ite : Expr.t -> id Jump_target.t -> int -> t
-
   val undefined : LValue.t -> int -> t
-
   val non_deterministic : LValue.t -> int -> t
-
   val static_jump : ?tag:Tag.t -> id Jump_target.t -> t
-
   val static_inner_jump : ?tag:Tag.t -> int -> t
-
   val static_outer_jump : ?tag:Tag.t -> Virtual_address.t -> t
-
   val call : return_address:address -> id Jump_target.t -> t
-
   val dynamic_jump : ?tag:Tag.t -> Expr.t -> t
-
   val _assert : Expr.t -> int -> t
-
   val assume : Expr.t -> int -> t
-
   val stop : state option -> t
 end

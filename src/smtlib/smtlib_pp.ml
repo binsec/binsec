@@ -58,7 +58,6 @@ let pp_symbol ppf symb =
   | QuotedSymbol s -> fprintf ppf "|%s|" s
 
 let pp_symbols ppf symbs = fprintf ppf "%a" (pp_list pp_symbol) symbs
-
 let pp_keyword ppf kwd = fprintf ppf ":%s" kwd
 
 let pp_spec_constant ppf = function
@@ -198,7 +197,6 @@ and pp_var_bindings_k k ppf vbindings =
   pp_list_k pp_var_binding_k k ppf vbindings
 
 let pp_term = pp_term_k (fun () -> ())
-
 let pp_terms = pp_terms_k (fun () -> ())
 
 let pp_opt_type_parameters ppf optsorts =

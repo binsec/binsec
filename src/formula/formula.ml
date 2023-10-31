@@ -28,9 +28,7 @@ let status_to_exit_code = function
   | UNKNOWN -> 12
 
 type bl_unop = BlNot
-
 type bl_bnop = BlImply | BlAnd | BlOr | BlXor
-
 type bl_comp = BlEqual | BlDistinct
 
 type bv_unop =
@@ -77,11 +75,8 @@ type bv_comp =
   | BvSge
 
 type ax_comp = AxEqual | AxDistinct
-
 type sort = BlSort | BvSort of int | AxSort of int * int
-
 type bl_var = { bl_hash : int; bl_name : string }
-
 type bv_var = { bv_hash : int; bv_name : string; bv_size : int }
 
 type ax_var = {
@@ -94,7 +89,6 @@ type ax_var = {
 type var = BlVar of bl_var | BvVar of bv_var | AxVar of ax_var
 
 type term_desc = BlTerm of bl_term | BvTerm of bv_term | AxTerm of ax_term
-
 and term = { term_hash : int; term_desc : term_desc }
 
 and bl_term_desc =
@@ -161,7 +155,6 @@ type entry_desc =
   | Comment of string
 
 type entry = { entry_hash : int; entry_desc : entry_desc }
-
 type formula = { entries : entry Sequence.t }
 
 (* Basic printing of formulas, usable here *)
@@ -411,9 +404,7 @@ end
 (* Some utilities *)
 
 let equal_bl_term (bl1 : bl_term) (bl2 : bl_term) = bl1 = bl2
-
 let equal_bv_term (bv1 : bv_term) (bv2 : bv_term) = bv1 = bv2
-
 let equal_ax_term (ax1 : ax_term) (ax2 : ax_term) = ax1 = ax2
 
 let is_bl_cst bl =
@@ -454,11 +445,8 @@ let ax_var ax_name idx_size elt_size =
   { ax_hash; ax_name; idx_size; elt_size }
 
 let bl_sort = BlSort
-
 let bv_sort i = BvSort i
-
 let ax_sort i j = AxSort (i, j)
-
 let list_hash (f : 'a -> int) (l : 'a list) = Hashtbl.hash (List.map f l)
 
 let term_desc_hash = function
@@ -471,9 +459,7 @@ let term term_desc =
   { term_hash; term_desc }
 
 let mk_bl_term bl = term (BlTerm bl)
-
 let mk_bv_term bv = term (BvTerm bv)
-
 let mk_ax_term ax = term (AxTerm ax)
 
 let mk_bv_cst bv =
@@ -769,27 +755,17 @@ let rec bl_term bl_term_desc =
             { bl_term_hash; bl_term_desc })
 
 and mk_bl_not bl = bl_term (BlUnop (BlNot, bl))
-
 and mk_bv_equal bv1 bv2 = bl_term (BvComp (BvEqual, bv1, bv2))
-
 and mk_bv_distinct bv1 bv2 = bl_term (BvComp (BvDistinct, bv1, bv2))
-
 and mk_bl_and bv1 bv2 = bl_term (BlBnop (BlAnd, bv1, bv2))
 
 let mk_bl_fun fn lst = bl_term (BlFun (fn, lst))
-
 let mk_bl_let bn bl = bl_term (BlLet (bn, bl))
-
 let mk_bl_unop u bl = bl_term (BlUnop (u, bl))
-
 let mk_bl_bnop b bl1 bl2 = bl_term (BlBnop (b, bl1, bl2))
-
 let mk_bl_comp c bl1 bl2 = bl_term (BlComp (c, bl1, bl2))
-
 let mk_bv_comp c bv1 bv2 = bl_term (BvComp (c, bv1, bv2))
-
 let mk_ax_comp c ax1 ax2 = bl_term (AxComp (c, ax1, ax2))
-
 let mk_bl_ite bl bl1 bl2 = bl_term (BlIte (bl, bl1, bl2))
 
 (* Bitvector terms *)
@@ -820,13 +796,9 @@ let bv_bnop_size b bv1 bv2 =
       bv1.bv_term_size
 
 let mk_bv_zero = mk_bv_cst Bitvector.zero
-
 let mk_bv_one = mk_bv_cst Bitvector.one
-
 let mk_bv_zeros n = mk_bv_cst (Bitvector.zeros n)
-
 let mk_bv_ones n = mk_bv_cst (Bitvector.ones n)
-
 let mk_bv_fill n = mk_bv_cst (Bitvector.fill n)
 
 let rec bv_term bv_term_desc =
@@ -1397,21 +1369,14 @@ let rec bv_term bv_term_desc =
       { bv_term_hash; bv_term_desc; bv_term_size }
 
 and mk_bv_neg bv = bv_term (BvUnop (BvNeg, bv))
-
 and mk_bv_add bv1 bv2 = bv_term (BvBnop (BvAdd, bv1, bv2))
-
 and mk_bv_sub bv1 bv2 = bv_term (BvBnop (BvSub, bv1, bv2))
-
 and mk_bv_unop u bv = bv_term (BvUnop (u, bv))
-
 and mk_bv_bnop b bv1 bv2 = bv_term (BvBnop (b, bv1, bv2))
 
 let mk_bv_fun fn lst = bv_term (BvFun (fn, lst))
-
 let mk_bv_let bn bv = bv_term (BvLet (bn, bv))
-
 let mk_bv_ite bl bv1 bv2 = bv_term (BvIte (bl, bv1, bv2))
-
 let mk_select n ax bv = bv_term (Select (n, ax, bv))
 
 (* Array terms *)
@@ -1459,11 +1424,8 @@ let ax_term ax_term_desc =
       { ax_term_hash; ax_term_desc; idx_term_size; elt_term_size }
 
 let mk_ax_fun fn lst = ax_term (AxFun (fn, lst))
-
 let mk_ax_let bn ax = ax_term (AxLet (bn, ax))
-
 let mk_ax_ite bl ax1 ax2 = ax_term (AxIte (bl, ax1, ax2))
-
 let mk_store n ax bv1 bv2 = ax_term (Store (n, ax, bv1, bv2))
 
 (* Definition, declaration and entries *)
@@ -1507,9 +1469,7 @@ let decl decl_desc =
   { decl_hash; decl_desc }
 
 let mk_bl_decl v lst = decl (BlDecl (v, lst))
-
 let mk_bv_decl v lst = decl (BvDecl (v, lst))
-
 let mk_ax_decl v lst = decl (AxDecl (v, lst))
 
 let entry_desc_hash = function
@@ -1524,37 +1484,23 @@ let entry entry_desc =
   { entry_hash; entry_desc }
 
 let mk_declare dc = entry (Declare dc)
-
 let mk_define df = entry (Define df)
-
 let mk_assert bl = entry (Assert bl)
-
 let mk_assume bl = entry (Assume bl)
-
 let mk_comment s = entry (Comment s)
 
 (* Some helpers *)
 
 let mk_bl_var bl = mk_bl_fun bl []
-
 let mk_bv_var bv = mk_bv_fun bv []
-
 let mk_ax_var ax = mk_ax_fun ax []
-
 let mk_bl_not bl = mk_bl_unop BlNot bl
-
 let mk_bv_not bv = mk_bv_unop BvNot bv
-
 let mk_bv_neg bv = mk_bv_unop BvNeg bv
-
 let mk_bv_repeat i bv = mk_bv_unop (BvRepeat i) bv
-
 let mk_bv_zero_extend i bv = mk_bv_unop (BvZeroExtend i) bv
-
 let mk_bv_sign_extend i bv = mk_bv_unop (BvSignExtend i) bv
-
 let mk_bv_rotate_left i bv = mk_bv_unop (BvRotateLeft i) bv
-
 let mk_bv_rotate_right i bv = mk_bv_unop (BvRotateRight i) bv
 
 let mk_bv_extract i bv =
@@ -1566,77 +1512,41 @@ let mk_bv_extract i bv =
   mk_bv_unop (BvExtract i) bv
 
 let mk_bl_imply bl1 bl2 = mk_bl_bnop BlImply bl1 bl2
-
 let mk_bl_and bl1 bl2 = mk_bl_bnop BlAnd bl1 bl2
-
 let mk_bl_or bl1 bl2 = mk_bl_bnop BlOr bl1 bl2
-
 let mk_bl_xor bl1 bl2 = mk_bl_bnop BlXor bl1 bl2
-
 let mk_bv_concat bv1 bv2 = mk_bv_bnop BvConcat bv1 bv2
-
 let mk_bv_and bv1 bv2 = mk_bv_bnop BvAnd bv1 bv2
-
 let mk_bv_nand bv1 bv2 = mk_bv_bnop BvNand bv1 bv2
-
 let mk_bv_or bv1 bv2 = mk_bv_bnop BvOr bv1 bv2
-
 let mk_bv_nor bv1 bv2 = mk_bv_bnop BvNor bv1 bv2
-
 let mk_bv_xor bv1 bv2 = mk_bv_bnop BvXor bv1 bv2
-
 let mk_bv_xnor bv1 bv2 = mk_bv_bnop BvXnor bv1 bv2
-
 let mk_bv_cmp bv1 bv2 = mk_bv_bnop BvCmp bv1 bv2
-
 let mk_bv_add bv1 bv2 = mk_bv_bnop BvAdd bv1 bv2
-
 let mk_bv_sub bv1 bv2 = mk_bv_bnop BvSub bv1 bv2
-
 let mk_bv_mul bv1 bv2 = mk_bv_bnop BvMul bv1 bv2
-
 let mk_bv_udiv bv1 bv2 = mk_bv_bnop BvUdiv bv1 bv2
-
 let mk_bv_sdiv bv1 bv2 = mk_bv_bnop BvSdiv bv1 bv2
-
 let mk_bv_urem bv1 bv2 = mk_bv_bnop BvUrem bv1 bv2
-
 let mk_bv_srem bv1 bv2 = mk_bv_bnop BvSrem bv1 bv2
-
 let mk_bv_smod bv1 bv2 = mk_bv_bnop BvSmod bv1 bv2
-
 let mk_bv_shl bv1 bv2 = mk_bv_bnop BvShl bv1 bv2
-
 let mk_bv_ashr bv1 bv2 = mk_bv_bnop BvAshr bv1 bv2
-
 let mk_bv_lshr bv1 bv2 = mk_bv_bnop BvLshr bv1 bv2
-
 let mk_bl_equal bl1 bl2 = mk_bl_comp BlEqual bl1 bl2
-
 let mk_bl_distinct bl1 bl2 = mk_bl_comp BlDistinct bl1 bl2
-
 let mk_bv_equal bv1 bv2 = mk_bv_comp BvEqual bv1 bv2
-
 let mk_bv_distinct bv1 bv2 = mk_bv_comp BvDistinct bv1 bv2
-
 let mk_ax_equal ax1 ax2 = mk_ax_comp AxEqual ax1 ax2
-
 let mk_ax_distinct ax1 ax2 = mk_ax_comp AxDistinct ax1 ax2
-
 let mk_bv_ult bv1 bv2 = mk_bv_comp BvUlt bv1 bv2
-
 let mk_bv_ule bv1 bv2 = mk_bv_comp BvUle bv1 bv2
-
 let mk_bv_ugt bv1 bv2 = mk_bv_comp BvUgt bv1 bv2
-
 let mk_bv_uge bv1 bv2 = mk_bv_comp BvUge bv1 bv2
-
 let mk_bv_slt bv1 bv2 = mk_bv_comp BvSlt bv1 bv2
-
 let mk_bv_sle bv1 bv2 = mk_bv_comp BvSle bv1 bv2
-
 let mk_bv_sgt bv1 bv2 = mk_bv_comp BvSgt bv1 bv2
-
 let mk_bv_sge bv1 bv2 = mk_bv_comp BvSge bv1 bv2
 
 let mk_bv_add_int bv i =
@@ -1658,9 +1568,7 @@ let split_assert bl =
   split_assert_aux bl [] Sequence.empty
 
 let empty = { entries = Sequence.empty }
-
 let length fm = Sequence.length fm.entries
-
 let append fm1 fm2 = { entries = Sequence.append fm1.entries fm2.entries }
 
 let push_front en fm =
@@ -1678,27 +1586,16 @@ let push_back en fm =
   | _ -> { entries = Sequence.push_back en fm.entries }
 
 let push_front_declare dc fm = push_front (mk_declare dc) fm
-
 let push_front_define df fm = push_front (mk_define df) fm
-
 let push_front_assert bl fm = push_front (mk_assert bl) fm
-
 let push_front_assume bl fm = push_front (mk_assume bl) fm
-
 let push_front_comment s fm = push_front (mk_comment s) fm
-
 let push_back_declare dc fm = push_back (mk_declare dc) fm
-
 let push_back_define df fm = push_back (mk_define df) fm
-
 let push_back_assert bl fm = push_back (mk_assert bl) fm
-
 let push_back_assume bl fm = push_back (mk_assume bl) fm
-
 let push_back_comment s fm = push_back (mk_comment s) fm
-
 let peek_front fm = Sequence.peek_front fm.entries
-
 let peek_back fm = Sequence.peek_back fm.entries
 
 let pop_front fm =
@@ -1712,15 +1609,10 @@ let pop_back fm =
   | None -> None
 
 let map_forward f fm = { entries = Sequence.map_forward f fm.entries }
-
 let map_backward f fm = { entries = Sequence.map_backward f fm.entries }
-
 let iter_forward f fm = Sequence.iter_forward f fm.entries
-
 let iter_backward f fm = Sequence.iter_backward f fm.entries
-
 let fold_forward f fm acc = Sequence.fold_forward f fm.entries acc
-
 let fold_backward f fm acc = Sequence.fold_backward f fm.entries acc
 
 (* Modules *)
@@ -1753,7 +1645,6 @@ module BlVarHashtbl = Hashtbl.Make (struct
   type t = bl_var
 
   let equal bl1 bl2 = bl1 = bl2
-
   let hash bl = bl.bl_hash
 end)
 
@@ -1761,7 +1652,6 @@ module BvVarHashtbl = Hashtbl.Make (struct
   type t = bv_var
 
   let equal bv1 bv2 = bv1 = bv2
-
   let hash bv = bv.bv_hash
 end)
 
@@ -1769,7 +1659,6 @@ module AxVarHashtbl = Hashtbl.Make (struct
   type t = ax_var
 
   let equal ax1 ax2 = ax1 = ax2
-
   let hash ax = ax.ax_hash
 end)
 
@@ -1777,7 +1666,6 @@ module BlTermHashtbl = Hashtbl.Make (struct
   type t = bl_term
 
   let equal bl1 bl2 = bl1 = bl2
-
   let hash bl = bl.bl_term_hash
 end)
 
@@ -1785,7 +1673,6 @@ module BvTermHashtbl = Hashtbl.Make (struct
   type t = bv_term
 
   let equal bv1 bv2 = bv1 = bv2
-
   let hash bv = bv.bv_term_hash
 end)
 
@@ -1793,6 +1680,5 @@ module AxTermHashtbl = Hashtbl.Make (struct
   type t = ax_term
 
   let equal ax1 ax2 = ax1 = ax2
-
   let hash ax = ax.ax_term_hash
 end)

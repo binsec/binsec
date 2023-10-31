@@ -43,7 +43,5 @@ val find : Z.t -> 'a t -> 'a
 *)
 
 val iter : (Z.t * Z.t -> 'a -> unit) -> 'a t -> unit
-
 val fold : (Z.t * Z.t -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
-
 val map : ('a -> 'b) -> 'a t -> 'b t

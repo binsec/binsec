@@ -21,18 +21,15 @@
 
 include Cli.Make (struct
   let shortname = "ghidra"
-
   let name = "Ghidra CFG import"
 end)
 
 module Runner = Builder.String_option (struct
   let name = "analyzeHeadless"
-
   let doc = "Path to the analyzeHeadless script"
 end)
 
 module Cache = Builder.String_option (struct
   let name = "cache"
-
   let doc = "Path to the file to load or save"
 end)

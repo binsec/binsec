@@ -126,25 +126,15 @@ let ext f c size =
       unary (f k) (c size') size size')
 
 let div f x y = try f x y with Division_by_zero -> raise_notrace Skip
-
 let cmp f x y = Bitvector.of_bool (f x y)
-
 let shift f x y = f x (Bitvector.to_uint y)
-
 let%test "uminus" = unary Interval.uminus Bitvector.neg 4 4
-
 let%test "add" = binary Interval.add Bitvector.add 4 4
-
 let%test "sub" = binary Interval.sub Bitvector.sub 4 4
-
 let%test "mul" = binary Interval.mul Bitvector.mul 4 4
-
 let%test "smod" = binary Interval.smod (div Bitvector.smod) 4 4
-
 let%test "umod" = binary Interval.umod (div Bitvector.umod) 4 4
-
 let%test "udiv" = binary Interval.udiv (div Bitvector.udiv) 4 4
-
 let%test "sdiv" = binary Interval.sdiv (div Bitvector.sdiv) 4 4
 
 let%test "append" =
@@ -153,31 +143,18 @@ let%test "append" =
     Bitvector.append 4 8
 
 let%test "equal" = binary Interval.equal (cmp Bitvector.equal) 4 1
-
 let%test "diff" = binary Interval.diff (cmp Bitvector.diff) 4 1
-
 let%test "ule" = binary Interval.ule (cmp Bitvector.ule) 4 1
-
 let%test "uge" = binary Interval.uge (cmp Bitvector.uge) 4 1
-
 let%test "ult" = binary Interval.ult (cmp Bitvector.ult) 4 1
-
 let%test "ugt" = binary Interval.ugt (cmp Bitvector.ugt) 4 1
-
 let%test "sle" = binary Interval.sle (cmp Bitvector.sle) 4 1
-
 let%test "sge" = binary Interval.sge (cmp Bitvector.sge) 4 1
-
 let%test "slt" = binary Interval.slt (cmp Bitvector.slt) 4 1
-
 let%test "sgt" = binary Interval.sgt (cmp Bitvector.sgt) 4 1
-
 let%test "logand" = binary Interval.logand Bitvector.logand 4 4
-
 let%test "logor" = binary Interval.logor Bitvector.logor 4 4
-
 let%test "logxor" = binary Interval.logxor Bitvector.logxor 4 4
-
 let%test "lognot" = unary Interval.lognot Bitvector.lognot 4 4
 
 let%test "shift_left" =
@@ -196,7 +173,6 @@ let%test "rotate_right" =
   binary Interval.rotate_right (shift Bitvector.rotate_right) 4 4
 
 let%test "uext" = ext Interval.uext (fun n x -> Bitvector.extend x n) 4
-
 let%test "sext" = ext Interval.sext (fun n x -> Bitvector.extend_signed x n) 4
 
 let%test "restrict" =
@@ -337,7 +313,6 @@ let binary_feedback c b size size' =
                 b)))
 
 let cmp_feedback c b size = binary_feedback c b size 1
-
 let binary_feedback c b size = binary_feedback c b size size
 
 let%test "equal_feedback" =
@@ -359,7 +334,6 @@ let%test "ugt_feedback" =
   cmp_feedback (cmp Bitvector.ugt) Interval.ugt_feedback 4
 
 let%test "add_feedback" = binary_feedback Bitvector.add Interval.add_feedback 3
-
 let%test "sub_feedback" = binary_feedback Bitvector.sub Interval.sub_feedback 3
 
 let%test "lognot_feedback" =

@@ -21,39 +21,22 @@
 
 module I386 = struct
   let eax = Dba.Expr.var "eax" 32
-
   let ecx = Dba.Expr.var "ecx" 32
-
   let edx = Dba.Expr.var "edx" 32
-
   let ebx = Dba.Expr.var "ebx" 32
-
   let esp = Dba.Expr.var "esp" 32
-
   let ebp = Dba.Expr.var "ebp" 32
-
   let esi = Dba.Expr.var "esi" 32
-
   let edi = Dba.Expr.var "edi" 32
-
   let eip = Dba.Expr.var "eip" 32
-
   let stx = Array.init 8 (fun x -> Dba.Expr.var (Format.sprintf "st%d" x) 80)
-
   let mmx = Array.init 8 (fun x -> Dba.Expr.var (Format.sprintf "mm%d" x) 64)
-
   let xmmx = Array.init 8 (fun x -> Dba.Expr.var (Format.sprintf "xmm%d" x) 128)
-
   let es = Dba.Expr.var "es" 16
-
   let cs = Dba.Expr.var "cs" 16
-
   let ss = Dba.Expr.var "ss" 16
-
   let ds = Dba.Expr.var "ds" 16
-
   let fs = Dba.Expr.var "fs" 16
-
   let gs = Dba.Expr.var "gs" 16
 
   let map = function
@@ -82,17 +65,11 @@ end
 
 module ARMv7 = struct
   let rx = Array.init 10 (fun x -> Dba.Expr.var (Format.sprintf "r%d" x) 32)
-
   let sl = Dba.Expr.var "sl" 32
-
   let fp = Dba.Expr.var "fp" 32
-
   let ip = Dba.Expr.var "ip" 32
-
   let sp = Dba.Expr.var "sp" 32
-
   let lr = Dba.Expr.var "lr" 32
-
   let pc = Dba.Expr.var "pc" 32
 
   let map = function

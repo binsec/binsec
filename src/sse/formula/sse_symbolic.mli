@@ -20,3 +20,5 @@
 (**************************************************************************)
 
 module State (S : Smt_sig.Solver) : Types.STATE_FACTORY
+
+type Options.Engine.t += Legacy

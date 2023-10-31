@@ -24,9 +24,7 @@
 (** {2 Model types }*)
 
 type t
-
 type address = Bitvector.t
-
 type identifier = string
 
 (** {2 Constructors} *)
@@ -62,11 +60,8 @@ val yices_extract : string -> t
 (** {2 Create from scratch} *)
 
 val create : ?len:int -> unit -> t
-
 val add_var : t -> string -> Bitvector.t -> unit
-
 val add_memcell : t -> Bitvector.t -> Bitvector.t -> unit
-
 val add_memory_term : t -> (Smtlib.term * Smtlib.term) list -> unit
 
 (** {2 Pretty-printer} *)

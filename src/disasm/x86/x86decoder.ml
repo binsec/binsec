@@ -48,15 +48,10 @@ exception Decode_abort
 type prefix = F2 | F3
 
 let rep_of = function None | Some F2 -> NoRep | Some F3 -> Rep
-
 let repcc_of = function None -> NoRep | Some F2 -> RepNE | Some F3 -> RepE
-
 let abort () = raise Decode_abort
-
 let imode = function `M32 -> 32 | `M16 -> 16
-
 let of_mode = function `M32 -> `M32 | `M16 -> `M16
-
 let nCcs = 16
 (* Number of distinct condition codes
  * Lookup http://x86.renejeschke.de/html/file_module_x86_id_146.html

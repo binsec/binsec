@@ -26,47 +26,33 @@ type header = { name : string; comment : string }
 
 module Section = struct
   type t = { offset : int; size : int }
-
   type header = unit
 
   let name _ = "RAM"
-
   let flag _ = 0
-
   let pos { offset; _ } = { virt = 0x9d93; raw = offset }
-
   let size { size; _ } = { virt = size; raw = size }
-
   let header _ = ()
-
   let has_flag _ _ = true
 end
 
 module Symbol = struct
   type t = { name : string; value : int }
-
   type header = unit
 
   let name { name; _ } = name
-
   let value { value; _ } = value
-
   let header _ = ()
 end
 
 module Img = struct
   type t = { header : header; ram : Section.t; buf : Loader_buf.t }
-
   type nonrec header = header
 
   let arch _ = Machine.z80
-
   let entry _ = 0x9d95
-
   let sections { ram; _ } = [| ram |]
-
   let symbols _ = [||]
-
   let header { header; _ } = header
 
   let cursor ?(at = 0) { buf; _ } =
@@ -135,7 +121,6 @@ module Offset = Loader_buf.Make (struct
   type t = Img.t
 
   let get t i = read_offset t i
-
   let dim i = Bigarray.Array1.dim i.Img.buf
 end)
 
@@ -143,6 +128,5 @@ module Address = Loader_buf.Make (struct
   type t = Img.t
 
   let get t i = read_address t i
-
   let dim _ = max_int
 end)

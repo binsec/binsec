@@ -51,6 +51,5 @@ module Loader = struct
     KO.Machine.set isa
 
   let set_arch_from_file ~filename = Loader.load_file filename |> set_arch
-
   let pp_loader_summary ppf file = Loader.(Img.pp ppf (load_file file))
 end

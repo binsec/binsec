@@ -38,7 +38,6 @@ val native_instructions_decoded : unit -> int
 *)
 
 val pp_unknown_instructions : Format.formatter -> unit -> unit
-
 val decode : Lreader.t -> Virtual_address.t -> X86Instruction.t * Dhunk.t
 
 val decode_binstream :

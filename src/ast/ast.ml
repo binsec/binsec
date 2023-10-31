@@ -48,13 +48,9 @@ module rec Size : sig
     | Eval of Expr.t loc
 
   val none : t
-
   val some : int -> t
-
   val sizeof : Loc.t loc -> t
-
   val eval : Expr.t loc -> t
-
   val pp : Format.formatter -> t -> unit
 end = struct
   type t =
@@ -64,11 +60,8 @@ end = struct
     | Eval of Expr.t loc
 
   let none = Implicit
-
   let some size = Explicit size
-
   let sizeof lval = Sizeof lval
-
   let eval expr = Eval expr
 
   let pp ppf = function
@@ -90,7 +83,6 @@ and Loc : sig
     ?array:string -> int -> ?endianness:Machine.endianness -> Expr.t loc -> t
 
   val restrict : hi:int -> lo:int -> t loc -> t
-
   val pp : Format.formatter -> t -> unit
 end = struct
   type t =
@@ -99,9 +91,7 @@ end = struct
     | Sub of int Interval.t * t loc
 
   let var ?(size = Size.none) name = Var (name, size)
-
   let load ?array len ?endianness addr = Load (len, endianness, addr, array)
-
   let restrict ~hi ~lo t = Sub ({ hi; lo }, t)
 
   let rec pp ppf lval =
@@ -132,67 +122,41 @@ and Expr : sig
     | Ite of t loc * t loc * t loc
 
   val zero : t
-
   val one : t
-
   val succ : t loc -> t
-
   val integer : Z.t -> t
-
   val constant : Bitvector.t -> t
-
   val symbol : Symbol.t loc -> t
-
   val loc : Loc.t loc -> t
-
   val add : t loc -> t loc -> t
-
   val sub : t loc -> t loc -> t
-
   val mul : t loc -> t loc -> t
-
   val neg : t loc -> t
 
   (* Unsigned operations *)
   val udiv : t loc -> t loc -> t
-
   val umod : t loc -> t loc -> t
 
   (* Signed operations *)
   val sdiv : t loc -> t loc -> t
-
   val smod : t loc -> t loc -> t
-
   val logand : t loc -> t loc -> t
-
   val logor : t loc -> t loc -> t
-
   val lognot : t loc -> t
-
   val logxor : t loc -> t loc -> t
 
   include Sigs.COMPARISON with type t := t loc and type boolean := t
 
   val shift_left : t loc -> t loc -> t
-
   val shift_right : t loc -> t loc -> t
-
   val shift_right_signed : t loc -> t loc -> t
-
   val rotate_left : t loc -> t loc -> t
-
   val rotate_right : t loc -> t loc -> t
-
   val sext : int -> t loc -> t
-
   val uext : int -> t loc -> t
-
   val restrict : hi:int -> lo:int -> t loc -> t
-
   val append : t loc -> t loc -> t
-
   val ite : t loc -> t loc -> t loc -> t
-
   val pp : Format.formatter -> t -> unit
 end = struct
   type t =
@@ -205,83 +169,44 @@ end = struct
     | Ite of t loc * t loc * t loc
 
   let zero = Bv Bitvector.zero
-
   let one = Bv Bitvector.one
-
   let succ x = Binary (Plus, x, (Int Z.one, Lexing.dummy_pos))
-
   let integer z = Int z
-
   let constant bv = Bv bv
-
   let symbol sym = Symbol sym
-
   let loc lval = Loc lval
-
   let binary op x y = Binary (op, x, y)
-
   let neg x = Unary (UMinus, x)
-
   let add = binary Plus
-
   let sub = binary Minus
-
   let mul = binary Mult
-
   let smod = binary ModS
-
   let umod = binary ModU
-
   let udiv = binary DivU
-
   let sdiv = binary DivS
-
   let lognot x = Unary (Not, x)
-
   let logor = binary Or
-
   let logxor = binary Xor
-
   let logand = binary And
-
   let equal = binary Eq
-
   let diff = binary Diff
-
   let ule = binary LeqU
-
   let sle = binary LeqS
-
   let ult = binary LtU
-
   let slt = binary LtS
-
   let uge = binary GeqU
-
   let sge = binary GeqS
-
   let ugt = binary GtU
-
   let sgt = binary GtS
-
   let shift_left = binary LShift
-
   let shift_right = binary RShiftU
-
   let shift_right_signed = binary RShiftS
-
   let rotate_left = binary LeftRotate
-
   let rotate_right = binary RightRotate
-
   let sext n x = Unary (Sext n, x)
-
   let uext n x = Unary (Uext n, x)
-
   let restrict ~hi ~lo x = Unary (Restrict { hi; lo }, x)
-
   let append = binary Concat
-
   let ite t x y = Ite (t, x, y)
 
   let rec pp ppf e =
@@ -319,29 +244,17 @@ module Instr = struct
     | Halt
 
   let nop = Nop
-
   let label name = Label name
-
   let assign lval rval = Assign (lval, rval)
-
   let undef lval = Nondet lval
-
   let nondet lval = Nondet lval
-
   let assume rval = Assume rval
-
   let dynamic_assert rval = Assert rval
-
   let conditional_jump rval label = If (rval, label)
-
   let dynamic_jump rval = Jump rval
-
   let goto label = Goto label
-
   let halt = Halt
-
   let printers = ref []
-
   let register_pp f = printers := f :: !printers
 
   let rec resolve_pp ppf inst = function

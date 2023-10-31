@@ -29,84 +29,47 @@ module type S = sig
   (** Return address / x1 *)
 
   val sp : t
-
   val gp : t
-
   val tp : t
 
   val fp : t
   (** Same as s0 *)
 
   val a0 : t
-
   val a1 : t
-
   val a2 : t
-
   val a3 : t
-
   val a4 : t
-
   val a5 : t
-
   val a6 : t
-
   val a7 : t
-
   val t0 : t
-
   val t1 : t
-
   val t2 : t
-
   val t3 : t
-
   val t4 : t
-
   val t5 : t
-
   val t6 : t
-
   val s0 : t
-
   val s1 : t
-
   val s2 : t
-
   val s3 : t
-
   val s4 : t
-
   val s5 : t
-
   val s6 : t
-
   val s7 : t
-
   val s8 : t
-
   val s9 : t
-
   val s10 : t
-
   val s11 : t
-
   val name : t -> string
-
   val size : t -> int
-
   val num : t -> int
-
   val bvnum : t -> Bitvector.t
-
   val of_string : string -> t option
-
   val of_int_exn : int -> t
-
   val of_int : int -> t option
-
   val expr : t -> Dba.Expr.t
-
   val lval : t -> Dba.LValue.t
 end
 
@@ -116,17 +79,12 @@ module Mode = struct
   type t = M32 | M64 | M128
 
   let m32 = M32
-
   and m64 = M64
-
   and m128 = M128
 
   let is_m32 = function M32 -> true | M64 | M128 -> false
-
   let is_m64 = function M64 -> true | M32 | M128 -> false
-
   let is_m128 = function M128 -> true | M32 | M64 -> false
-
   let size = function M32 -> 32 | M64 -> 64 | M128 -> 128
 end
 
@@ -136,7 +94,6 @@ end
 
 module Register (M : RegisterSize) = struct
   type register = Dba.Var.t
-
   type t = register
 
   (* The local hashtable holding the information for this architecture *)
@@ -144,9 +101,7 @@ module Register (M : RegisterSize) = struct
     include Basic_types.String.Htbl
 
     let h = create 7
-
     let get = find h
-
     let set = add h
   end
 
@@ -177,67 +132,36 @@ module Register (M : RegisterSize) = struct
   let _ = add_all ()
 
   let zero = H.get "zero"
-
   and ra = H.get "ra"
-
   and sp = H.get "sp"
-
   and gp = H.get "gp"
-
   and tp = H.get "tp"
-
   and a0 = H.get "a0"
-
   and a1 = H.get "a1"
-
   and a2 = H.get "a2"
-
   and a3 = H.get "a3"
-
   and a4 = H.get "a4"
-
   and a5 = H.get "a5"
-
   and a6 = H.get "a6"
-
   and a7 = H.get "a7"
-
   and t0 = H.get "t0"
-
   and t1 = H.get "t1"
-
   and t2 = H.get "t2"
-
   and t3 = H.get "t3"
-
   and t4 = H.get "t4"
-
   and t5 = H.get "t5"
-
   and t6 = H.get "t6"
-
   and s0 = H.get "s0"
-
   and s1 = H.get "s1"
-
   and s2 = H.get "s2"
-
   and s3 = H.get "s3"
-
   and s4 = H.get "s4"
-
   and s5 = H.get "s5"
-
   and s6 = H.get "s6"
-
   and s7 = H.get "s7"
-
   and s8 = H.get "s8"
-
   and s9 = H.get "s9"
-
   and s10 = H.get "s10"
-
   and s11 = H.get "s11"
 
   let fp = s0
@@ -280,18 +204,14 @@ module Register (M : RegisterSize) = struct
     |]
 
   let name t = t.Dba.Var.name
-
   and size t = t.Dba.Var.size
-
   and expr t = Dba.Expr.v t
-
   and lval t = Dba.LValue.v t
 
   let of_string name =
     match H.get name with t -> Some t | exception Not_found -> None
 
   let of_int_exn n = Array.get x n
-
   let of_int n = match of_int_exn n with t -> Some t | exception _ -> None
 
   let num t =

@@ -24,30 +24,21 @@ type 'a key = 'a Types.key
 external key : int -> 'a key = "%identity"
 
 type data
-
 and proc = data -> data -> data option
 
 external make : int -> int -> 'a array = "caml_obj_block"
-
 external get : data array -> 'a key -> 'a = "%obj_field"
-
 external set : data array -> 'a key -> 'a -> unit = "%obj_set_field"
-
 external handler : ('a -> 'a -> 'a option) -> proc = "%identity"
 
 module type S = sig
   type t
 
   val id : t -> int
-
   val get : 'a key -> t -> 'a
-
   val set : 'a key -> 'a -> t -> unit
-
   val register_key : ?merge:('a -> 'a -> 'a option) -> 'a -> 'a key
-
   val register_at_fork : (t -> t -> unit) -> unit
-
   val register_at_end : (t -> Types.status -> unit) -> unit
 end
 
@@ -55,33 +46,23 @@ module Make () : sig
   include S
 
   val empty : unit -> t
-
   val fork : t -> t
-
   val merge : t -> t -> t option
-
   val terminate : t -> Types.status -> unit
 end = struct
   type t = data array
 
   let id : int key = key 0
-
   let merger : (data -> data -> data option) array ref = ref (make 0 16)
-
   let matrice : data array ref = ref (make 0 16)
 
   let n = ref 0
-
   and s = ref 1
 
   let at_fork_callbacks = Queue.create ()
-
   let register_at_fork f = Queue.add f at_fork_callbacks
-
   let at_end_callbacks = Queue.create ()
-
   let register_at_end f = Queue.add f at_end_callbacks
-
   let default_merge x y = if x == y then Some x else None
 
   let register_key : ?merge:('a -> 'a -> 'a option) -> 'a -> 'a key =
@@ -131,10 +112,7 @@ end = struct
     merge t'' t t' 1
 
   let terminate t status = Queue.iter (fun f -> f t status) at_end_callbacks
-
   let id t = get t id
-
   let get k t = get t k
-
   let set k v t = set t k v
 end

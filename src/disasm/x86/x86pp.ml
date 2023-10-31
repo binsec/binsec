@@ -42,7 +42,6 @@ open X86Types
 open X86Util
 
 let high_bit = Int64.shift_left Int64.one 31
-
 let _higher_bit = Int64.shift_left Int64.one 32
 
 let pp_int16 ppf n =
@@ -56,35 +55,20 @@ let pp_int64 ppf n =
     fprintf ppf "0x%Lx" (Int64.logand mask n)
 
 let pp_reg_xmm ppf r = fprintf ppf "%s" (xmm_reg_to_string r)
-
 let pp_reg8 ppf r = fprintf ppf "%s" (reg8_to_string r)
-
 let pp_reg16 ppf r = fprintf ppf "%s" (reg16_to_string r)
-
 let pp_reg32 ppf r = fprintf ppf "%s" (reg32_to_string r)
-
 let pp_reg32_16 ppf r = fprintf ppf "%s" (reg32_to_string_16 r)
-
 let pp_reg32_8 ppf r = fprintf ppf "%s" (reg32_to_string_8 r)
-
 let pp_segment_reg ppf r = fprintf ppf "%s" (segment_reg_to_string r)
-
 let _pp_float_reg ppf r = fprintf ppf "%s" (float_reg_to_string r)
-
 let _pp_mmx_reg ppf r = fprintf ppf "%s" (mmx_reg_to_string r)
-
 let _pp_control_reg ppf r = fprintf ppf "%s" (control_reg_to_string r)
-
 let _pp_debug_reg ppf r = fprintf ppf "%s" (debug_reg_to_string r)
-
 let _pp_test_reg ppf r = fprintf ppf "%s" (test_reg_to_string r)
-
 let pp_cc ppf r = fprintf ppf "%s" (cc_to_string r)
-
 let _pp_sse ppf r = fprintf ppf "%s" (sse_to_string r)
-
 let pp_scale ppf r = fprintf ppf "%s" (scale_to_string r)
-
 let pp_addr ppf n = fprintf ppf "0x%Lx" n
 
 let pp_address ppf addr =
@@ -117,15 +101,10 @@ let pp_genop pp_reg ppf = function
   | Address addr -> pp_address ppf addr
 
 let pp_genop_xmm = pp_genop pp_reg_xmm
-
 let pp_genop32 = pp_genop pp_reg32
-
 let pp_genop32_16 = pp_genop pp_reg32_16
-
 let pp_genop32_8 = pp_genop pp_reg32_8
-
 let pp_genop16 = pp_genop pp_reg16
-
 let pp_genop8 = pp_genop pp_reg8
 
 let pp_genop_addr pp_reg ppf = function
@@ -134,15 +113,10 @@ let pp_genop_addr pp_reg ppf = function
   | Address addr -> pp_address ppf addr
 
 let pp_genop_addr32 = pp_genop_addr pp_reg32
-
 let _pp_genop_addr8 = pp_genop_addr pp_reg8
-
 let pp_arith_op ppf aop = fprintf ppf "%s" (arith_op_to_string aop)
-
 let pp_shift_op ppf sop = fprintf ppf "%s" (shift_op_to_string sop)
-
 let pp_rotate_op ppf rop = fprintf ppf "%s" (rotate_op_to_string rop)
-
 let pp_shiftd_op ppf sop = fprintf ppf "%s" (shiftd_op_to_string sop)
 
 let pp_rep ppf = function
@@ -420,5 +394,4 @@ let pp_bytes nbytes ppf i =
   aux ppf 0
 
 let pp_byte = pp_bytes 1
-
 let pp_word = pp_bytes 4

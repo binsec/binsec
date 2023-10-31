@@ -40,17 +40,11 @@
 (* The X86 machine language *)
 
 type simd_size = S32 | S64 | S128
-
 type xmm_mm = XMM | MM
-
 type xmm_pos = Left | Right
-
 type mode = [ `M32 | `M16 ]
-
 type sizeMode = [ mode | `M8 ]
-
 type address_size_mode = A16 | A32
-
 type rep = NoRep | Rep | RepE | RepNE
 
 (** {6 Register sets} *)
@@ -107,8 +101,9 @@ type flag =
   | TF
   | SF (* Sign: The highest bit is 1 or 0 *)
   | ZF (* Zero: the result is zero *)
-  | AF (* Adjust/Auxilary: overflow or under flow on the 8 lower bits, used in
-          BCD calculation *)
+  | AF
+    (* Adjust/Auxilary: overflow or under flow on the 8 lower bits, used in
+       BCD calculation *)
   | PF (* Parity: number of set bits in lower byte is even or odd *)
   | CF
 (* Carry: Overflow in unsigned calculation *)
@@ -157,11 +152,8 @@ type 'a genop =
   | Address of address  (** A memory dereference *)
 
 type genopxmm = xmm_reg genop
-
 type genop32 = reg32 genop
-
 type genop16 = reg16 genop
-
 type genop8 = reg8 genop
 
 (** Specializations to particular register sets *)

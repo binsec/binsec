@@ -24,7 +24,6 @@ type t = string
 external to_string : t -> string = "%identity"
 
 let pp = Format.pp_print_string
-
 let zero = "!0"
 
 let incr =

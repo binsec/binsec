@@ -29,7 +29,6 @@ exception Invalid_format of string
 (** Minimal support for error reporting. *)
 
 val invalid_format : string -> 'a
-
 val assert_format : bool -> string -> unit
 
 module type S = sig
@@ -46,34 +45,21 @@ module type S = sig
   (** A mutable cursor, pointing to an arbitrary position of a buffer. *)
 
   val cursor : ?at:int -> Machine.endianness -> t -> cursor
-
   val seek : cursor -> int -> unit
-
   val ensure : cursor -> int -> string -> unit
-
   val advance : cursor -> int -> unit
-
   val at_end : cursor -> bool
 
   module Peek : sig
     val u8 : cursor -> u8
-
     val u16 : cursor -> u16
-
     val u32 : cursor -> u32
-
     val u64 : cursor -> u64
-
     val s8 : cursor -> s8
-
     val s16 : cursor -> s16
-
     val s32 : cursor -> s32
-
     val s64 : cursor -> s64
-
     val uleb128 : cursor -> u64
-
     val sleb128 : cursor -> s64
 
     val bytes : cursor -> int -> string
@@ -90,23 +76,14 @@ module type S = sig
 
   module Read : sig
     val u8 : cursor -> u8
-
     val u16 : cursor -> u16
-
     val u32 : cursor -> u32
-
     val u64 : cursor -> u64
-
     val s8 : cursor -> s8
-
     val s16 : cursor -> s16
-
     val s32 : cursor -> s32
-
     val s64 : cursor -> s64
-
     val uleb128 : cursor -> u64
-
     val sleb128 : cursor -> s64
 
     val bytes : cursor -> int -> string
@@ -127,7 +104,6 @@ module type Bufferable = sig
   type t
 
   val get : t -> int -> int
-
   val dim : t -> int
 end
 
@@ -138,19 +114,12 @@ module type W = sig
 
   module Write : sig
     val u8 : cursor -> u8 -> unit
-
     val u16 : cursor -> u16 -> unit
-
     val u32 : cursor -> u32 -> unit
-
     val u64 : cursor -> u64 -> unit
-
     val s8 : cursor -> s8 -> unit
-
     val s16 : cursor -> s16 -> unit
-
     val s32 : cursor -> s32 -> unit
-
     val s64 : cursor -> s64 -> unit
   end
 end
@@ -166,7 +135,7 @@ module Wake (W : Writable) : W with type t = W.t
 include
   W
     with type t =
-          (int, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
+      (int, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
 
 val sub : cursor -> int -> cursor
 (** [sub t len] returns a fresh cursor pointing to the beginning of a sub-buffer

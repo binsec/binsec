@@ -22,7 +22,6 @@
 (** Extra pretty-printing functions *)
 
 type sformat = (unit, Format.formatter, unit) format
-
 type 'a formatter = Format.formatter -> 'a -> unit
 
 val pp_list :
@@ -45,7 +44,6 @@ val pp_as_string : ('a -> string) -> 'a formatter
 (** [pp_as_string f ppf v] *)
 
 val pp_opt_as_string : ('a -> string) -> 'a option formatter
-
 val pp_opt : 'a formatter -> 'a option formatter
 
 val string_from_pp : 'a formatter -> 'a -> string

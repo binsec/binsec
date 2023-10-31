@@ -32,9 +32,7 @@ module Translate = struct
     | Unary_op.Restrict interval -> Formula.mk_bv_extract interval
 
   let as_bv bop e1 e2 = Formula.(mk_bv_ite (bop e1 e2) mk_bv_one mk_bv_zero)
-
   let rotate_right_const n = Formula.mk_bv_rotate_right n
-
   let rotate_left_const n = Formula.mk_bv_rotate_left n
 
   let rotate shift_func rev_shift_func const_rot_func value shift =
@@ -234,9 +232,7 @@ module Solver = struct
   type time = { mutable sec : float }
 
   let cumulated_time = { sec = 0. }
-
   let query_stat () = !queries
-
   let time_stat () = cumulated_time.sec
 
   type t = Solver.Session.t * float

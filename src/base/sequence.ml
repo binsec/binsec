@@ -23,35 +23,20 @@ module type S = sig
   type 'a t
 
   val empty : 'a t
-
   val length : 'a t -> int
-
   val push_front : 'a -> 'a t -> 'a t
-
   val push_back : 'a -> 'a t -> 'a t
-
   val peek_front : 'a t -> 'a
-
   val peek_back : 'a t -> 'a
-
   val pop_front : 'a t -> 'a t
-
   val pop_back : 'a t -> 'a t
-
   val map_forward : ('a -> 'b) -> 'a t -> 'b t
-
   val map_backward : ('a -> 'b) -> 'a t -> 'b t
-
   val iter_forward : ('a -> unit) -> 'a t -> unit
-
   val iter_backward : ('a -> unit) -> 'a t -> unit
-
   val fold_forward : ('a -> 'b -> 'b) -> 'a t -> 'b -> 'b
-
   val fold_backward : ('a -> 'b -> 'b) -> 'a t -> 'b -> 'b
-
   val to_seq_forward : 'a t -> 'a Seq.t
-
   val to_seq_backward : 'a t -> 'a Seq.t
 end
 
@@ -370,35 +355,20 @@ module D : S = struct
              m (dfold_backward g f acc))
 
   let empty = { length = 0; queue = qempty }
-
   let length t = t.length
-
   let push_front x t = { length = t.length + 1; queue = qpush_front x t.queue }
-
   let push_back x t = { length = t.length + 1; queue = qpush_back x t.queue }
-
   let peek_front t = qpeek_front t.queue
-
   let peek_back t = qpeek_back t.queue
-
   let pop_front t = { length = t.length - 1; queue = qpop_front t.queue }
-
   let pop_back t = { length = t.length - 1; queue = qpop_back t.queue }
-
   let map_forward f t = { t with queue = qmap_forward f t.queue }
-
   let map_backward f t = { t with queue = qmap_backward f t.queue }
-
   let iter_forward f t = qiter_forward f t.queue
-
   let iter_backward f t = qiter_backward f t.queue
-
   let to_seq_forward t = qto_seq_forward t.queue
-
   let to_seq_backward t = qto_seq_backward t.queue
-
   let fold_forward f t acc = qfold_forward f t.queue acc
-
   let fold_backward f t acc = qfold_backward f t.queue acc
 end
 
@@ -697,18 +667,14 @@ and qfold_backward : 'a 'b. ('a -> 'b -> 'b) -> 'a queue -> 'b -> 'b =
               (qfold_backward (cfold_backward g) a (D.fold_backward g f acc))))
 
 let empty = { length = 0; queue = qempty }
-
 let length t = t.length
 
 let append t1 t2 =
   { length = t1.length + t2.length; queue = qappend t1.queue t2.queue }
 
 let push_front x t = { length = t.length + 1; queue = qpush_front x t.queue }
-
 let push_back x t = { length = t.length + 1; queue = qpush_back x t.queue }
-
 let peek_front t = try Some (qpeek_front t.queue) with Not_found -> None
-
 let peek_back t = try Some (qpeek_back t.queue) with Not_found -> None
 
 let pop_front t =
@@ -720,17 +686,10 @@ let pop_back t =
   with Not_found -> None
 
 let map_forward f t = { t with queue = qmap_forward f t.queue }
-
 let map_backward f t = { t with queue = qmap_backward f t.queue }
-
 let iter_forward f t = qiter_forward f t.queue
-
 let iter_backward f t = qiter_backward f t.queue
-
 let to_seq_forward t = qto_seq_forward t.queue
-
 let to_seq_backward t = qto_seq_backward t.queue
-
 let fold_forward f t acc = qfold_forward f t.queue acc
-
 let fold_backward f t acc = qfold_backward f t.queue acc

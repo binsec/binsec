@@ -28,9 +28,7 @@ module A = struct
   type t = VA.t
 
   let compare a1 a2 = compare a1 a2
-
   let hash (a : t) = (a :> int)
-
   let equal a1 a2 = a1 = a2
 end
 
@@ -38,7 +36,6 @@ module I = struct
   type t = Instruction.t
 
   let hash (i : t) = (i.Instruction.address :> int)
-
   let equal i1 i2 = i1 = i2
 end
 
@@ -46,7 +43,6 @@ module Function = struct
   type t = Name of string | Address of VA.t
 
   let name s = Name s
-
   let addr a = Address a
 
   let pp ppf = function
@@ -77,13 +73,9 @@ module S = struct
   type t = { block : VA.t; func : Function.t }
 
   let create block func = { block; func }
-
   let block t = t.block
-
   let func t = t.func
-
   let equal = ( = )
-
   let hash = Hashtbl.hash
 end
 
@@ -99,13 +91,9 @@ module F = struct
   }
 
   let eps f = f.eps
-
   let name f = f.name
-
   let blocks f = f.blocks
-
   let edges f = f.edges
-
   let calls f = f.calls
 
   let create ~name ~edges ~eps =
@@ -130,13 +118,9 @@ module F = struct
     List.sort VA.compare insts
 
   let set_name f name = f.name <- name
-
   let set_eps f eps = f.eps <- VA.Set.union f.eps eps
-
   let set_blocks f k v = H.add f.blocks k v
-
   let set_edges f e = f.edges <- e
-
   let set_calls f k v = H.add f.calls k v
 
   let build_cfg f =
@@ -187,18 +171,14 @@ module G = struct
   }
 
   let graph g = g.graph
-
   let ep g = g.ep
-
   let funcs g = g.funcs
-
   let calls g = g.calls
 
   let create ?ep () =
     { ep; graph = C.create 1000; funcs = H.create 1000; calls = H.create 1000 }
 
   let pp ppf g = H.iter (fun _ f -> Format.fprintf ppf "%a\n" F.pp f) g.funcs
-
   let add_function t f = VA.Set.iter (fun va -> H.add t.funcs va f) (F.eps f)
 
   let add_calls t ~caller ~callee ~return =
@@ -209,21 +189,14 @@ module G = struct
   module V = C.V
 
   let iter_vertex f g = C.iter_vertex f (graph g)
-
   let add_vertex g v = C.add_vertex (graph g) v
-
   let add_inst g = C.add_inst (graph g)
-
   let add_symb g = C.add_symb (graph g)
-
   let add_edge_a g = C.add_edge_a (graph g)
-
   let remove_edge g = C.remove_edge (graph g)
-
   let mem_vertex_a g = C.mem_vertex_a (graph g)
 
   let succ g = C.succ (graph g)
-
   and pred g = C.pred (graph g)
 
   let all_leaders g =
@@ -311,15 +284,15 @@ module Read = struct
         let list_insts = IU.read_list insts in
         (* add edges between instructions of a basic block to G *)
         (if not simple then
-         let rec add_sequence = function
-           | ia1 :: (ia2 :: _ as l) ->
-               let va1 = IU.to_vaddr ia1 and va2 = IU.to_vaddr ia2 in
-               F.set_edges f ((va1, va2) :: F.edges f);
-               G.add_edge_a g va1 va2;
-               add_sequence l
-           | _ -> ()
-         in
-         add_sequence list_insts);
+           let rec add_sequence = function
+             | ia1 :: (ia2 :: _ as l) ->
+                 let va1 = IU.to_vaddr ia1 and va2 = IU.to_vaddr ia2 in
+                 F.set_edges f ((va1, va2) :: F.edges f);
+                 G.add_edge_a g va1 va2;
+                 add_sequence l
+             | _ -> ()
+           in
+           add_sequence list_insts);
         let last_inst = List_utils.last list_insts |> IU.to_vaddr in
         (* adding block successors *)
         let is_empty_list = ( = ) "()" in
@@ -402,9 +375,7 @@ module P = Graph.Graphviz.Dot (struct
   include C
 
   let graph_attributes _t = []
-
   let default_vertex_attributes _ = [ `Shape `Box; `Style `Rounded ]
-
   let vertex_name v = string_of_int @@ VA.to_int (V.addr v)
 
   let vertex_attributes v =
@@ -447,7 +418,6 @@ module P = Graph.Graphviz.Dot (struct
         Some { sg_name; sg_attributes; sg_parent }
 
   let default_edge_attributes _ = []
-
   let edge_attributes _ = []
 end)
 
@@ -484,17 +454,17 @@ let of_file ~simple ~ida_file =
       | line ->
           Logger.debug "Reading line %d" line_num;
           (if String.length line > 0 then
-           if is_function_header line then (
-             Logger.debug ~level:4 "Push";
-             Stack.push (F.empty ()) functions)
-           else
-             (* update the most recently added function *)
-             let f = Stack.top functions in
-             match String.get line 0 with
-             | '{' -> Read.func f ~line
-             | '[' -> Read.block g f ~simple ~line
-             | '(' -> Read.inst g f ~simple ~line
-             | _ -> Logger.warning "Ignoring line %s" line);
+             if is_function_header line then (
+               Logger.debug ~level:4 "Push";
+               Stack.push (F.empty ()) functions)
+             else
+               (* update the most recently added function *)
+               let f = Stack.top functions in
+               match String.get line 0 with
+               | '{' -> Read.func f ~line
+               | '[' -> Read.block g f ~simple ~line
+               | '(' -> Read.inst g f ~simple ~line
+               | _ -> Logger.warning "Ignoring line %s" line);
           loop (succ line_num) g
       | exception End_of_file ->
           close_in ic;

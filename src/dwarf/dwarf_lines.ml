@@ -429,7 +429,6 @@ let load img : t =
   loop [] cursor
 
 let fold = List.fold_left
-
 let iter = List.iter
 
 let pp =

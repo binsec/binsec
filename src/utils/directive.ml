@@ -31,18 +31,12 @@ end
 
 module Choice = struct
   type side = Consequent | Alternative
-
-  type t = { alternate : bool; (* Alternate side *)
-                               mutable side : side }
+  type t = { alternate : bool; (* Alternate side *) mutable side : side }
 
   let invert = function Consequent -> Alternative | Alternative -> Consequent
-
   let create ?(alternate = false) side = { alternate; side }
-
   let do_alternate t = if t.alternate then t.side <- invert t.side
-
   let is_alternative t = t.side = Alternative
-
   let is_consequent t = t.side = Consequent
 end
 
@@ -58,7 +52,6 @@ module Count = struct
     Count n
 
   let unlimited = Unlimited
-
   let once = Count 1
 
   let decr = function
@@ -112,15 +105,10 @@ let enumerate ?(n = 1) e ~loc () =
   { loc; goal = Enumerate (n, e) }
 
 let enumerate_all e ~loc () = enumerate ~n:(1 lsl Dba.Expr.size_of e) e ~loc ()
-
 let cut ?(guard = Dba.Expr.one) ~loc () = { loc; goal = Cut guard }
-
 let assume e ~loc () = { loc; goal = Assume e }
-
 let dynamic_assert e ~loc () = { loc; goal = Assert e }
-
 let directive g = g.goal
-
 let loc g = g.loc
 
 let addr g =
@@ -149,5 +137,4 @@ let check_and_decr g =
       Some { g with goal = Enumerate (n - 1, e) }
 
 let is_choice = function { goal = Choice _; _ } -> true | _ -> false
-
 let reloc loc g = { g with loc }

@@ -39,7 +39,6 @@ module A = struct
     | Some _, None -> 1
 
   let hash = function None -> 129913994 | Some name -> Hashtbl.hash name
-
   let default = None
 end
 
@@ -82,25 +81,17 @@ module Output = struct
 end
 
 exception Unknown
-
 exception Undef of Var.t
-
 exception Uninterp of string
-
 exception Non_unique
-
 exception Non_mergeable
 
 type 'a test = True of 'a | False of 'a | Both of { t : 'a; f : 'a }
-
 type 'a target = ('a * string) list option
 
 type size = Term.size
-
 and 'a interval = 'a Term.interval
-
 and unary = Term.unary
-
 and binary = Term.binary
 
 and 'a operator = 'a Term.operator =
@@ -136,16 +127,13 @@ and 'a operator = 'a Term.operator =
   | Sgt : binary operator
 
 type _ value = ..
-
 type _ value += Abstract : _ value
 
 module type UID = sig
   type t
 
   val zero : t
-
   val succ : t -> t
-
   val compare : t -> t -> int
 end
 
@@ -154,69 +142,57 @@ module type VALUE = sig
   (** Symbolic value *)
 
   type id
-
   type state
 
   val kind : t value
-
   val constant : Bitvector.t -> t
-
   val var : id -> string -> int -> t
-
   val unary : unary operator -> t -> t
-
   val binary : binary operator -> t -> t -> t
-
   val ite : t -> t -> t -> t
 end
+
+type 'a feature = ..
 
 module type RAW_STATE = sig
   type t
   (** Symbolic state *)
 
   module Uid : UID
-
   module Value : VALUE with type id := Uid.t and type state := t
 
   val lookup : Var.t -> t -> Value.t
-
   val read : addr:Value.t -> int -> Machine.endianness -> t -> Value.t * t
 
   val select :
     string -> addr:Value.t -> int -> Machine.endianness -> t -> Value.t * t
 
   val empty : unit -> t
-
   val assume : Value.t -> t -> t option
-
   val test : Value.t -> t -> t test
-
   val get_value : Value.t -> t -> Bitvector.t
-
   val get_a_value : Value.t -> t -> Bitvector.t
 
   val enumerate :
     Value.t -> ?n:int -> ?except:Bitvector.t list -> t -> (Bitvector.t * t) list
 
   val alloc : array:string -> t -> t
-
   val assign : Var.t -> Value.t -> t -> t
-
   val write : addr:Value.t -> Value.t -> Machine.endianness -> t -> t
-
   val store : string -> addr:Value.t -> Value.t -> Machine.endianness -> t -> t
-
   val memcpy : addr:Bitvector.t -> int -> Loader_buf.t -> t -> t
-
   val merge : parent:t -> t -> t -> t
-
   val assertions : t -> Value.t list
-
   val pp : Format.formatter -> t -> unit
-
   val pp_smt : Value.t target -> Format.formatter -> t -> unit
-
   val to_formula : t -> Formula.formula
+
+  val downcast : 'a feature -> (t -> 'a) option
+  (** [downcast feature]
+      returns a cast function from a state to an extended state.
+      It returns [None] if the current implementation does not support the
+      queried feature.
+   *)
 end
 
 type _ key
@@ -225,7 +201,6 @@ module type STATE = sig
   include RAW_STATE
 
   val id : Uid.t key
-
   val symbols : Value.t list S.Map.t key
 end
 
@@ -242,31 +217,18 @@ type status =
 
 module type EXPLORATION_STATISTICS = sig
   val get_paths : unit -> int
-
   val get_completed_paths : unit -> int
-
   val get_unknown_paths : unit -> int
-
   val get_pending_paths : unit -> int
-
   val get_status : status -> int
-
   val get_total_asserts : unit -> int
-
   val get_failed_asserts : unit -> int
-
   val get_branches : unit -> int
-
   val get_max_depth : unit -> int
-
   val get_instructions : unit -> int
-
   val get_unique_insts : unit -> int
-
   val get_time : unit -> float
-
   val pp : Format.formatter -> unit -> unit
-
   val to_toml : unit -> Toml.Types.table
 end
 
@@ -274,69 +236,43 @@ module type EXPLORATION_STATISTICS_FULL = sig
   include EXPLORATION_STATISTICS
 
   val reset : unit -> unit
-
   val add_path : unit -> unit
-
   val terminate_path : status -> unit
-
   val add_assert : unit -> unit
-
   val add_failed_assert : unit -> unit
-
   val add_branch : unit -> unit
-
   val update_depth : int -> unit
-
   val add_instructions : int -> unit
-
   val register_address : Virtual_address.t -> unit
 end
 
 module type QUERY_STATISTICS = sig
   module Preprocess : sig
     val get_sat : unit -> int
-
     val get_unsat : unit -> int
-
     val get_const : unit -> int
-
     val incr_sat : unit -> unit
-
     val incr_unsat : unit -> unit
-
     val incr_const : unit -> unit
-
     val pp : Format.formatter -> unit -> unit
-
     val to_toml : unit -> Toml.Types.table
   end
 
   module Solver : sig
     val get_sat : unit -> int
-
     val get_unsat : unit -> int
-
     val get_err : unit -> int
-
     val get_time : unit -> float
-
     val incr_sat : unit -> unit
-
     val incr_unsat : unit -> unit
-
     val incr_err : unit -> unit
-
     val start_timer : unit -> unit
-
     val stop_timer : unit -> unit
-
     val pp : Format.formatter -> unit -> unit
-
     val to_toml : unit -> Toml.Types.table
   end
 
   val reset : unit -> unit
-
   val pp : Format.formatter -> unit -> unit
 end
 
@@ -346,14 +282,9 @@ module type WORKLIST = sig
   type 'a t
 
   val push : 'a -> 'a t -> 'a t
-
   val pop : 'a t -> 'a * 'a t
-
   val singleton : 'a -> 'a t
-
   val length : 'a t -> int
-
   val is_empty : 'a t -> bool
-
   val empty : 'a t
 end

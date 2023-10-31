@@ -130,7 +130,6 @@ module Shdr : sig
 
   module SHN : sig
     type section = t
-
     type t = UNDEF | SEC of section | PROC of int | OS of int | ABS | COMMON
 
     include Sigs.PRINTABLE with type t := t
@@ -211,7 +210,6 @@ type fmap = private {
 }
 
 val fmap : Virtual_address.t Interval.t -> int -> string -> fmap
-
 val files : Img.t -> fmap array
 
 module Utils : sig

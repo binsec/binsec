@@ -29,11 +29,11 @@ module Make
   module Fiber :
     Fiber.S
       with type builtin :=
-            Virtual_address.t ->
-            Path.t ->
-            int ->
-            State.t ->
-            (State.t, Types.status) Result.t
+        Virtual_address.t ->
+        Path.t ->
+        int ->
+        State.t ->
+        (State.t, Types.status) Result.t
 
   type t
 
@@ -84,6 +84,9 @@ module Make
   end
 
   val register_callback : (module CALLBACK) -> unit
+
+  val register_opcode_hook :
+    (Lreader.t -> (Script.Instr.t list * Script.env) option) -> unit
 end = struct
   module type CALLBACK = sig
     val instruction_callback :
@@ -228,8 +231,12 @@ end = struct
     mutable last : Instruction.t option;
     mutable sinks : I.Set.t;
     killset : Var.Set.t I.Htbl.t;
+    task : unit I.Htbl.t;
     fibers : [ `All ] Fiber.t I.Htbl.t;
   }
+
+  let is_deadstore t var vertex =
+    try Var.Set.mem var (I.Htbl.find t.killset vertex) with Not_found -> false
 
   let entropy = Printf.sprintf "%%entropy%%%d"
 
@@ -294,15 +301,12 @@ end = struct
       type t = int
 
       let compare = ( - )
-
       let equal = ( == )
-
       let hash = Fun.id
 
       type label = t
 
       let create = Fun.id
-
       let label = Fun.id
     end
 
@@ -318,26 +322,24 @@ end = struct
       type vertex = V.t
 
       let src (vertex, _, _) = vertex
-
       let dst (_, _, vertex) = vertex
 
       type label = bool
 
       let create src branch dst = (src, branch, dst)
-
       let label (_, branch, _) = branch
     end
 
     type edge = E.t
 
     let is_directed = true
-
     let is_empty { nodes; _ } = I.Htbl.length nodes = 0
-
     let nb_vertex { nodes; _ } = I.Htbl.length nodes
 
     let nb_edges { preds; _ } =
       I.Htbl.fold (fun _ preds n -> n + List.length preds) preds 0
+
+    let is_new_vertex { n; _ } vertex = vertex >= n
 
     let out_degree { nodes; _ } vertex =
       match I.Htbl.find nodes vertex with
@@ -347,7 +349,6 @@ end = struct
       | Branch _ -> 2
 
     let in_degree { preds; _ } vertex = List.length (I.Htbl.find preds vertex)
-
     let mem_vertex { nodes; _ } vertex = I.Htbl.mem nodes vertex
 
     let mem_edge { nodes; _ } src dst =
@@ -554,9 +555,7 @@ end = struct
   end
 
   let instruction_callback = ref []
-
   let process_callback = Queue.create ()
-
   let builtin_callback = ref []
 
   let register_callback callback =
@@ -588,6 +587,9 @@ end = struct
     | [] -> raise (Invalid_argument "missing builtin callback")
     | exec :: callbacks -> (
         match exec p with None -> resolve_builtin p callbacks | Some f -> f)
+
+  let opcode_hook = ref []
+  let register_opcode_hook hook = opcode_hook := hook :: !opcode_hook
 
   let analyze_fallthrough kind killset =
     match kind with
@@ -637,7 +639,7 @@ end = struct
       match I.Htbl.find t.killset vertex with
       | old when Var.Set.equal old killset -> closure t todo push
       | (exception Not_found) | _ ->
-          I.Htbl.add t.killset vertex killset;
+          I.Htbl.replace t.killset vertex killset;
           G.iter_pred push t vertex;
           closure t todo push
 
@@ -671,9 +673,7 @@ end = struct
       include G
 
       let graph_attributes _ = []
-
       let default_vertex_attributes _ = [ `Shape `Box ]
-
       let vertex_name v = Format.asprintf "\"%d: %a\"" v pp_node (node t v)
 
       let vertex_attributes v =
@@ -688,14 +688,12 @@ end = struct
                 | Symbolize var );
               succ;
             }
-          when Var.Set.mem var (I.Htbl.find t.killset succ) ->
+          when is_deadstore t var succ ->
             [ `Color 0xff0000 ]
         | _ -> []
 
       let get_subgraph _ = None
-
       let default_edge_attributes _ = []
-
       let edge_attributes _ = []
     end in
     let module D = Graph.Graphviz.Dot (C_dot) in
@@ -829,32 +827,6 @@ end = struct
           (fun var -> ignore (G.insert_before t vertex (Forget var)))
           temps)
       !exits
-
-  let rec disasm t todo =
-    if not (Virtual_address.Map.is_empty !todo) then (
-      let addr, tolink = Virtual_address.Map.choose !todo in
-      todo := Virtual_address.Map.remove addr !todo;
-      let pos' = Virtual_address.diff addr t.base in
-      if pos' < 0 || pos' >= t.size then disasm t todo
-      else
-        let pos = Lreader.get_pos t.reader in
-        if pos > pos' then Lreader.rewind t.reader (pos - pos')
-        else Lreader.advance t.reader (pos' - pos);
-        let inst, _ = Disasm_core.decode_from t.reader addr in
-        t.last <- Some inst;
-        Stats.register_address addr;
-        let hunk = Instruction.hunk inst in
-        let vertex = I.Htbl.length t.nodes in
-        add_node t vertex
-          (Fallthrough { kind = Instruction inst; succ = vertex + 1 });
-        if not (Virtual_address.Htbl.mem t.entries addr) then
-          Virtual_address.Htbl.add t.entries addr vertex;
-        List.iter
-          (fun (pred, tag) ->
-            add_node t pred (Goto { target = addr; tag; succ = Some vertex }))
-          tolink;
-        add_dhunk t todo (vertex + 1) hunk;
-        disasm t todo)
 
   let mk_label =
     let n = ref Suid.zero in
@@ -1006,7 +978,7 @@ end = struct
             incr vertex)
       hunk
 
-  let add_script t todo task addr stmts env fallthrough =
+  let add_script t todo addr stmts env fallthrough =
     let vertex = ref (I.Htbl.length t.nodes) in
     let labels = S.Htbl.create 16
     and tolink = S.Htbl.create 16
@@ -1146,36 +1118,29 @@ end = struct
             add_node t !vertex (Terminator Cut);
             incr vertex
         | Script.Reach (n, guard, actions) ->
-            let tid = I.Htbl.length task in
-            I.Htbl.add task tid ();
+            let tid = I.Htbl.length t.task in
+            I.Htbl.add t.task tid ();
             let guard =
               Option.fold ~none:Dba.Expr.one
                 ~some:(fun test -> Script.eval_expr ~size:1 test env)
                 guard
             in
-            let actions =
-              List.map
-                (fun (output : Script.Output.t) : Output.t ->
-                  match output with
-                  | Model -> Model
-                  | Formula -> Formula
-                  | Slice values ->
-                      Slice
-                        (List.map
-                           (fun (e, name) -> (Script.eval_expr e env, name))
-                           values)
-                  | Value (fmt, e) -> Value (fmt, Script.eval_expr e env)
-                  | Stream name -> Stream name
-                  | String name -> String name)
-                actions
-            in
+            let actions = List.map (Script.Output.eval env) actions in
             add_node t !vertex
               (Fallthrough
                  { kind = Reach { tid; n; guard; actions }; succ = !vertex + 1 });
             incr vertex
+        | Script.Print output ->
+            add_node t !vertex
+              (Fallthrough
+                 {
+                   kind = Print (Script.Output.eval env output);
+                   succ = !vertex + 1;
+                 });
+            incr vertex
         | Script.Enumerate (n, enum) ->
-            let tid = I.Htbl.length task in
-            I.Htbl.add task tid ();
+            let tid = I.Htbl.length t.task in
+            I.Htbl.add t.task tid ();
             let enum = Script.eval_expr enum env in
             add_node t !vertex
               (Fallthrough
@@ -1257,7 +1222,7 @@ end = struct
           !temps)
       !exits
 
-  let add_hook t todo task addr anchor stmts env fallthrough =
+  let add_hook t todo addr anchor stmts env fallthrough =
     let vertex = I.Htbl.length t.nodes in
     let succ = vertex + 1 in
     let info = Format.sprintf "hook at %s" anchor in
@@ -1271,7 +1236,60 @@ end = struct
          (Virtual_address.Map.find addr !todo);
        todo := Virtual_address.Map.remove addr !todo
      with Not_found -> ());
-    add_script t todo task addr stmts env fallthrough
+    add_script t todo addr stmts env fallthrough
+
+  let rec resolve_decode t todo addr pos decoders =
+    match decoders with
+    | [] ->
+        let inst, _ = Disasm_core.decode_from t.reader addr in
+        t.last <- Some inst;
+        let hunk = Instruction.hunk inst in
+        let vertex = I.Htbl.length t.nodes in
+        add_node t vertex
+          (Fallthrough { kind = Instruction inst; succ = vertex + 1 });
+        add_dhunk t todo (vertex + 1) hunk;
+        vertex
+    | decode :: decoders -> (
+        match decode t.reader with
+        | None ->
+            Lreader.rewind t.reader (Lreader.get_pos t.reader - pos);
+            resolve_decode t todo addr pos decoders
+        | Some (stmts, env) ->
+            let pos' = Lreader.get_pos t.reader in
+            let vertex = I.Htbl.length t.nodes in
+            let succ = vertex + 1 in
+            let opcode = Lreader.get_slice t.reader ~lo:pos ~hi:(pos' - 1) in
+            let info =
+              Format.asprintf "hook for opcode %a" Binstream.pp
+                (Binstream.of_bytes (Bytes.unsafe_to_string opcode))
+            in
+            add_node t vertex (Fallthrough { kind = Hook { addr; info }; succ });
+            add_script t todo
+              (Virtual_address.add_int (Bytes.length opcode) addr)
+              stmts env true;
+            vertex)
+
+  let rec disasm t todo =
+    if not (Virtual_address.Map.is_empty !todo) then (
+      let addr, tolink = Virtual_address.Map.choose !todo in
+      todo := Virtual_address.Map.remove addr !todo;
+      let pos' = Virtual_address.diff addr t.base in
+      if pos' < 0 || pos' >= t.size then disasm t todo
+      else
+        let pos = Lreader.get_pos t.reader in
+        if pos > pos' then Lreader.rewind t.reader (pos - pos')
+        else Lreader.advance t.reader (pos' - pos);
+        let vertex =
+          resolve_decode t todo addr (Lreader.get_pos t.reader) !opcode_hook
+        in
+        if not (Virtual_address.Htbl.mem t.entries addr) then
+          Virtual_address.Htbl.add t.entries addr vertex;
+        List.iter
+          (fun (pred, tag) ->
+            add_node t pred (Goto { target = addr; tag; succ = Some vertex }))
+          tolink;
+        Stats.register_address addr;
+        disasm t todo)
 
   let extract_loads =
     let rec fold m (e : Expr.t) =
@@ -1401,6 +1419,7 @@ end = struct
         last = None;
         sinks = I.Set.empty;
         killset = I.Htbl.create size;
+        task;
         fibers = I.Htbl.create (size / 15);
       }
     in
@@ -1411,7 +1430,7 @@ end = struct
           (fun addr hooks ->
             List.iter
               (fun (anchor, script) ->
-                add_hook t todo task addr anchor script env true)
+                add_hook t todo addr anchor script env true)
               hooks)
           hooks)
       hooks;
@@ -1487,7 +1506,7 @@ end = struct
             Assign { var; _ } | Clobber var | Load { var; _ } | Symbolize var;
           succ;
         }
-      when Var.Set.mem var (I.Htbl.find t.killset succ) ->
+      when is_deadstore t var succ ->
         forward t succ
     | _ -> vertex
 
@@ -1503,8 +1522,8 @@ end = struct
       let step = Fiber.Step { addr; n; succ = Halt } in
       Fiber.relink ~pred
         (if debug_level >= 39 then
-         Fiber.Debug { msg = Format.sprintf "step %d" n; succ = step }
-        else step);
+           Fiber.Debug { msg = Format.sprintf "step %d" n; succ = step }
+         else step);
       step)
     else pred
 
@@ -1595,16 +1614,14 @@ end = struct
             Assign { var; _ } | Clobber var | Load { var; _ } | Symbolize var;
           succ;
         }
-      when Var.Set.mem var (I.Htbl.find t.killset succ) ->
+      when is_deadstore t var succ ->
         line t todo reloc addr n vars pred succ
     | Fallthrough { kind = Assign { var; rval = Var var' }; succ }
-      when Var.Map.mem var' vars
-           && Var.Set.mem var' (I.Htbl.find t.killset succ) ->
+      when Var.Map.mem var' vars && is_deadstore t var' succ ->
         let value = Var.Map.find var' vars in
+        let vars = Var.Map.remove var' vars in
         let vars, pred = commit_vars ~var ~deps:Var.Set.empty vars pred in
-        line t todo reloc addr n
-          (Var.Map.add var value (Var.Map.remove var' vars))
-          pred succ
+        line t todo reloc addr n (Var.Map.add var value vars) pred succ
     | Fallthrough { kind = Assign { var; rval }; succ } ->
         let vars, pred =
           commit_vars ~var ~deps:(Var.collect rval Var.Set.empty) vars pred
@@ -1703,15 +1720,14 @@ end = struct
         last = None;
         sinks = I.Set.empty;
         killset = I.Htbl.create 16;
+        task;
         fibers = I.Htbl.create 1;
       }
     in
     add_node t 0
       (Fallthrough { kind = Hook { addr; info = "anonymous" }; succ = 1 });
     Virtual_address.Htbl.add t.entries addr 0;
-    add_script t
-      (ref Virtual_address.Map.empty)
-      task addr script env fallthrough;
+    add_script t (ref Virtual_address.Map.empty) addr script env fallthrough;
     process t;
     get t addr
 end

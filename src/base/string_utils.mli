@@ -43,7 +43,6 @@ val fold : ('a -> char -> 'a) -> 'a -> string -> 'a
  **)
 
 val for_all : (char -> bool) -> string -> bool
-
 val exists : (char -> bool) -> string -> bool
 
 val lfindi : string -> (char -> bool) -> int option

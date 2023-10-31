@@ -29,7 +29,5 @@ include Map.Make (struct
 end)
 
 let add ~base size x t = add (base, Z.pred (Z.add base (Z.of_int size))) x t
-
 let mem a t = mem (a, a) t
-
 let find a t = find (a, a) t

@@ -23,7 +23,6 @@ open Generic_decoder_sig
 
 module Decode_Expr (I : Expr_Input) : sig
   val expr : Dba.Expr.t -> I.binary I.M.m
-
   val cond : Dba.Expr.t -> I.boolean I.M.m
 end
 

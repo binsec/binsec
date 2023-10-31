@@ -23,7 +23,6 @@
 
 include Cli.Make (struct
   let name = "disassembly"
-
   let shortname = "disasm"
 end)
 
@@ -46,9 +45,7 @@ module Disassembly_mode = struct
       ]
 
     let default = Linear
-
     let name = "mode"
-
     let doc = " Set disassembly mode"
   end)
 end
@@ -56,52 +53,38 @@ end
 module DbaOutputFile = struct
   include Builder.String (struct
     let name = "o-dba"
-
     let default = "out.dba"
-
     let doc = Format.sprintf " Set DBA instructions output file"
   end)
 end
 
 module OpcodeOutputFile = Builder.String_option (struct
   let name = "dump"
-
   let doc = " Set opcodes output file [stdout]"
 end)
 
 module NoLoaderMode = Builder.False (struct
   let name = "no-loader"
-
   let doc = "Do not use loader and start at 0x0"
-end)
-
-module IgnoreUnhandledInstructions = Builder.True (struct
-  let name = "ignore-unhandled"
-
-  let doc = "Skip unknown instructions"
 end)
 
 module ShowInstructionCount = Builder.False (struct
   let name = "show-instruction-count"
-
   let doc = "Show a summary of encountered instructions"
 end)
 
 module Sections = Builder.String_set (struct
   let name = "sections"
-
   let doc = "Disassemble given comma separated list of sections"
 end)
 
 module Functions = Builder.String_set (struct
   let name = "functions"
-
   let doc = "Disassemble given comma separated list of functions"
 end)
 
 module Decode_instruction = Builder.String_option (struct
   let name = "decode"
-
   let doc = "Decode hexadecimal opcode"
 end)
 
@@ -115,15 +98,12 @@ end)
 
 module CFG_graph = Builder.False (struct
   let name = "cfgraph"
-
   let doc = "Print control-flow graph"
 end)
 
 module Disasm_at = Builder.String (struct
   let default = "0"
-
   let name = "at"
-
   let doc = "Use this address as base for opcode decoding"
 end)
 

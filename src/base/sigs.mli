@@ -65,7 +65,6 @@ module type HASHABLE = sig
   include COMPARABLE
 
   val equal : t -> t -> bool
-
   val hash : t -> int
 end
 
@@ -73,7 +72,6 @@ module type ITERABLE = sig
   include COMPARABLE
 
   val succ : t -> t
-
   val pred : t -> t
 end
 
@@ -90,9 +88,7 @@ module type Collection = sig
     include Map.S with type key = t
 
     val pop : 'a t -> (key * 'a) * 'a t
-
     val keys : 'a t -> key list
-
     val values : 'a t -> 'a list
   end
 
@@ -108,34 +104,23 @@ module type Collection = sig
     include Hashtbl.S with type key = t
 
     val filter : (key -> 'a -> bool) -> 'a t -> 'a t
-
     val bindings : 'a t -> (key * 'a) list
   end
 end
 
 module type COMPARISON = sig
   type t
-
   type boolean
 
   val equal : t -> t -> boolean
-
   val diff : t -> t -> boolean
-
   val ule : t -> t -> boolean
-
   val uge : t -> t -> boolean
-
   val ult : t -> t -> boolean
-
   val ugt : t -> t -> boolean
-
   val sle : t -> t -> boolean
-
   val sge : t -> t -> boolean
-
   val slt : t -> t -> boolean
-
   val sgt : t -> t -> boolean
 end
 
@@ -143,25 +128,18 @@ module type ARITHMETIC = sig
   type t
 
   val add : t -> t -> t
-
   val sub : t -> t -> t
-
   val mul : t -> t -> t
-
   val neg : t -> t
 
   (* Unsigned operations *)
   val udiv : t -> t -> t
-
   val umod : t -> t -> t
-
   val urem : t -> t -> t
 
   (* Signed operations *)
   val sdiv : t -> t -> t
-
   val smod : t -> t -> t
-
   val srem : t -> t -> t
 end
 
@@ -169,9 +147,7 @@ module type LOGICAL = sig
   type t
 
   val logand : t -> t -> t
-
   val logor : t -> t -> t
-
   val lognot : t -> t
 end
 
@@ -185,18 +161,13 @@ module type SHIFT_ROT = sig
   type t
 
   val shift_left : t -> int -> t
-
   val shift_right : t -> int -> t
-
   val shift_right_signed : t -> int -> t
-
   val rotate_left : t -> int -> t
-
   val rotate_right : t -> int -> t
 end
 
 module type BITWISE = sig
   include EXTENDED_LOGICAL
-
   include SHIFT_ROT with type t := t
 end

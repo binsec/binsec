@@ -22,29 +22,16 @@
 type t = private int
 
 val create : int -> t
-
 val add : t -> t -> t
-
 val add_int : t -> int -> t
-
 val sub : t -> t -> t
-
 val sub_int : t -> int -> t
-
 val mul : t -> t -> t
-
 val div : t -> t -> t
-
 val eq : t -> t -> bool
-
 val gt : t -> t -> bool
-
 val ge : t -> t -> bool
-
 val pred : t -> t
-
 val is_zero : t -> bool
-
 val to_int : t -> int
-
 val pp : Format.formatter -> t -> unit

@@ -1,3 +1,18 @@
+## 0.8.1 (2023-10-31)
+
+** Misc
+
+  - Add basic opcode replacement and address hook in SSE script
+  - Add a registration mechanism for symbolic state
+  - Add an option to disable the monitor screen when `curses` is installed
+  - Small code improvements
+  - Upgrade `ocamlformat` to `0.26.1`
+
+** Bugs
+
+  - Fix some uncatched exceptions
+  - Fix a bug in `checkct` preprocessing
+
 ## 0.8.0 (2023-07-14)
 
 ** Features

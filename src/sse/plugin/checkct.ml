@@ -27,7 +27,6 @@ module B = Bitvector.Collection
 
 include Cli.Make (struct
   let name = "Constant time checker"
-
   let shortname = "checkct"
 end)
 
@@ -48,31 +47,26 @@ module LeakInfo = Builder.Variant_choice_assoc (struct
        once)\n"
 
   let default = InstrLeak
-
   let assoc_map = [ ("halt", HaltLeak); ("instr", InstrLeak) ]
 end)
 
-module Taint = Builder.True (struct
+module Taint = Builder.No (struct
   let name = "taint"
-
-  let doc = "use taint to find instruction that can not leak"
+  let doc = "Disable taint analysis (prove that instruction can not leak)"
 end)
 
-module ChosenValues = Builder.True (struct
+module ChosenValues = Builder.No (struct
   let name = "cv"
-
-  let doc = "try to leak info using chosen secret values"
+  let doc = "Disable chosen value sampling (prove that instruction may leak)"
 end)
 
-module Relse = Builder.True (struct
+module Relse = Builder.No (struct
   let name = "relse"
-
-  let doc = "find insecurities using relational symbolic execution"
+  let doc = "Disable relational symbolic engine to answer security queries"
 end)
 
 module StatsFile = Builder.String_option (struct
   let name = "stats-file"
-
   let doc = "set file for dumping staistics"
 end)
 
@@ -174,22 +168,15 @@ module Status = struct
 end
 
 type Ast.Obj.t += Bool of bool
-
 type Ast.Instr.t += Secret of Ast.Loc.t Ast.loc
-
 type Ast.t += Globals of bool * string list
-
 type builtin += Mirror of Dba.Var.t | Check of Dba.Expr.t * Kind.t
 
 module type OPTIONS = sig
   val leak_info : leak_info
-
   val taint : bool
-
   val cv : bool
-
   val relse : bool
-
   val stats_file : string option
 end
 
@@ -197,13 +184,9 @@ let make_options : unit -> (module OPTIONS) =
  fun () : (module OPTIONS) ->
   (module struct
     let leak_info = LeakInfo.get ()
-
     let taint = Taint.get ()
-
     let cv = ChosenValues.get ()
-
     let relse = Relse.get ()
-
     let stats_file = StatsFile.get_opt ()
   end)
 
@@ -215,7 +198,7 @@ module Ct_state = struct
   type t = {
     mutable constraints : Expr.t list;
     mutable conjunction : Expr.t;
-    mutable secrets : (Expr.t * Expr.t) list;
+    secrets : Expr.t BvTbl.t;
     mirror_e : Expr.t BvTbl.t;
     mirror_m : Memory.t AxTbl.t;
     mutable loads : load list;
@@ -228,7 +211,7 @@ module Ct_state = struct
     {
       constraints = [];
       conjunction = Expr.one;
-      secrets = [];
+      secrets = BvTbl.create 8;
       mirror_e = BvTbl.create 64;
       mirror_m = AxTbl.create 16;
       loads = [];
@@ -241,6 +224,7 @@ module Ct_state = struct
       t with
       mirror_e = BvTbl.copy t.mirror_e;
       mirror_m = AxTbl.copy t.mirror_m;
+      secrets = BvTbl.copy t.secrets;
       roots = AxTbl.copy t.roots;
       models =
         List.map
@@ -253,7 +237,7 @@ module Ct_state = struct
     | Var { name; size; label; _ } ->
         let e' = Expr.var ("mirror_" ^ name) size label in
         BvTbl.add t.mirror_e e e';
-        t.secrets <- (e, e') :: t.secrets
+        BvTbl.add t.secrets e' e
     | _ -> raise_notrace (Invalid_argument "mirror")
 
   let rec is_tainted (e : Expr.t) t =
@@ -362,7 +346,6 @@ module Make
     (State : STATE with type Value.t = Sexpr.Expr.t) :
   Exec.EXTENSION with type path = Path.t and type state = State.t = struct
   type path = Path.t
-
   and state = State.t
 
   let key = Path.register_key (Ct_state.empty ())
@@ -374,15 +357,10 @@ module Make
   module Eval = Eval.Make (Path) (State)
 
   let ct_cf_secure = ref 0
-
   and ct_cf_insecure = ref 0
-
   and ct_cf_unknown = ref 0
-
   and ct_mem_secure = ref 0
-
   and ct_mem_insecure = ref 0
-
   and ct_mem_unknown = ref 0
 
   let ct_status (kind : Kind.t) (status : Status.t) =
@@ -557,14 +535,13 @@ module Make
 
   let cv_symbol (ct_state : Ct_state.t) (state : State.t) i e =
     let open Sexpr in
-    if try e == BvTbl.find ct_state.mirror_e e with Not_found -> true then
-      State.get_a_value e state
-    else
+    if BvTbl.mem ct_state.secrets e then
       match i with
       | 0 -> Bv.zeros (Expr.sizeof e)
       | 1 -> Bv.ones (Expr.sizeof e)
       | 2 -> Bv.fill (Expr.sizeof e)
       | _ -> Bv.rand (Expr.sizeof e)
+    else State.get_a_value e state
 
   and cv_memory state array addr =
     let open Sexpr in
@@ -597,29 +574,29 @@ module Make
           memory
       else memory
     in
-    let secret, public =
-      S.Map.partition
-        (fun _ values ->
-          let value = List.hd values in
-          try value != BvTbl.find ct_state.mirror_e value
-          with Not_found -> false)
+    let public, secret1, secret2 =
+      S.Map.fold
+        (fun name values (public, secret1, secret2) ->
+          let vpublic, vsecret1, vsecret2 =
+            List.fold_left
+              (fun (public, secret1, secret2) value ->
+                let value' =
+                  try BvTbl.find ct_state.mirror_e value
+                  with Not_found -> value
+                in
+                if value != value' then
+                  ( public,
+                    State.get_a_value value state :: secret1,
+                    Model.eval model value' :: secret2 )
+                else (State.get_a_value value state :: public, secret1, secret2))
+              ([], [], []) values
+          in
+          ( (if vpublic <> [] then S.Map.add name vpublic public else public),
+            (if vsecret1 <> [] then S.Map.add name vsecret1 secret1 else secret1),
+            if vsecret2 <> [] then S.Map.add name vsecret2 secret2 else secret2
+          ))
         symbols
-    in
-    let public =
-      S.Map.map
-        (fun values ->
-          List.rev_map (fun value -> State.get_a_value value state) values)
-        public
-    and secret1 =
-      S.Map.map
-        (fun values ->
-          List.rev_map (fun value -> State.get_a_value value state) values)
-        secret
-    and secret2 =
-      S.Map.map
-        (fun values ->
-          List.rev_map (fun value -> Model.eval model value) values)
-        secret
+        (S.Map.empty, S.Map.empty, S.Map.empty)
     in
     { memory; public; secret1; secret2 }
 
@@ -629,7 +606,8 @@ module Make
     | [] -> Unknown
     | models -> (
         Ct_state.make_context (State.assertions state) ct_state;
-        if e == Ct_state.make_mirror_e e ct_state then Secure
+        let e' = Ct_state.make_mirror_e e ct_state in
+        if e == e' then Secure
         else
           let memory = cv_memory state in
           ct_state.models <-
@@ -649,7 +627,7 @@ module Make
                 Bv.diff value
                   (Model.eval
                      ~symbols:(cv_symbol ct_state state i)
-                     ~memory model e))
+                     ~memory model e'))
               ct_state.models
           with
           | exception Not_found -> Unknown
@@ -717,6 +695,7 @@ module Make
       match
         State.assume Sexpr.Expr.(logand (diff e e') ct_state.conjunction) state
       with
+      | exception Unknown -> Unknown
       | None -> Secure
       | Some state -> Insecure (extract_relse_report ct_state symbols state))
 

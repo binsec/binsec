@@ -109,35 +109,20 @@ module Color = struct
 
   (* ¯\_(ツ)_/¯ *)
   let _black = Black
-
   let _darkgray = DarkGray
-
   let _blue = Blue
-
   let _lightblue = LightBlue
-
   let _green = Green
-
   let _lightgreen = LightGreen
-
   let _cyan = Cyan
-
   let _lightcyan = LightCyan
-
   let _red = Red
-
   let _lightred = LightRed
-
   let _purple = Purple
-
   let _lightpurple = LightPurple
-
   let _brown = Brown
-
   let _yellow = Yellow
-
   let _lightgray = LightGray
-
   let _white = White
 end
 
@@ -197,62 +182,36 @@ module type S = sig
   type channel
 
   val fatal_channel : channel
-
   val error_channel : channel
-
   val result_channel : channel
-
   val warning_channel : channel
-
   val info_channel : channel
-
   val debug_channel : channel
-
   val fatal : ?e:exn -> ('a, Format.formatter, unit, 'b) format4 -> 'a
-
   val error : ('a, Format.formatter, unit) format -> 'a
-
   val result : ('a, Format.formatter, unit) format -> 'a
-
   val warning : ?level:int -> ('a, Format.formatter, unit) format -> 'a
-
   val set_warning_level : int -> unit
-
   val get_warning_level : unit -> int
-
   val info : ?level:int -> ('a, Format.formatter, unit) format -> 'a
-
   val set_info_level : int -> unit
-
   val get_info_level : unit -> int
-
   val debug : ?level:int -> ('a, Format.formatter, unit) format -> 'a
 
   val fdebug :
     ?level:int -> (unit -> (unit, Format.formatter, unit) format) -> unit
 
   val set_debug_level : int -> unit
-
   val get_debug_level : unit -> int
-
   val is_debug_enabled : unit -> bool
-
   val set_tagged_entry : bool -> unit
-
   val set_log_level : string -> unit
-
   val cli_handler : Arg.spec
-
   val quiet : unit -> unit
-
   val channel_set_color : bool -> channel -> unit
-
   val channel_get_color : channel -> bool
-
   val set_color : bool -> unit
-
   val get_color : unit -> bool
-
   val set_zmq_logging_only : send:(string -> unit) -> bool -> unit
 end
 
@@ -280,19 +239,13 @@ module Make (G : ChannelGroup) = struct
   }
 
   let default_out kind = { kind; ppfs = [ Format.std_formatter ] }
-
   let err_out kind = { kind; ppfs = [ Format.err_formatter ] }
 
   let debug_channel = default_out ChannelKind.ChDebug
-
   and info_channel = default_out ChannelKind.ChInfo
-
   and result_channel = default_out ChannelKind.ChResult
-
   and warning_channel = err_out ChannelKind.ChWarning
-
   and error_channel = err_out ChannelKind.ChError
-
   and fatal_channel = err_out ChannelKind.ChFatal
 
   let set_formatters ppfs channel = channel.ppfs <- ppfs
@@ -457,7 +410,6 @@ module Make (G : ChannelGroup) = struct
     log (fun _ -> raise e) fatal_channel txt
 
   let error txt = log finally_unit error_channel txt
-
   let result txt = log finally_unit result_channel txt
 
   let _ =

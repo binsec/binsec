@@ -25,15 +25,10 @@ module Dfs : WORKLIST = struct
   type 'a t = 'a list
 
   let empty = []
-
   let is_empty = function [] -> true | _ -> false
-
   let push e w = e :: w
-
   let singleton e = [ e ]
-
   let pop = function e :: w -> (e, w) | [] -> raise Not_found
-
   let length = List.length
 end
 
@@ -41,11 +36,8 @@ module Bfs : WORKLIST = struct
   type 'a t = 'a Sequence.t
 
   let length = Sequence.length
-
   let is_empty q = Sequence.length q = 0
-
   let empty = Sequence.empty
-
   let push p q = Sequence.push_back p q
 
   let pop q =
@@ -72,9 +64,7 @@ module Nurs : WORKLIST = struct
     if I.mem p t then gen_priority t else p
 
   let length = I.cardinal
-
   let is_empty = I.is_empty
-
   let empty = I.empty
 
   let push e t =

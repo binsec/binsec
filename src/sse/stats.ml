@@ -47,21 +47,13 @@ module Exploration () : Types.EXPLORATION_STATISTICS_FULL = struct
       | Die -> die
 
   let completed_paths = ref 0
-
   let unknown_paths = ref 0
-
   let total_asserts = ref 0
-
   let failed_asserts = ref 0
-
   let branches = ref 0
-
   let max_depth = ref 0
-
   let instructions = ref 0
-
   let unique_insts = Virtual_address.Htbl.create 256
-
   let init_time = { sec = Unix.gettimeofday () }
 
   let reset () =
@@ -77,31 +69,18 @@ module Exploration () : Types.EXPLORATION_STATISTICS_FULL = struct
     init_time.sec <- Unix.gettimeofday ()
 
   let time () = Unix.gettimeofday () -. init_time.sec
-
   let get_time = time
-
   let get_paths () = !paths
-
   let get_pending_paths () = !paths - !completed_paths - !unknown_paths
-
   let get_completed_paths () = !completed_paths
-
   let get_unknown_paths () = !unknown_paths
-
   let get_status status = !(counter status)
-
   let get_total_asserts () = !total_asserts
-
   let get_failed_asserts () = !failed_asserts
-
   let get_branches () = !branches
-
   let get_max_depth () = !max_depth
-
   let get_instructions () = !instructions
-
   let get_unique_insts () = Virtual_address.Htbl.length unique_insts
-
   let add_path () = incr paths
 
   let terminate_path (status : Types.status) =
@@ -114,15 +93,10 @@ module Exploration () : Types.EXPLORATION_STATISTICS_FULL = struct
         incr unknown_paths
 
   let add_assert () = incr total_asserts
-
   let add_failed_assert () = incr failed_asserts
-
   let add_branch () = incr branches
-
   let update_depth d = if !max_depth < d then max_depth := d
-
   let add_instructions n = instructions := !instructions + n
-
   let register_address addr = Virtual_address.Htbl.replace unique_insts addr ()
 
   let pp ppf () =
@@ -161,23 +135,14 @@ end
 module Query () : Types.QUERY_STATISTICS = struct
   module Preprocess = struct
     let sat = ref 0
-
     let unsat = ref 0
-
     let const = ref 0
-
     let get_sat () = !sat
-
     let get_unsat () = !unsat
-
     let get_const () = !const
-
     let total () = !sat + !unsat + !const
-
     let incr_sat () = incr sat
-
     let incr_unsat () = incr unsat
-
     let incr_const () = incr const
 
     let reset () =
@@ -205,27 +170,16 @@ module Query () : Types.QUERY_STATISTICS = struct
 
   module Solver = struct
     let sat = ref 0
-
     let unsat = ref 0
-
     let err = ref 0
-
     let get_sat () = !sat
-
     let get_unsat () = !unsat
-
     let get_err () = !err
-
     let incr_sat () = incr sat
-
     let incr_unsat () = incr unsat
-
     let incr_err () = incr err
-
     let total_time = { sec = 0. }
-
     let timer = { sec = 0. }
-
     let running = ref false
 
     let reset () =

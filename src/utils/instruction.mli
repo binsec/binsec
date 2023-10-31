@@ -35,24 +35,18 @@ val address : t -> Virtual_address.t
 (** {2 Accessors} *)
 
 val size : t -> Size.Byte.t
-
 val opcode : t -> Binstream.t
-
 val mnemonic : t -> Mnemonic.t
-
 val hunk : t -> Dhunk.t
 
 (** {3 Basics} *)
 
 module type Basic = sig
   type mnemonic
-
   type t = private { size : Size.Byte.t; opcode : string; mnemonic : mnemonic }
 
   val create : int -> string -> mnemonic -> t
-
   val pp_opcode : Format.formatter -> t -> unit
-
   val pp_mnemonic : Format.formatter -> t -> unit
 end
 
@@ -80,23 +74,16 @@ val unsupported :
  *)
 
 val of_generic_instruction : Virtual_address.t -> Generic.t -> Dhunk.t -> t
-
 val of_dba_block : ?mnemonic:Mnemonic.t -> Virtual_address.t -> Dhunk.t -> t
-
 val to_generic_instruction : t -> Generic.t
-
 val set_dba_block : t -> Dhunk.t -> t
-
 val set_mnemonic : Mnemonic.t -> t -> t
-
 val is_decoded : t -> bool
-
 val stop : Virtual_address.t -> t
 
 (** {2 Other accessors} *)
 
 val get_caddress : t -> Dba_types.Caddress.t
-
 val start : t -> int
 
 include Sigs.PRINTABLE with type t := t

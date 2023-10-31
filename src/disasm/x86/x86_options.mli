@@ -20,7 +20,5 @@
 (**************************************************************************)
 
 module Logger : Logger.S
-
 module HandleSegments : Cli.STRING_SET
-
 module ProtectedMode : Cli.BOOLEAN

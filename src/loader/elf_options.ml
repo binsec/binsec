@@ -21,7 +21,6 @@
 
 include Cli.Options (struct
   let shortname = "elf"
-
   let name = "Elf loader"
 end)
 
@@ -34,6 +33,5 @@ end)
 
 module Reloc = Builder.False (struct
   let name = "reloc"
-
   let doc = "limited support for static relocation entry"
 end)

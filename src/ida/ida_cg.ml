@@ -52,11 +52,8 @@ module Node = struct
   type t = { nid : Dot_ast.id; func : IF.t; typ : T.t }
 
   let nid t = t.nid
-
   let func t = t.func
-
   let typ t = t.typ
-
   let create ?(nid = String "") func typ = { nid; func; typ }
 
   let pp ppf n =
@@ -75,11 +72,8 @@ module Edge = struct
   type t = { src : Node.t; dst : Node.t }
 
   let src t = t.src
-
   let dst t = t.dst
-
   let create s d = { src = s; dst = d }
-
   let pp ppf t = Format.fprintf ppf "%a -> %a" Node.pp t.src Node.pp t.dst
 
   let pp_list ppf edges =
@@ -90,9 +84,7 @@ module A = struct
   type t = Node.t
 
   let compare = compare
-
   let equal = ( = )
-
   let hash = Hashtbl.hash
 end
 

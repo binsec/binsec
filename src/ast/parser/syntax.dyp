@@ -31,20 +31,6 @@
   let uid =
     let i = ref 0 in
     fun () -> incr i; Format.sprintf "%%%d" !i
-
-  (*let rec unwrap_action = function
-    | `Add_rules r -> Dyp.Add_rules (mk_rules r)
-    | `Bind_to_cons b -> Dyp.Bind_to_cons b
-    | `Dont_shift -> Dyp.Dont_shift
-    | `Keep_grammar -> Dyp.Keep_grammar
-    | `Relation r -> Dyp.Relation r
-
-  and wrap_action action _ objs =
-    let obj, actions = action objs in
-    (obj, List.map unwrap_action actions)
-
-  and mk_rules rules =
-    List.map (fun (rule, action) -> (rule, wrap_action action)) rules*)
 }
 
 %token LSL LSR ASR ROL ROR <int> ZEXT <int> SEXT
@@ -86,8 +72,9 @@
 
 let space = ' ' | '\t' | '\r'
 let digit = ['0'-'9']
-let hex = '0' ['x'] (['0'-'9''A'-'F''a'-'f'] '_'*)+
-let bin = '0' ['b'] (['0''1'] '_'*)+
+let hexdigit = ['0'-'9''A'-'F''a'-'f']
+let hex = '0' 'x' (hexdigit '_'*)+
+let bin = '0' 'b' (['0''1'] '_'*)+
 let alpha = ['a'-'z''A'-'Z']
 let alpha_num = (alpha | digit)
 let sident = '_'* alpha (alpha_num | '_')* ('.' (alpha_num | '_')+)*

@@ -21,31 +21,26 @@
 
 include Cli.Make (struct
   let shortname = "bbsse"
-
   let name = "Backward Bounded Static Symbolic Execution"
 end)
 
 module MaxBB = Builder.Integer_list (struct
   let name = "max-basic-blocks"
-
   let doc = "Set the maximal number of basic blocks to process backward"
 end)
 
 module Consolidate = Builder.False (struct
   let name = "consolidate"
-
   let doc = "Use previous opaque predicate knowledge to cut paths early"
 end)
 
 module FindJumpsBetween = Builder.Integer_list (struct
   let name = "find-jumps"
-
   let doc = "Automatically find conditional jumps between these two addresses"
 end)
 
 module FindAllJumps = Builder.False (struct
   let name = "process-all-jumps"
-
   let doc = "Automatically find all conditional jumps in the executable"
 end)
 
@@ -58,6 +53,5 @@ end)
 
 module Directives = Builder.String_option (struct
   let name = "directives"
-
   let doc = "Path to a script file"
 end)

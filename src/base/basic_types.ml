@@ -20,7 +20,6 @@
 (**************************************************************************)
 
 type 'a interval = { lo : 'a; hi : 'a }
-
 type u8 = int
 
 module Constants = struct
@@ -36,7 +35,6 @@ module MapSetMaker (C : Sigs.COMPARABLE) = struct
       (elt, remove k m)
 
     let keys m = fold (fun k _ acc -> k :: acc) m [] |> List.rev
-
     let values m = fold (fun _ v acc -> v :: acc) m [] |> List.rev
   end
 

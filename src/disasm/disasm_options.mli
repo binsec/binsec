@@ -24,19 +24,13 @@ include Cli.S
 (** Command-line options specific to disassembly *)
 
 module DbaOutputFile : Cli.STRING
-
 module OpcodeOutputFile : Cli.STRING_OPT
 
 module NoLoaderMode : Cli.BOOLEAN
 (** Default to [false]. Loader is activated by default *)
 
-module IgnoreUnhandledInstructions : Cli.BOOLEAN
-(** Defaults to [true] **)
-
 module ShowInstructionCount : Cli.BOOLEAN
-
 module Sections : Cli.STRING_SET
-
 module Functions : Cli.STRING_SET
 
 type disassembly_mode =
@@ -46,13 +40,8 @@ type disassembly_mode =
   | Extended_linear
 
 module Disassembly_mode : Cli.GENERIC with type t = disassembly_mode
-
 module Decode_instruction : Cli.STRING_OPT
-
 module Decode_replacement : Cli.STRING_OPT
-
 module CFG_graph : Cli.BOOLEAN
-
 module Disasm_at : Cli.STRING
-
 module Cache_decoder : Cli.BOOLEAN

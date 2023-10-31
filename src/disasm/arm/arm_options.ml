@@ -21,7 +21,6 @@
 
 include Cli.Options (struct
   let name = "arm"
-
   let shortname = name
 end)
 
@@ -31,7 +30,6 @@ module SupportedModes = Builder.Variant_choice (struct
   type t = supported_modes
 
   let name = "supported-modes"
-
   let default = Arm
 
   let doc =

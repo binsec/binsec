@@ -22,58 +22,36 @@
 type 'a t = 'a Basic_types.interval = { lo : 'a; hi : 'a }
 
 let belongs cmp x t = cmp x t.lo >= 0 && cmp x t.hi <= 0
-
 let intersects cmp t s = not (cmp t.hi s.lo < 0 || cmp t.lo s.hi > 0)
 
 module type S = sig
   type point
-
   type interval
-
   type t
 
   val empty : t
-
   val singleton : interval -> t
-
   val add : interval -> t -> t
-
   val remove : interval -> t -> t
-
   val is_empty : t -> bool
-
   val cardinal : t -> int
-
   val mem : interval -> t -> bool
-
   val min : t -> point option
-
   val max : t -> point option
-
   val is_point : t -> point option
-
   val is_interval : t -> interval option
-
   val belongs : point -> t -> interval list
-
   val intersects : interval -> t -> interval list
-
   val map : (interval -> interval) -> t -> t
-
   val iter : (interval -> unit) -> t -> unit
-
   val fold : (interval -> 'a -> 'a) -> t -> 'a -> 'a
-
   val union : t -> t -> t
-
   val inter : t -> t -> t
-
   val print : (point -> string) -> t -> string
 end
 
 module type T = sig
   type point
-
   type interval
 
   type t = private
@@ -82,20 +60,15 @@ module type T = sig
     | Red of int * t * interval * t * interval
 
   val empty : t
-
   val singleton : interval -> t
-
   val add : interval -> t -> t
-
   val remove : interval -> t -> t
-
   val cardinal : t -> int
 end
 
 module Base (Ord : Sigs.COMPARABLE) :
   T with type point = Ord.t and type interval = Ord.t t = struct
   type point = Ord.t
-
   type interval = Ord.t t
 
   type t =
@@ -442,9 +415,7 @@ module IntFlat = Flat (struct
   type t = int
 
   let compare (x : int) (y : int) = compare x y
-
   let succ x = succ x
-
   let pred x = pred x
 end)
 
@@ -458,9 +429,7 @@ module FloatFlat = Flat (struct
   type t = float
 
   let compare (x : float) (y : float) = compare x y
-
   let succ x = x +. epsilon_float
-
   let pred x = x -. epsilon_float
 end)
 
@@ -470,13 +439,9 @@ struct
   include Make
 
   let top n = singleton Bitvector.{ lo = zeros n; hi = max_ubv n }
-
   let bot _ = empty
-
   let ule bv = singleton Bitvector.{ lo = zeros (size_of bv); hi = bv }
-
   let uge bv = singleton Bitvector.{ lo = bv; hi = max_ubv (size_of bv) }
-
   let ult bv = if Bitvector.is_zeros bv then empty else ule (Bitvector.pred bv)
 
   let ugt bv =
@@ -505,7 +470,6 @@ struct
     if Bitvector.is_max_sbv bv then empty else sge (Bitvector.succ bv)
 
   let equal bv = singleton { lo = bv; hi = bv }
-
   let distinct bv = union (ult bv) (ugt bv)
 
   let size_of t =
@@ -634,8 +598,6 @@ module BitVecFlat = BV (Flat (struct
   type t = Bitvector.t
 
   let compare x y = Bitvector.compare x y
-
   let succ x = if Bitvector.is_max_ubv x then x else Bitvector.succ x
-
   let pred x = if Bitvector.is_zeros x then x else Bitvector.pred x
 end))

@@ -27,7 +27,6 @@ module type CONTEXT = sig
   include Ai.S
 
   val anchor : t -> Memory.t -> unit
-
   val anchored : t -> Memory.t -> bool
 end
 
@@ -35,11 +34,8 @@ module Make (D : Domains.S) (C : CONTEXT with type v := D.t) : sig
   include module type of Memory
 
   val source : C.t -> addr:Expr.t -> len:int -> Loader_buf.t -> t -> t
-
   val write : C.t -> addr:Expr.t -> Expr.t -> Expr.endianness -> t -> t
-
   val read : C.t -> addr:Expr.t -> int -> Expr.endianness -> t -> Expr.t
-
   val merge : C.t -> Expr.t -> t -> t -> t
 end = struct
   include Memory

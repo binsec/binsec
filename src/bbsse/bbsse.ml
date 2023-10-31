@@ -56,41 +56,25 @@ end
 
 module Stat = struct
   let ground_truth = ref false
-
   let all_predicates = ref 0
-
   let deemed_opaques = ref 0
-
   let true_positives = ref 0
-
   let false_positives = ref 0
-
   let wrong_positives = ref 0
-
   let deemed_clear = ref 0
-
   let true_negatives = ref 0
-
   let false_negatives = ref 0
-
   let deemed_unreachable = ref 0
-
   let true_unreachable = ref 0
-
   let false_unreachable = ref 0
-
   let failure = ref 0
-
   let all_paths = ref 0
 
   type time = { mutable sec : float }
 
   let search_time = { sec = 0. }
-
   let eval_time = { sec = 0. }
-
   let preprocess_time = { sec = 0. }
-
   let total_time = { sec = 0. }
 end
 

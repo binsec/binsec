@@ -47,9 +47,7 @@ module Program = struct
     { instructions; callsites; entrypoints; unresolved_jumps }
 
   let on_instructions f p = { p with instructions = f p.instructions }
-
   let on_callsites f p = { p with callsites = f p.callsites }
-
   let is_callsite vaddr p = Virtual_address.Set.mem vaddr p.callsites
 
   let add_callsite p callsite =

@@ -28,3 +28,4 @@ module State
   Types.RAW_STATE with type Value.t = Sexpr.Expr.t
 
 type _ Types.value += Term : Sexpr.Expr.t Types.value
+type Options.Engine.t += Vanilla

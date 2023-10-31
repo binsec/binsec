@@ -25,9 +25,7 @@ type direction = Forward | Backward
 
 module type S = sig
   type addr (* Addresses    *)
-
   type inst (* Instructions *)
-
   type symb (* Symbols      *)
 
   type t
@@ -38,21 +36,13 @@ module type S = sig
     type t
 
     val compare : t -> t -> int
-
     val hash : t -> int
-
     val equal : t -> t -> bool
-
     val of_addr : addr -> t
-
     val of_inst : addr -> inst -> t
-
     val of_symb : addr -> symb -> t
-
     val addr : t -> addr
-
     val inst : t -> inst option
-
     val symb : t -> symb option
   end
 
@@ -61,17 +51,12 @@ module type S = sig
   (** Edges *)
   module E : sig
     type t
-
     type label
 
     val compare : t -> t -> int
-
     val label : t -> label
-
     val src : t -> vertex
-
     val dst : t -> vertex
-
     val create : vertex -> label -> vertex -> t
   end
 
@@ -130,9 +115,7 @@ module type S = sig
     * is already in [g]. *)
 
   val add_addr : t -> addr -> unit
-
   val add_inst : t -> addr -> inst -> unit
-
   val add_symb : t -> addr -> symb -> unit
 
   val remove_vertex : t -> vertex -> unit
@@ -140,9 +123,7 @@ module type S = sig
     * going from [v] in [g]). Do nothing if [v] is not in [g]. *)
 
   val remove_addr : t -> addr -> unit
-
   val remove_inst : t -> addr -> unit
-
   val remove_symb : t -> addr -> unit
 
   val add_edge : t -> vertex -> vertex -> unit
@@ -172,9 +153,7 @@ module type S = sig
   (** {2 Size functions} *)
 
   val is_empty : t -> bool
-
   val nb_vertex : t -> int
-
   val nb_edges : t -> int
 
   (** Degree of a vertex *)
@@ -191,13 +170,9 @@ module type S = sig
   (** {2 Membership functions} *)
 
   val mem_vertex : t -> vertex -> vertex option
-
   val mem_vertex_a : t -> addr -> vertex option
-
   val mem_edge : t -> vertex -> vertex -> edge option
-
   val mem_edge_a : t -> addr -> addr -> edge option
-
   val mem_edge_e : t -> edge -> edge option
 
   (** {2 Successors and predecessors of a vertex} *)
@@ -225,17 +200,13 @@ module type S = sig
   (** iter/fold on all vertices/edges of a graph *)
 
   val iter_vertex : (vertex -> unit) -> t -> unit
-
   val iter_edges : (vertex -> vertex -> unit) -> t -> unit
-
   val fold_vertex : (vertex -> 'a -> 'a) -> t -> 'a -> 'a
-
   val fold_edges : (vertex -> vertex -> 'a -> 'a) -> t -> 'a -> 'a
 
   (** iter/fold on all labeled edges of a graph *)
 
   val iter_edges_e : (edge -> unit) -> t -> unit
-
   val fold_edges_e : (edge -> 'a -> 'a) -> t -> 'a -> 'a
 
   (** {2 Vertex iterators}
@@ -246,21 +217,15 @@ module type S = sig
   (** iter/fold on all successors/predecessors of a vertex. *)
 
   val iter_succ : (vertex -> unit) -> t -> vertex -> unit
-
   val iter_pred : (vertex -> unit) -> t -> vertex -> unit
-
   val fold_succ : (vertex -> 'a -> 'a) -> t -> vertex -> 'a -> 'a
-
   val fold_pred : (vertex -> 'a -> 'a) -> t -> vertex -> 'a -> 'a
 
   (** iter/fold on all edges going from/to a vertex. *)
 
   val iter_succ_e : (edge -> unit) -> t -> vertex -> unit
-
   val fold_succ_e : (edge -> 'a -> 'a) -> t -> vertex -> 'a -> 'a
-
   val iter_pred_e : (edge -> unit) -> t -> vertex -> unit
-
   val fold_pred_e : (edge -> 'a -> 'a) -> t -> vertex -> 'a -> 'a
 end
 

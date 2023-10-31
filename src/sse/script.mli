@@ -30,11 +30,8 @@ type env = {
 type 'a loc = 'a Ast.loc
 
 module Symbol : module type of Ast.Symbol
-
 module Loc : module type of Ast.Loc
-
 module Expr : module type of Ast.Expr
-
 module Instr : module type of Ast.Instr
 
 module Output : sig
@@ -48,11 +45,13 @@ module Output : sig
     | Stream of string
     | String of string
 
+  val eval : env -> t -> Types.Output.t
   val pp : Format.formatter -> t -> unit
 end
 
 type Ast.Obj.t +=
   | Int of int
+  | Int_list of int list
   | Format of Output.format
   | Output of Output.t
   | Output_list of Output.t list
@@ -71,6 +70,7 @@ type Ast.Instr.t +=
   | Argument of Loc.t loc * int  (** [lval] := arg([i]) *)
   | Return of Expr.t loc option  (** return [rval] *)
   | Cut of Expr.t loc option
+  | Print of Output.t
   | Reach of int * Expr.t loc option * Output.t list
   | Enumerate of int * Expr.t loc
 
@@ -82,15 +82,13 @@ type Ast.t +=
   | Concretize_stack_pointer
   | Import_symbols of Symbol.t loc list * string
   | Hook of Expr.t loc list * Instr.t list * bool
+  | Decode of Binstream.t * Instr.t list
   | Init of Instr.t list
   | Explore_all
 
 val pp_options : Format.formatter -> (string * string) list -> unit
-
 val pp_stmts : Format.formatter -> Ast.Instr.t list -> unit
-
 val register_pp : (Format.formatter -> Ast.t -> bool) -> unit
-
 val pp : Format.formatter -> Ast.t -> unit
 
 val read_files :
@@ -101,11 +99,8 @@ val read_files :
   Ast.t list
 
 exception Inference_failure of Expr.t loc
-
 exception Invalid_size of Expr.t loc * int * int
-
 exception Invalid_operation of Expr.t loc
 
 val eval_loc : ?size:int -> Loc.t loc -> env -> Dba.LValue.t
-
 val eval_expr : ?size:int -> Expr.t loc -> env -> Dba.Expr.t

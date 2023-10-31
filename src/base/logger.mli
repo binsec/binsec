@@ -27,13 +27,9 @@ module type S = sig
   type channel
 
   val fatal_channel : channel
-
   val error_channel : channel
-
   val result_channel : channel
-
   val warning_channel : channel
-
   val info_channel : channel
 
   val debug_channel : channel
@@ -55,14 +51,12 @@ module type S = sig
   (** For warning messages. *)
 
   val set_warning_level : int -> unit
-
   val get_warning_level : unit -> int
 
   val info : ?level:int -> ('a, Format.formatter, unit) format -> 'a
   (** Any info that should be displayed *)
 
   val set_info_level : int -> unit
-
   val get_info_level : unit -> int
 
   val debug : ?level:int -> ('a, Format.formatter, unit) format -> 'a
@@ -77,9 +71,7 @@ module type S = sig
       compute inside the closure). *)
 
   val set_debug_level : int -> unit
-
   val get_debug_level : unit -> int
-
   val is_debug_enabled : unit -> bool
 
   val set_tagged_entry : bool -> unit
@@ -101,7 +93,6 @@ module type S = sig
   *)
 
   val cli_handler : Arg.spec
-
   val quiet : unit -> unit
 
   val channel_set_color : bool -> channel -> unit

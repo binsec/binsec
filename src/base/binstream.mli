@@ -49,31 +49,22 @@ val of_list : int list -> t
 (** {3 Operations} *)
 
 val append_int : int -> t -> t
-
 val prepend_int : int -> t -> t
-
 val append_int64 : int64 -> t -> t
-
 val prepend_int64 : int64 -> t -> t
-
 val append_char : char -> t -> t
-
 val prepend_char : char -> t -> t
-
 val rev : t -> t
 
 (** {3 Iterators }*)
 
 val iter : (int -> unit) -> t -> unit
-
 val map : (int -> int) -> t -> t
-
 val fold : (int -> 'a -> 'a) -> t -> 'a -> 'a
 
 (** {3 Accessors} *)
 
 val length : t -> int
-
 val get_byte : t -> int -> int option
 
 val get_byte_exn : t -> int -> int

@@ -33,13 +33,9 @@ module Machine : sig
   include Cli.GENERIC with type t := Machine.t
 
   val isa : unit -> Machine.isa
-
   val endianness : unit -> Machine.endianness
-
   val bits : unit -> Machine.bitwidth
-
   val word_size : unit -> int
-
   val stack_register : unit -> string
 
   include Sigs.PRINTABLE with type t := unit
@@ -53,13 +49,11 @@ module Decoder : Cli.STRING
 (** {2 Static disassembly / Analysis } *)
 
 module Dba_file : Cli.STRING_OPT
-
 module Dba_config : Cli.STRING_OPT
 
 (** DBA start address *)
 
 module Entry_point : Cli.STRING_OPT
-
 module Describe_binary : Cli.BOOLEAN
 
 (** {2 Tests} *)

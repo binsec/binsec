@@ -23,8 +23,9 @@ type numeral = string
 (** Concrete parse tree for SMT-LIB Formulas. *)
 
 type constant =
-  | CstNumeral of numeral (* Better to use a string than an int here as
-                           * int_of_string can fail *)
+  | CstNumeral of numeral
+    (* Better to use a string than an int here as
+     * int_of_string can fail *)
   | CstDecimal of string
   | CstDecimalSize of string * string
   | CstHexadecimal of string
@@ -33,11 +34,8 @@ type constant =
   | CstBool of bool
 
 type symbol_desc = SimpleSymbol of string | QuotedSymbol of string
-
 type symbol = { symbol_desc : symbol_desc; symbol_loc : Location.t }
-
 type symbols = symbol list
-
 type keyword = string
 
 type sexpr_desc =
@@ -47,19 +45,13 @@ type sexpr_desc =
   | SexprParens of sexprs
 
 and sexpr = { sexpr_desc : sexpr_desc; sexpr_loc : Location.t }
-
 and sexprs = sexpr list
 
 type index = IdxNum of numeral | IdxSymbol of symbol
-
 type indexes = index list
-
 type info_flag_desc = InfoFlagKeyword of keyword
-
 type info_flag = { info_flag_desc : info_flag_desc; info_flag_loc : Location.t }
-
 type id_desc = IdSymbol of symbol | IdUnderscore of symbol * indexes
-
 type identifier = { id_desc : id_desc; id_loc : Location.t }
 
 type attr_value_desc =
@@ -77,9 +69,7 @@ type attribute_desc =
   | AttrKeywordValue of keyword * attr_value
 
 type attribute = { attribute_desc : attribute_desc; attribute_loc : Location.t }
-
 type attributes = attribute list
-
 type smt_option_desc = OptionAttribute of attribute
 
 type smt_option = {
@@ -88,9 +78,7 @@ type smt_option = {
 }
 
 type sort = { sort_desc : sort_desc; sort_loc : Location.t }
-
 and sorts = sort list
-
 and sort_desc = SortIdentifier of identifier | SortFun of identifier * sorts
 (* SMT-LIB: there must be at least one sort *)
 
@@ -132,7 +120,6 @@ and term_desc =
   | TermAnnotatedTerm of term * attributes
 
 and terms = term list
-
 and term = { term_desc : term_desc; term_loc : Location.t }
 
 (* [sorted_vars] can be empty *)
@@ -186,9 +173,6 @@ type command_desc =
   | CmdSetOption of smt_option
 
 type command = { command_desc : command_desc; command_loc : Location.t }
-
 type commands = command list
-
 type script = { script_commands : commands; script_loc : Location.t }
-
 type model = { model_commands : commands; model_loc : Location.t }

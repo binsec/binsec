@@ -60,13 +60,9 @@ let get_solver_factory () =
         (map solver)
 
 exception Undef = Types.Undef
-
 exception Uninterp = Types.Uninterp
-
 exception Unknown = Types.Unknown
-
 exception Non_unique = Types.Non_unique
-
 exception Non_mergeable = Types.Non_mergeable
 
 type 'a test = 'a Types.test =
@@ -99,7 +95,6 @@ struct
     (* zero is reserved for initial memory *)
 
     let succ = Suid.incr
-
     let compare = Suid.compare
   end
 
@@ -133,9 +128,7 @@ struct
           t.deps
 
     let find_dependency t e = BvMap.find e t.deps
-
     let add t e v = t.domains <- BvMap.add e v t.domains
-
     let find t e = BvMap.find e t.domains
   end
 
@@ -234,8 +227,8 @@ struct
                     let value' =
                       Char.unsafe_chr
                         (if offset < Bigarray.Array1.dim img then
-                         Bigarray.Array1.get img offset
-                        else 0)
+                           Bigarray.Array1.get img offset
+                         else 0)
                     in
                     if value <> value' then (addr, value') :: alocs else alocs)
               !(state.alocs) assignment
@@ -433,10 +426,10 @@ struct
       let d = Overapprox.eval state cond in
       if D.included ~size:1 d D.zero then (
         QS.Preprocess.incr_unsat ();
-        False { state with constraints = Expr.lognot cond :: state.constraints })
+        False state)
       else if D.included ~size:1 d D.one then (
         QS.Preprocess.incr_sat ();
-        True { state with constraints = cond :: state.constraints })
+        True state)
       else
         let t = { state with constraints = cond :: state.constraints } in
         let f =
@@ -568,15 +561,10 @@ struct
     type t = Expr.t
 
     let kind = Term
-
     let constant = Expr.constant
-
     let var id name size = Expr.var (name ^ Suid.to_string id) size name
-
     let unary = Expr.unary
-
     let binary = Expr.binary
-
     let ite = Expr.ite
   end
 
@@ -648,4 +636,12 @@ struct
       (fun id expr -> C.define_bv ctx (Dba.Var.from_id id).name expr)
       t.vsymbols;
     C.to_formula ctx
+
+  let downcast _ = None
 end
+
+type Options.Engine.t += Vanilla
+
+let () =
+  Options.Engine.register "vanilla" Vanilla (fun () ->
+      (module State (Domains.Interval) ((val get_solver_factory ()))))

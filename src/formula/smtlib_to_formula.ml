@@ -56,9 +56,7 @@ module Sort = struct
     | Var d -> Format.fprintf ppf "var %d" d
 
   let bv n = BitVec n
-
   let array idx elt = Array (idx, elt)
-
   let boolean = Bool
 
   let fresh_var =
@@ -136,7 +134,6 @@ type sorted_expr = { sort : Sort.t; term : Formula.term }
 let sorted_expr sort term = { sort; term }
 
 let bl_sorted_expr ble = sorted_expr Sort.boolean (mk_bl_term ble)
-
 and bv_sorted_expr n bve = sorted_expr (Sort.bv n) (mk_bv_term bve)
 
 and ax_sorted_expr idx elt axe =
@@ -226,9 +223,7 @@ module FunTyp = struct
   type t = { user_defined : bool; formals : Sort.t list; return : Sort.t }
 
   let create user_defined formals return = { user_defined; formals; return }
-
   let xx_y ?(user_defined = false) x y = create user_defined [ x; x ] y
-
   let x_y ?(user_defined = false) x y = create user_defined [ x ] y
 end
 
@@ -236,9 +231,7 @@ module BvTheory = struct
   open Sort
 
   let bv_bin sz1 sz2 sz3 = FunTyp.create false [ bv sz1; bv sz2 ] (bv sz3)
-
   let bin_same sz = bv_bin sz sz sz
-
   let bin_bool sz1 sz2 = FunTyp.create false [ bv sz1; bv sz2 ] boolean
 
   let un l =
@@ -246,7 +239,6 @@ module BvTheory = struct
     FunTyp.create false l
 
   let un_bv n = un [ bv n ] (bv n)
-
   let vars = [ ("bv1", Sort.bv 1); ("bv0", Sort.bv 1) ]
 
   let functions =
@@ -328,7 +320,6 @@ module BvTheory = struct
     | SmtBvSelect
 
   let mk_bv_bnop name = SmtBvBnop (List.assoc name bv_bnop_tbl)
-
   let mk_bv_unop name = SmtBvUnop (List.assoc name bv_unop_tbl)
 
   let fill_unop_indexes idxs = function
@@ -398,7 +389,6 @@ end
 
 module CoreTheory = struct
   let boolbool_bool_fun = FunTyp.xx_y Sort.boolean Sort.boolean
-
   let vars = [ ("true", Sort.boolean); ("false", Sort.boolean) ]
 
   let functions =
@@ -420,9 +410,7 @@ module TypEnv = struct
   type t = { functions : FunTyp.t StringMap.t; variables : Sort.t StringMap.t }
 
   let empty = { functions = StringMap.empty; variables = StringMap.empty }
-
   let create functions variables = { functions; variables }
-
   let add_var env v s = { env with variables = StringMap.add v s env.variables }
 
   let find_var env v =
@@ -474,9 +462,7 @@ let eval_constant = function
       sorted_expr Sort.boolean term
 
 let _check_sort _ _ = ()
-
 let check_length _ n l = assert (List.length l = n)
-
 let param1 unhide = function [ e ] -> unhide e.term | [] | _ -> assert false
 
 let param2 unhide = function
@@ -590,7 +576,6 @@ let genr_bool_apply name _ exprs =
   bl_sorted_expr expr
 
 let unhide2 e = param2 unhide_bvexpr e
-
 let extract_bv_expr se = (unhide_bvexpr se.term, Sort.bv_size se.sort)
 
 let get_one_param msg = function

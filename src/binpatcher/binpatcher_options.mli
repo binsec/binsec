@@ -22,7 +22,5 @@
 (** Options for binary patching *)
 
 include Cli.S
-
 module PatchOutFile : Cli.STRING
-
 module PatchFile : Cli.STRING_OPT

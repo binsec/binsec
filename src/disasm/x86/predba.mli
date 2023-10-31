@@ -32,21 +32,13 @@ type 'a t = private
   | Stop of Dba.state
 
 val assign : Dba.LValue.t -> Dba.Expr.t -> 'a t
-
 val ( <<- ) : Dba.LValue.t -> Dba.Expr.t -> 'a t
-
 val static_jump : ?tag:Dba.tag -> 'a Dba.jump_target -> 'a t
-
 val dynamic_jump : ?tag:Dba.tag -> Dba.Expr.t -> 'a t
-
 val dynamic_assert : Dba.Expr.t -> 'a t
-
 val conditional_jump : Dba.Expr.t -> 'a Dba.jump_target -> 'a t
-
 val undefined : Dba.LValue.t -> 'a t
-
 val non_deterministic : Dba.LValue.t -> 'a t
-
 val stop : Dba.state -> 'a t
 
 val blockify : Dba.address -> Dba.id t list -> Dhunk.t

@@ -25,20 +25,15 @@ module V_comparable = struct
   type t = int
 
   let compare = compare
-
   let equal x y = compare x y = 0
-
   let hash x = x
 end
 
 include Basic_types.Collection_make.Hashed (V_comparable)
 
 let zero = 0
-
 let create n = n
-
 let to_int n = n
-
 let to_int64 x = Int64.(shift_right (shift_left (of_int x) 1) 1)
 
 let of_int64 n64 =
@@ -53,16 +48,12 @@ let of_bigint b =
   else raise Non_canonical_form
 
 let of_string s = of_bigint @@ Z.of_string s
-
 let to_bigint v = Z.extract (Z.signed_extract (Z.of_int v) 0 63) 0 64
-
 let of_bitvector bv = Bitvector.value_of bv |> of_bigint
 
 (* FIXME: we may want to check for overflow? *)
 let add_int n t = create (t + n)
-
 let succ = add_int 1
-
 let pred t = add_int (-1) t
 
 (* FIXME: hope that t and t' are close enough *)

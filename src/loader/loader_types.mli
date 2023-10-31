@@ -20,7 +20,6 @@
 (**************************************************************************)
 
 type section_flag = Read | Write | Exec
-
 type 'a map = { raw : 'a; virt : 'a }
 
 type u8 = int
@@ -28,15 +27,9 @@ type u8 = int
     first approximation, all values are expected to fit in OCaml integers. *)
 
 type u16 = int
-
 type u32 = int
-
 type u64 = int (* Bye bye 32 bits. 63 bits ought to be enough for anyone. *)
-
 type s8 = int
-
 type s16 = int
-
 type s32 = int
-
 type s64 = int (* Bye bye 32 bits. 63 bits ought to be enough for anyone. *)

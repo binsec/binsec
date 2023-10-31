@@ -22,11 +22,8 @@
 (** Definition of DBA type *)
 
 let invalid_boolean = Invalid_argument "not a boolean expression"
-
 let bad_bound = Invalid_argument "index out of bound"
-
 let mismatched_operands = Invalid_argument "mismatched operands size"
-
 let invalid_assignment = Invalid_argument "mismatched assign"
 
 type size = int
@@ -243,14 +240,11 @@ end = struct
     type nonrec t = t
 
     let equal t t' = t.id = t'.id
-
     let hash { id; _ } = id
   end)
 
   let cons = C.create 128
-
   let id = ref 0
-
   let rev = R.create 128
 
   let create name ~bitsize ~tag =
@@ -271,9 +265,7 @@ end = struct
     temporary name nbits
 
   let hash { id; _ } = id
-
   let equal = ( == )
-
   let compare t t' = t.id - t'.id
 
   let from_id id =
@@ -292,11 +284,8 @@ module Expr : sig
   (* sugar operator *)
 
   val v : Var.t -> t
-
   val var : ?tag:Var.Tag.t -> string -> int -> t
-
   val is_equal : t -> t -> bool
-
   val size_of : t -> int
   (*
    *   val var : Size.Bit.t -> string -> Tag.t option -> t
@@ -305,73 +294,43 @@ module Expr : sig
    *)
 
   val is_constant : t -> bool
-
   val constant : Bitvector.t -> t
-
   val temporary : size:int -> string -> t
-
   val zeros : int -> t
-
   val ones : int -> t
-
   val one : t
-
   val _true : t
-
   val zero : t
-
   val _false : t
-
   val binary : Binary_op.t -> t -> t -> t
-
   val add : t -> t -> t
-
   val sub : t -> t -> t
-
   val mul : t -> t -> t
-
   val smod : t -> t -> t
-
   val umod : t -> t -> t
-
   val udiv : t -> t -> t
-
   val sdiv : t -> t -> t
-
   val append : t -> t -> t
 
   include Sigs.COMPARISON with type t := t and type boolean = t
 
   val unary : Unary_op.t -> t -> t
-
   val uminus : t -> t
 
   include Sigs.LOGICAL with type t := t
 
   val logxor : t -> t -> t
-
   val shift_left : t -> t -> t
-
   val shift_right : t -> t -> t
-
   val shift_right_signed : t -> t -> t
-
   val rotate_left : t -> t -> t
-
   val rotate_right : t -> t -> t
-
   val sext : int -> t -> t
-
   val uext : int -> t -> t
-
   val ite : t -> t -> t -> t
-
   val restrict : int -> int -> t -> t
-
   val bit_restrict : int -> t -> t
-
   val load : ?array:string -> Size.Byte.t -> Machine.endianness -> t -> t
-
   val is_max : t -> bool
 end = struct
   open Binary_op
@@ -416,32 +375,21 @@ end = struct
     | _, _ -> false
 
   let is_constant = function Cst _ -> true | _ -> false
-
   let _is_zero = function Cst bv -> Bitvector.is_zeros bv | _ -> false
-
   let _is_one = function Cst bv -> Bitvector.is_ones bv | _ -> false
-
   let is_max = function Cst bv -> Bitvector.is_max_ubv bv | _ -> false
-
   let v va = Var va
 
   let var ?(tag = Var.Tag.Empty) name size =
     Var (Var.create ~tag name ~bitsize:(Size.Bit.create size))
 
   let temporary ~size name = var name size ~tag:Var.Tag.Temp
-
   let constant bv = Cst bv
-
   let zeros length = constant (Bitvector.zeros length)
-
   let ones length = constant (Bitvector.ones length)
-
   let zero = constant Bitvector.zero
-
   let _false = zero
-
   let one = constant Bitvector.one
-
   let _true = one
 
   let ite condition then_expr else_expr =
@@ -459,17 +407,11 @@ end = struct
 
   module Straight = struct
     let binary op e1 e2 = Binary (op, e1, e2)
-
     let append = binary Concat
-
     let shift_left = binary LShift
-
     let shift_right = binary RShiftU
-
     let shift_right_signed = binary RShiftS
-
     let rotate_left = binary LeftRotate
-
     let rotate_right = binary RightRotate
 
     let symmetric_binary op e1 e2 =
@@ -477,53 +419,29 @@ end = struct
       binary op e1 e2
 
     let add = symmetric_binary Plus
-
     let sub = symmetric_binary Minus
-
     let mul = symmetric_binary Mult
-
     let smod = symmetric_binary ModS
-
     let umod = symmetric_binary ModU
-
     let udiv = symmetric_binary DivU
-
     let sdiv = symmetric_binary DivS
-
     let logor = symmetric_binary Or
-
     let logxor = symmetric_binary Xor
-
     let logand = symmetric_binary And
-
     let equal = symmetric_binary Eq
-
     let diff = symmetric_binary Diff
-
     let ule = symmetric_binary LeqU
-
     let sle = symmetric_binary LeqS
-
     let ult = symmetric_binary LtU
-
     let slt = symmetric_binary LtS
-
     let uge = symmetric_binary GeqU
-
     let sge = symmetric_binary GeqS
-
     let ugt = symmetric_binary GtU
-
     let sgt = symmetric_binary GtS
-
     let unary op e = Unary (op, e)
-
     let lognot = unary Unary_op.Not
-
     let uminus = unary Unary_op.UMinus
-
     let sext bits = unary (Unary_op.Sext bits)
-
     let uext bits = unary (Unary_op.Uext bits)
 
     let restrict lo hi e =
@@ -979,7 +897,6 @@ end = struct
 end
 
 type exprs = Expr.t list
-
 type printable = Exp of Expr.t | Str of string
 
 module Tag = struct
@@ -992,11 +909,8 @@ module Jump_target = struct
   type 'a t = 'a jump_target
 
   let inner n = JInner n
-
   let outer a = JOuter a
-
   let is_inner = function JInner _ -> true | JOuter _ -> false
-
   let is_outer = function JOuter _ -> true | JInner _ -> false
 end
 
@@ -1004,7 +918,6 @@ module type INSTR = sig
   type t
 
   include Sigs.ARITHMETIC with type t := t
-
   include Sigs.BITWISE with type t := t
 end
 
@@ -1056,7 +969,6 @@ module LValue = struct
     restrict v lo hi
 
   let bit_restrict v bit = restrict v bit bit
-
   let _bit_restrict name sz bit = _restrict name sz bit bit
 
   let store ?array nbytes endianness e =
@@ -1117,7 +1029,6 @@ module Instr = struct
     Assign (lval, rval, nid)
 
   let static_jump ?(tag = Default) jt = SJump (jt, tag)
-
   let static_inner_jump ?tag n = static_jump (Jump_target.inner n) ?tag
 
   let static_outer_jump ?tag base =
@@ -1142,10 +1053,7 @@ module Instr = struct
     else If (c, goto, nid)
 
   let undefined lv nid = Undef (lv, nid)
-
   let non_deterministic lv nid = Nondet (lv, nid)
-
   let _assert c nid = Assert (c, nid)
-
   let assume c nid = Assume (c, nid)
 end

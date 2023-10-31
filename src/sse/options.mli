@@ -23,23 +23,26 @@
 
 include Cli.S
 
+module Engine : sig
+  type t = ..
+
+  include Cli.GENERIC_OPT with type t := t
+
+  val register : string -> t -> (unit -> (module Types.STATE_FACTORY)) -> unit
+  val get_factory : unit -> (module Types.STATE_FACTORY)
+end
+
 module AlternativeEngine : Cli.BOOLEAN
-
 module LegacyEngine : Cli.BOOLEAN
-
 module MaxDepth : Cli.INTEGER
-
 module TransientEnum : Cli.INTEGER
-
 module JumpEnumDepth : Cli.INTEGER
-
 module QMerge : Cli.INTEGER
-
+module KillFlagsAtReturn : Cli.BOOLEAN
 module Randomize : Cli.BOOLEAN
-
 module ScriptFiles : Cli.STRING_LIST
-
 module Timeout : Cli.INTEGER_OPT
+module Monitor : Cli.BOOLEAN
 
 type search_heuristics = Dfs | Bfs | Nurs
 

@@ -35,44 +35,33 @@ module Section = struct
     { raw; virt = raw }
 
   let pos _ = { raw = 0; virt = 0 }
-
   let flag _ = 0b110
-
   let name _ = ".raw"
 end
 
 module Symbol = struct
   type t = unit
-
   type header = unit
 
   let name _ = assert false
-
   let value _ = assert false
-
   let header _ = assert false
 end
 
 module Img = struct
   type header = unit
-
   type t = { content : Section.t; sections : Section.t array; arch : Machine.t }
 
   let sections { sections; _ } = sections
-
   let symbols _ = [||]
-
   let arch t = t.arch
-
   let header _ = ()
-
   let entry _ = 0
 
   let cursor ?(at = 0) t =
     Loader_buf.cursor ~at Machine.LittleEndian (Array.get t.sections 0)
 
   let content _ buf = buf
-
   let pp ppf _ = Format.pp_print_string ppf "Raw image"
 end
 
@@ -107,7 +96,6 @@ module Offset = Loader_buf.Make (struct
   type t = Img.t
 
   let get t i = read_address t i
-
   let dim t = Bigarray.Array1.dim t.Img.content
 end)
 

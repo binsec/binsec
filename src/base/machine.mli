@@ -24,7 +24,6 @@
 (** Abstract representation of hardware architecture *)
 
 type bitwidth = [ `x16 | `x32 | `x64 | `x128 ]
-
 type endianness = LittleEndian | BigEndian
 
 type isa = private
@@ -39,11 +38,8 @@ module ISA : sig
   include Sigs.PRINTABLE with type t = isa
 
   val endianness : t -> endianness
-
   val bits : t -> bitwidth
-
   val stack_register : t -> string
-
   val to_string : isa -> string
 end
 
@@ -52,9 +48,7 @@ module Bitwidth : sig
   include Sigs.PRINTABLE with type t = bitwidth
 
   val bitsize : t -> Size.Bit.t
-
   val bytesize : t -> Size.Byte.t
-
   val pp_print_hex : t -> Format.formatter -> int -> unit
 end
 
@@ -63,19 +57,12 @@ module Endianness : Sigs.PRINTABLE with type t = endianness
 type t = isa
 
 val amd64 : t
-
 val armv7 : endianness -> t
-
 val armv8 : endianness -> t
-
 val ppc64 : endianness -> t
-
 val riscv : [ `x32 | `x64 | `x128 ] -> t
-
 val x86 : t
-
 val z80 : t
-
 val unknown : t
 
 include Sigs.PRINTABLE with type t := t

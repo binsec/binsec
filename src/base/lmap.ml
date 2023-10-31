@@ -23,51 +23,33 @@ module type Value = sig
   type t
 
   val equal : t -> t -> bool
-
   val len : t -> int
-
   val crop : lo:int -> hi:int -> t -> t
-
   val concat : t -> t -> t
 end
 
 module type S = sig
   type t
-
   type v
 
   val empty : t
-
   val is_empty : t -> bool
-
   val is_empty_between : Z.t -> Z.t -> t -> bool
-
   val singleton : Z.t -> v -> t
-
   val store : Z.t -> v -> t -> t
-
   val select : (Z.t -> int -> v) -> Z.t -> int -> t -> v
-
   val iter : (Z.t -> v -> unit) -> t -> unit
-
   val rev_iter : (Z.t -> v -> unit) -> t -> unit
-
   val fold : (Z.t -> v -> 'a -> 'a) -> 'a -> t -> 'a
-
   val rev_fold : (Z.t -> v -> 'a -> 'a) -> 'a -> t -> 'a
-
   val map : (Z.t -> v -> v) -> t -> t
-
   val merge : (Z.t -> v option -> v option -> v option) -> t -> t -> t
-
   val choose : t -> Z.t * v
-
   val bindings : t -> (Z.t * v) list
 end
 
 module Make (E : Value) : S with type v := E.t = struct
   type empty
-
   type nonempty
 
   type _ tree =
@@ -88,18 +70,14 @@ module Make (E : Value) : S with type v := E.t = struct
         (** branch with left and right sub-trees *)
 
   exception Overflow of { mutable t : nonempty tree; k : Z.t; e : E.t }
-
   exception Return of nonempty tree
-
   exception Hole of E.t
 
   type t = T : _ tree -> t [@@unboxed]
 
   (* most significant bit of difference betweeb two key *)
   let diff k k' = Z.numbits (Z.logxor k k')
-
   let upper_bound k e = Z.add k (Z.of_int (E.len e))
-
   let distance k' u' = Z.to_int (Z.sub u' k')
 
   let rec iter : type a. (Z.t -> E.t -> unit) -> a tree -> unit =
@@ -717,19 +695,19 @@ module Make (E : Value) : S with type v := E.t = struct
       raise_notrace o
 
   let rec d_seek_rightmost :
-      type a. (Z.t -> int -> E.t) -> Z.t -> Z.t -> a tree -> E.t =
-   fun f k' u' t ->
+      type a. a tree -> (Z.t -> int -> E.t) -> Z.t -> Z.t -> E.t =
+   fun t f k' u' ->
     match t with
     | Z -> raise_notrace Not_found
-    | N { k; e } | LN { k; e; _ } -> n_seek_rightmost f k' u' k e Z
-    | NR { k; e; r } | LNR { k; e; r; _ } -> n_seek_rightmost f k' u' k e r
-    | LR { r; _ } -> d_seek_rightmost f k' u' r
+    | N { k; e } | LN { k; e; _ } -> n_seek_rightmost Z f k' u' k e
+    | NR { k; e; r } | LNR { k; e; r; _ } -> n_seek_rightmost r f k' u' k e
+    | LR { r; _ } -> d_seek_rightmost r f k' u'
 
   and n_seek_rightmost :
-      type a. (Z.t -> int -> E.t) -> Z.t -> Z.t -> Z.t -> E.t -> a tree -> E.t =
-   fun f k' u' k e r ->
+      type a. a tree -> (Z.t -> int -> E.t) -> Z.t -> Z.t -> Z.t -> E.t -> E.t =
+   fun r f k' u' k e ->
     let u = upper_bound k e in
-    if Z.leq u k' then d_seek_rightmost f k' u' r
+    if Z.leq u k' then d_seek_rightmost r f k' u'
     else
       let d = distance u u' in
       let s = E.len e and s' = distance k' u' in
@@ -738,36 +716,44 @@ module Make (E : Value) : S with type v := E.t = struct
       else if d > 0 then raise_notrace (Hole (E.crop ~hi:(s - 1) ~lo e))
       else E.crop ~hi:(lo + s' - 1) ~lo e
 
-  let rec d_seek : type a. (Z.t -> int -> E.t) -> Z.t -> Z.t -> a tree -> E.t =
-   fun f k' u' t ->
+  let rec d_seek :
+      type p a. p tree -> (Z.t -> int -> E.t) -> Z.t -> Z.t -> a tree -> E.t =
+   fun p f k' u' t ->
     match t with
-    | Z -> raise_notrace Not_found
-    | N { k; e } -> n_seek f k' u' k e Z Z
-    | LN { k; e; l } -> n_seek f k' u' k e l Z
-    | NR { k; e; r } -> n_seek f k' u' k e Z r
-    | LNR { k; e; l; r } -> n_seek f k' u' k e l r
-    | LR { k; l; r } -> b_seek f k' u' k l r
+    | Z -> d_seek_rightmost p f k' u' (* raise_notrace Not_found *)
+    | N { k; e } -> n_seek p f k' u' k e Z Z
+    | LN { k; e; l } -> n_seek p f k' u' k e l Z
+    | NR { k; e; r } -> n_seek p f k' u' k e Z r
+    | LNR { k; e; l; r } -> n_seek p f k' u' k e l r
+    | LR { k; l; r } -> b_seek p f k' u' k l r
 
   and n_seek :
-      type a b.
-      (Z.t -> int -> E.t) -> Z.t -> Z.t -> Z.t -> E.t -> a tree -> b tree -> E.t
-      =
-   fun f k' u' k e l r ->
+      type p a b.
+      p tree ->
+      (Z.t -> int -> E.t) ->
+      Z.t ->
+      Z.t ->
+      Z.t ->
+      E.t ->
+      a tree ->
+      b tree ->
+      E.t =
+   fun p f k' u' k e l r ->
     if Z.equal k k' then
       let s = E.len e and s' = distance k' u' in
       let d = s - s' in
       if d = 0 then e
       else if d > 0 then E.crop ~hi:(s' - 1) ~lo:0 e
       else d_fill f (Z.add k (Z.of_int s)) u' e r
-    else if Z.geq k u' then d_seek f k' u' l
+    else if Z.geq k u' then d_seek p f k' u' l
     else
       let u = upper_bound k e in
-      if Z.leq u k' then d_seek f k' u' r
+      if Z.leq u k' then d_seek Z f k' u' r
       else
         let d = distance u u' in
         if Z.gt k k' then
           let e' =
-            try d_seek f k' k l with
+            try d_seek p f k' k l with
             | Not_found -> f k' (distance k' k)
             | Hole e' ->
                 let kh = upper_bound k' e' in
@@ -784,6 +770,8 @@ module Make (E : Value) : S with type v := E.t = struct
           else E.crop ~hi:(lo + s' - 1) ~lo e
 
   and b_seek :
+      type p.
+      p tree ->
       (Z.t -> int -> E.t) ->
       Z.t ->
       Z.t ->
@@ -791,13 +779,12 @@ module Make (E : Value) : S with type v := E.t = struct
       nonempty tree ->
       nonempty tree ->
       E.t =
-   fun f k' u' k l r ->
-    if Z.geq k u' then d_seek f k' u' l
+   fun p f k' u' k l r ->
+    if Z.geq k u' then d_seek p f k' u' l
+    else if Z.lt k k' then d_seek l f k' u' r (* d_seek_rightmost f k' u' l *)
     else
-      try
-        if Z.lt k k' then d_seek_rightmost f k' u' l else d_seek f k' u' l
-      with
-      | Not_found -> d_seek f k' u' r
+      try d_seek p f k' u' l with
+      | Not_found -> d_seek Z f k' u' r
       | Hole e' -> d_fill f (upper_bound k' e') u' e' r
 
   and d_fill : type a. (Z.t -> int -> E.t) -> Z.t -> Z.t -> E.t -> a tree -> E.t
@@ -957,11 +944,8 @@ module Make (E : Value) : S with type v := E.t = struct
    *   | _ -> assert false *)
 
   let empty = T Z
-
   let is_empty t = t == empty
-
   let is_empty_between i j (T t) = d_is_empty_between i j t
-
   let singleton k e = T (N { k; e })
 
   let store k' e' (T t) =
@@ -973,20 +957,16 @@ module Make (E : Value) : S with type v := E.t = struct
 
   let select f k s (T t) =
     let u = Z.add k (Z.of_int s) in
-    try d_seek f k u t with
+    try d_seek Z f k u t with
     | Not_found -> f k s
     | Hole e ->
         let kh = upper_bound k e in
         E.concat (f kh (distance kh u)) e
 
   let iter f (T t) = iter f t
-
   let rev_iter f (T t) = rev_iter f t
-
   let fold f x (T t) = fold f x t
-
   let rev_fold f x (T t) = rev_fold f x t
-
   let map f (T t) = T (map f t)
 
   let rec choose (T t) =
@@ -1072,6 +1052,5 @@ module Make (E : Value) : S with type v := E.t = struct
     merge_bindings f bindings bindings' (T Z)
 
   let merge f (T t) (T t') = slow_merge f t t'
-
   let bindings (T t) = bindings t
 end

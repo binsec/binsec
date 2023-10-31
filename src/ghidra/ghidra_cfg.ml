@@ -35,16 +35,13 @@ module G =
       type t = Virtual_address.t
 
       let compare = Virtual_address.compare
-
       let equal = Virtual_address.equal
-
       let hash = Hashtbl.hash
     end)
     (struct
       type t = kind
 
       let default = Fallthrough
-
       let compare = compare
     end)
 
@@ -216,15 +213,10 @@ let pretty_dot ppf (g, m) =
     include G
 
     let graph_attributes _ = [ `Orientation `Portrait; `Fontname "Courier" ]
-
     let default_vertex_attributes _ = [ `Shape `Box ]
-
     let vertex_name v = Format.asprintf "\"%a\"" Virtual_address.pp v
-
     let vertex_attributes v = [ `Label (Virtual_address.Htbl.find labels v) ]
-
     let get_subgraph _ = None
-
     let default_edge_attributes _ = []
 
     let edge_attributes = function

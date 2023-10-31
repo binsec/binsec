@@ -95,13 +95,10 @@ and def_desc_stats acc = function
   | AxDef (_, _, ax) -> ax_term_stats acc ax
 
 and funs_stats acc ls = List.fold_left term_stats acc ls
-
 and lets_stats acc ls = List.fold_left def_stats acc ls
 
 let bl_term_stats bl = bl_term_stats empty_stats bl
-
 let bv_term_stats bv = bv_term_stats empty_stats bv
-
 let ax_term_stats ax = ax_term_stats empty_stats ax
 
 let rec term_variables acc tm = term_desc_variables acc tm.term_desc
@@ -155,25 +152,18 @@ and def_desc_variables acc = function
   | AxDef (_, _, ax) -> ax_term_variables acc ax
 
 and funs_variables acc ls = List.fold_left term_variables acc ls
-
 and lets_variables acc ls = List.fold_left def_variables acc ls
 
 let bl_term_variables bl = bl_term_variables VarSet.empty bl
-
 let bv_term_variables bv = bv_term_variables VarSet.empty bv
-
 let ax_term_variables ax = ax_term_variables VarSet.empty ax
-
 let is_symbolic_bl_term bl = (bl_term_stats bl).var > 0
-
 let is_symbolic_bv_term bv = (bv_term_stats bv).var > 0
-
 let is_symbolic_ax_term ax = (ax_term_stats ax).var > 0
 
 (* Some accessors *)
 
 let bv_size bv = bv.bv_term_size
-
 let ax_size ax = (ax.idx_term_size, ax.elt_term_size)
 
 let bv_desc_size = function
@@ -303,9 +293,7 @@ let is_store { ax_term_desc; _ } =
   | AxIte (_, _, _) -> None
 
 let bl_var_hash bl = bl.bl_hash
-
 let bv_var_hash bv = bv.bv_hash
-
 let ax_var_hash ax = ax.ax_hash
 
 let var_hash = function
@@ -314,9 +302,7 @@ let var_hash = function
   | AxVar v -> ax_var_hash v
 
 let bl_var_name bl = bl.bl_name
-
 let bv_var_name bv = bv.bv_name
-
 let ax_var_name ax = ax.ax_name
 
 let var_name = function
@@ -382,15 +368,10 @@ module BindEnv = struct
     }
 
   let bl_lookup t v = try BlVarHashtbl.find t.bl_bind v with Not_found -> Free
-
   let bv_lookup t v = try BvVarHashtbl.find t.bv_bind v with Not_found -> Free
-
   let ax_lookup t v = try AxVarHashtbl.find t.ax_bind v with Not_found -> Free
-
   let bl_decl t v ls = BlVarHashtbl.add t.bl_bind v (Declared (v, ls))
-
   let bv_decl t v ls = BvVarHashtbl.add t.bv_bind v (Declared (v, ls))
-
   let ax_decl t v ls = AxVarHashtbl.add t.ax_bind v (Declared (v, ls))
 
   let decl t dc =
@@ -400,9 +381,7 @@ module BindEnv = struct
     | AxDecl (v, ls) -> ax_decl t v ls
 
   let bl_def t v ls bl = BlVarHashtbl.add t.bl_bind v (Defined (v, ls, bl))
-
   let bv_def t v ls bv = BvVarHashtbl.add t.bv_bind v (Defined (v, ls, bv))
-
   let ax_def t v ls ax = AxVarHashtbl.add t.ax_bind v (Defined (v, ls, ax))
 
   let rec def is_var add find v ls tm =

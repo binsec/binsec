@@ -43,7 +43,6 @@ module Caddress = struct
   include Basic_types.Collection_make.Default (X)
 
   let compare = X.compare
-
   let hash = X.hash
 
   let create base id =
@@ -51,27 +50,16 @@ module Caddress = struct
     { base; id }
 
   let rebase a base = create base a.id
-
   let reid a id = create a.base id
-
   let block_start bv = create bv 0
-
   let base_value addr = addr.base
-
   let equal caddr1 caddr2 = compare caddr1 caddr2 = 0
-
   let pp_base ppf v = Format.fprintf ppf "%a" Virtual_address.pp v.base
-
   let add_int a n = rebase a (Virtual_address.add_int n a.base)
-
   let add_id a n = reid a (n + a.id)
-
   let block_start_of_int n = block_start (Virtual_address.create n)
-
   let default_init = ref (block_start_of_int 0)
-
   let to_virtual_address caddr = base_value caddr
-
   let of_virtual_address n = block_start n
 end
 
@@ -112,33 +100,19 @@ module Expr : sig
   type t = Dba.Expr.t
 
   val var : string -> Size.Bit.t -> Dba.Var.Tag.t -> t
-
   val flag : ?bits:Size.Bit.t -> string -> t
-
   val temporary : string -> Size.Bit.t -> t
-
   val sext : t -> Size.Bit.t -> t
-
   val uext : t -> Size.Bit.t -> t
-
   val bool_false : t
-
   val bool_true : t
-
   val temp : Size.Bit.t -> t
-
   val is_symbolic : t -> bool
-
   val of_lvalue : Dba.LValue.t -> t
-
   val is_zero : t -> bool
-
   val is_one : t -> bool
-
   val is_max : t -> bool
-
   val variables : t -> Basic_types.String.Set.t
-
   val temporaries : t -> Basic_types.String.Set.t
 end = struct
   type t = Dba.Expr.t
@@ -155,9 +129,7 @@ end = struct
     Dba.Expr.temporary ~size tempname
 
   let pp = Dba_printer.Ascii.pp_bl_term
-
   let sext e bitsize = Dba.Expr.sext (Size.Bit.to_int bitsize) e
-
   let uext e bitsize = Dba.Expr.uext (Size.Bit.to_int bitsize) e
 
   let temp size =
@@ -165,7 +137,6 @@ end = struct
     temporary name size
 
   let bool_true = Dba.Expr.one
-
   let bool_false = Dba.Expr.zero
 
   open! Dba
@@ -186,7 +157,6 @@ end = struct
         Expr.load bysz endiannness e ?array
 
   let is_zero = function Expr.Cst bv -> Bitvector.is_zeros bv | _ -> false
-
   let is_one = function Expr.Cst bv -> Bitvector.is_ones bv | _ -> false
 
   let is_max = function
@@ -229,7 +199,6 @@ module LValue = struct
     Size.Bit.create sz
 
   let unsafe_bitsize lval = bitsize lval |> Size.Bit.to_int
-
   let _pp = Dba_printer.Ascii.pp_lhs
 
   let name_of = function
@@ -416,13 +385,9 @@ module Statement = struct
   type t = { location : Caddress.t; instruction : Instr.t }
 
   let create a i = { location = a; instruction = i }
-
   let location li = li.location
-
   let instruction li = li.instruction
-
   let set_instruction li instruction = { li with instruction }
-
   let set_location li location = { li with location }
 
   let pp ppf li =
@@ -431,11 +396,8 @@ module Statement = struct
 end
 
 type read_perm = Read of bool
-
 type write_perm = Write of bool
-
 type exec_perm = Exec of bool
-
 type permissions = Dba.Expr.t * (read_perm * write_perm * exec_perm)
 
 type program = {

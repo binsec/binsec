@@ -146,7 +146,6 @@ module Binary_loc = struct
   type t = Address of Virtual_address.t | Name of string | Offset of t * int
 
   let name s = Name s
-
   let address a = Address a
 
   let offset n t =

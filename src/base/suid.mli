@@ -28,11 +28,7 @@ type t = private string
     always start with one of the special characters *)
 
 external to_string : t -> string = "%identity"
-
 val pp : Format.formatter -> t -> unit
-
 val zero : t
-
 val incr : t -> t
-
 val compare : t -> t -> int

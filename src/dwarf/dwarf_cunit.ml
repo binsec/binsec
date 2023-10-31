@@ -547,12 +547,10 @@ module Attribute = struct
     | _ -> Reserved
 
   let read cursor : t = of_value (Read.uleb128 cursor)
-
   let compare = compare
 
   module MapSet = Basic_types.Collection_make.Default (struct
     type a = t
-
     type t = a
 
     let compare = compare
@@ -779,7 +777,6 @@ and Die : sig
     | Node of Tag.t * Class.t Attribute.Map.t * t list
 
   val get : Attribute.t -> t -> Class.t
-
   val pp : Format.formatter -> t -> unit
 end = struct
   type t =
@@ -1204,19 +1201,15 @@ module Type = struct
   type t = Die.t
 
   let name typ = Class.String.get (Die.get Attribute.Name typ)
-
   let pp ppf typ = Format.fprintf ppf "%s" (name typ)
 end
 
 module Var = struct
   type var = Die.t
-
   type t = var
 
   let name var = Class.String.get (Die.get Attribute.Name var)
-
   let line var = Class.Constant.get (Die.get Attribute.Decl_line var)
-
   let typ var = Class.Ref.get (Die.get Attribute.Type var)
 
   let loc var cfa addr : Dba.Expr.t =
@@ -1242,15 +1235,11 @@ end
 
 module Func = struct
   type func = Die.t
-
   type t = func
 
   let name t = Class.String.get (Die.get Attribute.Name t)
-
   let line t = Class.Constant.get (Die.get Attribute.Decl_line t)
-
   let typ t = Class.Ref.get (Die.get Attribute.Type t)
-
   let cfa t = Class.Dwarf_exprloc.get (Die.get Attribute.Dwarf_frame_base t)
 
   let vars = function

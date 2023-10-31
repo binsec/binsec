@@ -185,7 +185,6 @@ module Printer = struct
   type term = string * int
 
   type access = Select of term * int | Store of term * int
-
   and def = Bl of Expr.t | Bv of Expr.t | Ax of Memory.t
 
   and t = {
@@ -226,7 +225,6 @@ module Printer = struct
     }
 
   let pp_int_as_offset size ppf i = pp_bv ppf i size
-
   let once = ""
 
   let rec visit_bl ctx bl =
@@ -739,9 +737,7 @@ module Printer = struct
       ctx.ordered_defs
 
   let pp_print_bl = print_bl
-
   let pp_print_bv = print_bv
-
   let pp_print_ax = print_ax
 end
 
@@ -783,9 +779,7 @@ module Cross = struct
     }
 
   let bl_once = Formula.bl_var "!"
-
   let bv_once = Formula.bv_var "!" 1
-
   let ax_once = Formula.ax_var "!" 1 1
 
   let rec visit_bl ctx bl =
@@ -1095,7 +1089,6 @@ module Solver () : Solver_sig.S = struct
   open Sexpr
 
   type result = Sat | Unsat | Unknown
-
   type term = Printer.term
 
   let put (ctx : Printer.t) ppf constraints =
@@ -1179,7 +1172,6 @@ module Solver () : Solver_sig.S = struct
       x
 
   let iter_free_variables f = StTbl.iter f (Option.get !ctx).fvariables
-
   let iter_free_arrays f = StTbl.iter f (Option.get !ctx).farrays
 
   let get_array ar =

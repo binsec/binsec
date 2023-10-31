@@ -21,7 +21,6 @@
 
 module Statistics = struct
   type h = (string, unit) Hashtbl.t
-
   type opcode_tbl = (Instruction.Generic.t, unit) Hashtbl.t
 
   type t = {
@@ -42,7 +41,6 @@ module Statistics = struct
     }
 
   let add_bytes bytes h = Hashtbl.add h bytes ()
-
   let size h = Hashtbl.length h
 
   let size_unique h =
@@ -61,9 +59,7 @@ module Statistics = struct
     Hashtbl.replace t.decoded i ()
 
   let incr_parse_failed ~bytes t = add_bytes bytes t.parse_failed
-
   let incr_errors ~bytes t = add_bytes bytes t.other_errors
-
   let incr_not_implemented ~bytes t = add_bytes bytes t.not_implemented
 
   let pp ppf t =
@@ -76,9 +72,7 @@ module Statistics = struct
 end
 
 let stats = Statistics.empty
-
 let show_stats ppf () = Statistics.pp ppf stats
-
 let find key kvs = List.assoc key kvs
 
 (* Some conversion functions from parsed categorized value to the expected types
@@ -166,7 +160,6 @@ let parse_result s =
   | Not_found -> Error (EMnemonic, empty_instruction)
 
 let decode addr bytes = Amd64dba.decode ~m64:true ~addr bytes |> parse_result
-
 let read_sample_size = 15
 (* This value is chosen to be large enough to get a sure opcode hit *)
 

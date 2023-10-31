@@ -23,14 +23,15 @@ default: binsec
 
 ifneq (, $(shell command -v opam 2> /dev/null))
 
-OCAML_COMPILER ?= $(shell opam switch list | grep -m 1 -oe "ocaml-system[^ ]*")
+OCAML_COMPILER ?= $(shell opam switch list 2> /dev/null |\
+		    grep -m 1 -oe "ocaml-system[^ ]*" )
 
 _opam:
 	opam switch create . $(OCAML_COMPILER) --no-install
-	opam install merlin ocamlformat=0.19.0 user-setup -y
-	opam user-setup install
 	opam pin add . -n
 	opam install binsec --deps-only --with-test --with-doc -y
+	opam install merlin ocamlformat=0.26.1 user-setup -y
+	opam user-setup install
 
 switch: _opam
 

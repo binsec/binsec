@@ -48,9 +48,7 @@ let fold f acc s =
   !acc_ref
 
 let char_codes s = Array.init (String.length s) (fun i -> Char.code s.[i])
-
 let remove_char c s = filter (fun c' -> c <> c') s
-
 let remove_newline = remove_char '\n'
 
 let for_all p s =

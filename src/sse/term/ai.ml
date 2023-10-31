@@ -29,21 +29,16 @@ module type CONTEXT = sig
   (** domain abstract value *)
 
   val add_dependency : t -> parent:Expr.t -> Expr.t -> unit
-
   val find_dependency : t -> Expr.t -> BvSet.t
-
   val add : t -> Expr.t -> v -> unit
-
   val find : t -> Expr.t -> v
 end
 
 module type S = sig
   type t
-
   type v
 
   val eval : t -> Expr.t -> v
-
   val refine : t -> Expr.t -> v -> unit
 end
 

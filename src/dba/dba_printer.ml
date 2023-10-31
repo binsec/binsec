@@ -23,13 +23,9 @@ open Format
 
 module type Renderer = sig
   val binary_ops : (Dba.Binary_op.t * string) list
-
   val unary_ops : (Dba.Unary_op.t * string) list
-
   val endiannesses : (Machine.endianness * string) list
-
   val string_of_digit_char : char -> string
-
   val left_right_parentheses : string * string
 end
 
@@ -65,11 +61,8 @@ module AsciiRenderer = struct
     ]
 
   let unary_ops = [ (Dba.Unary_op.UMinus, "-"); (Dba.Unary_op.Not, "!") ]
-
   let endiannesses = [ (Machine.BigEndian, "B"); (Machine.LittleEndian, "L") ]
-
   let string_of_digit_char c = Format.sprintf "%c" c
-
   let left_right_parentheses = ("(", ")")
 end
 
@@ -135,19 +128,12 @@ end
 
 module type DbaPrinter = sig
   val pp_code_address : Format.formatter -> Dba.address -> unit
-
   val pp_tag : Format.formatter -> Dba.tag -> unit
-
   val pp_binary_op : Format.formatter -> Dba.Binary_op.t -> unit
-
   val pp_unary_op : Format.formatter -> Dba.Unary_op.t -> unit
-
   val pp_bl_term : Format.formatter -> Dba.Expr.t -> unit
-
   val pp_expr : Format.formatter -> Dba.Expr.t -> unit
-
   val pp_instruction : Format.formatter -> Dba.Instr.t -> unit
-
   val pp_lhs : Format.formatter -> Dba.LValue.t -> unit
 
   val pp_instruction_maybe_goto :
@@ -161,9 +147,7 @@ module Make (R : Renderer) : DbaPrinter = struct
     h
 
   let binary_op_tbl = mk_tbl R.binary_ops
-
   and unary_op_tbl = mk_tbl R.unary_ops
-
   and endianness_tbl = mk_tbl R.endiannesses
 
   let find_or_default h key default =
@@ -208,7 +192,6 @@ module Make (R : Renderer) : DbaPrinter = struct
 
   (* Arbitrarily set value limits displayed as integer *)
   let max_display_int = Z.of_int 4096
-
   let min_display_int = Z.of_int (-4096)
 
   let pp_constant ppf bv =
@@ -295,9 +278,7 @@ module Make (R : Renderer) : DbaPrinter = struct
         fprintf ppf "%a := nondet%a" pp_lhs lhs suffix id
 
   let pp_expr = pp_bl_term
-
   let old_pp = pp_instruction
-
   let pp_instruction ppf instruction = old_pp None ppf instruction
 
   let pp_instruction_maybe_goto ~current_id ppf instruction =

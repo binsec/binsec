@@ -38,11 +38,8 @@ module Command = struct
     | GetValue tm -> fprintf ppf "@[<hov 2>(get-value@ (%a))@]" pp_term tm
 
   let put_entry en = PutEntry en
-
   let check_sat = CheckSat
-
   let get_model = GetModel
-
   let get_value v = GetValue v
 end
 
@@ -286,7 +283,6 @@ let solve_incremental_value ?term expr session =
   get_result_and session (fun session -> read_value session |> List.hd |> snd)
 
 let push session = Format.fprintf (get_formatter_of_session session) "(push 1)"
-
 let pop session = Format.fprintf (get_formatter_of_session session) "(pop 1)"
 
 module Session = struct

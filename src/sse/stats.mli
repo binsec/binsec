@@ -20,5 +20,4 @@
 (**************************************************************************)
 
 module Exploration () : Types.EXPLORATION_STATISTICS_FULL
-
 module Query () : Types.QUERY_STATISTICS

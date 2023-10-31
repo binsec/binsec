@@ -56,9 +56,7 @@ val address_of_symbol : Loader.Symbol.t -> int
     is defined. Otherwise returns [None]. *)
 
 val address_of_symbol_by_name : name:string -> Loader.Img.t -> int option
-
 val size_of_symbol : Loader.Symbol.t -> int
-
 val size_of_symbol_by_name : name:string -> Loader.Img.t -> int option
 
 val symbol_interval : Loader.Symbol.t -> Virtual_address.t * Virtual_address.t
@@ -89,7 +87,6 @@ val interval_of_symbol_or_section_by_name :
 (* { End of Manipulation of symbols } *)
 
 val get_byte_at : Loader.Img.t -> Bitvector.t -> int
-
 val entry_point : Loader.Img.t -> Virtual_address.t
 
 module Binary_loc : sig
@@ -103,11 +100,8 @@ module Binary_loc : sig
   (** {6 Constructors} *)
 
   val name : string -> t
-
   val address : Virtual_address.t -> t
-
   val offset : int -> t -> t
-
   val pp : Format.formatter -> t -> unit
 
   (** {6 Accessors} *)

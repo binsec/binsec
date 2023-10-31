@@ -29,7 +29,6 @@ val symbol_of_vbinding : Smtlib.var_binding -> Smtlib.symbol
 (** Extracts the newly defined symbol part out of a variable binding. *)
 
 val symbols_of_sort : Smtlib.sort -> Smtlib.symbol list
-
 val string_of_symbol : Smtlib.symbol -> string
 
 val get_logic : Smtlib.script -> string
@@ -53,34 +52,22 @@ val mk_symbol : string -> Smtlib.symbol
 (** [mk_symbol name] creates a dummy symbol for name *)
 
 val mk_localized_symbol : string -> Location.t -> Smtlib.symbol
-
 val mk_idx_num : int -> Smtlib.index
-
 val mk_id_symbol : Smtlib.symbol -> Smtlib.identifier
-
 val mk_id_underscore : Smtlib.symbol -> Smtlib.indexes -> Smtlib.identifier
-
 val mk_qual_identifier_identifier : Smtlib.identifier -> Smtlib.qual_identifier
-
 val mk_sorted_var : Smtlib.symbol -> Smtlib.sort -> Smtlib.sorted_var
-
 val mk_var_binding : Smtlib.symbol -> Smtlib.term -> Smtlib.var_binding
-
 val mk_sort_identifier : Smtlib.symbol -> Smtlib.sort
-
 val mk_sort_fun : Smtlib.symbol -> Smtlib.sorts -> Smtlib.sort
-
 val mk_term_spec_constant : Smtlib.constant -> Smtlib.term
-
 val mk_term_qual_identifier : Smtlib.qual_identifier -> Smtlib.term
 
 val mk_term_qual_identifier_terms :
   Smtlib.qual_identifier -> Smtlib.terms -> Smtlib.term
 
 val mk_term_let_term : Smtlib.var_bindings -> Smtlib.term -> Smtlib.term
-
 val mk_term_forall_term : Smtlib.sorted_vars -> Smtlib.term -> Smtlib.term
-
 val mk_term_exists_term : Smtlib.sorted_vars -> Smtlib.term -> Smtlib.term
 
 val mk_fun_def :

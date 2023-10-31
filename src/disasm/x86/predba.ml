@@ -45,19 +45,12 @@ let assign lval e =
   Assign (lval, e)
 
 let ( <<- ) = assign
-
 let static_jump ?tag jt = SJump (jt, tag)
-
 let dynamic_jump ?tag e = DJump (e, tag)
-
 let dynamic_assert e = Assert e
-
 let conditional_jump c jt = If (c, jt)
-
 let undefined lval = Undef lval
-
 let non_deterministic lval = Nondet lval
-
 let stop s = Stop s
 
 let needs_termination = function

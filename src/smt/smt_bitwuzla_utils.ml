@@ -21,7 +21,6 @@
 
 module Interrupt : sig
   val default : float -> int
-
   val timeout : float -> int
 end = struct
   let check timestamp = Float.compare (Unix.gettimeofday ()) timestamp
@@ -33,9 +32,7 @@ end = struct
     | _ -> f x
 
   let zero = Fun.const 0
-
   let default = interrupt zero
-
   let timeout = interrupt check
 end
 

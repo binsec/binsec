@@ -25,13 +25,9 @@ let mkdir dirname =
   if not @@ Sys.file_exists dirname then Unix.mkdir dirname 0o700
 
 let sub_dir dirname ~base = Filename.concat base dirname
-
 let func_dir = "functions"
-
 let mnem_dir = "mnemonics"
-
 let function_directory = sub_dir func_dir
-
 let mnemonic_directory = sub_dir mnem_dir
 
 let dirfile dirbase ~filename =
@@ -39,9 +35,7 @@ let dirfile dirbase ~filename =
   Filename.concat (sub_dir dirbase ~base) filename
 
 let _mnemonic_file = dirfile mnem_dir
-
 let _function_file = dirfile func_dir
-
 let html_file file = file ^ ".html"
 
 let create_base_directory ~base =

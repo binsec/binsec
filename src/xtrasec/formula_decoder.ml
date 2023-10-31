@@ -26,9 +26,7 @@ module Instr_to_Formula = struct
 
   module Types = struct
     type binary = F.bv_term
-
     type boolean = F.bl_term
-
     type memory = F.ax_term
   end
 
@@ -96,7 +94,6 @@ module Instr_to_Formula = struct
     { vars = VarMap.empty; mem; memcount = 1; formula }
 
   let clear_memory = State.clear
-
   let get_formula x = x.formula
 
   let assume cond state =
@@ -153,24 +150,17 @@ module Instr_to_Formula = struct
     (F.mk_select (size / 8) state.mem addr, state)
 
   let ite cond then_ else_ state = (F.mk_bv_ite cond then_ else_, state)
-
   let bool_of_bin x state = (F.mk_bv_equal x F.mk_bv_one, state)
-
   let bin_of_bool x state = (F.mk_bv_ite x F.mk_bv_one F.mk_bv_zero, state)
-
   let undef = unknown
 
   module Boolean = struct
     include Types
 
     let false_ state = (F.mk_bl_false, state)
-
     let true_ state = (F.mk_bl_true, state)
-
     let ( || ) a b state = (F.mk_bl_or a b, state)
-
     let ( && ) a b state = (F.mk_bl_and a b, state)
-
     let not a state = (F.mk_bl_not a, state)
   end
 
@@ -188,29 +178,17 @@ module Instr_to_Formula = struct
       f
 
     let bimul = bvar2 F.mk_bv_mul
-
     let bisub = bvar2 F.mk_bv_sub
-
     let biadd = bvar2 F.mk_bv_add
-
     let blshr = bvar2 F.mk_bv_lshr
-
     let bashr = bvar2 F.mk_bv_ashr
-
     let bshl = bvar2 F.mk_bv_shl
-
     let biurem = bvar2 F.mk_bv_urem
-
     let biudiv = bvar2 F.mk_bv_udiv
-
     let bisrem = bvar2 F.mk_bv_srem
-
     let bisdiv = bvar2 F.mk_bv_sdiv
-
     let bxor = bvar2 F.mk_bv_xor
-
     let bor = bvar2 F.mk_bv_or
-
     let band = bvar2 F.mk_bv_and
 
     let bv_right_rotate ~size _a _b state =
@@ -244,13 +222,9 @@ module Instr_to_Formula = struct
       f
 
     let biult = bpred F.mk_bv_ult
-
     let biule = bpred F.mk_bv_ule
-
     let bislt = bpred F.mk_bv_slt
-
     let bisle = bpred F.mk_bv_sle
-
     let beq = bpred F.mk_bv_equal
   end
 end

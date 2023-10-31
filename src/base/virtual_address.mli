@@ -30,35 +30,21 @@ exception Non_canonical_form
 type t = private int
 
 val zero : t
-
 val create : int -> t
-
 val to_int : t -> int
-
 val of_int64 : int64 -> t
-
 val of_bitvector : Bitvector.t -> t
-
 val to_int64 : t -> int64
-
 val of_bigint : Z.t -> t
-
 val to_bigint : t -> Z.t
-
 val of_string : string -> t
-
 val to_string : t -> string
-
 val add_int : int -> t -> t
-
 val succ : t -> t
-
 val pred : t -> t
-
 val diff : t -> t -> int
 
 include Sigs.PRINTABLE with type t := t
-
 include Sigs.Collection with type t := t
 
 val pp_set : Format.formatter -> Set.t -> unit

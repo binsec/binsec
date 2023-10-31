@@ -26,11 +26,11 @@ module Make
   module Fiber :
     Fiber.S
       with type builtin :=
-            Virtual_address.t ->
-            Path.t ->
-            int ->
-            State.t ->
-            (State.t, Types.status) Result.t
+        Virtual_address.t ->
+        Path.t ->
+        int ->
+        State.t ->
+        (State.t, Types.status) Result.t
 
   type t
 
@@ -81,4 +81,7 @@ module Make
   end
 
   val register_callback : (module CALLBACK) -> unit
+
+  val register_opcode_hook :
+    (Lreader.t -> (Script.Instr.t list * Script.env) option) -> unit
 end

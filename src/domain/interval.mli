@@ -26,21 +26,12 @@ type t = private { min : Z.t; max : Z.t; stride : int }
 include Common.S with type t := t
 
 val zeros : int -> t
-
 val zero : t
-
 val ones : int -> t
-
 val one : t
-
 val create : size:int -> min:Z.t -> max:Z.t -> stride:int -> t
-
 val mem : Z.t -> size:int -> t -> bool
-
 val iter : (Z.t -> unit) -> size:int -> t -> unit
-
 val fold : (Z.t -> 'a -> 'a) -> 'a -> size:int -> t -> 'a
-
 val for_all : (Z.t -> bool) -> size:int -> t -> bool
-
 val sum : size:int -> t -> Z.t

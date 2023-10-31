@@ -22,52 +22,31 @@
 type 'a t = 'a Basic_types.interval = { lo : 'a; hi : 'a }
 
 val belongs : ('a -> 'a -> int) -> 'a -> 'a t -> bool
-
 val intersects : ('a -> 'a -> int) -> 'a t -> 'a t -> bool
 
 module type S = sig
   type point
-
   type interval
-
   type t
 
   val empty : t
-
   val singleton : interval -> t
-
   val add : interval -> t -> t
-
   val remove : interval -> t -> t
-
   val is_empty : t -> bool
-
   val cardinal : t -> int
-
   val mem : interval -> t -> bool
-
   val min : t -> point option
-
   val max : t -> point option
-
   val is_point : t -> point option
-
   val is_interval : t -> interval option
-
   val belongs : point -> t -> interval list
-
   val intersects : interval -> t -> interval list
-
   val map : (interval -> interval) -> t -> t
-
   val iter : (interval -> unit) -> t -> unit
-
   val fold : (interval -> 'a -> 'a) -> t -> 'a -> 'a
-
   val union : t -> t -> t
-
   val inter : t -> t -> t
-
   val print : (point -> string) -> t -> string
 end
 
@@ -82,11 +61,8 @@ module Flat (Ord : Sigs.ITERABLE) :
   S with type point = Ord.t and type interval = Ord.t t
 
 module Int : S with type point = int and type interval = int t
-
 module IntFlat : S with type point = int and type interval = int t
-
 module Float : S with type point = float and type interval = float t
-
 module FloatFlat : S with type point = float and type interval = float t
 
 (* Unsigned bitvector intervals *)
@@ -94,19 +70,12 @@ module BitVec : sig
   include S with type point = Bitvector.t and type interval = Bitvector.t t
 
   val ule : Bitvector.t -> t
-
   val uge : Bitvector.t -> t
-
   val ult : Bitvector.t -> t
-
   val ugt : Bitvector.t -> t
-
   val sle : Bitvector.t -> t
-
   val sge : Bitvector.t -> t
-
   val slt : Bitvector.t -> t
-
   val sgt : Bitvector.t -> t
 end
 
@@ -114,42 +83,23 @@ module BitVecFlat : sig
   include S with type point = Bitvector.t and type interval = Bitvector.t t
 
   val top : int -> t
-
   val bot : int -> t
-
   val equal : Bitvector.t -> t
-
   val distinct : Bitvector.t -> t
-
   val ule : Bitvector.t -> t
-
   val uge : Bitvector.t -> t
-
   val ult : Bitvector.t -> t
-
   val ugt : Bitvector.t -> t
-
   val sle : Bitvector.t -> t
-
   val sge : Bitvector.t -> t
-
   val slt : Bitvector.t -> t
-
   val sgt : Bitvector.t -> t
-
   val zero_extend : int -> t -> t
-
   val sign_extend : int -> t -> t
-
   val extract : int Basic_types.interval -> t -> t
-
   val concat : t -> t -> t
-
   val bvand : t -> t -> t
-
   val bvor : t -> t -> t
-
   val bvadd : t -> t -> t
-
   val bvsub : t -> t -> t
 end

@@ -21,6 +21,5 @@
 
 include Cli.Make (struct
   let name = "Debug"
-
   let shortname = "g"
 end)

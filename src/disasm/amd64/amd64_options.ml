@@ -21,6 +21,5 @@
 
 include Cli.Options (struct
   let name = "amd64"
-
   let shortname = name
 end)

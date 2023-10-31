@@ -25,15 +25,10 @@ let byte_size = Natural.to_int Basic_types.Constants.bytesize
 
 module F = struct
   let full name index = name ^ "_" ^ string_of_int index
-
   let memory = "__memory"
-
   let full_mem = full memory
-
   let memory_type word_size = Formula.ax_sort word_size byte_size
-
   let pc = "__pc"
-
   let full_pc = full pc
 
   let var name =
@@ -128,7 +123,6 @@ module State = struct
     assign F.pc bl_sort (mk_bl_term mk_bl_true) self
 
   let initializations st = st.initialisation
-
   let comment cmt state = add_entry (Formula.mk_comment cmt) state
 
   let pp ppf state =

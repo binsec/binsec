@@ -29,84 +29,47 @@ module type S = sig
   (** Return address / x1 *)
 
   val sp : t
-
   val gp : t
-
   val tp : t
 
   val fp : t
   (** Same as s0 *)
 
   val a0 : t
-
   val a1 : t
-
   val a2 : t
-
   val a3 : t
-
   val a4 : t
-
   val a5 : t
-
   val a6 : t
-
   val a7 : t
-
   val t0 : t
-
   val t1 : t
-
   val t2 : t
-
   val t3 : t
-
   val t4 : t
-
   val t5 : t
-
   val t6 : t
-
   val s0 : t
-
   val s1 : t
-
   val s2 : t
-
   val s3 : t
-
   val s4 : t
-
   val s5 : t
-
   val s6 : t
-
   val s7 : t
-
   val s8 : t
-
   val s9 : t
-
   val s10 : t
-
   val s11 : t
-
   val name : t -> string
-
   val size : t -> int
-
   val num : t -> int
-
   val bvnum : t -> Bitvector.t
-
   val of_string : string -> t option
-
   val of_int_exn : int -> t
-
   val of_int : int -> t option
-
   val expr : t -> Dba.Expr.t
-
   val lval : t -> Dba.LValue.t
 end
 
@@ -116,15 +79,10 @@ module Mode : sig
   type t
 
   val m32 : t
-
   val m64 : t
-
   val m128 : t
-
   val is_m32 : t -> bool
-
   val is_m64 : t -> bool
-
   val is_m128 : t -> bool
 
   val size : t -> int

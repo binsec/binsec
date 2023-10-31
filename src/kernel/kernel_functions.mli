@@ -22,7 +22,6 @@
 (** Basic kernel functions *)
 
 val get_ep : unit -> Virtual_address.t option
-
 val get_img : unit -> Loader.Img.t
 
 module Loader : sig
@@ -30,6 +29,5 @@ module Loader : sig
   (** [set_arch img] retrieves and sets the machine as determined by the loader **)
 
   val set_arch_from_file : filename:string -> unit
-
   val pp_loader_summary : Format.formatter -> string -> unit
 end

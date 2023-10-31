@@ -25,11 +25,8 @@ module Expr : sig
   exception Fold_const_failed
 
   val fold_expr : Dba.Expr.t -> Bitvector.t
-
   val of_vaddr : Virtual_address.t -> Dba.Expr.t
-
   val eval_from_img : Loader.Img.t -> Dba.Expr.t -> Bitvector.t
-
   val eval_addr_from_img : Loader.Img.t -> Dba.Expr.t -> Virtual_address.t
 
   val complement : Dba.Expr.t -> lo:int -> hi:int -> Dba.Var.t -> Dba.Expr.t
@@ -44,16 +41,12 @@ module Expr : sig
 end
 
 val checksize_address : Dba.address -> bool
-
 val checksize_dbacond : Dba.Expr.t -> bool
-
 val checksize_instruction : Dba.Instr.t -> bool
 
 (* basic typing *)
 val computesize_dbalhs : Dba.LValue.t -> int
-
 val computesize_dbaexpr : Dba.Expr.t -> int
-
 val contains_lhs : Dba.LValue.t -> Dba.LValue.t -> bool
 
 val globalize_address : Dba.address -> Dba.id Dba.jump_target -> Dba.address

@@ -20,7 +20,6 @@
 (**************************************************************************)
 
 type bitwidth = [ `x16 | `x32 | `x64 | `x128 ]
-
 type endianness = LittleEndian | BigEndian
 
 type isa =
@@ -86,7 +85,6 @@ module Bitwidth = struct
     | `x128 -> Size.Bit.bits128
 
   let bytesize t = Size.Byte.of_bitsize (bitsize t)
-
   let pp ppf t = Size.Bit.pp ppf (bitsize t)
 
   let pp_print_hex t ppf x =
@@ -108,19 +106,11 @@ end
 type t = isa
 
 let amd64 = X86 { bits = `x64 }
-
 let armv7 endianness = ARM { rev = `v7; endianness }
-
 let armv8 endianness = ARM { rev = `v8; endianness }
-
 let ppc64 endianness = PPC { bits = `x64; endianness }
-
 let riscv bits = RISCV { bits }
-
 let x86 = X86 { bits = `x32 }
-
 let z80 = Z80
-
 let unknown = Unknown
-
 let pp = ISA.pp

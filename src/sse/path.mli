@@ -25,15 +25,10 @@ module type S = sig
   type t
 
   val id : t -> int
-
   val get : 'a key -> t -> 'a
-
   val set : 'a key -> 'a -> t -> unit
-
   val register_key : ?merge:('a -> 'a -> 'a option) -> 'a -> 'a key
-
   val register_at_fork : (t -> t -> unit) -> unit
-
   val register_at_end : (t -> Types.status -> unit) -> unit
 end
 
@@ -41,10 +36,7 @@ module Make () : sig
   include S
 
   val empty : unit -> t
-
   val fork : t -> t
-
   val merge : t -> t -> t option
-
   val terminate : t -> Types.status -> unit
 end

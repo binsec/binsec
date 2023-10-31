@@ -27,9 +27,7 @@ type status = SAT | UNSAT | TIMEOUT | UNKNOWN
 val status_to_exit_code : status -> int
 
 type bl_unop = BlNot
-
 type bl_bnop = BlImply | BlAnd | BlOr | BlXor
-
 type bl_comp = BlEqual | BlDistinct
 
 type bv_unop =
@@ -76,11 +74,8 @@ type bv_comp =
   | BvSge
 
 type ax_comp = AxEqual | AxDistinct
-
 type sort = BlSort | BvSort of int | AxSort of int * int
-
 type bl_var = private { bl_hash : int; bl_name : string }
-
 type bv_var = private { bv_hash : int; bv_name : string; bv_size : int }
 
 type ax_var = private {
@@ -93,7 +88,6 @@ type ax_var = private {
 type var = BlVar of bl_var | BvVar of bv_var | AxVar of ax_var
 
 type term_desc = BlTerm of bl_term | BvTerm of bv_term | AxTerm of ax_term
-
 and term = private { term_hash : int; term_desc : term_desc }
 
 and bl_term_desc =
@@ -162,306 +156,162 @@ type entry_desc =
   | Comment of string
 
 type entry = private { entry_hash : int; entry_desc : entry_desc }
-
 type formula = private { entries : entry Sequence.t }
 
 val empty : formula
-
 val length : formula -> int
-
 val append : formula -> formula -> formula
-
 val push_front : entry -> formula -> formula
-
 val push_back : entry -> formula -> formula
-
 val peek_front : formula -> entry option
-
 val peek_back : formula -> entry option
-
 val pop_front : formula -> formula option
-
 val pop_back : formula -> formula option
-
 val map_forward : (entry -> entry) -> formula -> formula
-
 val map_backward : (entry -> entry) -> formula -> formula
-
 val iter_forward : (entry -> unit) -> formula -> unit
-
 val iter_backward : (entry -> unit) -> formula -> unit
-
 val fold_forward : (entry -> 'a -> 'a) -> formula -> 'a -> 'a
-
 val fold_backward : (entry -> 'a -> 'a) -> formula -> 'a -> 'a
-
 val push_front_declare : decl -> formula -> formula
-
 val push_front_define : def -> formula -> formula
-
 val push_front_assert : bl_term -> formula -> formula
-
 val push_front_assume : bl_term -> formula -> formula
-
 val push_front_comment : string -> formula -> formula
-
 val push_back_declare : decl -> formula -> formula
-
 val push_back_define : def -> formula -> formula
-
 val push_back_assert : bl_term -> formula -> formula
-
 val push_back_assume : bl_term -> formula -> formula
-
 val push_back_comment : string -> formula -> formula
 
 (** Basic printing of formulas *)
 module Printing : sig
   val p_blterm : Format.formatter -> bl_term -> unit
-
   val p_bvterm : Format.formatter -> bv_term -> unit
-
   val p_axterm : Format.formatter -> ax_term -> unit
-
   val p_term : Format.formatter -> term -> unit
-
   val p_entry : Format.formatter -> entry -> unit
-
   val p_formula : Format.formatter -> formula -> unit
 end
 
 val equal_bl_term : bl_term -> bl_term -> bool
-
 val equal_bv_term : bv_term -> bv_term -> bool
-
 val equal_ax_term : ax_term -> ax_term -> bool
 
 (* Smart constructors *)
 
 val bl_sort : sort
-
 val bv_sort : int -> sort
-
 val ax_sort : int -> int -> sort
-
 val bl_var : string -> bl_var
-
 val bv_var : string -> int -> bv_var
-
 val ax_var : string -> int -> int -> ax_var
-
 val term : term_desc -> term
-
 val bl_term : bl_term_desc -> bl_term
-
 val bv_term : bv_term_desc -> bv_term
-
 val ax_term : ax_term_desc -> ax_term
-
 val def : def_desc -> def
-
 val decl : decl_desc -> decl
-
 val entry : entry_desc -> entry
-
 val mk_bl_term : bl_term -> term
-
 val mk_bv_term : bv_term -> term
-
 val mk_ax_term : ax_term -> term
-
 val mk_bl_true : bl_term
-
 val mk_bl_false : bl_term
-
 val mk_bl_var : bl_var -> bl_term
-
 val mk_bl_fun : bl_var -> term list -> bl_term
-
 val mk_bl_let : def list -> bl_term -> bl_term
-
 val mk_bl_unop : bl_unop -> bl_term -> bl_term
-
 val mk_bl_bnop : bl_bnop -> bl_term -> bl_term -> bl_term
-
 val mk_bl_comp : bl_comp -> bl_term -> bl_term -> bl_term
-
 val mk_bv_comp : bv_comp -> bv_term -> bv_term -> bl_term
-
 val mk_ax_comp : ax_comp -> ax_term -> ax_term -> bl_term
-
 val mk_bl_ite : bl_term -> bl_term -> bl_term -> bl_term
-
 val mk_bv_cst : Bitvector.t -> bv_term
-
 val mk_bv_var : bv_var -> bv_term
-
 val mk_bv_fun : bv_var -> term list -> bv_term
-
 val mk_bv_let : def list -> bv_term -> bv_term
-
 val mk_bv_unop : bv_unop -> bv_term -> bv_term
-
 val mk_bv_bnop : bv_bnop -> bv_term -> bv_term -> bv_term
-
 val mk_bv_ite : bl_term -> bv_term -> bv_term -> bv_term
-
 val mk_select : int -> ax_term -> bv_term -> bv_term
-
 val mk_ax_var : ax_var -> ax_term
-
 val mk_ax_fun : ax_var -> term list -> ax_term
-
 val mk_ax_let : def list -> ax_term -> ax_term
-
 val mk_ax_ite : bl_term -> ax_term -> ax_term -> ax_term
-
 val mk_store : int -> ax_term -> bv_term -> bv_term -> ax_term
-
 val mk_bl_def : bl_var -> decl list -> bl_term -> def
-
 val mk_bv_def : bv_var -> decl list -> bv_term -> def
-
 val mk_ax_def : ax_var -> decl list -> ax_term -> def
-
 val mk_bl_decl : bl_var -> sort list -> decl
-
 val mk_bv_decl : bv_var -> sort list -> decl
-
 val mk_ax_decl : ax_var -> sort list -> decl
-
 val mk_declare : decl -> entry
-
 val mk_define : def -> entry
-
 val mk_assert : bl_term -> entry
-
 val mk_assume : bl_term -> entry
-
 val mk_comment : string -> entry
-
 val mk_bl_not : bl_term -> bl_term
-
 val mk_bv_not : bv_term -> bv_term
-
 val mk_bv_neg : bv_term -> bv_term
-
 val mk_bv_repeat : int -> bv_term -> bv_term
-
 val mk_bv_zero_extend : int -> bv_term -> bv_term
-
 val mk_bv_sign_extend : int -> bv_term -> bv_term
-
 val mk_bv_rotate_left : int -> bv_term -> bv_term
-
 val mk_bv_rotate_right : int -> bv_term -> bv_term
-
 val mk_bv_extract : int Interval.t -> bv_term -> bv_term
-
 val mk_bl_imply : bl_term -> bl_term -> bl_term
-
 val mk_bl_and : bl_term -> bl_term -> bl_term
-
 val mk_bl_or : bl_term -> bl_term -> bl_term
-
 val mk_bl_xor : bl_term -> bl_term -> bl_term
-
 val mk_bv_concat : bv_term -> bv_term -> bv_term
-
 val mk_bv_and : bv_term -> bv_term -> bv_term
-
 val mk_bv_nand : bv_term -> bv_term -> bv_term
-
 val mk_bv_or : bv_term -> bv_term -> bv_term
-
 val mk_bv_nor : bv_term -> bv_term -> bv_term
-
 val mk_bv_xor : bv_term -> bv_term -> bv_term
-
 val mk_bv_xnor : bv_term -> bv_term -> bv_term
-
 val mk_bv_cmp : bv_term -> bv_term -> bv_term
-
 val mk_bv_add : bv_term -> bv_term -> bv_term
-
 val mk_bv_sub : bv_term -> bv_term -> bv_term
-
 val mk_bv_mul : bv_term -> bv_term -> bv_term
-
 val mk_bv_udiv : bv_term -> bv_term -> bv_term
-
 val mk_bv_sdiv : bv_term -> bv_term -> bv_term
-
 val mk_bv_urem : bv_term -> bv_term -> bv_term
-
 val mk_bv_srem : bv_term -> bv_term -> bv_term
-
 val mk_bv_smod : bv_term -> bv_term -> bv_term
-
 val mk_bv_shl : bv_term -> bv_term -> bv_term
-
 val mk_bv_ashr : bv_term -> bv_term -> bv_term
-
 val mk_bv_lshr : bv_term -> bv_term -> bv_term
-
 val mk_bl_equal : bl_term -> bl_term -> bl_term
-
 val mk_bl_distinct : bl_term -> bl_term -> bl_term
-
 val mk_bv_equal : bv_term -> bv_term -> bl_term
-
 val mk_bv_distinct : bv_term -> bv_term -> bl_term
-
 val mk_ax_equal : ax_term -> ax_term -> bl_term
-
 val mk_ax_distinct : ax_term -> ax_term -> bl_term
-
 val mk_bv_ult : bv_term -> bv_term -> bl_term
-
 val mk_bv_ule : bv_term -> bv_term -> bl_term
-
 val mk_bv_ugt : bv_term -> bv_term -> bl_term
-
 val mk_bv_uge : bv_term -> bv_term -> bl_term
-
 val mk_bv_slt : bv_term -> bv_term -> bl_term
-
 val mk_bv_sle : bv_term -> bv_term -> bl_term
-
 val mk_bv_sgt : bv_term -> bv_term -> bl_term
-
 val mk_bv_sge : bv_term -> bv_term -> bl_term
-
 val mk_bv_zero : bv_term
-
 val mk_bv_one : bv_term
-
 val mk_bv_zeros : int -> bv_term
-
 val mk_bv_ones : int -> bv_term
-
 val mk_bv_fill : int -> bv_term
-
 val mk_bv_add_int : bv_term -> int -> bv_term
-
 val mk_bv_sub_int : bv_term -> int -> bv_term
 
 module VarSet : Set.S with type elt = var
-
 module BlVarSet : Set.S with type elt = bl_var
-
 module BvVarSet : Set.S with type elt = bv_var
-
 module AxVarSet : Set.S with type elt = ax_var
-
 module BlVarHashtbl : Hashtbl.S with type key = bl_var
-
 module BvVarHashtbl : Hashtbl.S with type key = bv_var
-
 module AxVarHashtbl : Hashtbl.S with type key = ax_var
-
 module BlTermHashtbl : Hashtbl.S with type key = bl_term
-
 module BvTermHashtbl : Hashtbl.S with type key = bv_term
-
 module AxTermHashtbl : Hashtbl.S with type key = ax_term

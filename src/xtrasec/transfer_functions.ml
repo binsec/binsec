@@ -24,13 +24,9 @@ module Integer = Z
 module type Arity = sig
   (* Symbols and their arities. 'r represents the result type. *)
   type 'r ar0
-
   type ('a, 'r) ar1
-
   type ('a, 'b, 'r) ar2
-
   type ('a, 'b, 'c, 'r) ar3
-
   type ('a, 'r) variadic
 end
 
@@ -47,9 +43,7 @@ module type Boolean_Backward = sig
   module Arity : Arity
 
   val not : (boolean, boolean) Arity.ar1
-
   val ( && ) : (boolean, boolean, boolean) Arity.ar2
-
   val ( || ) : (boolean, boolean, boolean) Arity.ar2
 end
 
@@ -57,7 +51,6 @@ module type Boolean_Forward = sig
   include Boolean_Backward
 
   val true_ : boolean Arity.ar0
-
   val false_ : boolean Arity.ar0
 end
 
@@ -68,59 +61,37 @@ end
    result. *)
 module type Binary_Backward = sig
   type binary
-
   type boolean
 
   module Arity : Arity
 
   val biadd : size:int -> (binary, binary, binary) Arity.ar2
-
   val bisub : size:int -> (binary, binary, binary) Arity.ar2
-
   val bimul : size:int -> (binary, binary, binary) Arity.ar2
-
   val beq : size:int -> (binary, binary, boolean) Arity.ar2
-
   val bisle : size:int -> (binary, binary, boolean) Arity.ar2
-
   val bislt : size:int -> (binary, binary, boolean) Arity.ar2
-
   val biule : size:int -> (binary, binary, boolean) Arity.ar2
-
   val biult : size:int -> (binary, binary, boolean) Arity.ar2
 
   (* First argument become most significant. *)
   val bconcat : size1:int -> size2:int -> (binary, binary, binary) Arity.ar2
-
   val bextract : lo:int -> hi:int -> oldsize:int -> (binary, binary) Arity.ar1
-
   val band : size:int -> (binary, binary, binary) Arity.ar2
-
   val bor : size:int -> (binary, binary, binary) Arity.ar2
-
   val bxor : size:int -> (binary, binary, binary) Arity.ar2
-
   val buext : size:int -> oldsize:int -> (binary, binary) Arity.ar1
-
   val bsext : size:int -> oldsize:int -> (binary, binary) Arity.ar1
 
   (* Correspond to truncated division, used in C99 and processors. *)
   val bisdiv : size:int -> (binary, binary, binary) Arity.ar2
-
   val bisrem : size:int -> (binary, binary, binary) Arity.ar2
-
   val biudiv : size:int -> (binary, binary, binary) Arity.ar2
-
   val biurem : size:int -> (binary, binary, binary) Arity.ar2
-
   val bshl : size:int -> (binary, binary, binary) Arity.ar2
-
   val bashr : size:int -> (binary, binary, binary) Arity.ar2
-
   val blshr : size:int -> (binary, binary, binary) Arity.ar2
-
   val bv_left_rotate : size:int -> (binary, binary, binary) Arity.ar2
-
   val bv_right_rotate : size:int -> (binary, binary, binary) Arity.ar2
 end
 

@@ -21,19 +21,15 @@
 
 module type Basic = sig
   type mnemonic
-
   type t = private { size : Size.Byte.t; opcode : string; mnemonic : mnemonic }
 
   val create : int -> string -> mnemonic -> t
-
   val pp_opcode : Format.formatter -> t -> unit
-
   val pp_mnemonic : Format.formatter -> t -> unit
 end
 
 module Make (P : Sigs.PRINTABLE) = struct
   type mnemonic = P.t
-
   type t = { size : Size.Byte.t; opcode : string; mnemonic : mnemonic }
 
   let create size opcode mnemonic =
@@ -41,7 +37,6 @@ module Make (P : Sigs.PRINTABLE) = struct
     { size; opcode; mnemonic }
 
   let pp_opcode ppf t = Format.fprintf ppf "%s" t.opcode
-
   let pp_mnemonic ppf t = Format.fprintf ppf "%a" P.pp t.mnemonic
 end
 
@@ -56,13 +51,9 @@ type t = {
 }
 
 let hunk t = t.dba_block
-
 let address t = t.address
-
 let size t = t.size
-
 let opcode t = t.opcode
-
 let mnemonic t = t.mnemonic
 
 let create address size opcode mnemonic dba_block =
@@ -94,11 +85,8 @@ let to_generic_instruction e =
     e.mnemonic
 
 let set_dba_block t dba_block = { t with dba_block }
-
 let set_mnemonic mnemonic t = { t with mnemonic }
-
 let is_decoded t = not (Dhunk.is_empty t.dba_block || Size.Byte.is_zero t.size)
-
 let get_caddress t = Dba_types.Caddress.block_start_of_int (t.address :> int)
 
 let stop vaddr =

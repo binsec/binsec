@@ -22,7 +22,6 @@
 type state = private Active | Inactive
 
 module Node : Graph.Sig.COMPARABLE with type t = string * state
-
 module Edge : Graph.Sig.ORDERED_TYPE_DFT with type t = string
 
 module G : sig
@@ -34,14 +33,11 @@ module G : sig
        and type E.label = Edge.t
 
   val mk_active_node : string -> V.t
-
   val mk_inactive_node : string -> V.t
 end
 
 module Dot : sig
   val fprint_graph : Format.formatter -> G.t -> unit
-
   val output_graph : out_channel -> G.t -> unit
-
   val output_graph_to_file : string -> G.t -> unit
 end

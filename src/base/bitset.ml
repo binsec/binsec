@@ -22,23 +22,14 @@
 include Bitvector
 
 let create = zeros
-
 let set = set_bit
-
 let get = get_bit
-
 let is_set = get
-
 let flip = flip_bit
-
 let remove = clear_bit
-
 let union = logor
-
 let inter = logand
-
 let size = size_of
-
 let equal = equal
 
 let cardinal b =

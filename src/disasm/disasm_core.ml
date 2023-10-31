@@ -27,18 +27,14 @@ module W = struct
   include Worklist.Make (Virtual_address)
 
   let add_list wl l = List.fold_left (fun wl a -> add a wl) wl l
-
   let of_list = add_list empty
-
   let add_set wl s = Virtual_address.Set.fold add s wl
 
   let add_filtered_set p wl s =
     Virtual_address.Set.fold (fun v wl -> if p v then add v wl else wl) s wl
 
   let of_set s = add_set empty s
-
   let of_filtered_set p s = add_filtered_set p empty s
-
   let singleton v = add v empty
 
   let pp ppf wl =
@@ -101,7 +97,6 @@ module M = Hashtbl.Make (struct
   type t = Machine.t
 
   let equal = ( = )
-
   let hash = Hashtbl.hash
 end)
 
@@ -112,11 +107,8 @@ let register_decoder isa decode convert =
       generic_decode reader decode convert vaddr)
 
 let () = M.add tbl Machine.x86 x86_decode
-
 let () = M.add tbl (Machine.riscv `x32) riscv32_decode
-
 let () = M.add tbl (Machine.riscv `x64) riscv64_decode
-
 let () = M.add tbl Machine.z80 z80_decode
 
 let () =

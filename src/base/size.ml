@@ -23,29 +23,17 @@ module type Size = sig
   type t = private Natural.t
 
   val create : int -> t
-
   val of_string : string -> t
-
   val of_int32 : int32 -> t
-
   val to_int : t -> int
-
   val eq : t -> t -> bool
-
   val pp : Format.formatter -> t -> unit
-
   val pp_hex : Format.formatter -> t -> unit
-
   val add : t -> t -> t
-
   val sub : t -> t -> t
-
   val div : t -> t -> t
-
   val mul : t -> t -> t
-
   val pred : t -> t
-
   val is_zero : t -> bool
 end
 
@@ -53,9 +41,7 @@ module CommonSize = struct
   include Natural
 
   let pp_hex ppf t = Format.fprintf ppf "%x" (to_int t)
-
   let of_string s = int_of_string s |> create
-
   let of_int32 n = Int32.to_int n |> create
 end
 
@@ -63,23 +49,14 @@ module Bit = struct
   include CommonSize
 
   let bits1 = create 1
-
   let bits2 = create 2
-
   let bits4 = create 4
-
   let bits8 = create 8
-
   let bits16 = create 16
-
   let bits32 = create 32
-
   let bits64 = create 64
-
   let bits128 = create 128
-
   let bits256 = create 256
-
   let bits512 = create 512
 end
 
@@ -88,7 +65,6 @@ module Byte = struct
   module Cst = Basic_types.Constants
 
   let b = Cst.bytesize
-
   let to_bitsize n = mul n b
 
   let of_bitsize n =
@@ -96,18 +72,11 @@ module Byte = struct
     div n b
 
   let unsafe_of_bits n = of_bitsize (create n)
-
   let one = create 1
-
   let two = create 2
-
   let four = create 4
-
   let eight = create 8
-
   let fifteen = create 15
-
   let sixteen = create 16
-
   let thirtytwo = create 32
 end

@@ -44,9 +44,7 @@ struct
     type t = int
 
     let zero = 0
-
     let succ = ( + ) 1
-
     let compare = ( - )
   end
 
@@ -71,7 +69,6 @@ struct
     type t = Formula.bv_term
 
     let kind = Abstract
-
     let constant = Formula.mk_bv_cst
 
     let var id name size =
@@ -81,9 +78,7 @@ struct
       Formula.(mk_bv_ite (mk_bv_equal cond mk_bv_one) then_smt else_smt)
 
     let as_bv bop e1 e2 = Formula.(mk_bv_ite (bop e1 e2) mk_bv_one mk_bv_zero)
-
     let rotate_right_const n = Formula.mk_bv_rotate_right n
-
     let rotate_left_const n = Formula.mk_bv_rotate_left n
 
     let rotate shift_func rev_shift_func const_rot_func value shift =
@@ -286,61 +281,47 @@ struct
         (Solver.get_ax_values session (Formula.mk_ax_var memory));
       model
 
+    let declare_var session marked var vars =
+      match (var : Formula.var) with
+      | BvVar bv_var when not (Formula.VarSet.mem var marked) ->
+          Solver.put session (Formula.mk_declare (Formula.mk_bv_decl bv_var []));
+          bv_var :: vars
+      | _ -> vars
+
     let with_solver formula f =
       QS.Solver.start_timer ();
       let session = Solver.open_session () in
       let vars, _ =
         Formula.fold_forward
           (fun entry (vars, marked) ->
+            let vars, marked =
+              match entry.entry_desc with
+              | Declare { decl_desc = BvDecl (bv_var, _); _ } ->
+                  (bv_var :: vars, Formula.VarSet.add (BvVar bv_var) marked)
+              | Declare { decl_desc = BlDecl _ | AxDecl _; _ } -> (vars, marked)
+              | Define { def_desc = BvDef (bv_var, _, bv_term); _ } ->
+                  let deps = Formula_utils.bv_term_variables bv_term in
+                  ( Formula.VarSet.fold (declare_var session marked) deps vars,
+                    Formula.VarSet.add (BvVar bv_var)
+                      (Formula.VarSet.union deps marked) )
+              | Define { def_desc = BlDef (bl_var, _, bl_term); _ } ->
+                  let deps = Formula_utils.bl_term_variables bl_term in
+                  ( Formula.VarSet.fold (declare_var session marked) deps vars,
+                    Formula.VarSet.add (BlVar bl_var)
+                      (Formula.VarSet.union deps marked) )
+              | Define { def_desc = AxDef (ax_var, _, ax_term); _ } ->
+                  let deps = Formula_utils.ax_term_variables ax_term in
+                  ( Formula.VarSet.fold (declare_var session marked) deps vars,
+                    Formula.VarSet.add (AxVar ax_var)
+                      (Formula.VarSet.union deps marked) )
+              | Assert bl_term | Assume bl_term ->
+                  let deps = Formula_utils.bl_term_variables bl_term in
+                  ( Formula.VarSet.fold (declare_var session marked) deps vars,
+                    Formula.VarSet.union deps marked )
+              | Comment _ -> (vars, marked)
+            in
             Solver.put session entry;
-            match entry.entry_desc with
-            | Declare { decl_desc = BvDecl (bv_var, _); _ } ->
-                (bv_var :: vars, Formula.VarSet.add (BvVar bv_var) marked)
-            | Declare { decl_desc = BlDecl _ | AxDecl _; _ } -> (vars, marked)
-            | Define { def_desc = BvDef (bv_var, _, bv_term); _ } ->
-                let deps = Formula_utils.bv_term_variables bv_term in
-                ( Formula.VarSet.fold
-                    (fun var vars ->
-                      match var with
-                      | BvVar bv_var when not (Formula.VarSet.mem var marked) ->
-                          bv_var :: vars
-                      | _ -> vars)
-                    deps vars,
-                  Formula.VarSet.add (BvVar bv_var)
-                    (Formula.VarSet.union deps marked) )
-            | Define { def_desc = BlDef (bl_var, _, bl_term); _ } ->
-                let deps = Formula_utils.bl_term_variables bl_term in
-                ( Formula.VarSet.fold
-                    (fun var vars ->
-                      match var with
-                      | BvVar bv_var when not (Formula.VarSet.mem var marked) ->
-                          bv_var :: vars
-                      | _ -> vars)
-                    deps vars,
-                  Formula.VarSet.add (BlVar bl_var)
-                    (Formula.VarSet.union deps marked) )
-            | Define { def_desc = AxDef (ax_var, _, ax_term); _ } ->
-                let deps = Formula_utils.ax_term_variables ax_term in
-                ( Formula.VarSet.fold
-                    (fun var vars ->
-                      match var with
-                      | BvVar bv_var when not (Formula.VarSet.mem var marked) ->
-                          bv_var :: vars
-                      | _ -> vars)
-                    deps vars,
-                  Formula.VarSet.add (AxVar ax_var)
-                    (Formula.VarSet.union deps marked) )
-            | Assert bl_term | Assume bl_term ->
-                let deps = Formula_utils.bl_term_variables bl_term in
-                ( Formula.VarSet.fold
-                    (fun var vars ->
-                      match var with
-                      | BvVar bv_var when not (Formula.VarSet.mem var marked) ->
-                          bv_var :: vars
-                      | _ -> vars)
-                    deps vars,
-                  Formula.VarSet.union deps marked )
-            | Comment _ -> (vars, marked))
+            (vars, marked))
           formula ([], Formula.VarSet.empty)
       in
       let r = f session vars in
@@ -640,4 +621,11 @@ struct
         Formula_pp.pp_formula ppf (do_optimization ~keep state.formula)
 
   let to_formula { formula; _ } = formula
+  let downcast _ = None
 end
+
+type Options.Engine.t += Legacy
+
+let () =
+  Options.Engine.register "legacy" Legacy (fun () ->
+      (module State ((val Smt_solver.get_solver ()))))

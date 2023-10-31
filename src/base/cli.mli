@@ -26,11 +26,8 @@ module type GENERIC = sig
   type t
 
   val set : t -> unit
-
   val get : unit -> t
-
   val is_set : unit -> bool
-
   val is_default : unit -> bool
 end
 
@@ -48,27 +45,21 @@ module type INTEGER = GENERIC with type t = int
 (** {5 Integer parameters} *)
 
 module type INTEGER_SET = GENERIC with type t = Basic_types.Int.Set.t
-
 module type INTEGER_LIST = GENERIC with type t = int list
-
 module type INTEGER_OPT = GENERIC_OPT with type t = int
 
 module type FLOAT = GENERIC with type t = float
 (** {5 Floating-point parameters} *)
 
 module type FLOAT_SET = GENERIC with type t = Basic_types.Float.Set.t
-
 module type FLOAT_LIST = GENERIC with type t = float list
-
 module type FLOAT_OPT = GENERIC_OPT with type t = float
 
 module type STRING = GENERIC with type t = string
 (** {5 String parameters} *)
 
 module type STRING_OPT = GENERIC_OPT with type t = string
-
 module type STRING_SET = GENERIC with type t = Basic_types.String.Set.t
-
 module type STRING_LIST = GENERIC with type t = string list
 
 (** {3 Builder functors for command-line parameters} *)
@@ -84,7 +75,6 @@ end
 (** {4 Module types for command-line declarations}*)
 module type CLI_DECL = sig
   val name : string
-
   val doc : string
 end
 
@@ -98,7 +88,6 @@ end
 
 module type DETAILED_CLI_DECL = sig
   include DEFAULTED_CLI_DECL
-
   include Sigs.STR_INJECTIBLE with type t := t
 
   val default_str : string option
@@ -114,11 +103,8 @@ end
 
 module type Cli_sig = sig
   module Logger : Logger.S
-
   module Debug_level : INTEGER
-
   module Loglevel : STRING
-
   module Quiet : BOOLEAN
 
   module Builder : sig
@@ -126,6 +112,11 @@ module type Cli_sig = sig
         otherwise. Use it only as last resort.
      *)
     module Any (P : DETAILED_CLI_DECL) : GENERIC with type t = P.t
+
+    module Any_opt (P : sig
+      include CLI_DECL
+      include Sigs.STR_INJECTIBLE
+    end) : GENERIC_OPT with type t = P.t
 
     (** {4 Boolean functors}*)
     module Boolean (P : sig
@@ -142,7 +133,7 @@ module type Cli_sig = sig
        The provided command-line switch
        automatically add a [no-] prefix to your option name.
      *)
-    module True (P : CLI_DECL) : BOOLEAN
+    module No (P : CLI_DECL) : BOOLEAN
 
     (** {4 Integer functors}*)
     module Integer (P : sig
@@ -152,11 +143,8 @@ module type Cli_sig = sig
     end) : INTEGER
 
     module Zero (P : CLI_DECL) : INTEGER
-
     module Integer_set (P : CLI_DECL) : INTEGER_SET
-
     module Integer_list (P : CLI_DECL) : INTEGER_LIST
-
     module Integer_option (P : CLI_DECL) : INTEGER_OPT
 
     (** {4 Floating point functors}*)
@@ -167,9 +155,7 @@ module type Cli_sig = sig
     end) : FLOAT
 
     module Float_set (P : CLI_DECL) : FLOAT_SET
-
     module Float_list (P : CLI_DECL) : FLOAT_LIST
-
     module Float_option (P : CLI_DECL) : FLOAT_OPT
 
     (** {4 String functors}*)
@@ -183,14 +169,11 @@ module type Cli_sig = sig
       include CLI_DECL
 
       val default : string
-
       val choices : string list
     end) : STRING
 
     module String_option (P : CLI_DECL) : STRING_OPT
-
     module String_set (P : CLI_DECL) : STRING_SET
-
     module String_list (P : CLI_DECL) : STRING_LIST
 
     (** {4 Variant functors} *)
@@ -200,11 +183,8 @@ module type Cli_sig = sig
       type t
 
       val to_string : t -> string
-
       val of_string : string -> t
-
       val choices : string list
-
       val default : t
     end) : GENERIC with type t = P.t
     (** Functor to map a string choice --- i.e., just one out of a set of
@@ -220,13 +200,11 @@ module type Cli_sig = sig
       type t
 
       val assoc_map : (string * t) list
-
       val default : t
     end) : GENERIC with type t = P.t
 
     module Variant_list (P : sig
       include CLI_DECL
-
       include Sigs.STR_INJECTIBLE
     end) : GENERIC with type t = P.t list
   end

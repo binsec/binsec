@@ -28,9 +28,7 @@ module rec Expr : (Term.S with type a := string and type b := Memory.t) =
       type t = string
 
       let compare _ _ = 0
-
       let equal _ _ = true
-
       let hash _ = 0
     end)
     (Memory)
@@ -44,21 +42,15 @@ and Chunk : sig
   type kind = Hunk of hunk | Term of Expr.t
 
   val inspect : t -> kind
-
   val of_hunk : hunk -> t
-
   val of_term : Expr.t -> t
-
   val to_term : t -> Expr.t
 
   (** low level API *)
 
   val is_hunk : t -> bool
-
   val is_term : t -> bool
-
   val unsafe_to_hunk : t -> hunk
-
   val unsafe_to_term : t -> Expr.t
 end = struct
   type t
@@ -69,23 +61,15 @@ end = struct
   type kind = Hunk of hunk | Term of Expr.t
 
   external is_unboxed : t -> bool = "%obj_is_int"
-
   external still_unboxed : Bv.t -> bool = "%obj_is_int"
-
   external to_bv : t -> Bv.t = "%identity"
-
   external of_bv : Bv.t -> t = "%identity"
-
   external unsafe_to_term : t -> Expr.t = "%identity"
-
   external of_term : Expr.t -> t = "%identity"
-
   external unsafe_to_hunk : t -> hunk = "%identity"
-
   external of_hunk : hunk -> t = "%identity"
 
   let is_hunk x = Obj.tag (Obj.repr x) = Obj.custom_tag
-
   let is_term x = is_unboxed x || not (is_hunk x)
 
   let of_bv bv =
@@ -122,7 +106,7 @@ end = struct
     let s = Bigarray.Array1.dim x in
     Bv.create
       (Z.of_bits
-         (String.init (Bigarray.Array1.dim x) (fun i ->
+         (String.init s (fun i ->
               Char.unsafe_chr (Bigarray.Array1.unsafe_get x i))))
       (s lsl 3)
 
@@ -154,13 +138,9 @@ and Store : sig
   include Lmap.S with type v := Chunk.t
 
   val singleton : Bv.t -> Chunk.t -> t
-
   val store : Bv.t -> Chunk.t -> t -> t
-
   val select : (Z.t -> int -> Chunk.t) -> Bv.t -> int -> t -> Chunk.t
-
   val iter_term : (Z.t -> Expr.t -> unit) -> t -> unit
-
   val fold_term : (Z.t -> Expr.t -> 'a -> 'a) -> 'a -> t -> 'a
 end = struct
   include Lmap.Make (Chunk)
@@ -213,15 +193,10 @@ and Memory : sig
     | Layer of { id : int; over : t; addr : Expr.t; store : Store.t }
 
   val compare : t -> t -> int
-
   val equal : t -> t -> bool
-
   val hash : t -> int
-
   val root : t
-
   val fresh : string -> t
-
   val layer : Expr.t -> Store.t -> t -> t
 end = struct
   type t =
@@ -246,7 +221,6 @@ end = struct
     | (Root | Symbol _ | Layer _), (Root | Symbol _ | Layer _) -> false
 
   let root = Root
-
   let fresh name = Symbol name
 
   let layer addr store over =

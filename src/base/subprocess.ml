@@ -21,7 +21,7 @@
 
 external set_pdeathsig : int -> int
   = "caml_subprocess_set_pdeathsig" "native_subprocess_set_pdeathsig"
-  [@@untagged] [@@noalloc]
+[@@untagged] [@@noalloc]
 
 let handle_pdeathsig = function
   | None -> ()
@@ -99,9 +99,6 @@ let close t =
   snd (waitpid_non_intr t.pid)
 
 let pid { pid; _ } = pid
-
 let stdin { stdin; _ } = stdin
-
 let stdout { stdout; _ } = stdout
-
 let stderr { stderr; _ } = stderr

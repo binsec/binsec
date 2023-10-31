@@ -23,19 +23,12 @@
 
 module type DbaPrinter = sig
   val pp_code_address : Format.formatter -> Dba.address -> unit
-
   val pp_tag : Format.formatter -> Dba.tag -> unit
-
   val pp_binary_op : Format.formatter -> Dba.Binary_op.t -> unit
-
   val pp_unary_op : Format.formatter -> Dba.Unary_op.t -> unit
-
   val pp_bl_term : Format.formatter -> Dba.Expr.t -> unit
-
   val pp_expr : Format.formatter -> Dba.Expr.t -> unit
-
   val pp_instruction : Format.formatter -> Dba.Instr.t -> unit
-
   val pp_lhs : Format.formatter -> Dba.LValue.t -> unit
 
   (* Print the instruction, but prints the explicit goto only if it
@@ -46,13 +39,9 @@ end
 
 module type Renderer = sig
   val binary_ops : (Dba.Binary_op.t * string) list
-
   val unary_ops : (Dba.Unary_op.t * string) list
-
   val endiannesses : (Machine.endianness * string) list
-
   val string_of_digit_char : char -> string
-
   val left_right_parentheses : string * string
 end
 
@@ -62,9 +51,6 @@ module Make : functor (R : Renderer) -> DbaPrinter
    Therefore, they do not print any information regarding endianness.
 *)
 module Ascii : DbaPrinter
-
 module EICAscii : DbaPrinter
-
 module Unicode : DbaPrinter
-
 module EICUnicode : DbaPrinter

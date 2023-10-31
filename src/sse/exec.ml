@@ -24,7 +24,6 @@ open Types
 
 module type EXTENSION = sig
   type path
-
   and state
 
   val initialization_callback : (path -> state -> state) option
@@ -49,7 +48,6 @@ module type EXTENSION = sig
     option
 
   val builtin_printer : (Format.formatter -> Ir.builtin -> bool) option
-
   val at_exit_callback : (unit -> unit) option
 end
 
@@ -66,7 +64,6 @@ module type PLUGIN = sig
     list
 
   val instruction_printer : (Format.formatter -> Ast.Instr.t -> bool) option
-
   val declaration_printer : (Format.formatter -> Ast.t -> bool) option
 
   val extension :
@@ -109,11 +106,8 @@ let pp_value_as (format : Output.format) ppf bv =
 
 module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
   module Exploration_stats = Stats.Exploration ()
-
   module Query_stats = Stats.Query ()
-
   module Screen = Screen.Make (Exploration_stats) (Query_stats)
-
   module Path = Path.Make ()
 
   module State : STATE = struct
@@ -241,7 +235,6 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
       raise_notrace Halt
 
   let add path = env.worklist <- W.push path env.worklist
-
   let at_exit_callbacks = Queue.create ()
 
   let halt () =
@@ -864,14 +857,14 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
                    Dba.Var.Tag.pp_attribute attr)
           in
           (if S.Htbl.mem shadowing_symbols name then
-           let file, sec = S.Htbl.find shadowing_symbols name in
-           Logger.warning
-             "@[<v>Symbol %s comes from%a the file %s and shadows other \
-              definitions@ Use \"import <%s> from FILE\" to disambiguate"
-             name
-             (Format.pp_print_option (fun ppf sec ->
-                  Format.fprintf ppf " a relocation in section %s of" sec))
-             sec file name);
+             let file, sec = S.Htbl.find shadowing_symbols name in
+             Logger.warning
+               "@[<v>Symbol %s comes from%a the file %s and shadows other \
+                definitions@ Use \"import <%s> from FILE\" to disambiguate"
+               name
+               (Format.pp_print_option (fun ppf sec ->
+                    Format.fprintf ppf " a relocation in section %s of" sec))
+               sec file name);
           let tag = Dba.Var.Tag.Symbol (attr, value) in
           let sym = Dba.Expr.var ~tag name wordsize in
           S.Htbl.add tbl name (attr, sym);
@@ -1078,37 +1071,40 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
                         in
                         let base = Bitvector.value_of addr in
                         (if hdr.kind = RELA || hdr.kind = REL then
-                         let lname =
-                           Section.name (Array.get sections hdr.Shdr.info)
-                         in
-                         if
-                           String_utils.start_with ~prefix:".got" lname
-                           || String_utils.start_with ~prefix:".plt" lname
-                         then
-                           Array.iter
-                             (fun Rel.
-                                    {
-                                      offset;
-                                      kind = _;
-                                      symbol = { name; _ };
-                                      addend;
-                                    } ->
-                               if name <> "" then
-                                 let addend = Option.value ~default:0 addend in
-                                 let reader =
-                                   Lreader.create ~endianness:env.endianness
-                                     ~at:(Z.to_int base + offset - pos)
-                                     Loader_elf.read_address img'
-                                 in
-                                 let value =
-                                   Bitvector.add_int
-                                     (Lreader.Read.read reader (addr_size lsr 3))
-                                     (-addend)
-                                 in
-                                 Queue.add
-                                   (name, value, lname, fname)
-                                   dyn_symbols)
-                             (Rel.read img hdr));
+                           let lname =
+                             Section.name (Array.get sections hdr.Shdr.info)
+                           in
+                           if
+                             String_utils.start_with ~prefix:".got" lname
+                             || String_utils.start_with ~prefix:".plt" lname
+                           then
+                             Array.iter
+                               (fun Rel.
+                                      {
+                                        offset;
+                                        kind = _;
+                                        symbol = { name; _ };
+                                        addend;
+                                      } ->
+                                 if name <> "" then
+                                   let addend =
+                                     Option.value ~default:0 addend
+                                   in
+                                   let reader =
+                                     Lreader.create ~endianness:env.endianness
+                                       ~at:(Z.to_int base + offset - pos)
+                                       Loader_elf.read_address img'
+                                   in
+                                   let value =
+                                     Bitvector.add_int
+                                       (Lreader.Read.read reader
+                                          (addr_size lsr 3))
+                                       (-addend)
+                                   in
+                                   Queue.add
+                                     (name, value, lname, fname)
+                                     dyn_symbols)
+                               (Rel.read img hdr));
                         if
                           (not (Section.has_flag Loader_types.Read s))
                           || Imap.mem base vmap
@@ -1335,7 +1331,7 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
                           Format.asprintf "%a" Script.Expr.pp (fst addr)
                         in
                         Logger.debug ~level:10
-                          "@[<v 2> replace address %s by%a@]" anchor
+                          "@[<v 2> replace address %s by@ %a@]" anchor
                           Script.pp_stmts stmts;
                         try
                           let addr =
@@ -1350,12 +1346,21 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
                           let addr = Virtual_address.of_bitvector bv in
                           if pre then register_hook prehooks addr (anchor, stmts)
                           else register_hook hooks addr (anchor, stmts)
-                        with Not_found ->
+                        with Non_unique ->
                           Logger.fatal
                             "the stub address %s does not resolve to a unique \
                              value"
                             anchor)
                       addresses;
+                    state
+                | Script.Decode (opcode, stmts) ->
+                    Dcode.register_opcode_hook (fun reader ->
+                        if
+                          Binstream.fold
+                            (fun byte eq -> eq && Lreader.Read.u8 reader = byte)
+                            opcode true
+                        then Some (stmts, parser_env)
+                        else None);
                     state
                 | Script.Init i -> set path state i
                 | Script.Explore_all ->
@@ -1428,7 +1433,10 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
   let unit =
     let filename = Kernel_options.ExecFile.get () in
     Logger.debug "Running SSE on %s" filename;
-    let entry, path, state = initialize_state () in
+    let entry, path, state =
+      try initialize_state ()
+      with Halt -> Logger.fatal "Unable to resolves the initial state"
+    in
     if I.Htbl.length env.tasks = 0 then
       Logger.warning "Nothing to reach: halting..."
     else

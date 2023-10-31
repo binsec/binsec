@@ -20,7 +20,5 @@
 (**************************************************************************)
 
 module Dfs : Types.WORKLIST
-
 module Bfs : Types.WORKLIST
-
 module Nurs : Types.WORKLIST

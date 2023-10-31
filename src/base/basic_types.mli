@@ -22,7 +22,6 @@
 (** Definitions of non-DBA types *)
 
 type 'a interval = { lo : 'a; hi : 'a }
-
 type u8 = int
 
 (** {2 Maps & Sets on base types } *)
@@ -32,11 +31,8 @@ type u8 = int
    clash with the standard library
 *)
 module String : Sigs.Collection with type t = string
-
 module Int : Sigs.Collection with type t = int
-
 module BigInt : Sigs.Collection with type t = Z.t
-
 module Float : Sigs.Collection with type t = float
 
 module Int64 : sig
@@ -56,9 +52,7 @@ module Addr64 = Int64
 
 module Collection_make : sig
   module Default (C : Sigs.COMPARABLE) : Sigs.Collection with type t = C.t
-
   module Auto (C : Sigs.COMPARABLE_EXT) : Sigs.Collection with type t = C.t
-
   module Hashed (C : Sigs.HASHABLE) : Sigs.Collection with type t = C.t
 end
 

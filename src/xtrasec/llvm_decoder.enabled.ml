@@ -34,12 +34,10 @@ module StringHashtbl = Hashtbl.Make (struct
   include String
 
   let equal s1 s2 = compare s1 s2 = 0
-
   let hash = Hashtbl.hash
 end)
 
 type llvm_registers = L.llvalue StringHashtbl.t
-
 type other = { llregs : llvm_registers; entry_block : L.llbasicblock }
 
 module Boolean = struct
@@ -48,19 +46,14 @@ module Boolean = struct
   type boolean = L.llvalue
 
   let false_ llst = (L.const_int (L.integer_type llst.llcontext 1) 0, llst)
-
   let true_ llst = (L.const_int (L.integer_type llst.llcontext 1) 1, llst)
-
   let ( && ) = ar2 L.build_and
-
   let ( || ) = ar2 L.build_or
-
   let not a llst = (L.build_not a "" llst.llbuilder, llst)
 end
 
 module Binary = struct
   type binary = L.llvalue
-
   type boolean = L.llvalue
 
   let biconst ~size i llst =
@@ -76,17 +69,11 @@ module Binary = struct
     (f a b "" llst.llbuilder, llst)
 
   let blshr = ar2 L.build_lshr
-
   let bashr = ar2 L.build_ashr
-
   let bshl = ar2 L.build_shl
-
   let biurem = ar2 L.build_urem
-
   let biudiv = ar2 L.build_udiv
-
   let bisrem = ar2 L.build_srem
-
   let bisdiv = ar2 L.build_sdiv
 
   let buext ~size ~oldsize a llst =
@@ -100,9 +87,7 @@ module Binary = struct
     (L.build_sext a newtype "" llst.llbuilder, llst)
 
   let bxor = ar2 L.build_xor
-
   let bor = ar2 L.build_or
-
   let band = ar2 L.build_and
 
   let bextract ~lo ~hi ~oldsize a llst =
@@ -135,19 +120,12 @@ module Binary = struct
     (L.build_icmp L.Icmp.Eq a b "" llst.llbuilder, llst)
 
   let biult = bpred L.Icmp.Ult
-
   let biule = bpred L.Icmp.Ule
-
   let bislt = bpred L.Icmp.Slt
-
   let bisle = bpred L.Icmp.Sle
-
   let beq = bpred L.Icmp.Eq
-
   let bimul = ar2 L.build_mul
-
   let bisub = ar2 L.build_sub
-
   let biadd = ar2 L.build_add
 
   let bv_right_rotate ~size _ =
@@ -203,17 +181,13 @@ module Instr_to_LLVM = struct
     llst
 
   let ite cond a b llst = (L.build_select cond a b "" llst.llbuilder, llst)
-
   let bool_of_bin x = M.return x
-
   let bin_of_bool x = M.return x
 
   type binary = L.llvalue
-
   type boolean = L.llvalue
 
   let unknown ~size llst = (L.undef (L.integer_type llst.llcontext size), llst)
-
   let undef = unknown
 
   let assume bool llst =
@@ -357,19 +331,16 @@ let generate_in_function ~modname ~funname f =
 
 include Cli.Make (struct
   let name = "llvm binding"
-
   let shortname = "llvm"
 end)
 
 module Decode = Builder.String_option (struct
   let name = "decode"
-
   let doc = "Decode hexadecimal opcode as LLVM"
 end)
 
 module Output = Builder.String_option (struct
   let name = "xtrasec-output"
-
   let doc = "If set, output a llvm function to this file"
 end)
 
@@ -393,7 +364,6 @@ let decode_llvm raw =
     exit 1
 
 let run_decode_llvm () = if Decode.is_set () then decode_llvm (Decode.get ())
-
 let () = Cli.Boot.enlist ~name:"decode hex as llvm" ~f:run_decode_llvm
 
 module Parse_llvm = Xtrasec.Make (struct

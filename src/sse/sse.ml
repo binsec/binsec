@@ -40,15 +40,31 @@ let get_worklist () =
       (module Heuristic.Nurs : WORKLIST)
 
 let get_state () =
+  if LegacyEngine.get () then
+    Logger.warning
+      "'-sse-legacy-engine' is deprecated. Use '-sse-engine legacy' instead.";
   if AlternativeEngine.get () then
     Logger.warning
-      "'-sse-alternative-engine' is now the default behavior. Use \
-       '-sse-legacy-engine' to restore the previous one.";
-  if LegacyEngine.get () then
-    (module Sse_symbolic.State ((val Smt_solver.get_solver ())) : STATE_FACTORY)
-  else
-    (module Senv.State (Domains.Interval) ((val Senv.get_solver_factory ()))
-    : STATE_FACTORY)
+      "'-sse-alternative-engine' is deprecated. Use '-sse-engine vanilla' \
+       instead.";
+  if Engine.is_set () then (
+    if LegacyEngine.get () then
+      Logger.warning
+        "'-sse-legacy-engine' is incompatible with '-sse-engine'. It will be \
+         ignored.";
+    if AlternativeEngine.get () then
+      Logger.warning
+        "'-sse-alternative-engine' is incompatible with '-sse-engine'. It will \
+         be ignored.")
+  else if LegacyEngine.get () then
+    if AlternativeEngine.get () then (
+      Logger.warning
+        "'-sse-legacy-engine' is incompatible with '-sse-alternative-engine'. \
+         It will be ignored.";
+      Engine.set Senv.Vanilla)
+    else Engine.set Sse_symbolic.Legacy
+  else Engine.set Senv.Vanilla;
+  Engine.get_factory ()
 
 let run () =
   if is_enabled () && Kernel_options.ExecFile.is_set () then

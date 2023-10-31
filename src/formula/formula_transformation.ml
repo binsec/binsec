@@ -23,9 +23,7 @@ open Formula
 open Formula_utils
 
 let rename_bl_var f bl = bl_var (f bl.bl_name)
-
 let rename_bv_var f bv = bv_var (f bv.bv_name) bv.bv_size
-
 let rename_ax_var f ax = ax_var (f ax.ax_name) ax.idx_size ax.elt_size
 
 let rename_list : 'env 'a 'b. ('env -> 'a -> 'b) -> 'env -> 'a list -> 'b list =
@@ -281,9 +279,7 @@ module Assertbl : sig
   type t
 
   val create : unit -> t
-
   val get : t -> bl_term -> bool
-
   val set : t -> bl_term -> unit
 end = struct
   type t = bool BlTermHashtbl.t
@@ -294,7 +290,6 @@ end = struct
     t
 
   let get t bl = try BlTermHashtbl.find t bl with Not_found -> false
-
   let set t bl = BlTermHashtbl.replace t bl true
 end
 
@@ -304,9 +299,7 @@ module ConstantPropagation = struct
   type env = { assertbl : Assertbl.t; bindenv : BindEnv.t }
 
   let create n = { assertbl = Assertbl.create (); bindenv = BindEnv.create n }
-
   let get_assertbl env bl = Assertbl.get env.assertbl bl
-
   let set_assertbl env bl = Assertbl.set env.assertbl bl
 
   let keep_def env df =
@@ -926,7 +919,6 @@ module ReadOverWrite = struct
     module H = Hashtbl.Make (K)
 
     type 'a t = { mutable data : 'a data }
-
     and 'a data = Array of 'a option H.t | Diff of K.t * 'a option * 'a t
 
     let create n = { data = Array (H.create n) }
@@ -1078,9 +1070,7 @@ module ReadOverWrite = struct
       bv_term
 
     val update : t -> Interval.BitVecFlat.t BvTermHashtbl.t -> ax_term -> unit
-
     val alias : t -> ax_var -> ax_term -> unit
-
     val unalias : t -> ax_var -> unit
   end
 
@@ -1088,13 +1078,9 @@ module ReadOverWrite = struct
     type t = unit
 
     let create _ = ()
-
     let lookup () _ n ax bv = mk_select n ax bv
-
     let update () _ _ = ()
-
     let alias () _ _ = ()
-
     let unalias () _ = ()
   end
 
@@ -1148,7 +1134,6 @@ module ReadOverWrite = struct
       type t = Z.t
 
       let equal t1 t2 = Z.equal t1 t2
-
       let hash t = Z.hash t
     end)
 
@@ -1213,7 +1198,6 @@ module ReadOverWrite = struct
       type t = Z.t
 
       let equal t1 t2 = Z.equal t1 t2
-
       let hash t = Z.hash t
     end)
 
@@ -1235,8 +1219,8 @@ module ReadOverWrite = struct
           shift_aux (n - 1) itv (Z.succ bv)
             (Interval.BitVecFlat.union acc
                (if Bitvector.ule lo hi then
-                Interval.BitVecFlat.(inter (uge lo) (ule hi))
-               else Interval.BitVecFlat.(union (uge lo) (ule hi))))
+                  Interval.BitVecFlat.(inter (uge lo) (ule hi))
+                else Interval.BitVecFlat.(union (uge lo) (ule hi))))
       in
       shift_aux n itv bv Interval.BitVecFlat.empty
 
@@ -1351,9 +1335,9 @@ module ReadOverWrite = struct
           let map = update map address.delta (n - 1) bv2 ax.elt_term_size in
           AxTermHashtbl.add t ax
             ( (if overlap = [] then arr
-              else (
-                Formula_options.Logger.debug "UPDATE CONFLICT\n";
-                array)),
+               else (
+                 Formula_options.Logger.debug "UPDATE CONFLICT\n";
+                 array)),
               (array, bv, itv, map) :: disjoin )
 
     let alias t v ax =
@@ -1395,7 +1379,6 @@ module ReadOverWrite = struct
     }
 
   let get_assertbl env bl = Assertbl.get env.assertbl bl
-
   let set_assertbl env bl = Assertbl.set env.assertbl bl
 
   let lookup t n ax bv =
@@ -1838,7 +1821,6 @@ module StaticSingleAssignment = struct
     }
 
   let do_nothing s x = (s, x)
-
   let k_identity f s x = f s x
 
   let rec fresh_name env name =
@@ -2171,17 +2153,11 @@ module Taint = struct
     }
 
   let bl_of_bv bv = mk_bv_equal bv (mk_bv_fill (bv_size bv))
-
   let bv_of_bl n bl = mk_bv_ite bl (mk_bv_fill n) (mk_bv_zeros n)
-
   let taintify_bl v = bl_var (v.bl_name ^ "<taint>")
-
   let taintify_bv v = bl_var (v.bv_name ^ "<taint>")
-
   let taintify_ax v = bl_var (v.ax_name ^ "<taint>")
-
   let arrayify v = ax_var (v.ax_name ^ "<array>") v.idx_size 1
-
   let add_taint_array env ax ax_t = AxTermHashtbl.add env.taintbl ax ax_t
 
   let find_taint_array env ax =
@@ -2193,7 +2169,6 @@ module Taint = struct
     try Some (AxTermHashtbl.find env.reprtbl ax) with Not_found -> None
 
   let taint_bl_unop _ (_, bl_t) = bl_t
-
   let taint_bv_unop _ (_, bv_t) = bv_t
 
   let taint_bl_bnop b (bl1, bl1_t) (bl2, bl2_t) =

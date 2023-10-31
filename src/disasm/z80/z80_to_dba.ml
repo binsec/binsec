@@ -48,15 +48,10 @@ type t =
   | I  (** Invalid *)
 
 let two16 = E.constant (B.of_int ~size:16 2)
-
 let one8, one16 = (E.ones 8, E.ones 16)
-
 let zero4, zero8, zero16 = (E.zeros 4, E.zeros 8, E.zeros 16)
-
 let smax8 = E.constant (B.max_sbv 8)
-
 let umax4 = E.constant (B.max_ubv 4)
-
 let smin8 = E.constant (B.min_sbv 8)
 
 let six4, nine4, ten4 =
@@ -205,37 +200,21 @@ module LD8 = struct
       (E.constant (B.of_int ~size:8 src))
 
   let ld_r_r' r r' = ld_reg_reg (R8.r r) (R8.r r')
-
   let ld_p_p' p p' = ld_reg_reg (R8.p p) (R8.p p')
-
   let ld_q_q' q q' = ld_reg_reg (R8.q q) (R8.q q')
-
   let ld_r_n r n = ld_reg_imm (R8.r r) n
-
   let ld_p_n p n = ld_reg_imm (R8.p p) n
-
   let ld_q_n q n = ld_reg_imm (R8.q q) n
-
   let ld_r_HL r = ld_reg_mem (R8.r r) A.(mem hl) A.(load1 hl)
-
   let ld_r_IXd r d = ld_reg_memdisp (R8.r r) A.ix d
-
   let ld_r_IYd r d = ld_reg_memdisp (R8.r r) A.iy d
-
   let ld_HL_r r = ld_mem_reg A.(mem hl) A.(store1 hl) (R8.r r)
-
   let ld_IXd_r d r = ld_memdisp_reg A.ix d (R8.r r)
-
   let ld_IYd_r d r = ld_memdisp_reg A.iy d (R8.r r)
-
   let ld_HL_n n = ld_mem_imm A.(mem hl) A.(store1 hl) n
-
   let ld_IXd_n d n = ld_memdisp_imm A.ix d n
-
   let ld_IYd_n d n = ld_memdisp_imm A.iy d n
-
   let ld_a_BC = ld_reg_mem A.a A.(mem bc) A.(load1 bc)
-
   let ld_a_DE = ld_reg_mem A.a A.(mem de) A.(load1 de)
 
   let ld_a_NN nn =
@@ -244,7 +223,6 @@ module LD8 = struct
       (E.load b1 M.LittleEndian (E.constant (B.of_int ~size:16 nn)))
 
   let ld_BC_a = ld_mem_reg A.(mem bc) A.(store1 bc) A.a
-
   let ld_DE_a = ld_mem_reg A.(mem de) A.(store1 de) A.a
 
   let ld_NN_a nn =
@@ -254,11 +232,8 @@ module LD8 = struct
       A.a
 
   let ld_a_i = U "LD A, I"
-
   let ld_a_r = U "LD A, R"
-
   let ld_i_a = U "LD I, A"
-
   let ld_r_a = U "LD R, A"
 end
 
@@ -280,11 +255,8 @@ module LD16 = struct
   end
 
   let ld = LD8.ld
-
   let ld_reg_reg = LD8.ld_reg_reg
-
   let ld_reg_mem = LD8.ld_reg_mem
-
   let ld_mem_reg = LD8.ld_mem_reg
 
   let ld_reg_imm dst src =
@@ -305,31 +277,18 @@ module LD16 = struct
       r
 
   let ld_dd_nn dd nn = ld_reg_imm (R16.dd dd) nn
-
   let ld_ix_nn nn = ld_reg_imm A.ix nn
-
   let ld_iy_nn nn = ld_reg_imm A.iy nn
-
   let ld_hl_NN nn = ld_reg_NN A.hl nn
-
   let ld_dd_NN dd nn = ld_reg_NN (R16.dd dd) nn
-
   let ld_ix_NN nn = ld_reg_NN A.ix nn
-
   let ld_iy_NN nn = ld_reg_NN A.iy nn
-
   let ld_NN_hl nn = ld_NN_reg nn A.hl
-
   let ld_NN_dd nn dd = ld_NN_reg nn (R16.dd dd)
-
   let ld_NN_ix nn = ld_NN_reg nn A.ix
-
   let ld_NN_iy nn = ld_NN_reg nn A.iy
-
   let ld_sp_hl = ld_reg_reg A.sp A.hl
-
   let ld_sp_ix = ld_reg_reg A.sp A.ix
-
   let ld_sp_iy = ld_reg_reg A.sp A.iy
 
   let push src_str src =
@@ -341,13 +300,9 @@ module LD16 = struct
         |] )
 
   let push_af = push "AF" (E.append A.(expr a) A.(expr f))
-
   let push_reg r = push (A.name r) (A.expr r)
-
   let push_qq qq = push_reg (R16.qq qq)
-
   let push_ix = push_reg A.ix
-
   let push_iy = push_reg A.iy
 
   let pop_af =
@@ -369,9 +324,7 @@ module LD16 = struct
         |] )
 
   let pop_qq qq = pop_reg (R16.qq qq)
-
   let pop_ix = pop_reg A.ix
-
   let pop_iy = pop_reg A.iy
 end
 
@@ -423,9 +376,7 @@ module EBTS = struct
         |] )
 
   let ex_SP_hl = ex_SP_reg A.hl
-
   let ex_SP_IX = ex_SP_reg A.ix
-
   let ex_SP_IY = ex_SP_reg A.iy
 
   let flag_ld =
@@ -457,11 +408,8 @@ module EBTS = struct
       | _ -> I.static_relative_jump pc 2)
 
   let ldi = F ("LDI", ld_f E.add)
-
   let ldir pc = T ("LDIR", ld_f_r E.add pc)
-
   let ldd = F ("LDD", ld_f E.sub)
-
   let lddr pc = T ("LDDR", ld_f_r E.sub pc)
 
   let flag_cp =
@@ -496,11 +444,8 @@ module EBTS = struct
       | _ -> I.static_relative_jump pc 2)
 
   let cpi = F ("CPI", cp_f E.add)
-
   let cpir pc = T ("CPIR", cp_f_r E.add pc)
-
   let cpd = F ("CPD", cp_f E.sub)
-
   let cpdr pc = T ("CPDR", cp_f_r E.sub pc)
 end
 
@@ -599,9 +544,7 @@ module Arith8 = struct
     fold E.zero 7
 
   let flag_and _ = build_flag8 ~hf:E.one ~vf:pf ~cf:E.zero ()
-
   let flag_or _ = build_flag8 ~vf:pf ~cf:E.zero ()
-
   let flag_xor _ = build_flag8 ~vf:pf ~cf:E.zero ()
 
   let flag op src =
@@ -635,11 +578,8 @@ module Arith8 = struct
         |] )
 
   let op_a_reg op r = op_a_s op (A.name r) (A.expr r)
-
   let op_a_r op r = op_a_reg op (R8.r r)
-
   let op_a_p op p = op_a_reg op (R8.p p)
-
   let op_a_q op q = op_a_reg op (R8.q q)
 
   let op_a_n op n =
@@ -654,7 +594,6 @@ module Arith8 = struct
          (E.add (A.expr addr) (E.constant (B.of_int ~size:16 disp))))
 
   let op_a_IXd op d = op_a_memdisp op A.ix d
-
   let op_a_IYd op d = op_a_memdisp op A.iy d
 
   let cp_a_s src_str src =
@@ -666,11 +605,8 @@ module Arith8 = struct
         |] )
 
   let cp_a_reg r = cp_a_s (A.name r) (A.expr r)
-
   let cp_a_r r = cp_a_reg (R8.r r)
-
   let cp_a_p p = cp_a_reg (R8.p p)
-
   let cp_a_q q = cp_a_reg (R8.q q)
 
   let cp_a_n n =
@@ -685,7 +621,6 @@ module Arith8 = struct
          (E.add (A.expr addr) (E.constant (B.of_int ~size:16 disp))))
 
   let cp_a_IXd d = cp_a_memdisp A.ix d
-
   let cp_a_IYd d = cp_a_memdisp A.iy d
 
   let flag_inc src =
@@ -725,19 +660,12 @@ module Arith8 = struct
         |] )
 
   let inc_reg r = incdec_reg "INC" E.add flag_inc r
-
   let inc_r r = inc_reg (R8.r r)
-
   let inc_p p = inc_reg (R8.p p)
-
   let inc_q q = inc_reg (R8.q q)
-
   let inc_HL = incdec_HL "INC" E.add flag_inc
-
   let inc_memdisp r d = incdec_memdisp "INC" E.add flag_inc r d
-
   let inc_IXd d = inc_memdisp A.ix d
-
   let inc_IYd d = inc_memdisp A.iy d
 
   let flag_dec src =
@@ -746,19 +674,12 @@ module Arith8 = struct
       ~vf:(E.equal src smin8) ~nf:E.one ()
 
   let dec_reg r = incdec_reg "DEC" E.sub flag_dec r
-
   let dec_r r = dec_reg (R8.r r)
-
   let dec_p p = dec_reg (R8.p p)
-
   let dec_q q = dec_reg (R8.q q)
-
   let dec_HL = incdec_HL "DEC" E.sub flag_dec
-
   let dec_memdisp r d = incdec_memdisp "DEC" E.sub flag_dec r d
-
   let dec_IXd d = dec_memdisp A.ix d
-
   let dec_IYd d = dec_memdisp A.iy d
 end
 
@@ -849,20 +770,15 @@ module GPAC = struct
     F ("SCF", [| I.assign A.(lval f) f' 1 |])
 
   let nop = F ("NOP", [||])
-
   let halt = T ("HALT", Dhunk.stop)
 
   let set_iffts e =
     [| I.assign A.(lval ifft1) e 1; I.assign A.(lval ifft2) e 2 |]
 
   let di = F ("DI", set_iffts E.zero)
-
   let ei = F ("EI", set_iffts E.one)
-
   let im0 = U "IM 0"
-
   let im1 = U "IM 1"
-
   let im2 = U "IM 2"
 end
 
@@ -987,7 +903,6 @@ module Arith16 = struct
         |] )
 
   let add_ix_pp pp = add_reg_reg A.ix (R16.pp pp)
-
   let add_iy_qq qq = add_reg_reg A.iy (R16.qq qq)
 
   let op_reg op f (r : [ `x16 ] A.t) =
@@ -995,19 +910,12 @@ module Arith16 = struct
     F (Format.sprintf "%s %s" op name, [| I.assign loc (f expr one16) 1 |])
 
   let inc_reg r = op_reg "INC" E.add r
-
   let dec_reg r = op_reg "DEC" E.sub r
-
   let inc_ss ss = inc_reg (R16.ss ss)
-
   let inc_ix = inc_reg A.ix
-
   let inc_iy = inc_reg A.iy
-
   let dec_ss ss = dec_reg (R16.ss ss)
-
   let dec_ix = dec_reg A.ix
-
   let dec_iy = dec_reg A.iy
 end
 
@@ -1128,9 +1036,7 @@ module RS = struct
     op_m op (A.name r) (A.lval r) (A.expr r)
 
   let op_HL op = op_m op A.(mem hl) A.(store1 hl) A.(load1 hl)
-
   let op_IXd op d = op_m_memdisp op A.ix d
-
   let op_IYd op d = op_m_memdisp op A.iy d
 
   let op_m_memdisp_r op r disp r' =
@@ -1140,7 +1046,6 @@ module RS = struct
       op r disp
 
   let op_IXd_r op d r = op_m_memdisp_r op A.ix d r
-
   let op_IYd_r op d r = op_m_memdisp_r op A.iy d r
 
   let flag =
@@ -1220,9 +1125,7 @@ module BSRT = struct
     bit_b b (A.name r) (A.expr r)
 
   let bit_b_HL b = bit_b b A.(mem hl) A.(load1 hl)
-
   let bit_b_IXd b d = bit_b_memdisp b A.ix d
-
   let bit_b_IYd b d = bit_b_memdisp b A.iy d
 
   let setres_b op f b str loc expr =
@@ -1245,47 +1148,26 @@ module BSRT = struct
         [| I.assign (A.lval r) (f load1 b) 1; I.assign store1 (A.expr r) 2 |] )
 
   let set e b = E.logor e (E.constant (B.of_int ~size:8 (1 lsl b)))
-
   let clear e b = E.logand e (E.constant (B.of_int ~size:8 (lnot (1 lsl b))))
-
   let set_b b str loc expr = setres_b "SET" set b str loc expr
-
   let set_b_memdisp b r d = setres_b_memdisp "SET" set b r d
-
   let set_b_memdisp_r b r d r' = setres_b_memdisp_r "SET" set b r d r'
-
   let res_b b str loc expr = setres_b "RES" clear b str loc expr
-
   let res_b_memdisp b r d = setres_b_memdisp "RES" clear b r d
-
   let res_b_memdisp_r b r d r' = setres_b_memdisp_r "RES" clear b r d r'
-
   let set_b_reg b A.(S { name; loc; expr }) = set_b b name loc expr
-
   let set_b_r b r = set_b_reg b (R8.r r)
-
   let set_b_HL b = set_b b A.(mem hl) A.(store1 hl) A.(load1 hl)
-
   let set_b_IXd b d = set_b_memdisp b A.ix d
-
   let set_b_IYd b d = set_b_memdisp b A.iy d
-
   let set_b_IXd_r b d r = set_b_memdisp_r b A.ix d r
-
   let set_b_IYd_r b d r = set_b_memdisp_r b A.iy d r
-
   let res_b_reg b A.(S { name; loc; expr }) = res_b b name loc expr
-
   let res_b_r b r = res_b_reg b (R8.r r)
-
   let res_b_HL b = res_b b A.(mem hl) A.(store1 hl) A.(load1 hl)
-
   let res_b_IXd b d = res_b_memdisp b A.ix d
-
   let res_b_IYd b d = res_b_memdisp b A.iy d
-
   let res_b_IXd_r b d r = res_b_memdisp_r b A.ix d r
-
   let res_b_IYd_r b d r = res_b_memdisp_r b A.iy d r
 end
 
@@ -1310,9 +1192,7 @@ module JMP = struct
         Dhunk.singleton (I.static_outer_jump (Virtual_address.create nn)) )
 
   let jp_HL = jp_reg A.hl
-
   let jp_IX = jp_reg A.ix
-
   let jp_IY = jp_reg A.iy
 
   let jr_e pc e =
@@ -1388,7 +1268,6 @@ module RTN = struct
           | _ -> I.dynamic_jump ~tag:Return et16) )
 
   let reti = U "RETI"
-
   let retn = U "RETN"
 
   let rst_p pc p =
@@ -1406,31 +1285,18 @@ end
 (* 8.11 Input and Output Group *)
 module IO = struct
   let in_a_N n = U (Format.sprintf "IN A, (%02x)" n)
-
   let in_r_C r = U (Format.sprintf "IN %s, (C)" (A.name (R8.r r)))
-
   let in_f_C = U "IN (C)"
-
   let ini = U "INI"
-
   let inir = U "INIR"
-
   let ind = U "IND"
-
   let indr = U "INDR"
-
   let out_N_a n = U (Format.sprintf "OUT (%02x), A" n)
-
   let out_C_r r = U (Format.sprintf "OUT (C), %s" (A.name (R8.r r)))
-
   let out_C_0 = U "OUT (C), 0"
-
   let outi = U "OUTI"
-
   let otir = U "OTIR"
-
   let outd = U "OUTD"
-
   let otdr = U "OTDR"
 end
 

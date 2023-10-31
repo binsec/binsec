@@ -35,7 +35,6 @@ let in_file name =
   { loc_start = loc; loc_end = loc }
 
 let none = in_file "_none_"
-
 let dummy_loc = { loc_start = Lexing.dummy_pos; loc_end = Lexing.dummy_pos }
 
 let pp_lines ppf loc =

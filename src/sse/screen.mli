@@ -19,8 +19,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module Make (E : Types.EXPLORATION_STATISTICS) (Q : Types.QUERY_STATISTICS) : sig
+module Make
+    (E : Types.EXPLORATION_STATISTICS)
+    (Q : Types.QUERY_STATISTICS) : sig
   val init : unit -> unit
-
   val release : unit -> unit
 end

@@ -268,7 +268,6 @@ end
 
 module Interpreter (P : Program) = struct
   exception AssertFailure of Dba.address
-
   exception EndOfTrace of Env.t
 
   let step e a =

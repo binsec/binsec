@@ -20,13 +20,10 @@
 (**************************************************************************)
 
 type size = int
-
 type 'a interval = 'a Interval.t = { lo : 'a; hi : 'a }
-
 type endianness = Machine.endianness = LittleEndian | BigEndian
 
 type unary = U
-
 and binary = B
 
 type _ operator =
@@ -61,15 +58,20 @@ type _ operator =
   | Sge : binary operator
   | Sgt : binary operator
 
-val pp_op : Format.formatter -> _ operator -> unit
+module Op : sig
+  type 'a t = 'a operator
+
+  val equal : 'a t -> 'b t -> bool
+  val compare : 'a t -> 'b t -> int
+  val hash : 'a t -> int
+  val pp : Format.formatter -> 'a t -> unit
+end
 
 module Bv : sig
   include module type of Bitvector
 
   val unary : unary operator -> t -> t
-
   val binary : binary operator -> t -> t -> t
-
   val extract : lo:size -> hi:size -> t -> t
 end
 
@@ -85,7 +87,7 @@ type (_, 'a, 'b) t = private
       hash : int;
       len : size;
       dir : endianness;
-      addr : ([ `Exp ], 'a, 'b) t;
+      mutable addr : ([ `Exp ], 'a, 'b) t;
       label : 'b;
     }
       -> ([< `Mem | `Loc | `Exp ], 'a, 'b) t
@@ -94,35 +96,32 @@ type (_, 'a, 'b) t = private
       hash : int;
       size : size;
       f : unary operator;
-      x : ([ `Exp ], 'a, 'b) t;
+      mutable x : ([ `Exp ], 'a, 'b) t;
     }
-      -> ([ `Exp ], 'a, 'b) t
+      -> ([< `Unary | `Exp ], 'a, 'b) t
   | Binary : {
       hash : int;
       size : size;
       f : binary operator;
-      x : ([ `Exp ], 'a, 'b) t;
-      y : ([ `Exp ], 'a, 'b) t;
+      mutable x : ([ `Exp ], 'a, 'b) t;
+      mutable y : ([ `Exp ], 'a, 'b) t;
     }
-      -> ([ `Exp ], 'a, 'b) t
+      -> ([< `Binary | `Exp ], 'a, 'b) t
   | Ite : {
       hash : int;
       size : size;
-      c : ([ `Exp ], 'a, 'b) t;
-      t : ([ `Exp ], 'a, 'b) t;
-      e : ([ `Exp ], 'a, 'b) t;
+      mutable c : ([ `Exp ], 'a, 'b) t;
+      mutable t : ([ `Exp ], 'a, 'b) t;
+      mutable e : ([ `Exp ], 'a, 'b) t;
     }
-      -> ([ `Exp ], 'a, 'b) t
+      -> ([< `Ite | `Exp ], 'a, 'b) t
 
 module type S = sig
   type a
-
   and b
 
   type nonrec size = size
-
   type nonrec 'a interval = 'a interval = { lo : 'a; hi : 'a }
-
   type nonrec endianness = endianness = LittleEndian | BigEndian
 
   type 'a op = 'a operator =
@@ -169,7 +168,7 @@ module type S = sig
         hash : int;
         len : size;
         dir : endianness;
-        addr : ([ `Exp ], 'a, 'b) term;
+        mutable addr : ([ `Exp ], 'a, 'b) term;
         label : 'b;
       }
         -> ([< `Mem | `Loc | `Exp ], 'a, 'b) term
@@ -178,25 +177,25 @@ module type S = sig
         hash : int;
         size : size;
         f : unary operator;
-        x : ([ `Exp ], 'a, 'b) term;
+        mutable x : ([ `Exp ], 'a, 'b) term;
       }
-        -> ([ `Exp ], 'a, 'b) term
+        -> ([< `Unary | `Exp ], 'a, 'b) term
     | Binary : {
         hash : int;
         size : size;
         f : binary operator;
-        x : ([ `Exp ], 'a, 'b) term;
-        y : ([ `Exp ], 'a, 'b) term;
+        mutable x : ([ `Exp ], 'a, 'b) term;
+        mutable y : ([ `Exp ], 'a, 'b) term;
       }
-        -> ([ `Exp ], 'a, 'b) term
+        -> ([< `Binary | `Exp ], 'a, 'b) term
     | Ite : {
         hash : int;
         size : size;
-        c : ([ `Exp ], 'a, 'b) term;
-        t : ([ `Exp ], 'a, 'b) term;
-        e : ([ `Exp ], 'a, 'b) term;
+        mutable c : ([ `Exp ], 'a, 'b) term;
+        mutable t : ([ `Exp ], 'a, 'b) term;
+        mutable e : ([ `Exp ], 'a, 'b) term;
       }
-        -> ([ `Exp ], 'a, 'b) term
+        -> ([< `Ite | `Exp ], 'a, 'b) term
 
   type t = ([ `Exp ], a, b) term
 
@@ -225,53 +224,29 @@ module type S = sig
   *)
 
   val uminus : t -> t
-
   val add : t -> t -> t
-
   val sub : t -> t -> t
-
   val mul : t -> t -> t
-
   val smod : t -> t -> t
-
   val umod : t -> t -> t
-
   val udiv : t -> t -> t
-
   val sdiv : t -> t -> t
-
   val append : t -> t -> t
-
   val equal : t -> t -> t
-
   val diff : t -> t -> t
-
   val ule : t -> t -> t
-
   val uge : t -> t -> t
-
   val ult : t -> t -> t
-
   val ugt : t -> t -> t
-
   val sle : t -> t -> t
-
   val sge : t -> t -> t
-
   val slt : t -> t -> t
-
   val sgt : t -> t -> t
-
   val logand : t -> t -> t
-
   val logor : t -> t -> t
-
   val lognot : t -> t
-
   val logxor : t -> t -> t
-
   val shift_left : t -> t -> t
-
   val shift_right : t -> t -> t
 
   val shift_right_signed : t -> t -> t
@@ -308,11 +283,8 @@ module type S = sig
   *)
 
   val one : t
-
   val zero : t
-
   val addi : t -> int -> t
-
   val addz : t -> Z.t -> t
 
   (** {4 Utils} **)
@@ -322,7 +294,6 @@ module type S = sig
   *)
 
   val is_equal : t -> t -> bool
-
   val compare : t -> t -> int
 
   val sizeof : t -> size
@@ -345,19 +316,12 @@ val to_exp : (_, 'a, 'b) t -> ([ `Exp ], 'a, 'b) t
 (** {4 Conversion} **)
 
 val to_var : (_, 'a, 'b) t -> ([ `Var ], 'a, 'b) t option
-
 val to_var_exn : (_, 'a, 'b) t -> ([ `Var ], 'a, 'b) t
-
 val to_loc : (_, 'a, 'b) t -> ([ `Loc ], 'a, 'b) t option
-
 val to_loc_exn : (_, 'a, 'b) t -> ([ `Loc ], 'a, 'b) t
-
 val to_mem : (_, 'a, 'b) t -> ([ `Mem ], 'a, 'b) t option
-
 val to_mem_exn : (_, 'a, 'b) t -> ([ `Mem ], 'a, 'b) t
-
 val to_cst : (_, _, _) t -> ([ `Cst ], _, _) t option
-
 val to_cst_exn : (_, _, _) t -> ([ `Cst ], _, _) t
 
 val pp : Format.formatter -> _ t -> unit

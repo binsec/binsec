@@ -192,18 +192,18 @@ module Make (E : EXPLORATION_STATISTICS) (Q : QUERY_STATISTICS) = struct
       ignore
       @@ Curses.mvaddstr y x
            (if Float.compare f 1e9 >= 1 then
-            let g = int_of_float (f /. 1e9) in
-            let m = int_of_float (f /. 1e8) - (10 * g) in
-            Printf.sprintf "%4d.%1dGIPS" g m
-           else if Float.compare f 1e6 >= 1 then
-             let m = int_of_float (f /. 1e6) in
-             let k = int_of_float (f /. 1e5) - (10 * m) in
-             Printf.sprintf "%4d.%1dMIPS" m k
-           else if Float.compare f 1e3 >= 1 then
-             let k = int_of_float (f /. 1e3) in
-             let z = int_of_float (f /. 1e2) - (10 * k) in
-             Printf.sprintf "%4d.%1dkIPS" k z
-           else Printf.sprintf "%7dIPS" (int_of_float f))
+              let g = int_of_float (f /. 1e9) in
+              let m = int_of_float (f /. 1e8) - (10 * g) in
+              Printf.sprintf "%4d.%1dGIPS" g m
+            else if Float.compare f 1e6 >= 1 then
+              let m = int_of_float (f /. 1e6) in
+              let k = int_of_float (f /. 1e5) - (10 * m) in
+              Printf.sprintf "%4d.%1dMIPS" m k
+            else if Float.compare f 1e3 >= 1 then
+              let k = int_of_float (f /. 1e3) in
+              let z = int_of_float (f /. 1e2) - (10 * k) in
+              Printf.sprintf "%4d.%1dkIPS" k z
+            else Printf.sprintf "%7dIPS" (int_of_float f))
 
     let percent y x p = ignore @@ Curses.mvaddstr y x (Printf.sprintf "%9d%%" p)
   end
@@ -427,12 +427,14 @@ module Make (E : EXPLORATION_STATISTICS) (Q : QUERY_STATISTICS) = struct
     (restore_fof, logging_fof, drawing_fof, flush_buffer)
 
   let init () =
-    let debug = Logger.is_debug_enabled () and tty = Unix.(isatty stdout) in
-    if debug && tty then
+    let enabled = Monitor.get ()
+    and debug = Logger.is_debug_enabled ()
+    and tty = Unix.(isatty stdout) in
+    if enabled && debug && tty then
       Logger.warning
         "Monitoring screen is disabled when debug mode is set to avoid blink \
          issues."
-    else if tty then (
+    else if enabled && tty then (
       Logger.info "TTY: press [space] to switch between log and monitor modes.";
       let mutex = Mutex.create () in
       Mutex.lock mutex;

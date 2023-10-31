@@ -48,7 +48,6 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
 
   (* In 64 mode, a few operation work on 32 bit values then sign extend them *)
   let to_32 x = De.restrict 0 31 x
-
   let sext x = De.sext mode_size x
 
   (* Instruction size *)
@@ -62,17 +61,11 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
     type t = { addr : Virtual_address.t; isz : Isz.t }
 
     let addr t = t.addr
-
     let bysz t = Isz.bytes t.isz
-
     let create ?(isz = Isz.I32) va = { addr = va; isz }
-
     let switch isz t = { t with isz }
-
     let switch16 = switch Isz.I16
-
     let switch32 = switch Isz.I32
-
     let next t = Virtual_address.add_int (bysz t) (addr t)
   end
 
@@ -81,13 +74,9 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
   (* let mode_bytes = Size.Byte.of_bitsize mode_bits *)
 
   let mk_bv ?(size = mode_size) v = Bitvector.create v size
-
   let mk_cst ?(size = mode_size) extend bv = De.constant (extend bv size)
-
   let mk_imm ?(size = mode_size) = mk_cst ~size Bv.extend_signed
-
   let _mk_offset = mk_cst Bv.extend_signed
-
   let _mk_uint = mk_cst Bv.extend
 
   let scale_by n bv =
@@ -101,7 +90,6 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
 
   module D = struct
     type label = string
-
     type jt = E of Dba.Expr.t | C of Virtual_address.t | L of string
 
     type inst =
@@ -120,9 +108,7 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
       if Dba.Expr.is_equal dst src then Nop else Asg (dst, src)
 
     let jmp j = Jmp j
-
     let ejmp e = jmp (E e)
-
     let cjmp c = jmp (C c)
 
     let aoff ?(offset = Bv.zero) va =
@@ -130,7 +116,6 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
       if Bv.is_zero offset then ve else De.add ve (mk_imm offset)
 
     let vajmp ?(offset = 0) va = cjmp (Virtual_address.add_int offset va)
-
     let _ljmp l = jmp (L l)
 
     let lab label inst =
@@ -213,9 +198,7 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
       type t = { sealed : bool; insts : inst list }
 
       let last_label = "last"
-
       let empty = { insts = []; sealed = false }
-
       let is_empty t = t.insts = []
 
       (* Actually, we can never have a sealed block without DBA instructions *)
@@ -229,7 +212,6 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
         { b with insts = inst :: b.insts }
 
       let ini inst = empty +++ inst
-
       let ( !! ) b = { insts = List.rev b.insts; sealed = true }
 
       let seal a b =
@@ -293,9 +275,7 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
       && D.Block.is_empty inst.dba
 
     let _set_opcode t opcode = { t with opcode }
-
     let _set_dba t dba = { t with dba }
-
     let create ~dba ~opcode ~mnemonic = { dba; opcode; mnemonic }
   end
 
@@ -322,11 +302,8 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
   let cut bv n = Bv.extract bv { lo = n; hi = n }
 
   let signed_int bv = Bv.signed_of bv |> Z.to_int
-
   let reg_num bv = Rar.of_int_exn @@ Z.to_int @@ Bitvector.value_of bv
-
   let reg_bv bv = Rar.expr (reg_num bv)
-
   let reg_name bv = Rar.name (reg_num bv)
 
   let op_imm mnemonic ~src ~dst ~imm =
@@ -366,7 +343,6 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
 
     (* is h/b defined differenlty when in 64 mode ? (ie., 32/16 bits) *)
     let loadh = De.load (Size.Byte.create 2) Machine.LittleEndian
-
     let loadb = De.load (Size.Byte.create 1) Machine.LittleEndian
 
     let load name load_f st ~dst ~src ~offset =
@@ -382,17 +358,11 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
       (mnemonic, dba)
 
     let ld = load "ld" loadd
-
     let lw = load "lw" (fun e -> sext (loadw e))
-
     let lwu = load "lwu" (fun e -> De.uext mode_size (loadw e))
-
     let lh = load "lh" (fun e -> sext (loadh e))
-
     let lhu = load "lhu" (fun e -> De.uext mode_size (loadh e))
-
     let lb = load "lb" (fun e -> sext (loadb e))
-
     let lbu = load "lbu" (fun e -> De.uext mode_size (loadb e))
 
     let store name store_f restrict st ~offset ~base ~src =
@@ -414,9 +384,7 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
     let sb = store "sb" loadb (De.restrict 0 7)
 
     let sh = store "sh" loadh (De.restrict 0 15)
-
     let sw = store "sw" loadw (De.restrict 0 31)
-
     let sd = store "sd" loadd (De.restrict 0 63)
 
     let jmp_offset st offset =
@@ -443,15 +411,10 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
       (mnemonic, dba)
 
     let bne = branch "bne" De.diff
-
     let beq = branch "beq" De.equal
-
     let blt = branch "blt" De.slt
-
     let bltu = branch "bltu" De.ult
-
     let bge = branch "bge" De.sge
-
     let bgeu = branch "bgeu" De.uge
 
     let slti st ~dst ~src ~imm =
@@ -520,9 +483,7 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
       (mnemonic, dba)
 
     let andi = logicali "andi" De.logand
-
     let xori = logicali "xori" De.logxor
-
     let ori = logicali "ori" De.logor
 
     (** Binary operation with given name and function *)
@@ -535,13 +496,9 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
       (mnemonic, dba)
 
     let add = bop "add" De.add
-
     let sub = bop "sub" De.sub
-
     let logxor = bop "xor" De.logxor
-
     let logor = bop "or" De.logor
-
     let logand = bop "and" De.logand
 
     (** Binary operation on word in 64 bit mode *)
@@ -555,7 +512,6 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
       (mnemonic, dba)
 
     let addw = bop_w "addw" De.add
-
     let subw = bop_w "subw" De.sub
 
     let _mul name restrict ext1 ext2 st ~dst ~src1 ~src2 =
@@ -569,22 +525,16 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
       (mnemonic, dba)
 
     let rmul_lo = De.restrict 0 (mode_size - 1)
-
     let rmul_hi = De.restrict mode_size ((2 * mode_size) - 1)
-
     let sextmul = De.sext @@ (2 * mode_size)
-
     let uextmul = De.uext @@ (2 * mode_size)
-
     let mul = _mul "mul" rmul_lo sextmul sextmul
 
     (* let mulu  = _mul "mulu" rmul_lo uextmul uextmul ;;
      * let mulsu = _mul "mulsu" rmul_lo sextmul uextmul ;; *)
 
     let mulh = _mul "mulh" rmul_hi sextmul sextmul
-
     let mulhu = _mul "mulhu" rmul_hi uextmul uextmul
-
     let mulhsu = _mul "mulhsu" rmul_hi sextmul uextmul
 
     let mulw st ~dst ~src1 ~src2 =
@@ -599,13 +549,9 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
       (mnemonic, dba)
 
     let eq_zero e = De.equal e (De.zeros (De.size_of e))
-
     let minus_one size = De.constant (Bv.of_int ~size (-1))
-
     let min_int size = De.constant (Bv.min_sbv size)
-
     let eq_minus_one e = De.equal e (minus_one (De.size_of e))
-
     let eq_min_int e = De.equal e (min_int (De.size_of e))
 
     let _div ?on_overflow ~on_div_by_zero name f st ~dst ~src1 ~src2 =
@@ -690,7 +636,6 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
       (mnemonic, dba)
 
     let slt = slt_f "slt" De.slt
-
     let sltu = slt_f "ult" De.ult
 
     let shift_f name shop st ~dst ~src1 ~src2 =
@@ -707,9 +652,7 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
       (mnemonic, dba)
 
     let sll = shift_f "sll" De.shift_left
-
     let srl = shift_f "srl" De.shift_right
-
     let sra = shift_f "sra" De.shift_right_signed
 
     let shift_f_w name shop st ~dst ~src1 ~src2 =
@@ -728,9 +671,7 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
       (mnemonic, dba)
 
     let sllw = shift_f_w "sllw" De.shift_left
-
     let srlw = shift_f_w "srlw" De.shift_right
-
     let sraw = shift_f_w "sraw" De.shift_right_signed
 
     let mov st ~dst ~src =
@@ -816,9 +757,7 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
       |> seal (D_status.next st)
 
     let slli = shift_immediate De.shift_left
-
     let srli = shift_immediate De.shift_right
-
     let srai = shift_immediate De.shift_right_signed
 
     let shift_immediate_word shop st ~dst ~src ~shamt =
@@ -829,16 +768,12 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
       |> seal (D_status.next st)
 
     let slliw = shift_immediate_word De.shift_left
-
     let srliw = shift_immediate_word De.shift_right
-
     let sraiw = shift_immediate_word De.shift_right_signed
 
     module C = struct
       let slli st ~dst ~shamt = slli st ~dst ~src:dst ~shamt
-
       let srli st ~dst ~shamt = srli st ~dst ~src:dst ~shamt
-
       let srai st ~dst ~shamt = srai st ~dst ~src:dst ~shamt
 
       let jstitch11 offset =
@@ -1052,17 +987,11 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
         bop st ~dst ~src1:dst ~src2:src
 
       let add = lift_to_uncompressed add
-
       let sub = lift_to_uncompressed sub
-
       let addw = lift_to_uncompressed addw
-
       let subw = lift_to_uncompressed subw
-
       let logor = lift_to_uncompressed logor
-
       let logxor = lift_to_uncompressed logxor
-
       let logand = lift_to_uncompressed logand
 
       let lui st ~dst ~imm5 ~imm1 =
@@ -1091,7 +1020,6 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
           dba )
 
       let beqz = bz "beqz" beq
-
       let bnez = bz "bnez" bne
     end
   end
@@ -1099,9 +1027,7 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
   type inst = Unhandled of string | Unknown of string | Inst of Inst.t
 
   let unh s = Unhandled s
-
   let unk s = Unknown s
-
   let ins t = Inst t
 
   [@@@warning "-60"]
@@ -1135,33 +1061,19 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
         Inst.create ~dba ~mnemonic ~opcode
 
       let sub = apply Lift.sub
-
       let add = apply Lift.add
-
       let logxor = apply Lift.logxor
-
       let logor = apply Lift.logor
-
       let logand = apply Lift.logand
-
       let addw = apply Lift.addw
-
       let subw = apply Lift.subw
-
       let slt = apply Lift.slt
-
       let sltu = apply Lift.sltu
-
       let sll = apply Lift.sll
-
       let srl = apply Lift.srl
-
       let sra = apply Lift.sra
-
       let sllw = apply Lift.sllw
-
       let srlw = apply Lift.srlw
-
       let sraw = apply Lift.sraw
     end
 
@@ -1192,17 +1104,11 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
         Inst.create ~dba ~opcode ~mnemonic
 
       let addi = lift_aux Lift.addi
-
       let addiw = lift_aux Lift.addiw
-
       let slti = lift_aux Lift.slti
-
       let sltiu = lift_aux Lift.sltiu
-
       let andi = lift_aux Lift.andi
-
       let ori = lift_aux Lift.ori
-
       let xori = lift_aux Lift.xori
 
       let apply_off lift_f st opcode =
@@ -1211,19 +1117,12 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
         lift_f st ~dst ~src ~offset
 
       let ld = apply_off Lift.ld
-
       let lw = apply_off Lift.lw
-
       let lwu = apply_off Lift.lwu
-
       let lh = apply_off Lift.lh
-
       let lb = apply_off Lift.lb
-
       let lhu = apply_off Lift.lhu
-
       let lbu = apply_off Lift.lbu
-
       let jalr = apply_off (Lift.jalr ~instr_size:4)
 
       (* Shift with immediates *)
@@ -1311,15 +1210,10 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
         Inst.create ~dba ~mnemonic ~opcode
 
       let beq = branch Lift.beq
-
       let bne = branch Lift.bne
-
       let blt = branch Lift.blt
-
       let bge = branch Lift.bge
-
       let bltu = branch Lift.bltu
-
       let bgeu = branch Lift.bgeu
 
       let store store_f st opcode =
@@ -1332,9 +1226,7 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
       let sb = store Lift.sb
 
       let sh = store Lift.sh
-
       let sw = store Lift.sw
-
       let sd = store Lift.sd
     end
 
@@ -1355,7 +1247,6 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
         lift_f st ~dst ~offset
 
       let lui = apply Lift.lui
-
       let auipc = apply Lift.auipc
     end
 
@@ -1389,29 +1280,17 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
     (* RV32M/RV64M Standard Extension *)
     module M = struct
       let mul = Rtype.apply Lift.mul
-
       let mulh = Rtype.apply Lift.mulh
-
       let mulhu = Rtype.apply Lift.mulhu
-
       let mulhsu = Rtype.apply Lift.mulhsu
-
       let mulw = Rtype.apply Lift.mulw
-
       let div = Rtype.apply Lift.div
-
       let divu = Rtype.apply Lift.divu
-
       let rem = Rtype.apply Lift.rem
-
       let remu = Rtype.apply Lift.remu
-
       let divw = Rtype.apply Lift.divw
-
       let divuw = Rtype.apply Lift.divuw
-
       let remw = Rtype.apply Lift.remw
-
       let remuw = Rtype.apply Lift.remuw
     end
 
@@ -1432,9 +1311,7 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
         Inst.create ~dba ~mnemonic ~opcode
 
       let srli = shift "srli" Lift.C.srli
-
       let srai = shift "srai" Lift.C.srai
-
       let slli = shift "slli" Lift.C.slli
 
       let c0 st opcode =
@@ -1636,7 +1513,6 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
     module P = Print_utils
 
     let funct3 opcode = uint (Bitset.restrict ~lo:12 ~hi:14 opcode)
-
     let funct7 opcode = uint (Bitset.restrict ~lo:25 ~hi:31 opcode)
 
     (* Instructions with opcode 0x13 (0b0010011) are I type

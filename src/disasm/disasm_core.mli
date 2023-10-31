@@ -32,15 +32,11 @@ val register_decoder :
 
 module W : sig
   include Worklist.S with type elt = Virtual_address.t
-
   include Sigs.PRINTABLE with type t := t
 
   val of_list : Virtual_address.t list -> t
-
   val add_list : t -> Virtual_address.t list -> t
-
   val add_set : t -> Virtual_address.Set.t -> t
-
   val of_set : Virtual_address.Set.t -> t
 
   val add_filtered_set :
@@ -56,14 +52,11 @@ end
 
 module Successors : sig
   val recursive : Instruction.t -> Virtual_address.Set.t
-
   val linear : Instruction.t -> Virtual_address.Set.t
-
   val linear_bytewise : Instruction.t -> Virtual_address.Set.t
 end
 
 val get_decode_replacement : unit -> Dhunk.t Virtual_address.Map.t
-
 val add_replacement : Virtual_address.t -> Dhunk.t -> unit
 
 val decode :

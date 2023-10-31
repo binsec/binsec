@@ -24,7 +24,6 @@ open Loader_types
 exception Invalid_format of string
 
 let invalid_format msg = raise (Invalid_format msg)
-
 let assert_format b msg = if not b then invalid_format msg
 
 module type S = sig
@@ -39,68 +38,40 @@ module type S = sig
   }
 
   val cursor : ?at:int -> Machine.endianness -> t -> cursor
-
   val seek : cursor -> int -> unit
-
   val ensure : cursor -> int -> string -> unit
-
   val advance : cursor -> int -> unit
-
   val at_end : cursor -> bool
 
   module Peek : sig
     val u8 : cursor -> u8
-
     val u16 : cursor -> u16
-
     val u32 : cursor -> u32
-
     val u64 : cursor -> u64
-
     val s8 : cursor -> s8
-
     val s16 : cursor -> s16
-
     val s32 : cursor -> s32
-
     val s64 : cursor -> s64
-
     val uleb128 : cursor -> u64
-
     val sleb128 : cursor -> s64
-
     val bytes : cursor -> int -> string
-
     val fixed_string : cursor -> int -> string
-
     val zero_string : string -> cursor -> ?maxlen:int -> unit -> string
   end
 
   module Read : sig
     val u8 : cursor -> u8
-
     val u16 : cursor -> u16
-
     val u32 : cursor -> u32
-
     val u64 : cursor -> u64
-
     val s8 : cursor -> s8
-
     val s16 : cursor -> s16
-
     val s32 : cursor -> s32
-
     val s64 : cursor -> s64
-
     val uleb128 : cursor -> u64
-
     val sleb128 : cursor -> s64
-
     val bytes : cursor -> int -> string
-
     val fixed_string : cursor -> int -> string
-
     val zero_string : string -> cursor -> ?maxlen:int -> unit -> string
   end
 end
@@ -109,7 +80,6 @@ module type Bufferable = sig
   type t
 
   val get : t -> int -> int
-
   val dim : t -> int
 end
 
@@ -125,14 +95,12 @@ module Make (B : Bufferable) = struct
   }
 
   let cursor ?(at = 0) endian buffer = { buffer; endian; position = at }
-
   let seek t position = t.position <- position
 
   let ensure t count msg =
     if t.position + count > dim t.buffer then invalid_format msg
 
   let advance t count = t.position <- t.position + count
-
   let at_end t = dim t.buffer = t.position
 
   let uleb128 t : u64 * int =
@@ -434,19 +402,12 @@ module type W = sig
 
   module Write : sig
     val u8 : cursor -> u8 -> unit
-
     val u16 : cursor -> u16 -> unit
-
     val u32 : cursor -> u32 -> unit
-
     val u64 : cursor -> u64 -> unit
-
     val s8 : cursor -> s8 -> unit
-
     val s16 : cursor -> s16 -> unit
-
     val s32 : cursor -> s32 -> unit
-
     val s64 : cursor -> s64 -> unit
   end
 end
@@ -512,11 +473,8 @@ module Wake (W : Writable) = struct
       advance t 8
 
     let s8 = u8
-
     let s16 = u16
-
     let s32 = u32
-
     let s64 = u64
   end
 end
@@ -527,9 +485,7 @@ include Wake (struct
   type t = (int, int8_unsigned_elt, c_layout) Array1.t
 
   let get = Array1.get
-
   let set = Array1.set
-
   let dim = Array1.dim
 end)
 

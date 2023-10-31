@@ -21,7 +21,6 @@
 
 include Cli.Options (struct
   let shortname = "smt"
-
   let name = "Static Symbolic Execution"
 end)
 
@@ -55,28 +54,22 @@ module SMTSolver = Builder.Variant_choice_assoc (struct
     ]
 
   let default = Auto
-
   let name = "solver"
-
   let doc = "Manually set the SMT solver to use."
 end)
 
 module KeepGoing = Builder.False (struct
   let name = "keep-going"
-
   let doc = "Ignore errors returned by the SMT solver. Default is to abort."
 end)
 
 module SMT_dir = Builder.String_option (struct
   let name = "dir"
-
   let doc = "set directory to cache smt scripts"
 end)
 
 module SMT_log_directory = Builder.String (struct
   let name = "dump-dir"
-
   let doc = "Set directory where unsolved SMT scripts are dumped"
-
   let default = "binsec_smtdump"
 end)

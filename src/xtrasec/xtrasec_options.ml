@@ -21,19 +21,16 @@
 
 include Cli.Make (struct
   let name = "Follows a trace generated using pin"
-
   let shortname = "xtrasec"
 end)
 
 module Trace_file = Builder.String_option (struct
   let name = "trace"
-
   let doc = "Input trace as output by the xtrasec tool"
 end)
 
 module Output_smt = Builder.String_option (struct
   let name = "output-smt"
-
   let doc = "If set, output a SMT formula to this file"
 end)
 
@@ -60,7 +57,6 @@ module Concretize_mem = struct
     type t = [ `No | `Exact | `Approximate of int ]
 
     let name = "concretize-mem"
-
     let default = `Exact
 
     let doc =

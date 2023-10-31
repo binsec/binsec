@@ -24,31 +24,19 @@
 (** {1 Module type} *)
 module type S = sig
   type elt
-
   type t
 
   val empty : t
-
   val singleton : elt -> t
-
   val is_empty : t -> bool
-
   val length : t -> int
-
   val add : elt -> t -> t
-
   val remove : t -> t
-
   val pop : t -> elt * t
-
   val peek : t -> elt
-
   val merge : t -> t -> t
-
   val iter : (elt -> unit) -> t -> unit
-
   val fold : ('a -> elt -> 'a) -> 'a -> t -> 'a
-
   val map : (elt -> elt) -> t -> t
 end
 

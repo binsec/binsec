@@ -25,9 +25,7 @@ module State : sig
   type t
 
   val initializations : t -> int Bitvector.Collection.Map.t
-
   val create : unit -> t
-
   val assign : ?wild:bool -> string -> Formula.sort -> Formula.term -> t -> t
 
   val havoc : ?wild:bool -> string -> Formula.sort -> t -> t
@@ -43,19 +41,14 @@ module State : sig
   (** [comment cmt s] *)
 
   val formula : t -> Formula.formula
-
   val memory_term : Formula.ax_term -> string * Formula.sort * Formula.term
-
   val get_memory : t -> Formula.ax_term
-
   val get_path_constraint : t -> Formula.bl_term
 
   val get_bv : string -> Size.Bit.t -> t -> Formula.bv_term * t
   (** automatically declares missing variables, thus returns [t] *)
 
   val init_mem_at : addr:Bitvector.t -> size:int -> t -> t
-
   val uncontrolled : t -> Formula.VarSet.t
-
   val pp : Format.formatter -> t -> unit
 end

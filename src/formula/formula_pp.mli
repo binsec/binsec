@@ -68,13 +68,8 @@ val pp_as_comment :
   (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a -> unit
 
 val pp_bl_term : Format.formatter -> Formula.bl_term -> unit
-
 val pp_bv_term : Format.formatter -> Formula.bv_term -> unit
-
 val pp_ax_term : Format.formatter -> Formula.ax_term -> unit
-
 val pp_term : Format.formatter -> Formula.term -> unit
-
 val pp_entry : Format.formatter -> Formula.entry -> unit
-
 val pp_formula : Format.formatter -> Formula.formula -> unit

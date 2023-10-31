@@ -23,31 +23,26 @@
 
 include Cli.Options (struct
   let shortname = "" (* This is the only one :-) *)
-
   let name = "Kernel"
 end)
 
 module Config_file = Builder.String_option (struct
   let name = "config"
-
   let doc = "Use this configuration file"
 end)
 
 module Dba_config = Builder.String_option (struct
   let name = "dba-config"
-
   let doc = "Set dba configuration file name"
 end)
 
 module Dba_file = Builder.String_option (struct
   let name = "dba-file"
-
   let doc = "Set DBA file "
 end)
 
 module Describe_binary = Builder.False (struct
   let name = "describe"
-
   let doc = "Display a description of the binary and exits"
 end)
 
@@ -55,33 +50,27 @@ end)
 
 module Experimental = Builder.False (struct
   let name = "X"
-
   let doc = "Only for developmental purposes"
 end)
 
 module ExecFile = Builder.String_option (struct
   let name = "file"
-
   let doc = "Set binary file"
 end)
 
 module Entry_point = Builder.String_option (struct
   let name = "entrypoint"
-
   let doc = "Set entry point"
 end)
 
 module Decoder = Builder.String (struct
   let name = "decoder"
-
   let default = "unisim-armsec"
-
   let doc = "External decoder command"
 end)
 
 module Version = Builder.False (struct
   let name = "version"
-
   let doc = "Print the version identifier and exit"
 end)
 
@@ -91,7 +80,6 @@ module Machine = struct
     type t = Machine.isa
 
     let name = "isa"
-
     let doc = Format.asprintf " Set isa [set by loader]"
 
     let assoc_map =
@@ -111,15 +99,12 @@ module Machine = struct
   end)
 
   let pp ppf () = Machine.ISA.pp ppf (get ())
-
   let isa = get
-
   let endianness () = Machine.ISA.endianness (get ())
 
   let word_size () =
     Size.Bit.to_int Machine.(Bitwidth.bitsize (ISA.bits (get ())))
 
   let bits () = Machine.ISA.bits (get ())
-
   let stack_register () = Machine.ISA.stack_register (get ())
 end

@@ -23,7 +23,6 @@ module H = Hashtbl.Make (struct
   type t = Virtual_address.t
 
   let hash (addr : Virtual_address.t) = (addr :> int)
-
   let equal a1 a2 = a1 = a2
 end)
 

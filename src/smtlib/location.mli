@@ -23,9 +23,6 @@ type t = private { loc_start : Lexing.position; loc_end : Lexing.position }
 (** Locations in a file *)
 
 val mk_loc : Lexing.position -> Lexing.position -> t
-
 val none : t
-
 val dummy_loc : t
-
 val pp_lines : Format.formatter -> t -> unit

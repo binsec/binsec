@@ -35,13 +35,10 @@ end
 
 module Choice : sig
   type side = Consequent | Alternative
-
   type t
 
   val do_alternate : t -> unit
-
   val is_alternative : t -> bool
-
   val is_consequent : t -> bool
 end
 
@@ -54,11 +51,8 @@ module Count : sig
   (** [once] is [Count 1] *)
 
   val count : int -> t
-
   val unlimited : t
-
   val decr : t -> t
-
   val is_zero : t -> bool
 end
 
@@ -73,13 +67,9 @@ type d = private
 type t
 
 val check_and_decr : t -> t option
-
 val directive : t -> d
-
 val loc : t -> Dba.Expr.t
-
 val addr : t -> Virtual_address.t
-
 val pp : Format.formatter -> t -> unit
 
 (** {2 Constructors} *)
@@ -96,21 +86,12 @@ val reach_all :
   ?guard:Dba.Expr.t -> ?actions:Action.t list -> loc:Dba.Expr.t -> unit -> t
 
 val enumerate : ?n:int -> Dba.Expr.t -> loc:Dba.Expr.t -> unit -> t
-
 val enumerate_all : Dba.Expr.t -> loc:Dba.Expr.t -> unit -> t
-
 val cut : ?guard:Dba.Expr.t -> loc:Dba.Expr.t -> unit -> t
-
 val assume : Dba.Expr.t -> loc:Dba.Expr.t -> unit -> t
-
 val dynamic_assert : Dba.Expr.t -> loc:Dba.Expr.t -> unit -> t
-
 val choose : alternate:bool -> side:Choice.side -> d
-
 val choose_alternative : ?alternate:bool -> loc:Dba.Expr.t -> unit -> t
-
 val choose_consequent : ?alternate:bool -> loc:Dba.Expr.t -> unit -> t
-
 val is_choice : t -> bool
-
 val reloc : Dba.Expr.t -> t -> t

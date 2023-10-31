@@ -20,9 +20,7 @@
 (**************************************************************************)
 
 let get_opt_or_default default = function None -> default | Some x -> x
-
 let unsafe_get_opt = function None -> assert false | Some x -> x
-
 let is_none = function None -> true | Some _ -> false
 
 let time f =

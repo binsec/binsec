@@ -549,7 +549,6 @@ module Shdr = struct
 
   module SHN = struct
     type section = t
-
     type t = UNDEF | SEC of section | PROC of int | OS of int | ABS | COMMON
     (* | XINDEX *)
 
@@ -787,13 +786,10 @@ end
 
 module Section = struct
   type t = Shdr.t
-
   type header = t
 
   let name s = s.Shdr.name
-
   let flag s = s.Shdr.flags
-
   let pos s = { raw = s.Shdr.offset; virt = s.Shdr.addr }
 
   let size s =
@@ -814,13 +810,10 @@ end
 
 module Symbol = struct
   type t = Sym.t
-
   type header = t
 
   let name s = s.Sym.name
-
   let value s = s.Sym.value
-
   let header s = s
 end
 
@@ -877,7 +870,6 @@ end = struct
 
   module Common = struct
     let ppt ppf x = Format.fprintf ppf "OS(%x)" x
-
     let ppt8 ppf x = Format.fprintf ppf "OS(%08x)" x
   end
 
@@ -952,21 +944,13 @@ and Img : sig
   type header = Ehdr.t
 
   val arch : t -> Machine.t
-
   val entry : t -> int
-
   val endian : t -> Machine.endianness
-
   val sections : t -> Section.t array
-
   val symbols : t -> Symbol.t array
-
   val notes : t -> Note.t array
-
   val header : t -> header
-
   val cursor : ?at:int -> t -> Loader_buf.cursor
-
   val content : t -> Section.t -> Loader_buf.t
 
   include Sigs.PRINTABLE with type t := t
@@ -986,17 +970,11 @@ end = struct
   type header = Ehdr.t
 
   let arch i = i.header.Ehdr.machine
-
   let entry i = i.header.Ehdr.entry
-
   let endian i = i.header.Ehdr.ident.E_ident.data
-
   let sections i = Array.copy i.sections
-
   let symbols i = Array.concat @@ Array.to_list i.symtabs
-
   let notes i = i.notes
-
   let header i = i.header
 
   let cursor ?(at = 0) i =
@@ -1400,7 +1378,6 @@ module Offset = Loader_buf.Make (struct
   type t = Img.t
 
   let get t i = read_offset t i
-
   let dim i = Bigarray.Array1.dim i.Img.buf
 end)
 
@@ -1408,12 +1385,10 @@ module Address = Loader_buf.Make (struct
   type t = Img.t
 
   let get t i = read_address t i
-
   let dim _ = max_int
 end)
 
 let program_headers i = i.Img.phdrs
-
 let notes = Img.notes
 
 type fmap = {

@@ -401,15 +401,10 @@ and visit_formula env { entries; _ } =
   Sequence.map_forward (visit_entry env) entries
 
 let bl_term bl_term = visit_bl_term () bl_term
-
 let bv_term bv_term = visit_bv_term () bv_term
-
 let ax_term ax_term = visit_ax_term () ax_term
-
 let term term = visit_term () term
-
 let entry entry = visit_entry () entry
-
 let list_of_sequence seq = Sequence.fold_backward (fun x acc -> x :: acc) seq []
 
 let formula ast =

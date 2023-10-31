@@ -439,18 +439,15 @@ let read_symbols t file =
 
 module Section = struct
   type t = optional_header * section
-
   type header = section
 
   let name (_, s) = s.section_name
-
   let flag ((_, s) : t) = s.characteristics
 
   let pos (o, (s : section)) =
     { raw = s.pointer_to_raw_data; virt = rebase o s.virtual_address }
 
   let size (_, s) = { raw = s.size_of_raw_data; virt = s.virtual_size }
-
   let header (_, s) = s
 
   let has_flag f s =
@@ -465,13 +462,10 @@ end
 
 module Symbol = struct
   type t = symbol
-
   type header = symbol
 
   let name s = s.symbol_name
-
   let value s = s.value
-
   let header s = s
 end
 
@@ -510,12 +504,10 @@ let pp_sections ppf sections =
       sections
 
 let pp_arch ppf arch = Format.fprintf ppf "@[Machine: %a@]" Machine.pp arch
-
 let pp_ep ppf ep = Format.fprintf ppf "@[Entry point address: 0x%x@]" ep
 
 module Img = struct
   type t = program * section array * symbol array * Loader_buf.t
-
   type header = program
 
   let arch ((f, _), _, _, _) = arch f.machine
@@ -524,9 +516,7 @@ module Img = struct
     rebase o o.standard_fields.address_of_entry_point
 
   let sections ((_, o), s, _, _) = Array.map (fun s -> (o, s)) s
-
   let symbols (_, _, s, _) = Array.copy s
-
   let header (h, _, _, _) = h
 
   let cursor ?(at = 0) (_, _, _, b) =
@@ -568,7 +558,6 @@ let load_file path =
   img
 
 let read_offset (_, _, _, b) offset = b.{offset}
-
 let cache = ref None
 
 let find_section_by_addr_with_cache optional sections addr =
@@ -590,7 +579,6 @@ module Offset = Loader_buf.Make (struct
   type t = Img.t
 
   let get t i = read_offset t i
-
   let dim (_, _, _, b) = Bigarray.Array1.dim b
 end)
 
@@ -598,6 +586,5 @@ module Address = Loader_buf.Make (struct
   type t = Img.t
 
   let get t i = read_address t i
-
   let dim _ = max_int
 end)

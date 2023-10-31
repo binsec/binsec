@@ -21,6 +21,5 @@
 
 include Cli.Options (struct
   let name = "ppc64"
-
   let shortname = name
 end)

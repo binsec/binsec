@@ -60,23 +60,14 @@ let ( _add_unknown_instruction,
     fun () -> stats.handled.insertions + stats.unknown.insertions )
 
 let high_bit_8 = Int64.shift_left Int64.one 7
-
 let higher_bit_8 = Int64.shift_left Int64.one 8
-
 let high_bit_16 = Int64.shift_left Int64.one 15
-
 let higher_bit_16 = Int64.shift_left Int64.one 16
-
 let high_bit = Int64.shift_left Int64.one 31
-
 let higher_bit = Int64.shift_left Int64.one 32
-
 let temp_size size = Format.sprintf "temp%d" size
-
 let cpt_size size = Format.sprintf "cpt%d" size
-
 let size_mode m = match m with `M32 -> 32 | `M16 -> 16 | `M8 -> 8
-
 let nbytes_mode m = match m with `M32 -> 4 | `M16 -> 2 | `M8 -> 1
 
 let cst_of_int n size =
@@ -203,9 +194,7 @@ let lhs_of_reg8 r =
   Dba.LValue._restrict (X86Util.reg32_to_string r32) Size.Bit.bits32 off1 off2
 
 let edi_lval = lhs_of_reg32 EDI
-
 let esi_lval = lhs_of_reg32 ESI
-
 let esp_lval = lhs_of_reg32 ESP
 
 let lhs_of_reg_xmm r reg_t =
@@ -232,9 +221,7 @@ let lhs_of_flag f =
     ~tag:Dba.Var.Tag.Flag
 
 let undef_flag flag = Predba.undefined (lhs_of_flag flag)
-
 let undef_flags flags = List.map undef_flag flags
-
 let expr_of_seg s = Dba.Expr.var (X86Util.segment_reg_to_string s) 16
 
 let expr_of_reg mode r =
@@ -259,11 +246,8 @@ let expr_of_reg8 r =
   Dba.Expr.restrict off1 off2 (Dba.Expr.var (X86Util.reg32_to_string r32) 32)
 
 let esp_expr = expr_of_reg32 ESP
-
 and ebp_expr = expr_of_reg32 EBP
-
 and esi_expr = expr_of_reg32 ESI
-
 and edi_expr = expr_of_reg32 EDI
 
 let e_of_reg addrMode r =
@@ -288,15 +272,10 @@ let expr_of_flag f =
   Dba_types.Expr.flag (X86Util.flag_to_string f) ~bits:Size.Bit.bits1
 
 let cf_flag = expr_of_flag CF
-
 let pf_flag = expr_of_flag PF
-
 let af_flag = expr_of_flag AF
-
 let zf_flag = expr_of_flag ZF
-
 let sf_flag = expr_of_flag SF
-
 let of_flag = expr_of_flag OF
 
 type push_action =
@@ -330,17 +309,17 @@ let eflags22, split_eflags =
     else
       iter2 (i + 1)
         (if action.(i) = K then l
-        else
-          let f =
-            Dba.LValue.var ~tag
-              (X86Util.flag_to_string flag.(i))
-              ~bitsize:(Size.Bit.create size.(i))
-          in
-          let e =
-            if action.(i) = C then Dba.Expr.zeros size.(i)
-            else Dba.Expr.restrict position.(i) (position.(i) + size.(i) - 1) e
-          in
-          Predba.assign f e :: l)
+         else
+           let f =
+             Dba.LValue.var ~tag
+               (X86Util.flag_to_string flag.(i))
+               ~bitsize:(Size.Bit.create size.(i))
+           in
+           let e =
+             if action.(i) = C then Dba.Expr.zeros size.(i)
+             else Dba.Expr.restrict position.(i) (position.(i) + size.(i) - 1) e
+           in
+           Predba.assign f e :: l)
         e
   in
   (iter1 0 (cst_of_int 2 22), iter2 0 [])
@@ -444,9 +423,7 @@ let lhs_of_mem mode ?(sreg = None) a =
   Dba.LValue.store nbytes Machine.LittleEndian a
 
 let lhs_of_mem32 = lhs_of_mem `M32
-
 and lhs_of_mem16 = lhs_of_mem `M16
-
 and lhs_of_mem8 = lhs_of_mem `M8
 
 let lhs_of_mem_xmm mm a sreg =
@@ -460,9 +437,7 @@ let expr_of_mem (mode : X86Types.sizeMode) ?(sreg = None) a =
   Dba.Expr.load nbytes Machine.LittleEndian a
 
 let expr_of_mem32 = expr_of_mem `M32
-
 and expr_of_mem16 = expr_of_mem `M16
-
 and expr_of_mem8 = expr_of_mem `M8
 
 let expr_of_mem_xmm mm ?(sreg = None) a =
@@ -471,7 +446,6 @@ let expr_of_mem_xmm mm ?(sreg = None) a =
   Dba.Expr.load nbytes Machine.LittleEndian a
 
 let assign_flag flag e = Predba.assign (lhs_of_flag flag) e
-
 let assign_register register mode e = Predba.assign (lhs_of_reg register mode) e
 
 let fail_immediate_lvalue fname =
@@ -925,16 +899,12 @@ let mk_res_temp base size =
   Dba.Expr.var name sz ~tag
 
 let res_lhs mode = mk_lhs_temp "res" (size_mode mode)
-
 let temp_lhs mode = mk_lhs_temp "temp" (size_mode mode)
-
 let res_expr mode = mk_res_temp "res" (size_mode mode)
-
 let temp_expr mode = mk_res_temp "temp" (size_mode mode)
 
 module type B = sig
   val base : string
-
   val tag : Dba.Var.Tag.t
 end
 
@@ -963,14 +933,12 @@ module Bidirectional_name (X : B) = struct
     mk bitsize
 
   let ( <-- ) t e = Predba.assign t.b_dst e
-
   let ( --> ) t lv = Predba.assign lv t.b_src
 end
 
 module Bidirectional_tmp = struct
   include Bidirectional_name (struct
     let base = "temp"
-
     let tag = Dba.Var.Tag.Temp
   end)
 end
@@ -1382,24 +1350,24 @@ let lift_enter mode alloc level =
   :: Predba.assign (lhs_of_mem mode esp_expr) (expr_of_reg mode EBP)
   ::
   (if level = 0 then tail
-  else
-    let addr = Dba.Expr.sub esp_expr (cst_of_int (nbytes * level) 32) in
-    let tail = Predba.assign (lhs_of_mem mode addr) esp_expr :: tail in
-    if level = 1 then tail
-    else
-      let addr = Dba.Expr.sub esp_expr (cst_of_int nbytes 32) in
-      let lval =
-        Dba.LValue.store
-          (Size.Byte.create (nbytes * (level - 1)))
-          Machine.LittleEndian addr
-      in
-      let addr = Dba.Expr.sub ebp_expr (cst_of_int nbytes 32) in
-      let rval =
-        Dba.Expr.load
-          (Size.Byte.create (nbytes * (level - 1)))
-          Machine.LittleEndian addr
-      in
-      Predba.assign lval rval :: tail)
+   else
+     let addr = Dba.Expr.sub esp_expr (cst_of_int (nbytes * level) 32) in
+     let tail = Predba.assign (lhs_of_mem mode addr) esp_expr :: tail in
+     if level = 1 then tail
+     else
+       let addr = Dba.Expr.sub esp_expr (cst_of_int nbytes 32) in
+       let lval =
+         Dba.LValue.store
+           (Size.Byte.create (nbytes * (level - 1)))
+           Machine.LittleEndian addr
+       in
+       let addr = Dba.Expr.sub ebp_expr (cst_of_int nbytes 32) in
+       let rval =
+         Dba.Expr.load
+           (Size.Byte.create (nbytes * (level - 1)))
+           Machine.LittleEndian addr
+       in
+       Predba.assign lval rval :: tail)
 
 let lift_leave mode =
   [
@@ -1555,7 +1523,6 @@ let lift_xmul ext affect_flags dst1_opt src1 mode src2 sreg =
           :: flags_assigns))
 
 let lift_mul = lift_xmul Dba.Expr.uext affect_flags_mul None (Reg EAX)
-
 let lift_imul = lift_xmul Dba.Expr.sext affect_flags_imul
 
 let lift_xdiv div rem ext cond_err mode gop sreg =
@@ -1806,17 +1773,11 @@ let lift_p f range xmm mm gop1 gop2 sreg =
   unroll [] 0 (range - 1)
 
 let lift_padd = lift_p Dba.Expr.add
-
 let lift_psub = lift_p Dba.Expr.sub
-
 let select_p f op1 op2 = Dba.Expr.ite (f op1 op2) op1 op2
-
 let lift_pmaxu = lift_p @@ select_p Dba.Expr.ugt
-
 let lift_pmaxs = lift_p @@ select_p Dba.Expr.sgt
-
 let lift_pminu = lift_p @@ select_p Dba.Expr.ult
-
 let lift_pmins = lift_p @@ select_p Dba.Expr.slt
 
 let ssatured_add a b =
@@ -1863,9 +1824,7 @@ let avgu size a b =
       (add (add (uext (size + 1) a) (uext (size + 1) b)) (ones (size + 1))))
 
 let lift_pavgu size = lift_p (avgu size) size
-
 let mulhw a b = Dba.Expr.(restrict 16 31 (mul (sext 32 a) (sext 32 b)))
-
 let lift_pmulhw = lift_p mulhw 16
 
 let mulhrw a b =
@@ -1873,7 +1832,6 @@ let mulhrw a b =
     restrict 16 31 (add (mul (sext 32 a) (sext 32 b)) (cst_of_int 0x8000 32)))
 
 let lift_pmulhrw = lift_p mulhrw 16
-
 let lift_pmullw = lift_p Dba.Expr.mul 16
 
 let lift_pmuludq xmm mm gop1 gop2 sreg =
@@ -1916,7 +1874,6 @@ let lift_ps_l f range xmm size gop1 gop2 sreg =
       :: body
 
 let lift_psrl = lift_ps_l Dba.Expr.shift_right
-
 let lift_psll = lift_ps_l Dba.Expr.shift_left
 
 let lift_psra range xmm size gop1 gop2 sreg =
@@ -1960,11 +1917,8 @@ let lift_predicate p xmm mm lop rop sreg =
   [ Predba.assign lvalue e ]
 
 let lift_pxor = lift_predicate Dba.Expr.logxor
-
 and lift_por = lift_predicate Dba.Expr.logor
-
 and lift_pand = lift_predicate Dba.Expr.logand
-
 and lift_pandn = lift_predicate (fun le re -> Dba.Expr.(logand (lognot le) re))
 
 let lift_punpckl xmm size gop1 gop2 step sreg =
@@ -2072,11 +2026,8 @@ let lift_pmadd step ext1 ext2 add xmm size gop1 gop2 sreg =
   unroll [] 0 0
 
 let lift_pmaddwd = lift_pmadd 16 Dba.Expr.sext Dba.Expr.sext Dba.Expr.add
-
 let lift_pmaddusbsw = lift_pmadd 8 Dba.Expr.uext Dba.Expr.sext ssatured_add
-
 let lift_pcmpeq = lift_p (fun a b -> Dba.Expr.(sext (size_of a) (equal a b)))
-
 let lift_pcmpgt = lift_p (fun a b -> Dba.Expr.(sext (size_of a) (ugt a b)))
 
 let lv_restrict_eax =
@@ -2084,14 +2035,12 @@ let lv_restrict_eax =
   Dba.LValue._restrict (X86Util.reg32_to_string EAX) eax_size
 
 let al_lval = lv_restrict_eax 0 7
-
 let ah_lval = lv_restrict_eax 8 15
 
 let e_restrict_eax lo hi =
   Dba.Expr.(restrict lo hi (var (X86Util.reg32_to_string EAX) 32))
 
 let al_expr = e_restrict_eax 0 7
-
 let ah_expr = e_restrict_eax 8 15
 
 let lift_aad imm =

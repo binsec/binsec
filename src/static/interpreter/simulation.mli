@@ -22,9 +22,6 @@
 val is_enabled : unit -> bool
 
 module Logger : Logger.S
-
 module MemoryFile : Cli.STRING_OPT
-
 module InitFile : Cli.STRING_OPT
-
 module Directives : Cli.GENERIC with type t = Directive.t list

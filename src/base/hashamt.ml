@@ -23,51 +23,33 @@ module type HashedType = sig
   type t
 
   val equal : t -> t -> bool
-
   val hash : t -> int
 end
 
 module type S = sig
   type key
-
   type 'a t
 
   val empty : 'a t
-
   val is_empty : 'a t -> bool
-
   val singleton : key -> 'a -> 'a t
-
   val add : key -> 'a -> 'a t -> 'a t
-
   val remove : key -> 'a t -> 'a t
-
   val mem : key -> 'a t -> bool
-
   val find : key -> 'a t -> 'a
-
   val union : (key -> 'a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
-
   val join : (key -> 'a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
-
   val fold : (key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
-
   val iter : (key -> 'a -> unit) -> 'a t -> unit
-
   val map : ('a -> 'b) -> 'a t -> 'b t
-
   val mapi : (key -> 'a -> 'b) -> 'a t -> 'b t
-
   val cardinal : 'a t -> int
-
   val bindings : 'a t -> (key * 'a) list
 end
 
 module Make (Key : HashedType) : S with type key = Key.t = struct
   let size = 32
-
   let shift = 5
-
   let prefix = 0b11111
 
   type key = Key.t
@@ -82,9 +64,7 @@ module Make (Key : HashedType) : S with type key = Key.t = struct
       List.filter (fun (k, _) -> not (Key.equal key k)) t
 
     let mem key t : bool = List.mem_assoc key t
-
     let find key t : 'a = List.assoc key t
-
     let fold f t b : 'b = List.fold_left (fun b (k, v) -> f k v b) b t
 
     let union f b b' : 'a t =
@@ -121,7 +101,6 @@ module Make (Key : HashedType) : S with type key = Key.t = struct
 
   module Knot = struct
     let select i = 1 lsl i [@@inline]
-
     let mask i = (1 lsl i) - 1 [@@inline]
 
     let popcnt i =
@@ -135,14 +114,11 @@ module Make (Key : HashedType) : S with type key = Key.t = struct
         (i land 0x0f0f0f0f0f0f0f0f) + ((i lsr 4) land 0x0f0f0f0f0f0f0f0f)
       in
       (i * 0x0101010101010101) lsr (64 - 8)
-      [@@inlined]
+    [@@inlined]
 
     let mem x b : bool = b land select x != 0 [@@inlined]
-
     let get x v b : 'a = v.(popcnt (b land mask x)) [@@inlined]
-
     let set x a v b : unit = v.(popcnt (b land mask x)) <- a [@@inlined]
-
     let single x a = Knot ([| a |], select x)
 
     let add x a v b =
@@ -204,9 +180,7 @@ module Make (Key : HashedType) : S with type key = Key.t = struct
   end
 
   let empty = Empty
-
   let is_empty = function Empty -> true | _ -> false
-
   let singleton k a = Item (k, a, Key.hash k)
 
   let rec recadd d k a h t =
@@ -514,10 +488,7 @@ module Make (Key : HashedType) : S with type key = Key.t = struct
       () [ t ]
 
   let cardinal t = recfold (fun _ _ c -> c + 1) 0 [ t ]
-
   let bindings t = recfold (fun k' a' b -> (k', a') :: b) [] [ t ]
-
   let map f t = recfold (fun k' a' t' -> add k' (f a') t') Empty [ t ]
-
   let mapi f t = recfold (fun k' a' t' -> add k' (f k' a') t') Empty [ t ]
 end

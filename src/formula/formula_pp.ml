@@ -81,17 +81,11 @@ let pp_bvcomp ppf = function
   | BvSgt -> fprintf ppf "bvsgt"
 
 let print_bv_unop = Print_utils.string_from_pp pp_bvunop
-
 let print_bv_bnop = Print_utils.string_from_pp pp_bvbnop
-
 let print_bv_comp = Print_utils.string_from_pp pp_bvcomp
-
 let pp_bl_term ppf bl = Smtlib_pp.pp_term ppf (Formula_to_smtlib.bl_term bl)
-
 let pp_bv_term ppf bv = Smtlib_pp.pp_term ppf (Formula_to_smtlib.bv_term bv)
-
 let pp_ax_term ppf ax = Smtlib_pp.pp_term ppf (Formula_to_smtlib.ax_term ax)
-
 let pp_term ppf tm = Smtlib_pp.pp_term ppf (Formula_to_smtlib.term tm)
 
 let pp_entry ppf en =
@@ -108,11 +102,8 @@ let pp_formula ppf fm =
   Format.pp_close_box ppf ()
 
 let print_bv_term e = Print_utils.string_from_pp pp_bv_term e
-
 let print_ax_term e = Print_utils.string_from_pp pp_ax_term e
-
 let print_bl_term e = Print_utils.string_from_pp pp_bl_term e
-
 let bl_to_string name = Printf.sprintf "(declare-fun %s () Bool" name
 
 let bv_to_string name size =

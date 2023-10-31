@@ -23,21 +23,15 @@ module type Monad = sig
   type 'a m
 
   val return : 'a -> 'a m
-
   val bind : 'a m -> ('a -> 'b m) -> 'b m
 end
 
 module Monadic_Arity (M : Monad) : sig
   type 'a m = 'a M.m
-
   type 'r ar0 = 'r m
-
   type ('a, 'r) ar1 = 'a -> 'r m
-
   type ('a, 'b, 'r) ar2 = 'a -> 'b -> 'r m
-
   type ('a, 'b, 'c, 'r) ar3 = 'a -> 'b -> 'c -> 'r m
-
   type ('a, 'r) variadic = 'a list -> 'r m
 end
 
@@ -45,7 +39,6 @@ module type Expr_Input = sig
   module M : Monad
 
   type boolean
-
   type binary
 
   module Binary : sig
@@ -64,13 +57,9 @@ module type Expr_Input = sig
   end
 
   val bin_of_bool : boolean -> binary M.m
-
   val bool_of_bin : binary -> boolean M.m
-
   val ite : boolean -> binary -> binary -> binary M.m
-
   val get_var : size:int -> string -> binary M.m
-
   val load : size:int -> Machine.endianness -> binary -> binary M.m
 
   (* Block executions for which the boolean is false. *)
@@ -89,7 +78,6 @@ module type Instr_Input = sig
   include Expr_Input with module M := State_Monad(State)
 
   val unknown : size:int -> binary State_Monad(State).m
-
   val undef : size:int -> binary State_Monad(State).m
 
   (* Note: could return a unit State_Monad(State).m instead, but this

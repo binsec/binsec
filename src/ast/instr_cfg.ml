@@ -23,9 +23,7 @@ module Key = struct
   type t = Virtual_address.t
 
   let compare a1 a2 = compare a1 a2
-
   let hash (a : t) = (a :> int)
-
   let equal a1 a2 = a1 = a2
 end
 
@@ -33,7 +31,6 @@ module Value = struct
   type t = Instruction.t
 
   let hash (i : t) = (i.Instruction.address :> int)
-
   let equal i1 i2 = i1 = i2
 end
 
@@ -66,9 +63,7 @@ module Make (H : Hashtbl.HashedType) = struct
     type t = block
 
     let compare b1 b2 = V.compare b1.leader b2.leader
-
     let hash b = V.hash b.leader
-
     let equal b1 b2 = V.equal b1.leader b2.leader
   end)
 
@@ -76,7 +71,6 @@ module Make (H : Hashtbl.HashedType) = struct
   module H = Hashtbl.Make (V)
 
   let get_pred t v = match pred t v with [ v ] -> Some v | _ -> None
-
   let get_succ t v = match succ t v with [ v ] -> Some v | _ -> None
 
   let rec compare_preds_succs g v pred succ =
@@ -170,17 +164,11 @@ module Make (H : Hashtbl.HashedType) = struct
         include D
 
         let graph_attributes _ = []
-
         let default_vertex_attributes _ = [ `Shape `Plaintext ]
-
         let vertex_name b = Printf.sprintf "%i" (Hashtbl.hash b)
-
         let vertex_attributes b = [ `HtmlLabel (html_block ca b) ]
-
         let get_subgraph _ = None
-
         let default_edge_attributes _ = []
-
         let edge_attributes _ = [ `Minlen 1 ]
       end)
     end in
@@ -191,7 +179,6 @@ module Make (H : Hashtbl.HashedType) = struct
       include G
 
       let graph_attributes _ = []
-
       let default_vertex_attributes _ = []
 
       let vertex_name v =
@@ -204,11 +191,8 @@ module Make (H : Hashtbl.HashedType) = struct
           v
 
       let vertex_attributes _ = []
-
       let get_subgraph _ = None
-
       let default_edge_attributes _ = []
-
       let edge_attributes _ = []
     end) in
     Dot.output_graph oc g
@@ -238,7 +222,6 @@ module S = struct
   type t = string
 
   let hash s = Hashtbl.hash s
-
   let equal s1 s2 = s1 = s2
 end
 

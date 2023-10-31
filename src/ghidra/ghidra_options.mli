@@ -20,7 +20,5 @@
 (**************************************************************************)
 
 include Cli.S
-
 module Runner : Cli.STRING_OPT
-
 module Cache : Cli.STRING_OPT

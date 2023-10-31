@@ -28,9 +28,7 @@ end
 type t = Formula_options.solver
 
 val pp : Format.formatter -> t -> unit
-
 val is_boolector : t -> bool
-
 val is_yices : t -> bool
 
 val ping : t -> bool
@@ -40,5 +38,4 @@ val name_of : t -> string
 (** {2 Accessors} *)
 
 val command : ?incremental:bool -> int -> t -> Command.t
-
 val timeout_s : int -> t -> int

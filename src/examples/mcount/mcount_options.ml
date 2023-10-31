@@ -21,14 +21,11 @@
 
 include Cli.Make (struct
   let shortname = "mcount"
-
   let name = "Plugin example (Mnemonic count)"
 end)
 
 module Limit = Builder.Integer (struct
   let name = "limit"
-
   let doc = " Only print the <n> most frequent mnemonics"
-
   let default = 5
 end)

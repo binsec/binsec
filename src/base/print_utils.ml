@@ -22,7 +22,6 @@
 open Format
 
 type sformat = (unit, Format.formatter, unit) format
-
 type 'a formatter = Format.formatter -> 'a -> unit
 
 (* The empty format [ef] string *)

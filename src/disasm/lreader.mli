@@ -22,7 +22,6 @@
 (** Basic stream reader *)
 
 type byte = int
-
 type t
 
 (** {7 Constructors} *)
@@ -36,9 +35,7 @@ val of_zero_extend_buffer :
   ?endianness:Machine.endianness -> ?at:int -> Loader_buf.t -> t
 
 val of_nibbles : ?endianness:Machine.endianness -> ?at:int -> string -> t
-
 val of_bytes : ?endianness:Machine.endianness -> ?at:int -> string -> t
-
 val of_binstream : ?endianness:Machine.endianness -> ?at:int -> Binstream.t -> t
 
 (** {7 Pretty-printer} *)
@@ -68,23 +65,14 @@ module type Accessor = sig
 
   (* read a signed int *)
   val i8 : t -> int
-
   val u16 : t -> int
-
   val i16 : t -> int
-
   val i32 : t -> int32
-
   val i64 : t -> int64
-
   val bv8 : t -> Bitvector.t
-
   val bv16 : t -> Bitvector.t
-
   val bv32 : t -> Bitvector.t
-
   val bv64 : t -> Bitvector.t
-
   val read : t -> int -> Bitvector.t
 end
 

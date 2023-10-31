@@ -37,18 +37,14 @@ val stop : t
 (** A simple dhunk of one instruction stopping with an [OK] [Dba.state] *)
 
 val is_empty : t -> bool
-
 val init : int -> (int -> Dba.Instr.t) -> t
-
 val singleton : Dba.Instr.t -> t
 
 val goto : Virtual_address.t -> t
 (** A simple dhunk of one instruction jumping to the virtual address. *)
 
 val length : t -> int
-
 val inst : t -> int -> Dba.Instr.t option
-
 val inst_exn : t -> int -> Dba.Instr.t
 
 val start : t -> int
@@ -58,9 +54,7 @@ val exits : t -> int list
 (** [exits b] are the instruction indexes which end the block [b] *)
 
 val copy : t -> t
-
 val iter : f:(Dba.Instr.t -> unit) -> t -> unit
-
 val iteri : f:(int -> Dba.Instr.t -> unit) -> t -> unit
 
 val of_list : Dba.Instr.t list -> t
@@ -72,13 +66,9 @@ val of_labelled_list : (int * Dba.Instr.t) list -> t
     block, i.e. the labels are contiguous starting from 0. *)
 
 val mapi : f:(int -> Dba.Instr.t -> Dba.Instr.t) -> t -> t
-
 val flatten : t -> (int * Dba.Instr.t) list
-
 val to_list : t -> Dba.Instr.t list
-
 val fold : ('a -> Dba.Instr.t -> 'a) -> 'a -> t -> 'a
-
 val for_all : (Dba.Instr.t -> bool) -> t -> bool
 
 val unlink : t -> int -> unit
@@ -94,7 +84,6 @@ val export_and_view : ?cmd:string -> t -> unit
 *)
 
 val pred : t -> int -> int list
-
 val succ : t -> int -> int list
 
 val optimize : ?inplace:bool -> t -> t
@@ -157,7 +146,5 @@ type conditional = {
 }
 
 val conditional : t -> conditional option
-
 val constant_propagation : t -> t
-
 val dead_code_elimination : t -> t

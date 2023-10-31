@@ -47,32 +47,32 @@ module Column = struct
     Format.pp_print_string ppf t.left_border;
     let l = String.length s in
     (if k < l then (
-     for i = 0 to k - 4 do
-       Format.pp_print_char ppf (String.get s i)
-     done;
-     for _ = 1 to min 3 k do
-       Format.pp_print_char ppf '.'
-     done)
-    else
-      match t.align with
-      | L ->
-          Format.pp_print_string ppf s;
-          for _ = 1 to k - l do
-            Format.pp_print_char ppf ' '
-          done
-      | C ->
-          for _ = 1 to (k - l) / 2 do
-            Format.pp_print_char ppf ' '
-          done;
-          Format.pp_print_string ppf s;
-          for _ = 1 to (k - l + 1) / 2 do
-            Format.pp_print_char ppf ' '
-          done
-      | R ->
-          for _ = 1 to k - l do
-            Format.pp_print_char ppf ' '
-          done;
-          Format.pp_print_string ppf s);
+       for i = 0 to k - 4 do
+         Format.pp_print_char ppf (String.get s i)
+       done;
+       for _ = 1 to min 3 k do
+         Format.pp_print_char ppf '.'
+       done)
+     else
+       match t.align with
+       | L ->
+           Format.pp_print_string ppf s;
+           for _ = 1 to k - l do
+             Format.pp_print_char ppf ' '
+           done
+       | C ->
+           for _ = 1 to (k - l) / 2 do
+             Format.pp_print_char ppf ' '
+           done;
+           Format.pp_print_string ppf s;
+           for _ = 1 to (k - l + 1) / 2 do
+             Format.pp_print_char ppf ' '
+           done
+       | R ->
+           for _ = 1 to k - l do
+             Format.pp_print_char ppf ' '
+           done;
+           Format.pp_print_string ppf s);
     Format.fprintf ppf "%s" t.right_border
 end
 

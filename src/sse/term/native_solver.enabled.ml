@@ -32,14 +32,11 @@ let byte_size = Natural.to_int Basic_types.Constants.bytesize
 
 module Solver () : Solver_sig.S = struct
   module Solver = Bitwuzla.Incremental ()
-
   module T = Term
   open Solver
 
   type nonrec result = result = Sat | Unsat | Unknown
-
   type memory = (bv, bv) ar term
-
   type nonrec term = bv term
 
   module Context = struct
@@ -196,9 +193,7 @@ module Solver () : Solver_sig.S = struct
     e
 
   let iter_free_variables f = StTbl.iter f ctx.fvariables
-
   let iter_free_arrays f = StTbl.iter f ctx.farrays
-
   let get e = BvTbl.find ctx.bv_cons e
 
   let set_memory ~addr value =
@@ -223,10 +218,7 @@ module Solver () : Solver_sig.S = struct
       assignment
 
   let get_value x = Term.Bv.assignment (get_value x)
-
   let timeout = Formula_options.Solver.Timeout.get ()
-
   let check_sat () = Smt_bitwuzla_utils.watchdog ~timeout check_sat ()
-
   let close () = unsafe_close ()
 end

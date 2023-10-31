@@ -35,7 +35,6 @@
 open Smtlib_options
 
 type address = Bitvector.t
-
 type identifier = string
 
 module Stbl = Basic_types.String.Htbl
@@ -52,9 +51,7 @@ module Memory = struct
   type t = { map : Bitvector.t H.t; mutable default : Bitvector.t option }
 
   let create ?default length = { map = H.create length; default }
-
   let empty () = create 7
-
   let add t address value = H.add t.map address value
 
   let find t address =
@@ -63,7 +60,6 @@ module Memory = struct
     | exception Not_found -> t.default
 
   let has_value t address = H.mem t.map address
-
   let addresses t = H.fold (fun k _ l -> k :: l) t.map []
 
   let bindings t =
@@ -145,11 +141,8 @@ let create ?(len = 43) () =
   { memory = Memory.empty (); variables = Basic_types.String.Htbl.create len }
 
 let empty = create ~len:1 ()
-
 let add_var t name bv = Basic_types.String.Htbl.replace t.variables name bv
-
 let add_memcell t = Memory.add t.memory
-
 let add_default t bv = Memory.set_default t.memory bv
 
 let find_variable t name =
@@ -158,13 +151,9 @@ let find_variable t name =
   | exception Not_found -> None
 
 let find_address_contents t = Memory.find t.memory
-
 let find_address_content _ _ _ _ = assert false
-
 let is_memory_set t = Memory.has_value t.memory
-
 let memory_addresses t = Memory.addresses t.memory
-
 let memory_bindings t = Memory.bindings t.memory
 
 let variables t =
@@ -362,11 +351,8 @@ let is_string s qid =
   | QualIdentifierAs _ -> false
 
 let is_ite = is_string "ite"
-
 let is_eq = is_string "="
-
 let is_store = is_string "store"
-
 let is_as_const = is_as "const"
 
 let extract_address eqterm =

@@ -30,7 +30,6 @@ module Share = Weak.Make (struct
   include Dba.Instr
 
   let equal = ( = )
-
   let hash = Hashtbl.hash
 end)
 
@@ -40,9 +39,7 @@ module G : sig
   include Graph.Sig.G with type t = t and type V.t = int
 
   val empty : t
-
   val singleton : Dba.Instr.t -> t
-
   val init : int -> (int -> Dba.Instr.t) -> t
 end = struct
   type nonrec t = t
@@ -99,15 +96,12 @@ end = struct
     type t = int
 
     let compare a b = a - b
-
     let equal a b = a == b
-
     let hash = Fun.id
 
     type label = t
 
     let create = Fun.id
-
     let label = Fun.id
   end
 
@@ -122,22 +116,18 @@ end = struct
     type vertex = V.t
 
     let src = fst
-
     let dst = snd
 
     type label = unit
 
     let create src () dst = (src, dst)
-
     let label _ = ()
   end
 
   type edge = E.t
 
   let is_directed = true
-
   let is_empty = function { instructions = [||]; _ } -> true | _ -> false
-
   let nb_vertex { instructions; _ } = Array.length instructions
 
   let nb_edges { predecessors; _ } =
@@ -155,7 +145,6 @@ end = struct
         1
 
   let in_degree { predecessors; _ } v = List.length predecessors.(v)
-
   let mem_vertex { instructions; _ } v = v < Array.length instructions
 
   let mem_edge { instructions; _ } src dst =
@@ -196,9 +185,7 @@ end = struct
         [ fallthrough ]
 
   let pred { predecessors; _ } v = predecessors.(v)
-
   let succ_e t v = List.map (fun dst -> (v, dst)) (succ t v)
-
   let pred_e t v = List.map (fun src -> (src, v)) (pred t v)
 
   let iter_vertex f { instructions; _ } =
@@ -252,7 +239,6 @@ end = struct
       loop instructions f (Array.length instructions) 0 x
 
   let iter_edges_e f t = iter_edges (fun src dst -> f (src, dst)) t
-
   let fold_edges_e f t x = fold_edges (fun src dst x -> f (src, dst) x) t x
 
   let map_vertex f { instructions; _ } =
@@ -340,19 +326,12 @@ let stop_ok = Share.merge share (Dba.Instr.stop (Some Dba.OK))
 
 (* pred and succ are aliases *)
 let pred = G.pred
-
 let succ = G.succ
-
 let empty = G.empty
-
 let stop = G.singleton stop_ok
-
 let inst_exn { instructions; _ } n = instructions.(n)
-
 let inst g n = try Some (inst_exn g n) with Invalid_argument _ -> None
-
 let init = G.init
-
 let singleton = G.singleton
 
 let goto vaddr =
@@ -387,15 +366,10 @@ let unlink { instructions; predecessors; _ } i =
     Array.set instructions i stop_ok
 
 let length = G.nb_vertex
-
 let is_empty = G.is_empty
-
 let start _ = 0
-
 let exits { exits; _ } = exits
-
 let beginning_inst g = inst_exn g 0
-
 let fold f acc { instructions; _ } = Array.fold_left f acc instructions
 
 let of_list l =
@@ -415,9 +389,7 @@ let flatten { instructions; _ } =
     [] instructions
 
 let to_list { instructions; _ } = Array.to_list instructions
-
 let iteri ~f { instructions; _ } = Array.iteri f instructions
-
 let iter ~f g = iteri ~f:(fun _ inst -> f inst) g
 
 let copy { instructions; predecessors; exits } =
@@ -562,17 +534,12 @@ let optimize ?(inplace = false) t =
   in
   let module Analyze = struct
     type data = Var.Set.t
-
     type edge = G.E.t
-
     type vertex = G.E.vertex
-
     type g = G.t
 
     let direction = Graph.Fixpoint.Backward
-
     let join = Var.Set.union
-
     let equal = Var.Set.equal
 
     let analyze e d =
@@ -650,12 +617,12 @@ let optimize ?(inplace = false) t =
                 (o, associate o (associate o u i addr) i exp)
             | Undef (Var var, _) | Nondet (Var var, _) ->
                 (Var.Map.remove var o, u)
-            | Undef (Restrict (var, _), _) | Nondet (Restrict (var, _), _) -> (
+            | Undef (Restrict (var, _), _) | Nondet (Restrict (var, _), _) ->
                 ( Var.Map.remove var o,
                   try
                     let j = Var.Map.find var o in
                     Int.Map.add j None u
-                  with Not_found -> u ))
+                  with Not_found -> u )
             | Undef (Store (_, _, addr, _), _)
             | Nondet (Store (_, _, addr, _), _) ->
                 (o, associate o u i addr)
@@ -770,7 +737,6 @@ let export_to_file g =
     include G
 
     let graph_attributes _g = []
-
     let default_vertex_attributes _ = [ `Shape `Box ]
 
     let vertex_name v =
@@ -778,11 +744,8 @@ let export_to_file g =
         (inst_exn g v)
 
     let vertex_attributes _v = []
-
     let get_subgraph _ = None
-
     let default_edge_attributes _ = []
-
     let edge_attributes _ = []
   end in
   let module D = Graph.Graphviz.Dot (C_dot) in
@@ -866,16 +829,13 @@ module Check = struct
         (G)
         (struct
           type g = G.t
-
           type edge = G.E.t
-
           type vertex = G.V.t
 
           (* fact = reachable flag * defined temporaries *)
           type data = bool * Basic_types.String.Set.t
 
           let direction = Graph.Fixpoint.Forward
-
           let join (r, s) (r', s') = (r || r', Basic_types.String.Set.union s s')
 
           let equal (r, s) (r', s') =

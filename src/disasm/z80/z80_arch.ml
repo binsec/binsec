@@ -108,23 +108,14 @@ let f, sf, zf, yf, hf, xf, pf, vf, nf, cf =
     mk 0 "CF" )
 
 let (D { hi = b; lo = c; _ }) = bc
-
 let (D { hi = d; lo = e; _ }) = de
-
 let (D { hi = h; lo = l; _ }) = hl
-
 let a' = r8 "A'"
-
 let f' = r8 "F'"
-
 let (D { hi = b'; lo = c'; _ }) = bc'
-
 let (D { hi = d'; lo = e'; _ }) = de'
-
 let (D { hi = h'; lo = l'; _ }) = hl'
-
 let i = r8 "I"
-
 let r = r8 "R"
 
 let ifft1, ifft2 =
@@ -135,7 +126,6 @@ let ifft1, ifft2 =
   (mk "ifft1", mk "ifft2")
 
 let (D { hi = ixh; lo = ixl; _ }) = ix
-
 let (D { hi = iyh; lo = iyl; _ }) = iy
 
 let name : type a. a t -> string = function
@@ -150,21 +140,13 @@ let lval : type a. a t -> L.t = function
   | F { loc; _ } | S { loc; _ } | D { loc; _ } -> loc
 
 let var (D { var; _ }) = var
-
 let hi (D { hi; _ }) = hi
-
 let lo (D { lo; _ }) = lo
-
 let mem (D { mem; _ }) = mem
-
 let store1 (D { store1; _ }) = store1
-
 let store2 (D { store2; _ }) = store2
-
 let load1 (D { load1; _ }) = load1
-
 let load2 (D { load2; _ }) = load2
-
 let flags = [| sf; zf; hf; nf; cf; ifft1; ifft2 |]
 
 let registers8 =

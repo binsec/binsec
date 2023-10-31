@@ -21,14 +21,11 @@
 
 module type ARCH = sig
   val get_defs : unit -> (string * Dba.LValue.t) list
-
-  val get_arg : int -> Dba.Expr.t
-
+  val get_arg : ?syscall:bool -> int -> Dba.Expr.t
   val get_ret : ?syscall:bool -> unit -> Dba.LValue.t
-
   val make_return : ?value:Dba.Expr.t -> unit -> Dhunk.t
-
   val get_stack_pointer : unit -> Dba.Var.t * Bitvector.t
+  val get_shortlived_flags : unit -> Dba.Var.t list
 
   val core :
     Loader_elf.Img.t -> Virtual_address.t * (Dba.Var.t * Dba.Expr.t) list
@@ -40,85 +37,49 @@ module X86 : ARCH = struct
   let info = Dba.Var.Tag.Register
 
   let eax = Dba.Var.create "eax" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and ebx = Dba.Var.create "ebx" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and ecx = Dba.Var.create "ecx" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and edx = Dba.Var.create "edx" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and edi = Dba.Var.create "edi" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and esi = Dba.Var.create "esi" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and esp = Dba.Var.create "esp" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and ebp = Dba.Var.create "ebp" ~bitsize:Size.Bit.bits32 ~tag:info
 
   let cs = Dba.Var.create "cs" ~bitsize:Size.Bit.bits16 ~tag:info
-
   and ds = Dba.Var.create "ds" ~bitsize:Size.Bit.bits16 ~tag:info
-
   and es = Dba.Var.create "es" ~bitsize:Size.Bit.bits16 ~tag:info
-
   and fs = Dba.Var.create "fs" ~bitsize:Size.Bit.bits16 ~tag:info
-
   and gs = Dba.Var.create "gs" ~bitsize:Size.Bit.bits16 ~tag:info
-
   and gs_base = Dba.Var.create "gs_base" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and ss = Dba.Var.create "ss" ~bitsize:Size.Bit.bits16 ~tag:info
 
   let xmm0 = Dba.Var.create "xmm0" ~bitsize:Size.Bit.bits128 ~tag:info
-
   and xmm1 = Dba.Var.create "xmm1" ~bitsize:Size.Bit.bits128 ~tag:info
-
   and xmm2 = Dba.Var.create "xmm2" ~bitsize:Size.Bit.bits128 ~tag:info
-
   and xmm3 = Dba.Var.create "xmm3" ~bitsize:Size.Bit.bits128 ~tag:info
-
   and xmm4 = Dba.Var.create "xmm4" ~bitsize:Size.Bit.bits128 ~tag:info
-
   and xmm5 = Dba.Var.create "xmm5" ~bitsize:Size.Bit.bits128 ~tag:info
-
   and xmm6 = Dba.Var.create "xmm6" ~bitsize:Size.Bit.bits128 ~tag:info
-
   and xmm7 = Dba.Var.create "xmm7" ~bitsize:Size.Bit.bits128 ~tag:info
 
   let info = Dba.Var.Tag.Flag
 
   let cf = Dba.Var.create "CF" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and pf = Dba.Var.create "PF" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and af = Dba.Var.create "AF" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and zf = Dba.Var.create "ZF" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and sf = Dba.Var.create "SF" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and tf = Dba.Var.create "TF" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and if' = Dba.Var.create "IF" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and df = Dba.Var.create "DF" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and of' = Dba.Var.create "OF" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and iopl = Dba.Var.create "IOPL" ~bitsize:Size.Bit.bits2 ~tag:info
-
   and nt = Dba.Var.create "NT" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and rf = Dba.Var.create "RF" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and vm = Dba.Var.create "VM" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and ac = Dba.Var.create "AC" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and vif = Dba.Var.create "VIF" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and vip = Dba.Var.create "VIP" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and id = Dba.Var.create "ID" ~bitsize:Size.Bit.bits1 ~tag:info
 
   let defs =
@@ -174,6 +135,8 @@ module X86 : ARCH = struct
       ("xmm7", Dba.LValue.restrict xmm7 0 127);
     ]
 
+  let shortlived_flags = [ cf; pf; af; zf; sf; of' ]
+  let get_shortlived_flags () = shortlived_flags
   let get_defs () = defs
 
   let notes img =
@@ -332,6 +295,15 @@ module X86 : ARCH = struct
                   (id, rid);
                 ]
                 defs )
+        | { Loader_elf.Note.name = "CORE"; kind = 2; offset = at; _ } ->
+            let cursor = Lreader.create ~at Loader_elf.read_offset img in
+            Lreader.advance cursor 0xa0;
+            ( entrypoint,
+              List.fold_left
+                (fun defs reg ->
+                  (reg, Dba.Expr.constant (Lreader.Read.read cursor 16)) :: defs)
+                defs
+                [ xmm0; xmm1; xmm2; xmm3; xmm4; xmm5; xmm6; xmm7 ] )
         | { Loader_elf.Note.name = "PIN"; kind = 0; offset = at; _ } ->
             let cursor = Loader_elf.Img.cursor ~at img in
             let rgs_base =
@@ -344,21 +316,33 @@ module X86 : ARCH = struct
       (Loader_elf.notes img)
 
   let core = notes
-
   let ret = Dba.LValue.v eax
 
   let esp_l = Dba.LValue.v esp
-
   and esp_r = Dba.Expr.v esp
-
   and eax_l = Dba.LValue.v eax
-
+  and ebx_r = Dba.Expr.v ebx
+  and ecx_r = Dba.Expr.v ecx
+  and edx_r = Dba.Expr.v edx
+  and esi_r = Dba.Expr.v esi
+  and edi_r = Dba.Expr.v edi
+  and ebp_r = Dba.Expr.v ebp
   and four = Dba.Expr.constant (Bitvector.of_int ~size:32 4)
 
-  let get_arg i =
-    Dba.Expr.load Size.Byte.four LittleEndian
-      (Dba.Expr.add esp_r
-         (Dba.Expr.constant (Bitvector.of_int ~size:32 (4 * (i + 1)))))
+  let get_arg ?(syscall = false) i =
+    if syscall then
+      match i with
+      | 0 -> ebx_r
+      | 1 -> ecx_r
+      | 2 -> edx_r
+      | 3 -> esi_r
+      | 4 -> edi_r
+      | 5 -> ebp_r
+      | _ -> raise (Invalid_argument "syscall")
+    else
+      Dba.Expr.load Size.Byte.four LittleEndian
+        (Dba.Expr.add esp_r
+           (Dba.Expr.constant (Bitvector.of_int ~size:32 (4 * (i + 1)))))
 
   let get_ret ?syscall:_ () = ret
 
@@ -384,7 +368,6 @@ module X86 : ARCH = struct
     | Some value -> val_return value
 
   let get_stack_pointer () = (esp, Bitvector.of_int ~size:32 0xfff00000)
-
   let max_instruction_len = Size.Byte.fifteen
 end
 
@@ -392,119 +375,66 @@ module AMD64 : ARCH = struct
   let info = Dba.Var.Tag.Register
 
   let rax = Dba.Var.create "rax" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and rbx = Dba.Var.create "rbx" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and rcx = Dba.Var.create "rcx" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and rdx = Dba.Var.create "rdx" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and rdi = Dba.Var.create "rdi" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and rsi = Dba.Var.create "rsi" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and rsp = Dba.Var.create "rsp" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and rbp = Dba.Var.create "rbp" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r8 = Dba.Var.create "r8" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r9 = Dba.Var.create "r9" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r10 = Dba.Var.create "r10" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r11 = Dba.Var.create "r11" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r12 = Dba.Var.create "r12" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r13 = Dba.Var.create "r13" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r14 = Dba.Var.create "r14" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r15 = Dba.Var.create "r15" ~bitsize:Size.Bit.bits64 ~tag:info
 
   let cs = Dba.Var.create "cs" ~bitsize:Size.Bit.bits16 ~tag:info
-
   and ds = Dba.Var.create "ds" ~bitsize:Size.Bit.bits16 ~tag:info
-
   and es = Dba.Var.create "es" ~bitsize:Size.Bit.bits16 ~tag:info
-
   and fs = Dba.Var.create "fs" ~bitsize:Size.Bit.bits16 ~tag:info
-
   and gs = Dba.Var.create "gs" ~bitsize:Size.Bit.bits16 ~tag:info
-
   and ss = Dba.Var.create "ss" ~bitsize:Size.Bit.bits16 ~tag:info
-
   and fs_base = Dba.Var.create "fs_base" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and gs_base = Dba.Var.create "gs_base" ~bitsize:Size.Bit.bits64 ~tag:info
 
   let ymm0 = Dba.Var.create "ymm0" ~bitsize:Size.Bit.bits256 ~tag:info
-
   and ymm1 = Dba.Var.create "ymm1" ~bitsize:Size.Bit.bits256 ~tag:info
-
   and ymm2 = Dba.Var.create "ymm2" ~bitsize:Size.Bit.bits256 ~tag:info
-
   and ymm3 = Dba.Var.create "ymm3" ~bitsize:Size.Bit.bits256 ~tag:info
-
   and ymm4 = Dba.Var.create "ymm4" ~bitsize:Size.Bit.bits256 ~tag:info
-
   and ymm5 = Dba.Var.create "ymm5" ~bitsize:Size.Bit.bits256 ~tag:info
-
   and ymm6 = Dba.Var.create "ymm6" ~bitsize:Size.Bit.bits256 ~tag:info
-
   and ymm7 = Dba.Var.create "ymm7" ~bitsize:Size.Bit.bits256 ~tag:info
-
   and ymm8 = Dba.Var.create "ymm8" ~bitsize:Size.Bit.bits256 ~tag:info
-
   and ymm9 = Dba.Var.create "ymm9" ~bitsize:Size.Bit.bits256 ~tag:info
-
   and ymm10 = Dba.Var.create "ymm10" ~bitsize:Size.Bit.bits256 ~tag:info
-
   and ymm11 = Dba.Var.create "ymm11" ~bitsize:Size.Bit.bits256 ~tag:info
-
   and ymm12 = Dba.Var.create "ymm12" ~bitsize:Size.Bit.bits256 ~tag:info
-
   and ymm13 = Dba.Var.create "ymm13" ~bitsize:Size.Bit.bits256 ~tag:info
-
   and ymm14 = Dba.Var.create "ymm14" ~bitsize:Size.Bit.bits256 ~tag:info
-
   and ymm15 = Dba.Var.create "ymm15" ~bitsize:Size.Bit.bits256 ~tag:info
 
   let info = Dba.Var.Tag.Flag
 
   let cf = Dba.Var.create "cf" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and pf = Dba.Var.create "pf" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and af = Dba.Var.create "af" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and zf = Dba.Var.create "zf" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and sf = Dba.Var.create "sf" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and tf = Dba.Var.create "tf" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and if' = Dba.Var.create "if" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and df = Dba.Var.create "df" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and of' = Dba.Var.create "of" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and iopl = Dba.Var.create "iopl" ~bitsize:Size.Bit.bits2 ~tag:info
-
   and nt = Dba.Var.create "nt" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and rf = Dba.Var.create "rf" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and vm = Dba.Var.create "vm" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and ac = Dba.Var.create "ac" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and vif' = Dba.Var.create "vif" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and vip = Dba.Var.create "vip" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and id = Dba.Var.create "id" ~bitsize:Size.Bit.bits1 ~tag:info
 
   let defs =
@@ -636,204 +566,276 @@ module AMD64 : ARCH = struct
       ("id", Dba.LValue.v id);
     ]
 
+  let shortlived_flags = [ cf; pf; af; zf; sf; of' ]
+  let get_shortlived_flags () = shortlived_flags
   let get_defs () = defs
 
+  let ymmx =
+    [
+      ymm0;
+      ymm1;
+      ymm2;
+      ymm3;
+      ymm4;
+      ymm5;
+      ymm6;
+      ymm7;
+      ymm8;
+      ymm9;
+      ymm10;
+      ymm11;
+      ymm12;
+      ymm13;
+      ymm14;
+      ymm15;
+    ]
+
   let notes img =
-    Array.fold_left
-      (fun result -> function
-        | { Loader_elf.Note.name = "CORE"; kind = 1; offset = at; _ } ->
-            let cursor = Lreader.create ~at Loader_elf.read_offset img in
-            Lreader.advance cursor 0x70;
-            let vr15 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
-            let vr14 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
-            let vr13 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
-            let vr12 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
-            let vrbp = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
-            let vrbx = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
-            let vr11 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
-            let vr10 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
-            let vr9 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
-            let vr8 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
-            let vrax = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
-            let vrcx = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
-            let vrdx = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
-            let vrsi = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
-            let vrdi = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
-            Lreader.advance cursor 8;
-            let vrip =
-              Virtual_address.of_bitvector (Lreader.Read.bv64 cursor)
-            in
-            let vcs =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:16 (Lreader.Read.u16 cursor))
-            in
-            Lreader.advance cursor 6;
-            let rflags_15_0 = Lreader.Read.u16 cursor in
-            let rflags_31_16 = Lreader.Read.u16 cursor in
-            Lreader.advance cursor 4;
-            let vrsp = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
-            let vss =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:16 (Lreader.Read.u16 cursor))
-            in
-            Lreader.advance cursor 6;
-            let vfs_base = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
-            let vgs_base = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
-            let vds =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:16 (Lreader.Read.u16 cursor))
-            in
-            Lreader.advance cursor 6;
-            let ves =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:16 (Lreader.Read.u16 cursor))
-            in
-            Lreader.advance cursor 6;
-            let vfs =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:16 (Lreader.Read.u16 cursor))
-            in
-            Lreader.advance cursor 6;
-            let vgs =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:16 (Lreader.Read.u16 cursor))
-            in
-            Lreader.advance cursor 6;
-            let vcf =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 0) land 0b1))
-            and vpf =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 2) land 0b1))
-            and vaf =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 4) land 0b1))
-            and vzf =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 6) land 0b1))
-            and vsf =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 7) land 0b1))
-            and vtf =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 8) land 0b1))
-            and vif =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 9) land 0b1))
-            and vdf =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 10) land 0b1))
-            and vof =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 11) land 0b1))
-            and viopl =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:2 ((rflags_15_0 lsr 12) land 0b11))
-            and vnt =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 14) land 0b1))
-            and vrf =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:1 ((rflags_31_16 lsr 0) land 0b1))
-            and vvm =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:1 ((rflags_31_16 lsr 1) land 0b1))
-            and vac =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:1 ((rflags_31_16 lsr 2) land 0b1))
-            and vvif =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:1 ((rflags_31_16 lsr 3) land 0b1))
-            and vvip =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:1 ((rflags_31_16 lsr 4) land 0b1))
-            and vid =
-              Dba.Expr.constant
-                (Bitvector.of_int ~size:1 ((rflags_31_16 lsr 5) land 0b1))
-            in
-            ( vrip,
-              [
-                (r15, vr15);
-                (r14, vr14);
-                (r13, vr13);
-                (r12, vr12);
-                (r11, vr11);
-                (r10, vr10);
-                (r9, vr9);
-                (r8, vr8);
-                (rbx, vrbx);
-                (rcx, vrcx);
-                (rdx, vrdx);
-                (rsi, vrsi);
-                (rdi, vrdi);
-                (rbp, vrbp);
-                (rax, vrax);
-                (rsp, vrsp);
-                (ds, vds);
-                (es, ves);
-                (fs, vfs);
-                (gs, vgs);
-                (cs, vcs);
-                (ss, vss);
-                (fs_base, vfs_base);
-                (gs_base, vgs_base);
-                (cf, vcf);
-                (pf, vpf);
-                (af, vaf);
-                (zf, vzf);
-                (sf, vsf);
-                (tf, vtf);
-                (if', vif);
-                (df, vdf);
-                (of', vof);
-                (iopl, viopl);
-                (nt, vnt);
-                (rf, vrf);
-                (vm, vvm);
-                (ac, vac);
-                (vif', vvif);
-                (vip, vvip);
-                (id, vid);
-              ] )
-        | _ -> result)
-      (Virtual_address.create 0, [])
-      (Loader_elf.notes img)
+    let entrypoint, defs, lymmx, hymmx =
+      Array.fold_left
+        (fun ((entrypoint, defs, lymmx, hymmx) as result) -> function
+          | { Loader_elf.Note.name = "CORE"; kind = 1; offset = at; _ } ->
+              let cursor = Lreader.create ~at Loader_elf.read_offset img in
+              Lreader.advance cursor 0x70;
+              let vr15 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+              let vr14 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+              let vr13 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+              let vr12 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+              let vrbp = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+              let vrbx = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+              let vr11 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+              let vr10 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+              let vr9 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+              let vr8 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+              let vrax = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+              let vrcx = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+              let vrdx = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+              let vrsi = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+              let vrdi = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+              Lreader.advance cursor 8;
+              let vrip =
+                Virtual_address.of_bitvector (Lreader.Read.bv64 cursor)
+              in
+              let vcs =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:16 (Lreader.Read.u16 cursor))
+              in
+              Lreader.advance cursor 6;
+              let rflags_15_0 = Lreader.Read.u16 cursor in
+              let rflags_31_16 = Lreader.Read.u16 cursor in
+              Lreader.advance cursor 4;
+              let vrsp = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+              let vss =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:16 (Lreader.Read.u16 cursor))
+              in
+              Lreader.advance cursor 6;
+              let vfs_base = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+              let vgs_base = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+              let vds =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:16 (Lreader.Read.u16 cursor))
+              in
+              Lreader.advance cursor 6;
+              let ves =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:16 (Lreader.Read.u16 cursor))
+              in
+              Lreader.advance cursor 6;
+              let vfs =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:16 (Lreader.Read.u16 cursor))
+              in
+              Lreader.advance cursor 6;
+              let vgs =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:16 (Lreader.Read.u16 cursor))
+              in
+              Lreader.advance cursor 6;
+              let vcf =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 0) land 0b1))
+              and vpf =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 2) land 0b1))
+              and vaf =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 4) land 0b1))
+              and vzf =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 6) land 0b1))
+              and vsf =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 7) land 0b1))
+              and vtf =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 8) land 0b1))
+              and vif =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 9) land 0b1))
+              and vdf =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 10) land 0b1))
+              and vof =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 11) land 0b1))
+              and viopl =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:2 ((rflags_15_0 lsr 12) land 0b11))
+              and vnt =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:1 ((rflags_15_0 lsr 14) land 0b1))
+              and vrf =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:1 ((rflags_31_16 lsr 0) land 0b1))
+              and vvm =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:1 ((rflags_31_16 lsr 1) land 0b1))
+              and vac =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:1 ((rflags_31_16 lsr 2) land 0b1))
+              and vvif =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:1 ((rflags_31_16 lsr 3) land 0b1))
+              and vvip =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:1 ((rflags_31_16 lsr 4) land 0b1))
+              and vid =
+                Dba.Expr.constant
+                  (Bitvector.of_int ~size:1 ((rflags_31_16 lsr 5) land 0b1))
+              in
+              ( vrip,
+                List.rev_append
+                  [
+                    (r15, vr15);
+                    (r14, vr14);
+                    (r13, vr13);
+                    (r12, vr12);
+                    (r11, vr11);
+                    (r10, vr10);
+                    (r9, vr9);
+                    (r8, vr8);
+                    (rbx, vrbx);
+                    (rcx, vrcx);
+                    (rdx, vrdx);
+                    (rsi, vrsi);
+                    (rdi, vrdi);
+                    (rbp, vrbp);
+                    (rax, vrax);
+                    (rsp, vrsp);
+                    (ds, vds);
+                    (es, ves);
+                    (fs, vfs);
+                    (gs, vgs);
+                    (cs, vcs);
+                    (ss, vss);
+                    (fs_base, vfs_base);
+                    (gs_base, vgs_base);
+                    (cf, vcf);
+                    (pf, vpf);
+                    (af, vaf);
+                    (zf, vzf);
+                    (sf, vsf);
+                    (tf, vtf);
+                    (if', vif);
+                    (df, vdf);
+                    (of', vof);
+                    (iopl, viopl);
+                    (nt, vnt);
+                    (rf, vrf);
+                    (vm, vvm);
+                    (ac, vac);
+                    (vif', vvif);
+                    (vip, vvip);
+                    (id, vid);
+                  ]
+                  defs,
+                lymmx,
+                hymmx )
+          | { Loader_elf.Note.name = "CORE"; kind = 2; offset = at; _ } ->
+              let cursor = Lreader.create ~at Loader_elf.read_offset img in
+              Lreader.advance cursor 0xa0;
+              ( entrypoint,
+                defs,
+                List.map
+                  (fun _ -> Dba.Expr.constant (Lreader.Read.read cursor 16))
+                  ymmx,
+                hymmx )
+          | { Loader_elf.Note.name = "LINUX"; kind = 0x202; offset = at; _ } ->
+              let cursor = Lreader.create ~at Loader_elf.read_offset img in
+              Lreader.advance cursor 0x200;
+              let component = Lreader.Peek.u16 cursor in
+              let hymmx =
+                if component land 0b00000100 <> 0 then (
+                  Lreader.advance cursor 0x40;
+                  List.map
+                    (fun _ -> Dba.Expr.constant (Lreader.Read.read cursor 16))
+                    ymmx)
+                else hymmx
+              in
+              let lymmx =
+                if component land 0b00000010 <> 0 then (
+                  let cursor = Lreader.create ~at Loader_elf.read_offset img in
+                  Lreader.advance cursor 0xa0;
+                  List.map
+                    (fun _ -> Dba.Expr.constant (Lreader.Read.read cursor 16))
+                    ymmx)
+                else lymmx
+              in
+              (entrypoint, defs, lymmx, hymmx)
+          | _ -> result)
+        (Virtual_address.create 0, [], [], [])
+        (Loader_elf.notes img)
+    in
+    let vymmx =
+      match (hymmx, lymmx) with
+      | [], [] -> []
+      | _, [] -> List.map (fun h -> Dba.Expr.(append h (zeros 128))) hymmx
+      | [], _ -> List.map (fun l -> Dba.Expr.uext 256 l) lymmx
+      | _, _ -> List.map2 (fun h l -> Dba.Expr.append h l) hymmx lymmx
+    in
+    ( entrypoint,
+      if vymmx <> [] then
+        List.fold_left2 (fun defs r v -> (r, v) :: defs) defs ymmx vymmx
+      else defs )
 
   let core = notes
-
   let ret = Dba.LValue.v rax
 
   let rsp_l = Dba.LValue.v rsp
-
   and rsp_r = Dba.Expr.v rsp
-
   and rax_l = Dba.LValue.v rax
-
   and rdi_r = Dba.Expr.v rdi
-
   and rsi_r = Dba.Expr.v rsi
-
   and rdx_r = Dba.Expr.v rdx
-
   and rcx_r = Dba.Expr.v rcx
-
   and r8_r = Dba.Expr.v r8
-
   and r9_r = Dba.Expr.v r9
-
+  and r10_r = Dba.Expr.v r10
   and eight = Dba.Expr.constant (Bitvector.of_int ~size:64 8)
 
-  let get_arg = function
-    | 0 -> rdi_r
-    | 1 -> rsi_r
-    | 2 -> rdx_r
-    | 3 -> rcx_r
-    | 4 -> r8_r
-    | 5 -> r9_r
-    | i ->
-        Dba.Expr.load Size.Byte.eight LittleEndian
-          (Dba.Expr.add rsp_r
-             (Dba.Expr.constant (Bitvector.of_int ~size:64 (8 * (i - 5)))))
+  let get_arg ?(syscall = false) i =
+    if syscall then
+      match i with
+      | 0 -> rdi_r
+      | 1 -> rsi_r
+      | 2 -> rdx_r
+      | 3 -> r10_r
+      | 4 -> r8_r
+      | 5 -> r9_r
+      | _ -> raise (Invalid_argument "syscall")
+    else
+      match i with
+      | 0 -> rdi_r
+      | 1 -> rsi_r
+      | 2 -> rdx_r
+      | 3 -> rcx_r
+      | 4 -> r8_r
+      | 5 -> r9_r
+      | i ->
+          Dba.Expr.load Size.Byte.eight LittleEndian
+            (Dba.Expr.add rsp_r
+               (Dba.Expr.constant (Bitvector.of_int ~size:64 (8 * (i - 5)))))
 
   let get_ret ?syscall:_ () = ret
 
@@ -861,7 +863,6 @@ module AMD64 : ARCH = struct
     | Some value -> val_return value
 
   let get_stack_pointer () = (rsp, Bitvector.of_int64 0x7fff000000000000L)
-
   let max_instruction_len = Size.Byte.fifteen
 end
 
@@ -869,47 +870,28 @@ module ARM : ARCH = struct
   let info = Dba.Var.Tag.Register
 
   let r0 = Dba.Var.create "r0" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and r1 = Dba.Var.create "r1" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and r2 = Dba.Var.create "r2" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and r3 = Dba.Var.create "r3" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and r4 = Dba.Var.create "r4" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and r5 = Dba.Var.create "r5" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and r6 = Dba.Var.create "r6" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and r7 = Dba.Var.create "r7" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and r8 = Dba.Var.create "r8" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and r9 = Dba.Var.create "r9" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and r10 = Dba.Var.create "r10" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and r11 = Dba.Var.create "fp" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and r12 = Dba.Var.create "ip" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and r13 = Dba.Var.create "sp" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and r14 = Dba.Var.create "lr" ~bitsize:Size.Bit.bits32 ~tag:info
-
   and r15 = Dba.Var.create "pc" ~bitsize:Size.Bit.bits32 ~tag:info
 
   let info = Dba.Var.Tag.Flag
 
   let n = Dba.Var.create "n" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and z = Dba.Var.create "z" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and c = Dba.Var.create "c" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and v = Dba.Var.create "v" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and t = Dba.Var.create "t" ~bitsize:Size.Bit.bits1 ~tag:info
 
   let defs =
@@ -942,27 +924,23 @@ module ARM : ARCH = struct
       ("t", Dba.LValue.v t);
     ]
 
+  let get_shortlived_flags () = []
   let core _ = raise (Errors.not_yet_implemented "arm core")
-
   let get_defs () = defs
 
   let r0_l = Dba.LValue.v r0
-
   and r0_r = Dba.Expr.v r0
-
   and r1_r = Dba.Expr.v r1
-
   and r2_r = Dba.Expr.v r2
-
   and r3_r = Dba.Expr.v r3
-
   and r13_r = Dba.Expr.v r13
-
   and r14_r = Dba.Expr.v r14
 
   let ret = r0_l
 
-  let get_arg = function
+  let get_arg ?(syscall = false) i =
+    if syscall then raise (Errors.not_yet_implemented "syscall");
+    match i with
     | 0 -> r0_r
     | 1 -> r1_r
     | 2 -> r2_r
@@ -988,7 +966,6 @@ module ARM : ARCH = struct
     | Some value -> val_return value
 
   let get_stack_pointer () = (r13, Bitvector.of_int ~size:32 0xfff00000)
-
   let max_instruction_len = Size.Byte.four
 end
 
@@ -996,79 +973,44 @@ module AARCH64 : ARCH = struct
   let info = Dba.Var.Tag.Register
 
   let x0 = Dba.Var.create "x0" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x1 = Dba.Var.create "x1" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x2 = Dba.Var.create "x2" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x3 = Dba.Var.create "x3" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x4 = Dba.Var.create "x4" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x5 = Dba.Var.create "x5" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x6 = Dba.Var.create "x6" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x7 = Dba.Var.create "x7" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x8 = Dba.Var.create "x8" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x9 = Dba.Var.create "x9" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x10 = Dba.Var.create "x10" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x11 = Dba.Var.create "x11" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x12 = Dba.Var.create "x12" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x13 = Dba.Var.create "x13" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x14 = Dba.Var.create "x14" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x15 = Dba.Var.create "x15" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x16 = Dba.Var.create "x16" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x17 = Dba.Var.create "x17" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x18 = Dba.Var.create "x18" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x19 = Dba.Var.create "x19" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x20 = Dba.Var.create "x20" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x21 = Dba.Var.create "x21" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x22 = Dba.Var.create "x22" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x23 = Dba.Var.create "x23" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x24 = Dba.Var.create "x24" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x25 = Dba.Var.create "x25" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x26 = Dba.Var.create "x26" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x27 = Dba.Var.create "x27" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x28 = Dba.Var.create "x28" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x29 = Dba.Var.create "x29" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and x30 = Dba.Var.create "x30" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and sp = Dba.Var.create "sp" ~bitsize:Size.Bit.bits64 ~tag:info
 
   let info = Dba.Var.Tag.Flag
 
   let n = Dba.Var.create "n" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and z = Dba.Var.create "z" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and c = Dba.Var.create "c" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and v = Dba.Var.create "v" ~bitsize:Size.Bit.bits1 ~tag:info
-
   and t = Dba.Var.create "t" ~bitsize:Size.Bit.bits1 ~tag:info
 
   let defs =
@@ -1143,35 +1085,27 @@ module AARCH64 : ARCH = struct
       ("t", Dba.LValue.v t);
     ]
 
+  let get_shortlived_flags () = []
   let core _ = raise (Errors.not_yet_implemented "arm core")
-
   let get_defs () = defs
 
   let x0_l = Dba.LValue.v x0
-
   and x0_r = Dba.Expr.v x0
-
   and x1_r = Dba.Expr.v x1
-
   and x2_r = Dba.Expr.v x2
-
   and x3_r = Dba.Expr.v x3
-
   and x4_r = Dba.Expr.v x4
-
   and x5_r = Dba.Expr.v x5
-
   and x6_r = Dba.Expr.v x6
-
   and x7_r = Dba.Expr.v x7
-
   and x30_r = Dba.Expr.v x30
-
   and sp_r = Dba.Expr.v sp
 
   let ret = x0_l
 
-  let get_arg = function
+  let get_arg ?(syscall = false) i =
+    if syscall then raise (Errors.not_yet_implemented "syscall");
+    match i with
     | 0 -> x0_r
     | 1 -> x1_r
     | 2 -> x2_r
@@ -1201,7 +1135,6 @@ module AARCH64 : ARCH = struct
     | Some value -> val_return value
 
   let get_stack_pointer () = (sp, Bitvector.of_int64 0x7fff000000000000L)
-
   let max_instruction_len = Size.Byte.four
 end
 
@@ -1209,69 +1142,37 @@ module PPC64 : ARCH = struct
   let info = Dba.Var.Tag.Register
 
   let r0 = Dba.Var.create "r0" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r1 = Dba.Var.create "r1" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r2 = Dba.Var.create "r2" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r3 = Dba.Var.create "r3" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r4 = Dba.Var.create "r4" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r5 = Dba.Var.create "r5" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r6 = Dba.Var.create "r6" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r7 = Dba.Var.create "r7" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r8 = Dba.Var.create "r8" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r9 = Dba.Var.create "r9" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r10 = Dba.Var.create "r10" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r11 = Dba.Var.create "r11" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r12 = Dba.Var.create "r12" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r13 = Dba.Var.create "r13" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r14 = Dba.Var.create "r14" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r15 = Dba.Var.create "r15" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r16 = Dba.Var.create "r16" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r17 = Dba.Var.create "r17" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r18 = Dba.Var.create "r18" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r19 = Dba.Var.create "r19" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r20 = Dba.Var.create "r20" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r21 = Dba.Var.create "r21" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r22 = Dba.Var.create "r22" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r23 = Dba.Var.create "r23" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r24 = Dba.Var.create "r24" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r25 = Dba.Var.create "r25" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r26 = Dba.Var.create "r26" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r27 = Dba.Var.create "r27" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r28 = Dba.Var.create "r28" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r29 = Dba.Var.create "r29" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r30 = Dba.Var.create "r30" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and r31 = Dba.Var.create "r31" ~bitsize:Size.Bit.bits64 ~tag:info
-
   and lr = Dba.Var.create "lr" ~bitsize:Size.Bit.bits64 ~tag:info
 
   let defs =
@@ -1311,35 +1212,27 @@ module PPC64 : ARCH = struct
       ("lr", Dba.LValue.v lr);
     ]
 
+  let get_shortlived_flags () = []
   let core _ = raise (Errors.not_yet_implemented "ppc core")
-
   let get_defs () = defs
 
   let r3_l = Dba.LValue.v r3
-
   and r3_r = Dba.Expr.v r3
-
   and r4_r = Dba.Expr.v r4
-
   and r5_r = Dba.Expr.v r5
-
   and r6_r = Dba.Expr.v r6
-
   and r7_r = Dba.Expr.v r7
-
   and r8_r = Dba.Expr.v r8
-
   and r9_r = Dba.Expr.v r9
-
   and r10_r = Dba.Expr.v r10
-
   and lr_r = Dba.Expr.v lr
-
   and r1_r = Dba.Expr.v r1
 
   let ret = r3_l
 
-  let get_arg = function
+  let get_arg ?(syscall = false) i =
+    if syscall then raise (Errors.not_yet_implemented "syscall");
+    match i with
     | 0 -> r3_r
     | 1 -> r4_r
     | 2 -> r5_r
@@ -1369,7 +1262,6 @@ module PPC64 : ARCH = struct
     | Some value -> val_return value
 
   let get_stack_pointer () = (r1, Bitvector.of_int64 0x7fff000000000000L)
-
   let max_instruction_len = Size.Byte.four
 end
 
@@ -1423,39 +1315,29 @@ end) : ARCH = struct
          (fun (var : Dba.Var.t) -> (var.name, Dba.LValue.v var))
          registers)
 
+  let get_shortlived_flags () = []
   let get_defs () = defs
-
   let core _ = raise (Errors.not_yet_implemented "RISC V core")
-
   let a0 = reg 10
 
   let a0_l = Dba.LValue.v a0
-
   and a0_r = Dba.Expr.v a0
-
   and a1_r = Dba.Expr.v (reg 11)
-
   and a2_r = Dba.Expr.v (reg 12)
-
   and a3_r = Dba.Expr.v (reg 13)
-
   and a4_r = Dba.Expr.v (reg 14)
-
   and a5_r = Dba.Expr.v (reg 15)
-
   and a6_r = Dba.Expr.v (reg 16)
-
   and a7_r = Dba.Expr.v (reg 17)
-
   and ra_r = Dba.Expr.v (reg 1)
-
   and sp_r = Dba.Expr.v (reg 2)
 
   let bytesize = Size.Byte.create (C.size / 8)
-
   let ret = a0_l
 
-  let get_arg = function
+  let get_arg ?(syscall = false) i =
+    if syscall then raise (Errors.not_yet_implemented "syscall");
+    match i with
     | 0 -> a0_r
     | 1 -> a1_r
     | 2 -> a2_r
@@ -1516,9 +1398,11 @@ module Z80 = struct
       (Array.fold_right add Z80_arch.registers8
          (Array.fold_right add Z80_arch.flags []))
 
+  let get_shortlived_flags () = []
   let get_defs () = defs
 
-  let get_arg _ = raise (Errors.not_yet_implemented "Z80 calling convention")
+  let get_arg ?syscall:_ _ =
+    raise (Errors.not_yet_implemented "Z80 calling convention")
 
   let get_ret ?syscall:_ () =
     raise (Errors.not_yet_implemented "Z80 calling convention")
@@ -1530,7 +1414,6 @@ module Z80 = struct
     raise (Errors.not_yet_implemented "Z80 definitions")
 
   let core _ = raise (Errors.not_yet_implemented "Z80 core")
-
   let max_instruction_len = Size.Byte.four
 end
 
@@ -1552,9 +1435,9 @@ let get_defs () =
   let module A = (val get_arch ()) in
   A.get_defs ()
 
-let get_arg i =
+let get_arg ?syscall i =
   let module A = (val get_arch ()) in
-  A.get_arg i
+  A.get_arg ?syscall i
 
 let get_ret ?syscall () =
   let module A = (val get_arch ()) in
@@ -1571,6 +1454,10 @@ let core img =
 let get_stack_pointer () =
   let module A = (val get_arch ()) in
   A.get_stack_pointer ()
+
+let get_shortlived_flags () =
+  let module A = (val get_arch ()) in
+  A.get_shortlived_flags ()
 
 let max_instruction_len () =
   let module A = (val get_arch ()) in

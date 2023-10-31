@@ -88,13 +88,11 @@ end = struct
          and type binary = Param.binary
 
     val load_addr_info : Virtual_address.t option ref
-
     val store_addr_info : Virtual_address.t option ref
   end = struct
     include Param
 
     let load_addr_info = ref None
-
     let store_addr_info = ref None
 
     let add_assertion state address v =

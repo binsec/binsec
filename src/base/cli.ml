@@ -110,7 +110,6 @@ module H = Basic_types.String.Htbl
 
 module Argv = struct
   type t = { key : Arg.key; doc : Arg.doc; spec : action; values : Values.t }
-
   type _args = t list
 
   let _compare a1 a2 = String.compare a1.key a2.key
@@ -153,11 +152,8 @@ module rec Cli_node : sig
   type t = private { title : string; key : Arg.key; cmds : Cli.t }
 
   val create : title:string -> key:Arg.key -> t
-
   val insert : t -> Cli_spec.t -> unit
-
   val args : t -> Argv.t H.t
-
   val pp : Format.formatter -> t -> unit
 end = struct
   type t = { title : string; key : Arg.key; cmds : Cli.t }
@@ -196,40 +192,28 @@ end
 
 and Cli : sig
   type elt = private Leaf of Cli_spec.t | Node of Cli_node.t
-
   type t = elt H.t
 
   val args : unit -> Argv.t H.t
-
   val cli : t (* THE central cli *)
-
   val create : unit -> t
-
   val insert_leaf : t -> Cli_spec.t -> unit
-
   val insert_node : t -> Cli_node.t -> unit
-
   val pp : Format.formatter -> unit -> unit
-
   val size : t -> int
 end = struct
   type elt = Leaf of Cli_spec.t | Node of Cli_node.t
-
   and t = elt H.t
 
   let create () = H.create 11
-
   let cli = create ()
-
   let size t = H.length t
 
   let keys () =
     H.fold (fun k _ acc -> k :: acc) cli [] |> List.sort String.compare
 
   let _items () = H.fold (fun _ v acc -> v :: acc) cli []
-
   let insert_leaf t csp = H.add t csp.Argv.key (Leaf csp)
-
   let insert_node t csp = H.add t csp.Cli_node.key (Node csp)
 
   let args () =
@@ -286,11 +270,8 @@ module type GENERIC = sig
   type t
 
   val set : t -> unit
-
   val get : unit -> t
-
   val is_set : unit -> bool
-
   val is_default : unit -> bool
 end
 
@@ -305,36 +286,26 @@ module type BOOLEAN = GENERIC with type t = bool
 (** {5 Integer parameters} *)
 
 module type INTEGER = GENERIC with type t = int
-
 module type INTEGER_SET = GENERIC with type t = Basic_types.Int.Set.t
-
 module type INTEGER_LIST = GENERIC with type t = int list
-
 module type INTEGER_OPT = GENERIC_OPT with type t = int
 
 (** {5 Floating point parameters} *)
 
 module type FLOAT = GENERIC with type t = float
-
 module type FLOAT_SET = GENERIC with type t = Basic_types.Float.Set.t
-
 module type FLOAT_LIST = GENERIC with type t = float list
-
 module type FLOAT_OPT = GENERIC_OPT with type t = float
 
 (** {5 String parameters} *)
 
 module type STRING = GENERIC with type t = string
-
 module type STRING_OPT = GENERIC_OPT with type t = string
-
 module type STRING_SET = GENERIC with type t = Basic_types.String.Set.t
-
 module type STRING_LIST = GENERIC with type t = string list
 
 module type CLI_DECL = sig
   val name : string
-
   val doc : string
 end
 
@@ -343,15 +314,12 @@ module Listify (S : Sigs.STR_INJECTIBLE) = struct
   type t = S.t list
 
   let default = []
-
   let of_string s = String_utils.cli_split s |> List.map S.of_string
-
   let default_str = None
 end
 
 module type DECL = sig
   val name : string
-
   val shortname : string
 end
 
@@ -365,7 +333,6 @@ end
 
 module type DETAILED_CLI_DECL = sig
   include DEFAULTED_CLI_DECL
-
   include Sigs.STR_INJECTIBLE with type t := t
 
   val default_str : string option
@@ -373,11 +340,8 @@ end
 
 module type Cli_sig = sig
   module Logger : Logger.S
-
   module Debug_level : INTEGER
-
   module Loglevel : STRING
-
   module Quiet : BOOLEAN
 
   module Builder : sig
@@ -385,6 +349,11 @@ module type Cli_sig = sig
         otherwise. Use it only as last resort.
      *)
     module Any (P : DETAILED_CLI_DECL) : GENERIC with type t = P.t
+
+    module Any_opt (P : sig
+      include CLI_DECL
+      include Sigs.STR_INJECTIBLE
+    end) : GENERIC_OPT with type t = P.t
 
     (** {4 Boolean functors}*)
     module Boolean (P : sig
@@ -401,7 +370,7 @@ module type Cli_sig = sig
         The provided command-line switch
         automatically add a [no-] prefix to your option name.
      *)
-    module True (P : CLI_DECL) : BOOLEAN
+    module No (P : CLI_DECL) : BOOLEAN
 
     (** {4 Integer functors}*)
     module Integer (P : sig
@@ -411,11 +380,8 @@ module type Cli_sig = sig
     end) : INTEGER
 
     module Zero (P : CLI_DECL) : INTEGER
-
     module Integer_set (P : CLI_DECL) : INTEGER_SET
-
     module Integer_list (P : CLI_DECL) : INTEGER_LIST
-
     module Integer_option (P : CLI_DECL) : INTEGER_OPT
 
     (** {4 Floating point functors}*)
@@ -426,9 +392,7 @@ module type Cli_sig = sig
     end) : FLOAT
 
     module Float_set (P : CLI_DECL) : FLOAT_SET
-
     module Float_list (P : CLI_DECL) : FLOAT_LIST
-
     module Float_option (P : CLI_DECL) : FLOAT_OPT
 
     (** {4 String functors}*)
@@ -442,14 +406,11 @@ module type Cli_sig = sig
       include CLI_DECL
 
       val default : string
-
       val choices : string list
     end) : STRING
 
     module String_option (P : CLI_DECL) : STRING_OPT
-
     module String_set (P : CLI_DECL) : STRING_SET
-
     module String_list (P : CLI_DECL) : STRING_LIST
 
     (** {4 Variant functors} *)
@@ -459,11 +420,8 @@ module type Cli_sig = sig
       type t
 
       val to_string : t -> string
-
       val of_string : string -> t
-
       val choices : string list
-
       val default : t
     end) : GENERIC with type t = P.t
     (** Functor to map a string choice --- i.e., just one out of a set of
@@ -479,13 +437,11 @@ module type Cli_sig = sig
       type t
 
       val assoc_map : (string * t) list
-
       val default : t
     end) : GENERIC with type t = P.t
 
     module Variant_list (P : sig
       include CLI_DECL
-
       include Sigs.STR_INJECTIBLE
     end) : GENERIC with type t = P.t list
   end
@@ -493,9 +449,7 @@ end
 
 module Generic_make (D : DECL) = struct
   let sep = ","
-
   let cli_space = Cli_node.create ~key:D.shortname ~title:D.name
-
   let unsafe_extend = Cli_node.insert cli_space
 
   let extend cspec =
@@ -507,12 +461,10 @@ module Generic_make (D : DECL) = struct
      Hence the kernel is a "regular" node with the empty string prefix.
   *)
   let is_kernel = D.shortname = ""
-
   let name = if is_kernel then "kernel" else D.shortname
 
   module Args = struct
     let get () = Cli_node.args cli_space
-
     let get_list () = Argv.list_of_args @@ get ()
   end
 
@@ -529,7 +481,6 @@ module Generic_make (D : DECL) = struct
     type t = int
 
     let default = Logger.get_debug_level ()
-
     let is_set = ref false
 
     let set v =
@@ -537,19 +488,14 @@ module Generic_make (D : DECL) = struct
       Logger.set_debug_level v
 
     let get () = Logger.get_debug_level ()
-
     let is_set () = !is_set
-
     let is_default () = get () = default
 
     let doc = Printf.sprintf "Set %s debug level [%d]" name 0
-
     and key = "debug-level"
-
     and spec = Scan (fun s -> int_of_string s |> set)
 
     let cspec = Cli_spec.simple ~key ~doc ~spec
-
     let _ = extend cspec
   end
 
@@ -557,9 +503,7 @@ module Generic_make (D : DECL) = struct
     type t = string
 
     let default = "info"
-
     let is_set = ref false
-
     let value = ref default
 
     let set v =
@@ -568,9 +512,7 @@ module Generic_make (D : DECL) = struct
       Logger.set_log_level v
 
     let get () = !value
-
     let is_set () = !is_set
-
     let is_default () = !value = default
 
     let doc =
@@ -579,13 +521,9 @@ module Generic_make (D : DECL) = struct
         default
 
     let values = [ "info"; "debug"; "warning"; "error"; "fatal"; "result" ]
-
     let key = "loglevel"
-
     let spec = Scan set
-
     let cspec = Cli_spec.create ~values:(Values.one_of values) ~key ~doc ~spec
-
     let _ = extend cspec
   end
 
@@ -600,19 +538,14 @@ module Generic_make (D : DECL) = struct
       if v then Logger.quiet ()
 
     let get () = !value
-
     let is_set () = !value
-
     let is_default () = not !value
 
     let key = "quiet"
-
     and spec = Unit (fun _ -> set true)
-
     and doc = Printf.sprintf "Quiet all channels for %s" name
 
     let cspec = Cli_spec.simple ~key ~doc ~spec
-
     let _ = extend cspec
   end
 
@@ -670,9 +603,7 @@ module Generic_make (D : DECL) = struct
       type t = P.t
 
       let default = P.default
-
       let is_set = ref false
-
       let value = ref P.default
 
       let set v =
@@ -680,7 +611,6 @@ module Generic_make (D : DECL) = struct
         value := v
 
       let get () = !value
-
       let is_set () = !is_set
 
       let doc =
@@ -690,26 +620,20 @@ module Generic_make (D : DECL) = struct
           P.default_str
 
       let spec = Scan (fun s -> set @@ P.of_string s)
-
       let key = P.name
-
       let cspec = Cli_spec.simple ~key ~doc ~spec
-
       let is_default () = !value = default
-
       let _ = extend cspec
     end
 
     module Any_opt (P : sig
       include CLI_DECL
-
       include Sigs.STR_INJECTIBLE
     end) =
     struct
       type t = P.t
 
       let is_set = ref false
-
       let value = ref None
 
       let set v =
@@ -717,21 +641,13 @@ module Generic_make (D : DECL) = struct
         value := Some v
 
       let get () = Option.get !value
-
       let get_opt () = !value
-
       let is_set () = !is_set
-
       let doc = Format.asprintf "%s" P.doc
-
       let spec = Scan (fun s -> set @@ P.of_string s)
-
       let key = P.name
-
       let cspec = Cli_spec.simple ~key ~doc ~spec
-
       let is_default () = !value = None
-
       let _ = extend cspec
     end
 
@@ -744,7 +660,6 @@ module Generic_make (D : DECL) = struct
       type t = bool
 
       let value = ref P.default
-
       let is_set = ref false
 
       let set v =
@@ -752,19 +667,12 @@ module Generic_make (D : DECL) = struct
         value := v
 
       let get () = !value
-
       let is_set () = !is_set
-
       let doc = Printf.sprintf "%s [%b]" P.doc P.default
-
       let spec = Unit (fun () -> set (not !value))
-
       let key = P.name
-
       let cspec = Cli_spec.simple ~key ~doc ~spec
-
       let is_default () = !value = P.default
-
       let _ = extend cspec
     end
 
@@ -776,14 +684,15 @@ module Generic_make (D : DECL) = struct
       end)
     end
 
-    module True (P : CLI_DECL) = struct
-      include Boolean (struct
+    module No (P : CLI_DECL) = struct
+      include False (struct
         include P
 
         let name = "no-" ^ name
-
-        let default = true
       end)
+
+      let get () = not (get ())
+      let set v = set (not v)
     end
 
     module Integer (P : sig
@@ -797,7 +706,6 @@ module Generic_make (D : DECL) = struct
       include P
 
       let of_string = int_of_string
-
       let default_str = Some (string_of_int default)
     end)
 
@@ -856,7 +764,6 @@ module Generic_make (D : DECL) = struct
       include P
 
       let of_string = float_of_string
-
       let default_str = Some (string_of_float default)
     end)
 
@@ -907,7 +814,6 @@ module Generic_make (D : DECL) = struct
       include P
 
       let of_string = Fun.id
-
       let default_str = Some default
     end)
 
@@ -947,7 +853,6 @@ module Generic_make (D : DECL) = struct
       include CLI_DECL
 
       val default : string
-
       val choices : string list
     end) =
     Any (struct
@@ -969,11 +874,9 @@ module Generic_make (D : DECL) = struct
     *)
     module Variant_choice (P : sig
       include CLI_DECL
-
       include Sigs.STRINGIFIABLE
 
       val choices : string list
-
       val default : t
     end) =
     Any (struct
@@ -993,7 +896,6 @@ module Generic_make (D : DECL) = struct
       type t
 
       val assoc_map : (string * t) list
-
       val default : t
     end) =
     Variant_choice (struct
@@ -1023,7 +925,6 @@ module Generic_make (D : DECL) = struct
 
     module Variant_list (P : sig
       include CLI_DECL
-
       include Sigs.STR_INJECTIBLE
     end) =
     Any (struct
@@ -1039,17 +940,11 @@ module Make (D : DECL) = struct
   module Enabled = struct
     (* Add enabled switch *)
     let is_enabled = ref false
-
     let doc = Printf.sprintf "Enable %s" name
-
     let key = ""
-
     let spec = Unit (fun () -> is_enabled := true)
-
     let cspec = Cli_spec.simple ~key ~doc ~spec
-
     let is_enabled () = is_kernel || !is_enabled
-
     let _ = if not is_kernel then unsafe_extend cspec
   end
 
@@ -1327,5 +1222,4 @@ module Parse = struct
 end
 
 let parse = Parse.run
-
 let parse_configuration_file ~filename = Parse.of_filename ~filename

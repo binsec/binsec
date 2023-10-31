@@ -25,9 +25,7 @@ type t = int Sequence.t
 (* The list is stored in reversed order *)
 
 let length = Sequence.length
-
 let empty = Sequence.empty
-
 let is_byte_value n = n >= 0 && n < 256
 
 let iteri f s =
@@ -81,11 +79,8 @@ let prepend_int n h =
   Sequence.push_front n h
 
 let prepend_int64 n64 h = prepend_int (Int64.to_int n64) h
-
 let prepend_char c = prepend_int (Char.code c)
-
 let append_char c = append_int (Char.code c)
-
 let of_list l = List.fold_left (fun seq e -> prepend_int e seq) empty l
 
 let of_bytes s =
@@ -128,11 +123,8 @@ let of_nibbles s =
   loop empty 0
 
 let iter = Sequence.iter_forward
-
 let map = Sequence.map_forward
-
 let fold = Sequence.fold_forward
-
 let rev sq = fold Sequence.push_back sq empty
 
 let pp ppf t =

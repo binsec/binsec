@@ -22,7 +22,6 @@
 (** Abstract representation of configuration data for static analyses *)
 
 type instruction_kinds = Dba.Instr.t list
-
 type widening_delay = int
 
 module BoundThreshold : sig
@@ -41,7 +40,6 @@ module WideningThreshold : sig
 end
 
 val default_global_widening_thresholds : WideningThreshold.t
-
 val default_global_widening_delay : int
 
 type t = private {
@@ -62,24 +60,16 @@ val default : t
 (** {3 Constructors and modificators } *)
 
 val empty : t
-
 val set_entry_points : Virtual_address.Set.t -> t -> t
-
 val has_entry_points : t -> bool
-
 val set_jumps : Dba.addresses Dba_types.Caddress.Map.t -> t -> t
-
 val set_stops : Dba_types.Caddress.Set.t -> t -> t
-
 val set_prepend_stubs : instruction_kinds Dba_types.Caddress.Map.t -> t -> t
 
 val set_substitute_stubs :
   Dba_types.instruction_sequence Dba_types.Caddress.Map.t -> t -> t
 
 val set_allowed_jumpzones : (Dba.address * Dba.address) list -> t -> t
-
 val set_linear_addresses : (Dba.address * Dba.address) list -> t -> t
-
 val set_global_widening_delay : widening_delay -> t -> t
-
 val set_global_widening_thresholds : WideningThreshold.t -> t -> t

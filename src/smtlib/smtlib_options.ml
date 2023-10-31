@@ -21,12 +21,10 @@
 
 include Cli.Options (struct
   let name = "smtlib"
-
   let shortname = name
 end)
 
 module Model_from_file = Builder.String_option (struct
   let name = "model-from-file"
-
   let doc = "Parse model from given file."
 end)

@@ -24,7 +24,6 @@ open Ir
 
 include Cli.Make (struct
   let name = "Shadow stack protection"
-
   let shortname = "shadow-stack"
 end)
 
@@ -42,7 +41,6 @@ module Mode = Builder.Variant_choice_assoc (struct
      [Builtin]"
 
   let default = Inline
-
   let assoc_map = [ ("inline", Inline); ("builtin", Builtin) ]
 end)
 
@@ -51,13 +49,11 @@ type Ast.t += Initial_stack of Ast.Expr.t Ast.loc list
 module Inline (P : Path.S) (S : STATE) :
   Exec.EXTENSION with type path = P.t and type state = S.t = struct
   type path = P.t
-
   and state = S.t
 
   module Eval = Eval.Make (P) (S)
 
   let pointer_size = Kernel_options.Machine.word_size ()
-
   let array = "shadow_stack"
 
   let ptr =
@@ -71,7 +67,6 @@ module Inline (P : Path.S) (S : STATE) :
       ~tag:Temp
 
   let ptr_r = Dba.Expr.v ptr
-
   and witness_r = Dba.Expr.v witness
 
   let zero = Dba.Expr.constant (Bitvector.zeros pointer_size)
@@ -154,18 +149,14 @@ module Inline (P : Path.S) (S : STATE) :
         graph
 
   let process_callback = Some process_handler
-
   let builtin_callback = None
-
   let builtin_printer = None
-
   let at_exit_callback = None
 end
 
 module Builtin (P : Path.S) (S : STATE) :
   Exec.EXTENSION with type path = P.t and type state = S.t = struct
   type path = P.t
-
   and state = S.t
 
   let key = P.register_key []
@@ -173,7 +164,6 @@ module Builtin (P : Path.S) (S : STATE) :
   module Eval = Eval.Make (P) (S)
 
   let initialization_callback = None
-
   let instruction_callback = None
 
   let declaration_callback =

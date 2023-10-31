@@ -20,7 +20,6 @@
 (**************************************************************************)
 
 type instruction_kinds = Dba.Instr.t list
-
 type widening_delay = int
 
 module BoundThreshold = struct
@@ -57,7 +56,6 @@ module WideningThreshold = struct
 end
 
 let default_global_widening_thresholds = WideningThreshold.default
-
 and default_global_widening_delay = 0
 
 type t = {
@@ -89,15 +87,10 @@ let default =
   }
 
 let empty = default
-
 let has_entry_points p = not (Virtual_address.Set.is_empty p.entry_points)
-
 let has_stops p = not (Dba_types.Caddress.Set.is_empty p.stops)
-
 let has_jumps p = not (Dba_types.Caddress.Map.is_empty p.jumps)
-
 let has_allowed_jumpzones p = not (List_utils.is_empty p.allowed_jumpzones)
-
 let has_prepend_stubs p = not (Dba_types.Caddress.Map.is_empty p.prepend_stubs)
 
 let has_substitute_stubs p =

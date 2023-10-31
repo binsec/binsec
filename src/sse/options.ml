@@ -21,13 +21,62 @@
 
 include Cli.Make (struct
   let shortname = "sse"
-
   let name = "Static Symbolic Execution"
 end)
 
+module Engine = struct
+  type t = ..
+
+  module Htbl = Hashtbl.Make (struct
+    type nonrec t = t
+
+    let equal = ( = )
+    let hash = Hashtbl.hash
+  end)
+
+  let engines = Basic_types.String.Htbl.create 4
+  let factories = Htbl.create 4
+
+  module Opt = Builder.Any_opt (struct
+    type nonrec t = t
+
+    let name = "engine"
+    let doc = "Use the following symbolic engine"
+
+    let of_string name =
+      try Basic_types.String.Htbl.find engines name
+      with Not_found ->
+        if List.mem name (Plugins.Plugins.Plugins.list ()) then (
+          Plugins.Plugins.Plugins.load name;
+          Basic_types.String.Htbl.find engines name)
+        else raise Not_found
+  end)
+
+  let set = Opt.set
+  let get = Opt.get
+  let is_set = Opt.is_set
+  let is_default = Opt.is_default
+  let get_opt = Opt.get_opt
+
+  let register name engine factory =
+    if Basic_types.String.Htbl.mem engines name then
+      Logger.fatal "Engine name %S has already been taken." name;
+    (match Htbl.find factories engine with
+    | name', factory' when factory != factory' ->
+        Logger.fatal "Trying to overwrite engine %S with %S" name' name
+    | (exception Not_found) | _ -> ());
+    Basic_types.String.Htbl.add engines name engine;
+    Htbl.add factories engine (name, factory)
+
+  let get_factory () =
+    match Htbl.find factories (get ()) with
+    | _, f -> f ()
+    | exception Not_found ->
+        Logger.fatal "Trying to load an unregistered engine"
+end
+
 module AlternativeEngine = Builder.False (struct
   let name = "alternative-engine"
-
   let doc = "Enable the experimental engine"
 end)
 
@@ -41,52 +90,51 @@ end)
 
 module MaxDepth = Builder.Integer (struct
   let name = "depth"
-
   let default = 1000
-
   let doc = "Set exploration maximal depth"
 end)
 
 module TransientEnum = Builder.Integer (struct
   let name = "self-written-enum"
-
   let default = 0
-
   let doc = "Set maximum number of forks for symbolic instruction opcodes"
 end)
 
 module JumpEnumDepth = Builder.Integer (struct
   let name = "jump-enum"
-
   let default = 3
-
   let doc = "Set maximum number of jump targets to retrieve for dynamic jumps"
 end)
 
 module QMerge = Builder.Integer (struct
   let name = "qmerge"
-
   let default = 0
-
   let doc = "Set maximum look ahead depth for quick merging"
+end)
+
+module KillFlagsAtReturn = Builder.No (struct
+  let name = "kill-flags-at-return"
+  let doc = "Conservatively always consider flags alive at function return"
 end)
 
 module Randomize = Builder.False (struct
   let name = "randomize"
-
   let doc = "randomize path selection"
 end)
 
 module ScriptFiles = Builder.String_list (struct
   let name = "script"
-
   let doc = "set file containing initializations, directives and stubs"
 end)
 
 module Timeout = Builder.Integer_option (struct
   let name = "timeout"
-
   let doc = "Sets a timeout in second for symbolic execution"
+end)
+
+module Monitor = Builder.No (struct
+  let name = "screen"
+  let doc = "Disable the monitor screen (curses)"
 end)
 
 type search_heuristics = Dfs | Bfs | Nurs
@@ -95,16 +143,12 @@ module Search_heuristics = Builder.Variant_choice_assoc (struct
   type t = search_heuristics
 
   let name = "heuristics"
-
   let doc = "Use the following search heuristics"
-
   let default = Dfs
-
   let assoc_map = [ ("dfs", Dfs); ("bfs", Bfs); ("nurs", Nurs) ]
 end)
 
 module Seed = Builder.Integer_option (struct
   let name = "seed"
-
   let doc = "Give a specific seed for random number generators"
 end)

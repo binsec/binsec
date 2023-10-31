@@ -31,7 +31,6 @@ module Symbol : sig
   type t = string * Dba.Var.Tag.attribute
 
   val create : ?attr:Dba.Var.Tag.attribute -> string -> t
-
   val pp : Format.formatter -> t -> unit
 end
 
@@ -43,13 +42,9 @@ module rec Size : sig
     | Eval of Expr.t loc
 
   val none : t
-
   val some : int -> t
-
   val sizeof : Loc.t loc -> t
-
   val eval : Expr.t loc -> t
-
   val pp : Format.formatter -> t -> unit
 end
 
@@ -65,7 +60,6 @@ and Loc : sig
     ?array:string -> int -> ?endianness:Machine.endianness -> Expr.t loc -> t
 
   val restrict : hi:int -> lo:int -> t loc -> t
-
   val pp : Format.formatter -> t -> unit
 end
 
@@ -80,67 +74,41 @@ and Expr : sig
     | Ite of t loc * t loc * t loc
 
   val zero : t
-
   val one : t
-
   val succ : t loc -> t
-
   val integer : Z.t -> t
-
   val constant : Bitvector.t -> t
-
   val symbol : Symbol.t loc -> t
-
   val loc : Loc.t loc -> t
-
   val add : t loc -> t loc -> t
-
   val sub : t loc -> t loc -> t
-
   val mul : t loc -> t loc -> t
-
   val neg : t loc -> t
 
   (* Unsigned operations *)
   val udiv : t loc -> t loc -> t
-
   val umod : t loc -> t loc -> t
 
   (* Signed operations *)
   val sdiv : t loc -> t loc -> t
-
   val smod : t loc -> t loc -> t
-
   val logand : t loc -> t loc -> t
-
   val logor : t loc -> t loc -> t
-
   val lognot : t loc -> t
-
   val logxor : t loc -> t loc -> t
 
   include Sigs.COMPARISON with type t := t loc and type boolean := t
 
   val shift_left : t loc -> t loc -> t
-
   val shift_right : t loc -> t loc -> t
-
   val shift_right_signed : t loc -> t loc -> t
-
   val rotate_left : t loc -> t loc -> t
-
   val rotate_right : t loc -> t loc -> t
-
   val sext : int -> t loc -> t
-
   val uext : int -> t loc -> t
-
   val restrict : hi:int -> lo:int -> t loc -> t
-
   val append : t loc -> t loc -> t
-
   val ite : t loc -> t loc -> t loc -> t
-
   val pp : Format.formatter -> t -> unit
 end
 
@@ -161,29 +129,17 @@ module Instr : sig
     | Halt
 
   val nop : t
-
   val label : string -> t
-
   val assign : Loc.t loc -> Expr.t loc -> t
-
   val undef : Loc.t loc -> t
-
   val nondet : Loc.t loc -> t
-
   val assume : Expr.t loc -> t
-
   val dynamic_assert : Expr.t loc -> t
-
   val conditional_jump : Expr.t loc -> string -> t
-
   val dynamic_jump : Expr.t loc -> t
-
   val goto : string -> t
-
   val halt : t
-
   val pp : Format.formatter -> t -> unit
-
   val register_pp : (Format.formatter -> t -> bool) -> unit
 end
 

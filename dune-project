@@ -5,7 +5,7 @@
 
 (name binsec)
 
-(version "0.8.0")
+(version "0.8.1")
 (maintainers "BINSEC <binsec@saxifrage.saclay.cea.fr>")
 (authors
   "Adel Djoudi"
@@ -61,14 +61,15 @@ An overview of some BINSEC features can be found in our SSPREW'17 tutorial.")
   grain_dypgen
   (toml (>= 6))
   (ounit2 (and :with-test (>= 2)))
-  (qcheck (and :with-test (>= 0.7))))
+  (qcheck (and :with-test (>= 0.7)))
+  (ocamlformat (and :with-dev-setup (= 0.26.1))))
  (depopts
   curses
   llvm
   unisim_archisec
   bitwuzla)
  (conflicts
-  (llvm (< 6.0.0))
+  (llvm (or (< 6.0.0) (>= 16.0.0)))
   (bitwuzla (< 1.0.4))
   (unisim_archisec (< 0.0.6)))
  (tags

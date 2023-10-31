@@ -138,14 +138,10 @@ module type GRAPH = sig
   include Graph.Sig.G with type V.t = int and type E.t = int * bool * int
 
   val node : t -> vertex -> node
-
+  val is_new_vertex : t -> vertex -> bool
   val iter_new_vertex : (vertex -> unit) -> t -> unit
-
   val iter_entries : (vertex -> unit) -> t -> unit
-
   val iter_exits : (vertex -> unit) -> t -> unit
-
   val insert_before : t -> vertex -> fallthrough -> int
-
   val insert_list_before : t -> vertex -> fallthrough list -> int
 end

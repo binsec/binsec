@@ -34,13 +34,9 @@ module Command : sig
     | GetValue of Formula.term
 
   val pp_command : Format.formatter -> command -> unit
-
   val check_sat : command
-
   val get_model : command
-
   val get_value : Formula.term -> command
-
   val put_entry : Formula.entry -> command
 end
 
@@ -135,13 +131,9 @@ module Session : sig
     | Values of (Smtlib.term * Smtlib.term) list
 
   val pp : Format.formatter -> t -> unit
-
   val create : ?file:string -> ?timeout:int -> Prover.t -> t
-
   val destroy : t -> unit
-
   val run : t -> Command.command -> output
-
   val put_entry : t -> Formula.entry -> unit
 
   (* run check-sat only if necessary (ie no assert has been issued since last
@@ -151,6 +143,5 @@ module Session : sig
   (* run get-model only if necessary; you still have to make sure that the
    * current formula is satisfiable *)
   val get_model : t -> Smt_model.t
-
   val get_value : t -> Formula.term -> (Smtlib.term * Smtlib.term) list
 end

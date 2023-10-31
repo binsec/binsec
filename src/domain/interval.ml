@@ -46,20 +46,15 @@ let project ~size t =
   else Seq { start = t.min; n = Z.succ (Z.sub t.max t.min) }
 
 let top size = { min = Z.zero; max = Z.extract Z.minus_one 0 size; stride = 0 }
-
 let signed_of ~size i = Z.signed_extract i 0 size
 
 let round_down size pow rem =
   Z.logor (Z.shift_left (Z.extract Z.minus_one 0 (size - pow)) pow) rem
 
 let constant ~size bits = { min = bits; max = bits; stride = size }
-
 let zeros size = constant Z.zero ~size
-
 let zero = zeros 1
-
 let ones size = constant Z.one ~size
-
 let one = ones 1
 
 let uminus ~size t =
@@ -214,9 +209,7 @@ let ule ~size:_ t t' =
   if Z.leq t.max t'.min then one else if Z.gt t.min t'.max then zero else top1
 
 let uge ~size t t' = ule ~size t' t
-
 let ult ~size t t' = complement1 (uge ~size t t')
-
 let ugt ~size t t' = complement1 (ule ~size t t')
 
 let ucmp f c ~size t t' =
@@ -228,11 +221,8 @@ let ucmp f c ~size t t' =
   else top1
 
 let sle = ucmp ule Z.leq
-
 let sge = ucmp uge Z.geq
-
 let slt = ucmp ult Z.lt
-
 let sgt = ucmp ugt Z.gt
 
 let logand ~size t t' =
@@ -428,12 +418,12 @@ let create size min max stride rem =
   let min, max =
     if stride > 0 then
       ( (if Z.trailing_zeros (Z.logxor min rem) < stride then
-         Z.logor
-           (Z.shift_left
-              (Z.succ (Z.shift_right (Z.pred (Z.sub min rem)) stride))
-              stride)
-           rem
-        else min),
+           Z.logor
+             (Z.shift_left
+                (Z.succ (Z.shift_right (Z.pred (Z.sub min rem)) stride))
+                stride)
+             rem
+         else min),
         if Z.trailing_zeros (Z.logxor max rem) < stride then
           Z.logor
             (Z.shift_left (Z.shift_right (Z.sub max rem) stride) stride)
@@ -471,24 +461,22 @@ let overlap t t' =
      let min = Z.max t.min t'.min and max = Z.min t.max t'.max in
      Z.leq
        (if Z.trailing_zeros (Z.logxor min rem) < stride then
-        Z.logor
-          (Z.shift_left
-             (Z.succ (Z.shift_right (Z.pred (Z.sub min rem)) stride))
-             stride)
-          rem
-       else min)
+          Z.logor
+            (Z.shift_left
+               (Z.succ (Z.shift_right (Z.pred (Z.sub min rem)) stride))
+               stride)
+            rem
+        else min)
        (if Z.trailing_zeros (Z.logxor max rem) < stride then
-        Z.logor (Z.shift_left (Z.shift_right (Z.sub max rem) stride) stride) rem
-       else max))
+          Z.logor
+            (Z.shift_left (Z.shift_right (Z.sub max rem) stride) stride)
+            rem
+        else max))
 
 let disjoint ~size:_ t t' = not (overlap t t')
-
 let refine ~size t t' = if included ~size t t' then t else inter ~size t t'
-
 let unary_nofeedback ~size:_ t _ = t
-
 let binary_nofeedback ~size:_ t t' _ = (t, t')
-
 let uminus_feedback = unary_nofeedback
 
 let add_feedback ~size t t' r =
@@ -498,15 +486,10 @@ let sub_feedback ~size t t' r =
   (refine ~size t (add ~size r t'), refine ~size t' (sub ~size t r))
 
 let mul_feedback = binary_nofeedback
-
 let smod_feedback = binary_nofeedback
-
 let umod_feedback = binary_nofeedback
-
 let udiv_feedback = binary_nofeedback
-
 let sdiv_feedback = binary_nofeedback
-
 let append_feedback ~size1:_ t ~size2:_ t' _ = (t, t')
 
 let equal_feedback ~size t t' r =
@@ -532,15 +515,10 @@ let uge_feedback ~size t t' r =
   (t, t')
 
 let ult_feedback ~size t t' r = uge_feedback ~size t t' (complement1 r)
-
 let ugt_feedback ~size t t' r = ule_feedback ~size t t' (complement1 r)
-
 let sle_feedback = binary_nofeedback
-
 let sge_feedback = binary_nofeedback
-
 let slt_feedback = binary_nofeedback
-
 let sgt_feedback = binary_nofeedback
 
 (* result 0 0 -> ? | 1 0 -> 0 | 0 1 -> {} | 1 1 -> 1 *)
@@ -598,19 +576,12 @@ let logxor_feedback ~size t t' r =
   (refine ~size t (logxor ~size t' r), refine ~size t' (logxor ~size t r))
 
 let shift_left_feedback = binary_nofeedback
-
 let shift_right_feedback = binary_nofeedback
-
 let shift_right_signed_feedback = binary_nofeedback
-
 let rotate_left_feedback = binary_nofeedback
-
 let rotate_right_feedback = binary_nofeedback
-
 let uext_feedback _ ~size t r = refine ~size t r
-
 let sext_feedback _ ~size:_ t _ = t
-
 let restrict_feedback ~lo:_ ~hi:_ ~size:_ t _ = t
 
 let iter =

@@ -21,13 +21,11 @@
 
 include Cli.Options (struct
   let name = "x86"
-
   let shortname = name
 end)
 
 module HandleSegments = Builder.String_set (struct
   let name = "handle-seg"
-
   let doc = "Activate set of segments"
 end)
 

@@ -26,7 +26,6 @@ let sequence_of_list l =
   List.fold_left (fun acc elt -> push_front elt acc) empty l
 
 let list_of_sequence s = fold_backward (fun elt acc -> elt :: acc) s []
-
 let list_of_seq s = Seq.fold_left (fun acc elt -> elt :: acc) [] s |> List.rev
 
 let int_list_to_string l =
@@ -62,7 +61,6 @@ let check_id name f =
       l = via)
 
 let tests = []
-
 let qtests = []
 
 (* actual tests start here *)
@@ -109,5 +107,4 @@ let qtests =
 
 (* run the tests *)
 let () = run_test_tt_main ("Sequence" >::: tests)
-
 let () = QCheck_runner.run_tests_main qtests

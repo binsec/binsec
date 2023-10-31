@@ -22,7 +22,6 @@
 (** Modules & types related to DBA types *)
 
 open Sigs
-
 module Logger : Logger.S
 
 type instruction_sequence = (Dba.address * Dba.Instr.t) list
@@ -41,16 +40,13 @@ module Caddress : sig
   include Sigs.Collection with type t := t
 
   val default_init : t ref
-
   val create : Virtual_address.t -> int -> t
 
   val block_start : Virtual_address.t -> t
   (** [block_start bv] i [create bv 0] *)
 
   val block_start_of_int : int -> t
-
   val rebase : t -> Virtual_address.t -> t
-
   val reid : t -> int -> t
 
   val pp_base : Format.formatter -> t -> unit
@@ -62,11 +58,8 @@ module Caddress : sig
   (** [add_int addr n] Increment the current address from the value of [n] *)
 
   val add_id : t -> int -> t
-
   val base_value : t -> Virtual_address.t
-
   val of_virtual_address : Virtual_address.t -> t
-
   val to_virtual_address : t -> Virtual_address.t
 
   include HASHABLE with type t := t
@@ -103,9 +96,7 @@ module Expr : sig
       flagged as a temporary *)
 
   val sext : t -> Size.Bit.t -> t
-
   val uext : t -> Size.Bit.t -> t
-
   val bool_false : t
 
   val bool_true : t
@@ -142,11 +133,8 @@ module LValue : sig
       otherwise *)
 
   val bitsize : t -> Size.Bit.t
-
   val unsafe_bitsize : t -> int
-
   val is_temporary : t -> bool
-
   val is_flag : t -> bool
 end
 
@@ -222,26 +210,18 @@ module Statement : sig
   include PRINTABLE with type t := t
 
   val create : Caddress.t -> Dba.Instr.t -> t
-
   val location : t -> Caddress.t
-
   val instruction : t -> Dba.Instr.t
-
   val set_instruction : t -> Dba.Instr.t -> t
-
   val set_location : t -> Caddress.t -> t
 end
 
 val malloc_id : int ref
 
 type dbainstrmap = Dba.Instr.t Caddress.Map.t
-
 type read_perm = Read of bool
-
 type write_perm = Write of bool
-
 type exec_perm = Exec of bool
-
 type permissions = Dba.Expr.t * (read_perm * write_perm * exec_perm)
 
 type program = {

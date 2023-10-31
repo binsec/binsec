@@ -47,9 +47,7 @@ val flip : t -> int -> t
 (** [flip b i] flips the [i]th bit of bitset [b] *)
 
 val equal : t -> t -> bool
-
 val union : t -> t -> t
-
 val inter : t -> t -> t
 
 val subset : t -> t -> bool
@@ -77,5 +75,4 @@ val resize : t -> int -> t
 (** [resize b n] adjust the size of [b] *)
 
 val fold : ('a -> int -> 'a) -> 'a -> t -> 'a
-
 val map : (int -> bool) -> t -> t

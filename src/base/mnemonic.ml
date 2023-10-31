@@ -24,9 +24,7 @@ open Format
 type t = Unknown | Unsupported of string option | Supported of string
 
 let unknown = Unknown
-
 let unsupported ?mnemonic_hint () = Unsupported mnemonic_hint
-
 let supported v pp = Supported (asprintf "%a" pp v)
 
 let pp ppf = function

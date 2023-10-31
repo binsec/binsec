@@ -28,11 +28,7 @@ type t = private
   | Supported of string
 
 val supported : 'a -> (Format.formatter -> 'a -> unit) -> t
-
 val unsupported : ?mnemonic_hint:string -> unit -> t
-
 val unknown : t
-
 val pp : Format.formatter -> t -> unit
-
 val to_string : t -> string

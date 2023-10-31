@@ -20,7 +20,6 @@
 (**************************************************************************)
 
 type rule = Undef | Same | Value of Dba.Expr.t
-
 type entry
 
 val addresses : entry -> int Interval.t

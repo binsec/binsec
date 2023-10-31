@@ -21,43 +21,28 @@
 
 module type S = sig
   type elt
-
   type t
 
   val empty : t
-
   val singleton : elt -> t
-
   val is_empty : t -> bool
-
   val length : t -> int
-
   val add : elt -> t -> t
-
   val remove : t -> t
-
   val pop : t -> elt * t
-
   val peek : t -> elt
-
   val merge : t -> t -> t
-
   val iter : (elt -> unit) -> t -> unit
-
   val fold : ('a -> elt -> 'a) -> 'a -> t -> 'a
-
   val map : (elt -> elt) -> t -> t
 end
 
 module Make (X : Sigs.COMPARABLE) = struct
   type t = Empty | Heap of X.t * t list
-
   type elt = X.t
 
   let empty = Empty
-
   let singleton x = Heap (x, [])
-
   let is_empty h = h = Empty
 
   let merge h1 h2 =
@@ -113,11 +98,9 @@ module CMake (X : Sigs.ANY) = struct
   end)
 
   type elt = X.t
-
   type t = H.t
 
   let front_idx = ref 0
-
   let rear_idx = ref 0
 
   let front x =
@@ -129,17 +112,11 @@ module CMake (X : Sigs.ANY) = struct
     (x, !rear_idx)
 
   let empty = H.empty
-
   let is_empty = H.is_empty
-
   let add x = H.add (front x)
-
   let remove = H.remove
-
   let cons x = add x
-
   let singleton x = add x empty
-
   let snoc x = H.add (rear x)
 
   let pop h =
@@ -147,14 +124,9 @@ module CMake (X : Sigs.ANY) = struct
     (v, l)
 
   let peek h = fst (H.peek h)
-
   let fold f acc h = H.fold (fun acc (e, _) -> f acc e) acc h
-
   let iter f h = H.iter (fun (e, _) -> f e) h
-
   let map f h = H.map (fun (e, n) -> (f e, n)) h
-
   let merge = H.merge
-
   let length = H.length
 end

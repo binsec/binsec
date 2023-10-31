@@ -26,9 +26,7 @@ module Node = struct
   type t = string * state
 
   let compare (n1, _) (n2, _) = compare n1 n2
-
   let hash = Hashtbl.hash
-
   let equal = ( = )
 end
 
@@ -37,7 +35,6 @@ module Edge = struct
   type t = string
 
   let compare = compare
-
   let default = ""
 end
 
@@ -46,7 +43,6 @@ module G = struct
   include Graph.Persistent.Digraph.ConcreteBidirectionalLabeled (Node) (Edge)
 
   let mk_active_node name = V.create (name, Active)
-
   let mk_inactive_node name = V.create (name, Inactive)
 end
 
@@ -55,9 +51,7 @@ module Dot = struct
     include G (* use the graph module from above *)
 
     let edge_attributes (_, e, _) = [ `Label e; `Color 4711 ]
-
     let default_edge_attributes _ = []
-
     let get_subgraph _ = None
 
     let vertex_attributes (_name, state) =
@@ -71,7 +65,6 @@ module Dot = struct
 
     (* "\""^(String.sub (Dba.string_of_dbaaddress addr) 1 10) ^ "\"" *)
     let default_vertex_attributes _ = []
-
     let graph_attributes _ = []
   end)
 

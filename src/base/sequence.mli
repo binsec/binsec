@@ -23,7 +23,6 @@ type 'a t
 (** an ordered list from which we can push and pop at both sides *)
 
 val empty : 'a t
-
 val length : 'a t -> int
 
 val append : 'a t -> 'a t -> 'a t

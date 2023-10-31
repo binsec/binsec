@@ -35,17 +35,11 @@ module OptimAll : Cli.BOOLEAN
 (** {2 Formula optimizations} *)
 
 module OptimCst : Cli.BOOLEAN
-
 module OptimItv : Cli.BOOLEAN
-
 module OptimPrn : Cli.BOOLEAN
-
 module OptimRbs : Cli.BOOLEAN
-
 module OptimRow : Cli.BOOLEAN
-
 module OptimSsa : Cli.BOOLEAN
-
 module OptimLst : Cli.INTEGER
 
 type solver = Boolector | Bitwuzla | Z3 | CVC4 | Yices
