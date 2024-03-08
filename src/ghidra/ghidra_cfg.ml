@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -125,7 +125,7 @@ let parse_cache ~path =
               (calls, terminators)
           (* Skip jumps to external addresses *)
           | "UNCONDITIONAL_JUMP", [] -> (calls, terminators)
-          | _ -> raise (Errors.not_yet_implemented kind))
+          | _ -> Errors.not_yet_implemented kind)
         ([], Virtual_address.Set.empty)
         (Parser_ghidra.instructions Lexer_ghidra.token lexbuf)
     in

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -376,18 +376,18 @@ struct
 
   let assume cond state =
     if Expr.is_equal cond Expr.one then (
-      QS.Preprocess.incr_sat ();
+      QS.Preprocess.incr_true ();
       Some state)
     else if Expr.is_equal cond Expr.zero then (
-      QS.Preprocess.incr_unsat ();
+      QS.Preprocess.incr_false ();
       None)
     else
       let d = Overapprox.eval state cond in
       if D.included ~size:1 d D.zero then (
-        QS.Preprocess.incr_unsat ();
+        QS.Preprocess.incr_false ();
         None)
       else if D.included ~size:1 d D.one then (
-        QS.Preprocess.incr_sat ();
+        QS.Preprocess.incr_true ();
         Some { state with constraints = cond :: state.constraints })
       else
         let state = { state with constraints = cond :: state.constraints } in
@@ -411,24 +411,24 @@ struct
           QS.Solver.stop_timer ();
           r)
         else (
-          QS.Preprocess.incr_sat ();
+          QS.Preprocess.incr_true ();
           Overapprox.refine state cond D.one;
           Some state)
 
   let test cond state =
     if Expr.is_equal cond Expr.one then (
-      QS.Preprocess.incr_sat ();
+      QS.Preprocess.incr_true ();
       True state)
     else if Expr.is_equal cond Expr.zero then (
-      QS.Preprocess.incr_unsat ();
+      QS.Preprocess.incr_false ();
       False state)
     else
       let d = Overapprox.eval state cond in
       if D.included ~size:1 d D.zero then (
-        QS.Preprocess.incr_unsat ();
+        QS.Preprocess.incr_false ();
         False state)
       else if D.included ~size:1 d D.one then (
-        QS.Preprocess.incr_sat ();
+        QS.Preprocess.incr_true ();
         True state)
       else
         let t = { state with constraints = cond :: state.constraints } in

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,7 +25,8 @@ module S = Basic_types.String
 type env = {
   wordsize : int;
   endianness : Machine.endianness;
-  define : Dba.Var.t -> unit;
+  define : Dba.Var.t -> Lexing.position -> unit;
+  origin : string -> Lexing.position option;
   lookup : string -> Dba.LValue.t;
   lookup_symbol : string -> Dba.Var.Tag.attribute -> Dba.Expr.t;
 }
@@ -40,36 +41,33 @@ module Instr = Ast.Instr
 exception Inference_failure of Expr.t loc
 exception Invalid_size of Expr.t loc * int * int
 exception Invalid_operation of Expr.t loc
-
-let pp_pos ppf (pos : Lexing.position) =
-  try
-    let ic = open_in pos.pos_fname in
-    let rec scan ic lnum r =
-      let line = input_line ic in
-      let len = String.length line in
-      if len < r then scan ic (lnum + 1) (r - len - 1)
-      else
-        Format.fprintf ppf "(line %d, column %d in %s)@ %S@ %s^" lnum r
-          pos.pos_fname line
-          (String.make (r + 1) ' ')
-    in
-    scan ic 1 pos.pos_cnum
-  with Sys_error _ | End_of_file -> ()
+exception Invalid_annotation of (Loc.t loc * int * Lexing.position option)
 
 let _ =
   Printexc.register_printer (function
     | Inference_failure (e, pos) ->
         Some
           (Format.asprintf "@[<v>Unable to infer the size of %a %a@]" Expr.pp e
-             pp_pos pos)
+             Parse_utils.pp_pos pos)
     | Invalid_size ((e, pos), size, expect) ->
         Some
           (Format.asprintf "@[<v>Invalid size for %a (expected %d, got %d) %a@]"
-             Expr.pp e expect size pp_pos pos)
+             Expr.pp e expect size Parse_utils.pp_pos pos)
     | Invalid_operation (e, pos) ->
         Some
-          (Format.asprintf "@[<v>Invalid operation in %a %a@]" Expr.pp e pp_pos
-             pos)
+          (Format.asprintf "@[<v>Invalid operation in %a %a@]" Expr.pp e
+             Parse_utils.pp_pos pos)
+    | Invalid_annotation ((var, pos), _, Some pos') ->
+        Some
+          (Format.asprintf
+             "@[<v>Conflicting size annotation in %a %a@ Previous definition \
+              %a@]"
+             Loc.pp var Parse_utils.pp_pos pos Parse_utils.pp_pos pos')
+    | Invalid_annotation ((var, pos), size, None) ->
+        Some
+          (Format.asprintf
+             "@[<v>Invalid size annotation in %a (expected <%d>) %a@]" Loc.pp
+             var size Parse_utils.pp_pos pos)
     | _ -> None)
 
 let rec eval_expr ?size ((e, p) as t : Expr.t loc) env =
@@ -164,28 +162,44 @@ and eval_int ((e, _) as t : Expr.t loc) env =
   | Binary (DivS, x, y) -> eval_int x env / eval_int y env
   | Loc _ | Unary _ | Binary _ | Ite _ -> raise (Invalid_operation t)
 
-and declare_var name size env =
+and declare_var name size pos env =
   let var = Dba.Var.create name ~bitsize:(Size.Bit.create size) ~tag:Empty in
-  env.define var;
+  env.define var pos;
   Dba.LValue.v var
 
 and eval_var ?size ((_, p) as t) name (annot : Ast.Size.t) env =
   let lval =
-    try env.lookup name
-    with Not_found -> (
-      match annot with
-      | Explicit size -> declare_var name size env
-      | Sizeof lval ->
-          let lval = eval_loc lval env in
-          declare_var name (Dba.LValue.size_of lval) env
-      | Eval expr ->
-          let size = eval_int expr env in
-          if size < 0 then raise (Invalid_operation expr);
-          declare_var name size env
-      | Implicit -> (
-          match size with
-          | None -> raise (Inference_failure (Expr.loc t, p))
-          | Some size -> declare_var name size env))
+    match env.lookup name with
+    | lval ->
+        let size' =
+          match annot with
+          | Explicit size -> size
+          | Sizeof lval ->
+              let lval = eval_loc lval env in
+              Dba.LValue.size_of lval
+          | Eval expr ->
+              let size = eval_int expr env in
+              if size < 0 then raise (Invalid_operation expr);
+              size
+          | Implicit -> Dba.LValue.size_of lval
+        and size = Dba.LValue.size_of lval in
+        if size <> size' then
+          raise (Invalid_annotation (t, size, env.origin name));
+        lval
+    | exception Not_found -> (
+        match annot with
+        | Explicit size -> declare_var name size p env
+        | Sizeof lval ->
+            let lval = eval_loc lval env in
+            declare_var name (Dba.LValue.size_of lval) p env
+        | Eval expr ->
+            let size = eval_int expr env in
+            if size < 0 then raise (Invalid_operation expr);
+            declare_var name size p env
+        | Implicit -> (
+            match size with
+            | None -> raise (Inference_failure (Expr.loc t, p))
+            | Some size -> declare_var name size p env))
   in
   Option.iter
     (fun size ->
@@ -1347,14 +1361,14 @@ let try_and_parse grammar_extensions lexbuf =
   | [ (Syntax.Program ast, _) ] -> ast
   | exception Failure _ ->
       let s =
-        Format.asprintf "@[<v>Probable lexing error %a@]" pp_pos
+        Format.asprintf "@[<v>Probable lexing error %a@]" Parse_utils.pp_pos
           (Dyp.lexeme_end_p lexbuf)
       in
       raise (Parse_utils.UserFriendlyParseError s)
   | _ | (exception Dyp.Syntax_error) ->
       let s =
         Format.asprintf "@[<v>Parse error at word `%s' %a@]" (Dyp.lexeme lexbuf)
-          pp_pos (Dyp.lexeme_end_p lexbuf)
+          Parse_utils.pp_pos (Dyp.lexeme_end_p lexbuf)
       in
       raise (Parse_utils.UserFriendlyParseError s)
 

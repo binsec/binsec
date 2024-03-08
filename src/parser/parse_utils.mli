@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,6 +24,9 @@
 exception UserFriendlyParseError of string
 (** the exception for errors in read_* functions. Use `to_string` on it to get
  * a user-friendly error message *)
+
+val pp_pos : Format.formatter -> Lexing.position -> unit
+(** pretty print a lexing position with some context *)
 
 val read_file :
   parser:('a -> Lexing.lexbuf -> 'b) -> lexer:'a -> filename:string -> 'b

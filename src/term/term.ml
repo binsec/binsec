@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -1271,6 +1271,13 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
              (size - i))
           (binary And y (constant (Bv.extract ~hi:(i - 1) ~lo:0 bv)) i)
           (size - i)
+    | Lsr, Binary { f = Lsl; x; y = Cst bv; size; _ }, Cst bv'
+      when Bv.uge bv bv' ->
+        let i = Bv.to_uint bv in
+        binary Lsl
+          (unary (Uext i) (unary (Restrict { hi = size - 1 - i; lo = 0 }) x))
+          (constant (Bv.sub bv bv'))
+          size
     (* forward ite *)
     | f, Ite { c; t = Cst bv; e; _ }, (Cst bv' as y) ->
         ite c (constant (Bv.binary f bv bv')) (binary f e y sx)

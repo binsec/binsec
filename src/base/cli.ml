@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -599,7 +599,12 @@ module Generic_make (D : DECL) = struct
     Cli.insert_node Cli.cli cli_space
 
   module Builder = struct
-    module Any (P : DETAILED_CLI_DECL) = struct
+    module Gen (P : sig
+      include DETAILED_CLI_DECL
+
+      val values : Values.t
+    end) =
+    struct
       type t = P.t
 
       let default = P.default
@@ -621,10 +626,16 @@ module Generic_make (D : DECL) = struct
 
       let spec = Scan (fun s -> set @@ P.of_string s)
       let key = P.name
-      let cspec = Cli_spec.simple ~key ~doc ~spec
+      let cspec = Cli_spec.create ~values:P.values ~key ~doc ~spec
       let is_default () = !value = default
       let _ = extend cspec
     end
+
+    module Any (P : DETAILED_CLI_DECL) = Gen (struct
+      include P
+
+      let values = Values.Unconstrained
+    end)
 
     module Any_opt (P : sig
       include CLI_DECL
@@ -650,6 +661,17 @@ module Generic_make (D : DECL) = struct
       let is_default () = !value = None
       let _ = extend cspec
     end
+
+    module Choice (P : sig
+      include DETAILED_CLI_DECL
+
+      val choices : string list
+    end) =
+    Gen (struct
+      include P
+
+      let values = Values.one_of P.choices
+    end)
 
     module Boolean (P : sig
       include CLI_DECL
@@ -855,7 +877,7 @@ module Generic_make (D : DECL) = struct
       val default : string
       val choices : string list
     end) =
-    Any (struct
+    Choice (struct
       type t = string
 
       include P
@@ -879,7 +901,7 @@ module Generic_make (D : DECL) = struct
       val choices : string list
       val default : t
     end) =
-    Any (struct
+    Choice (struct
       include P
 
       let of_string s =

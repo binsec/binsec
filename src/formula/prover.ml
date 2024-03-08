@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -62,12 +62,21 @@ let executable = function
 let name_of = executable
 
 let check_version = function
-  | Bitwuzla -> (
+  | Bitwuzla ->
       fun version ->
-        try
-          Scanf.fscanf version "%d.%d.%d%s" (fun major minor _fix _ ->
-              major > 0 || minor >= 2)
-        with Scanf.Scan_failure _ | Failure _ | End_of_file -> false)
+        let check =
+          try
+            let ic = Scanf.Scanning.from_channel version in
+            Scanf.bscanf ic "%d.%d.%d%s" (fun major minor _fix _ ->
+                major > 0 || minor >= 2)
+          with Scanf.Scan_failure _ | Failure _ | End_of_file -> false
+        in
+        if not check then
+          Logger.warning
+            "Found %a in the path, but the version does not match (expects \
+             >=0.2)."
+            pp Bitwuzla;
+        check
   | _ -> Fun.const true
 (* TODO ? *)
 

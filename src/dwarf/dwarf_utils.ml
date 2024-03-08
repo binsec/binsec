@@ -19,12 +19,10 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Definition of command-line & programmatic options for BBSSE *)
+open Loader_buf
 
-include Cli.S
-module MaxBB : Cli.INTEGER_LIST
-module Consolidate : Cli.BOOLEAN
-module FindJumpsBetween : Cli.INTEGER_LIST
-module FindAllJumps : Cli.BOOLEAN
-module CallsToProceed : Cli.INTEGER_SET
-module Directives : Cli.STRING_OPT
+let read_addr cursor =
+  match Kernel_options.Machine.bits () with
+  | `x32 -> Read.u32 cursor
+  | `x64 -> Read.u64 cursor
+  | _ -> Dwarf_options.Logger.fatal "unexpected architecture bit size"

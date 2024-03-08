@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,11 +21,13 @@
 
 module type ARCH = sig
   val get_defs : unit -> (string * Dba.LValue.t) list
+  val get_return_address : unit -> Dba.Expr.t
   val get_arg : ?syscall:bool -> int -> Dba.Expr.t
   val get_ret : ?syscall:bool -> unit -> Dba.LValue.t
   val make_return : ?value:Dba.Expr.t -> unit -> Dhunk.t
   val get_stack_pointer : unit -> Dba.Var.t * Bitvector.t
   val get_shortlived_flags : unit -> Dba.Var.t list
+  val get_dwarf_register : int -> Dba.Expr.t
 
   val core :
     Loader_elf.Img.t -> Virtual_address.t * (Dba.Var.t * Dba.Expr.t) list
@@ -53,14 +55,29 @@ module X86 : ARCH = struct
   and gs_base = Dba.Var.create "gs_base" ~bitsize:Size.Bit.bits32 ~tag:info
   and ss = Dba.Var.create "ss" ~bitsize:Size.Bit.bits16 ~tag:info
 
-  let xmm0 = Dba.Var.create "xmm0" ~bitsize:Size.Bit.bits128 ~tag:info
-  and xmm1 = Dba.Var.create "xmm1" ~bitsize:Size.Bit.bits128 ~tag:info
-  and xmm2 = Dba.Var.create "xmm2" ~bitsize:Size.Bit.bits128 ~tag:info
-  and xmm3 = Dba.Var.create "xmm3" ~bitsize:Size.Bit.bits128 ~tag:info
-  and xmm4 = Dba.Var.create "xmm4" ~bitsize:Size.Bit.bits128 ~tag:info
-  and xmm5 = Dba.Var.create "xmm5" ~bitsize:Size.Bit.bits128 ~tag:info
-  and xmm6 = Dba.Var.create "xmm6" ~bitsize:Size.Bit.bits128 ~tag:info
-  and xmm7 = Dba.Var.create "xmm7" ~bitsize:Size.Bit.bits128 ~tag:info
+  let stx =
+    Array.init 8 (fun x ->
+        Dba.Var.create (Format.sprintf "st%d" x) ~bitsize:Size.Bit.bits80
+          ~tag:info)
+
+  let mmx =
+    Array.init 8 (fun x ->
+        Dba.Var.create (Format.sprintf "mm%d" x) ~bitsize:Size.Bit.bits64
+          ~tag:info)
+
+  let xmmx =
+    Array.init 8 (fun x ->
+        Dba.Var.create (Format.sprintf "xmm%d" x) ~bitsize:Size.Bit.bits128
+          ~tag:info)
+
+  let xmm0 = Array.get xmmx 0
+  and xmm1 = Array.get xmmx 1
+  and xmm2 = Array.get xmmx 2
+  and xmm3 = Array.get xmmx 3
+  and xmm4 = Array.get xmmx 4
+  and xmm5 = Array.get xmmx 5
+  and xmm6 = Array.get xmmx 6
+  and xmm7 = Array.get xmmx 7
 
   let info = Dba.Var.Tag.Flag
 
@@ -329,6 +346,9 @@ module X86 : ARCH = struct
   and ebp_r = Dba.Expr.v ebp
   and four = Dba.Expr.constant (Bitvector.of_int ~size:32 4)
 
+  let return_address = Dba.Expr.load Size.Byte.four LittleEndian esp_r
+  let get_return_address () = return_address
+
   let get_arg ?(syscall = false) i =
     if syscall then
       match i with
@@ -369,6 +389,43 @@ module X86 : ARCH = struct
 
   let get_stack_pointer () = (esp, Bitvector.of_int ~size:32 0xfff00000)
   let max_instruction_len = Size.Byte.fifteen
+
+  let eax_r = Dba.Expr.v eax
+  and eip_r = Dba.Expr.var "eip" 32
+  (* note that eip is not used nor updated by the DBA semantics -- do not use it outside of debug information *)
+
+  and es_r = Dba.Expr.v es
+  and cs_r = Dba.Expr.v cs
+  and ss_r = Dba.Expr.v ss
+  and ds_r = Dba.Expr.v ds
+  and fs_r = Dba.Expr.v fs
+  and gs_r = Dba.Expr.v gs
+  and stx_r = Array.map Dba.Expr.v stx
+  and mmx_r = Array.map Dba.Expr.v mmx
+  and xmmx_r = Array.map Dba.Expr.v xmmx
+
+  let get_dwarf_register = function
+    | 0 -> eax_r
+    | 1 -> ecx_r
+    | 2 -> edx_r
+    | 3 -> ebx_r
+    | 4 -> esp_r
+    | 5 -> ebp_r
+    | 6 -> esi_r
+    | 7 -> edi_r
+    | 8 -> eip_r
+    | (11 | 12 | 13 | 14 | 15 | 16 | 17 | 18) as x -> Array.get stx_r (x - 11)
+    | (21 | 22 | 23 | 24 | 25 | 26 | 27 | 28) as x -> Array.get xmmx_r (x - 21)
+    | (29 | 30 | 31 | 32 | 33 | 34 | 35 | 36) as x -> Array.get mmx_r (x - 29)
+    | 40 -> es_r
+    | 41 -> cs_r
+    | 42 -> ss_r
+    | 43 -> ds_r
+    | 44 -> fs_r
+    | 45 -> gs_r
+    | n ->
+        Kernel_options.Logger.fatal
+          "unable to map integer %d to a known expression" n
 end
 
 module AMD64 : ARCH = struct
@@ -814,6 +871,9 @@ module AMD64 : ARCH = struct
   and r10_r = Dba.Expr.v r10
   and eight = Dba.Expr.constant (Bitvector.of_int ~size:64 8)
 
+  let return_address = Dba.Expr.load Size.Byte.eight LittleEndian rsp_r
+  let get_return_address () = return_address
+
   let get_arg ?(syscall = false) i =
     if syscall then
       match i with
@@ -863,28 +923,35 @@ module AMD64 : ARCH = struct
     | Some value -> val_return value
 
   let get_stack_pointer () = (rsp, Bitvector.of_int64 0x7fff000000000000L)
+  let get_dwarf_register _ = Errors.not_yet_implemented "AMD64 dwarf mapping"
   let max_instruction_len = Size.Byte.fifteen
 end
 
 module ARM : ARCH = struct
   let info = Dba.Var.Tag.Register
 
-  let r0 = Dba.Var.create "r0" ~bitsize:Size.Bit.bits32 ~tag:info
-  and r1 = Dba.Var.create "r1" ~bitsize:Size.Bit.bits32 ~tag:info
-  and r2 = Dba.Var.create "r2" ~bitsize:Size.Bit.bits32 ~tag:info
-  and r3 = Dba.Var.create "r3" ~bitsize:Size.Bit.bits32 ~tag:info
-  and r4 = Dba.Var.create "r4" ~bitsize:Size.Bit.bits32 ~tag:info
-  and r5 = Dba.Var.create "r5" ~bitsize:Size.Bit.bits32 ~tag:info
-  and r6 = Dba.Var.create "r6" ~bitsize:Size.Bit.bits32 ~tag:info
-  and r7 = Dba.Var.create "r7" ~bitsize:Size.Bit.bits32 ~tag:info
-  and r8 = Dba.Var.create "r8" ~bitsize:Size.Bit.bits32 ~tag:info
-  and r9 = Dba.Var.create "r9" ~bitsize:Size.Bit.bits32 ~tag:info
-  and r10 = Dba.Var.create "r10" ~bitsize:Size.Bit.bits32 ~tag:info
+  let rx =
+    Array.init 11 (fun i ->
+        Dba.Var.create (Format.sprintf "r%d" i) ~bitsize:Size.Bit.bits32
+          ~tag:info)
+
+  let r0 = Array.get rx 0
+  and r1 = Array.get rx 1
+  and r2 = Array.get rx 2
+  and r3 = Array.get rx 3
+  and r4 = Array.get rx 4
+  and r5 = Array.get rx 5
+  and r6 = Array.get rx 6
+  and r7 = Array.get rx 7
+  and r8 = Array.get rx 8
+  and r9 = Array.get rx 9
+  and r10 = Array.get rx 10
   and r11 = Dba.Var.create "fp" ~bitsize:Size.Bit.bits32 ~tag:info
   and r12 = Dba.Var.create "ip" ~bitsize:Size.Bit.bits32 ~tag:info
   and r13 = Dba.Var.create "sp" ~bitsize:Size.Bit.bits32 ~tag:info
   and r14 = Dba.Var.create "lr" ~bitsize:Size.Bit.bits32 ~tag:info
   and r15 = Dba.Var.create "pc" ~bitsize:Size.Bit.bits32 ~tag:info
+  (* note that pc is not used nor updated by the DBA semantics -- do not use it outside of debug information *)
 
   let info = Dba.Var.Tag.Flag
 
@@ -925,7 +992,7 @@ module ARM : ARCH = struct
     ]
 
   let get_shortlived_flags () = []
-  let core _ = raise (Errors.not_yet_implemented "arm core")
+  let core _ = Errors.not_yet_implemented "arm core"
   let get_defs () = defs
 
   let r0_l = Dba.LValue.v r0
@@ -935,11 +1002,13 @@ module ARM : ARCH = struct
   and r3_r = Dba.Expr.v r3
   and r13_r = Dba.Expr.v r13
   and r14_r = Dba.Expr.v r14
+  and r15_r = Dba.Expr.v r15
 
   let ret = r0_l
+  let get_return_address () = r14_r
 
   let get_arg ?(syscall = false) i =
-    if syscall then raise (Errors.not_yet_implemented "syscall");
+    if syscall then Errors.not_yet_implemented "syscall";
     match i with
     | 0 -> r0_r
     | 1 -> r1_r
@@ -966,43 +1035,66 @@ module ARM : ARCH = struct
     | Some value -> val_return value
 
   let get_stack_pointer () = (r13, Bitvector.of_int ~size:32 0xfff00000)
+
+  let rx_r = Array.map Dba.Expr.v rx
+  and sl_r = Dba.Expr.v r10
+  and fp_r = Dba.Expr.v r11
+  and ip_r = Dba.Expr.v r12
+
+  let get_dwarf_register = function
+    | (0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9) as n -> Array.get rx_r n
+    | 10 -> sl_r
+    | 11 -> fp_r
+    | 12 -> ip_r
+    | 13 -> r13_r
+    | 14 -> r14_r
+    | 15 -> r15_r
+    | n ->
+        Kernel_options.Logger.fatal
+          "unable to map integer %d to a known expression" n
+
   let max_instruction_len = Size.Byte.four
 end
 
 module AARCH64 : ARCH = struct
   let info = Dba.Var.Tag.Register
 
-  let x0 = Dba.Var.create "x0" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x1 = Dba.Var.create "x1" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x2 = Dba.Var.create "x2" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x3 = Dba.Var.create "x3" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x4 = Dba.Var.create "x4" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x5 = Dba.Var.create "x5" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x6 = Dba.Var.create "x6" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x7 = Dba.Var.create "x7" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x8 = Dba.Var.create "x8" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x9 = Dba.Var.create "x9" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x10 = Dba.Var.create "x10" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x11 = Dba.Var.create "x11" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x12 = Dba.Var.create "x12" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x13 = Dba.Var.create "x13" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x14 = Dba.Var.create "x14" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x15 = Dba.Var.create "x15" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x16 = Dba.Var.create "x16" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x17 = Dba.Var.create "x17" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x18 = Dba.Var.create "x18" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x19 = Dba.Var.create "x19" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x20 = Dba.Var.create "x20" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x21 = Dba.Var.create "x21" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x22 = Dba.Var.create "x22" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x23 = Dba.Var.create "x23" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x24 = Dba.Var.create "x24" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x25 = Dba.Var.create "x25" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x26 = Dba.Var.create "x26" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x27 = Dba.Var.create "x27" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x28 = Dba.Var.create "x28" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x29 = Dba.Var.create "x29" ~bitsize:Size.Bit.bits64 ~tag:info
-  and x30 = Dba.Var.create "x30" ~bitsize:Size.Bit.bits64 ~tag:info
+  let rx =
+    Array.init 31 (fun i ->
+        Dba.Var.create (Format.sprintf "x%d" i) ~bitsize:Size.Bit.bits64
+          ~tag:info)
+
+  let x0 = Array.get rx 0
+  and x1 = Array.get rx 1
+  and x2 = Array.get rx 2
+  and x3 = Array.get rx 3
+  and x4 = Array.get rx 4
+  and x5 = Array.get rx 5
+  and x6 = Array.get rx 6
+  and x7 = Array.get rx 7
+  and x8 = Array.get rx 8
+  and x9 = Array.get rx 9
+  and x10 = Array.get rx 10
+  and x11 = Array.get rx 11
+  and x12 = Array.get rx 12
+  and x13 = Array.get rx 13
+  and x14 = Array.get rx 14
+  and x15 = Array.get rx 15
+  and x16 = Array.get rx 16
+  and x17 = Array.get rx 17
+  and x18 = Array.get rx 18
+  and x19 = Array.get rx 19
+  and x20 = Array.get rx 20
+  and x21 = Array.get rx 21
+  and x22 = Array.get rx 22
+  and x23 = Array.get rx 23
+  and x24 = Array.get rx 24
+  and x25 = Array.get rx 25
+  and x26 = Array.get rx 26
+  and x27 = Array.get rx 27
+  and x28 = Array.get rx 28
+  and x29 = Array.get rx 29
+  and x30 = Array.get rx 30
   and sp = Dba.Var.create "sp" ~bitsize:Size.Bit.bits64 ~tag:info
 
   let info = Dba.Var.Tag.Flag
@@ -1078,6 +1170,37 @@ module AARCH64 : ARCH = struct
       ("x29", Dba.LValue.v x29);
       ("x30", Dba.LValue.v x30);
       ("sp", Dba.LValue.v sp);
+      ("w0", Dba.LValue.restrict x0 0 31);
+      ("w1", Dba.LValue.restrict x1 0 31);
+      ("w2", Dba.LValue.restrict x2 0 31);
+      ("w3", Dba.LValue.restrict x3 0 31);
+      ("w4", Dba.LValue.restrict x4 0 31);
+      ("w5", Dba.LValue.restrict x5 0 31);
+      ("w6", Dba.LValue.restrict x6 0 31);
+      ("w7", Dba.LValue.restrict x7 0 31);
+      ("w8", Dba.LValue.restrict x8 0 31);
+      ("w9", Dba.LValue.restrict x9 0 31);
+      ("w10", Dba.LValue.restrict x10 0 31);
+      ("w11", Dba.LValue.restrict x11 0 31);
+      ("w12", Dba.LValue.restrict x12 0 31);
+      ("w13", Dba.LValue.restrict x13 0 31);
+      ("w14", Dba.LValue.restrict x14 0 31);
+      ("w15", Dba.LValue.restrict x15 0 31);
+      ("w16", Dba.LValue.restrict x16 0 31);
+      ("w17", Dba.LValue.restrict x17 0 31);
+      ("w18", Dba.LValue.restrict x18 0 31);
+      ("w19", Dba.LValue.restrict x19 0 31);
+      ("w20", Dba.LValue.restrict x20 0 31);
+      ("w21", Dba.LValue.restrict x21 0 31);
+      ("w22", Dba.LValue.restrict x22 0 31);
+      ("w23", Dba.LValue.restrict x23 0 31);
+      ("w24", Dba.LValue.restrict x24 0 31);
+      ("w25", Dba.LValue.restrict x25 0 31);
+      ("w26", Dba.LValue.restrict x26 0 31);
+      ("w27", Dba.LValue.restrict x27 0 31);
+      ("w28", Dba.LValue.restrict x28 0 31);
+      ("w29", Dba.LValue.restrict x29 0 31);
+      ("w30", Dba.LValue.restrict x30 0 31);
       ("n", Dba.LValue.v n);
       ("z", Dba.LValue.v z);
       ("c", Dba.LValue.v c);
@@ -1086,7 +1209,7 @@ module AARCH64 : ARCH = struct
     ]
 
   let get_shortlived_flags () = []
-  let core _ = raise (Errors.not_yet_implemented "arm core")
+  let core _ = Errors.not_yet_implemented "arm core"
   let get_defs () = defs
 
   let x0_l = Dba.LValue.v x0
@@ -1102,9 +1225,10 @@ module AARCH64 : ARCH = struct
   and sp_r = Dba.Expr.v sp
 
   let ret = x0_l
+  let get_return_address () = x30_r
 
   let get_arg ?(syscall = false) i =
-    if syscall then raise (Errors.not_yet_implemented "syscall");
+    if syscall then Errors.not_yet_implemented "syscall";
     match i with
     | 0 -> x0_r
     | 1 -> x1_r
@@ -1133,6 +1257,20 @@ module AARCH64 : ARCH = struct
     | None -> void_return
     | Some (Var v) when Dba.Var.equal v x0 -> void_return
     | Some value -> val_return value
+
+  let rx_r = Array.map Dba.Expr.v rx
+  and pc_r = Dba.Expr.var "pc" 64
+
+  let get_dwarf_register = function
+    | ( 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16
+      | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 ) as
+      n ->
+        Array.get rx_r n
+    | 31 -> sp_r
+    | 32 -> pc_r
+    | n ->
+        Kernel_options.Logger.fatal
+          "unable to map integer %d to a known expression" n
 
   let get_stack_pointer () = (sp, Bitvector.of_int64 0x7fff000000000000L)
   let max_instruction_len = Size.Byte.four
@@ -1213,7 +1351,7 @@ module PPC64 : ARCH = struct
     ]
 
   let get_shortlived_flags () = []
-  let core _ = raise (Errors.not_yet_implemented "ppc core")
+  let core _ = Errors.not_yet_implemented "ppc core"
   let get_defs () = defs
 
   let r3_l = Dba.LValue.v r3
@@ -1229,9 +1367,10 @@ module PPC64 : ARCH = struct
   and r1_r = Dba.Expr.v r1
 
   let ret = r3_l
+  let get_return_address () = lr_r
 
   let get_arg ?(syscall = false) i =
-    if syscall then raise (Errors.not_yet_implemented "syscall");
+    if syscall then Errors.not_yet_implemented "syscall";
     match i with
     | 0 -> r3_r
     | 1 -> r4_r
@@ -1262,6 +1401,7 @@ module PPC64 : ARCH = struct
     | Some value -> val_return value
 
   let get_stack_pointer () = (r1, Bitvector.of_int64 0x7fff000000000000L)
+  let get_dwarf_register _ = Errors.not_yet_implemented "PPC64 dwarf mapping"
   let max_instruction_len = Size.Byte.four
 end
 
@@ -1295,7 +1435,7 @@ end) : ARCH = struct
         "s3";
         "s4";
         "s5";
-        "s7";
+        "s6";
         "s7";
         "s8";
         "s9";
@@ -1317,7 +1457,7 @@ end) : ARCH = struct
 
   let get_shortlived_flags () = []
   let get_defs () = defs
-  let core _ = raise (Errors.not_yet_implemented "RISC V core")
+  let core _ = Errors.not_yet_implemented "RISC V core"
   let a0 = reg 10
 
   let a0_l = Dba.LValue.v a0
@@ -1334,9 +1474,10 @@ end) : ARCH = struct
 
   let bytesize = Size.Byte.create (C.size / 8)
   let ret = a0_l
+  let get_return_address () = ra_r
 
   let get_arg ?(syscall = false) i =
-    if syscall then raise (Errors.not_yet_implemented "syscall");
+    if syscall then Errors.not_yet_implemented "syscall";
     match i with
     | 0 -> a0_r
     | 1 -> a1_r
@@ -1376,6 +1517,7 @@ end) : ARCH = struct
           raise
             (Errors.not_yet_implemented "incomplete architecture definition") )
 
+  let get_dwarf_register _ = Errors.not_yet_implemented "RISCV dwarf mapping"
   let max_instruction_len = Size.Byte.four
 end
 
@@ -1387,7 +1529,7 @@ module RISCV64 = RISCV (struct
   let size = 64
 end)
 
-module Z80 = struct
+module Z80 : ARCH = struct
   let defs =
     let add r l =
       let name = Z80_arch.name r in
@@ -1401,19 +1543,20 @@ module Z80 = struct
   let get_shortlived_flags () = []
   let get_defs () = defs
 
-  let get_arg ?syscall:_ _ =
-    raise (Errors.not_yet_implemented "Z80 calling convention")
+  let get_return_address () =
+    Errors.not_yet_implemented "Z80 calling convention"
+
+  let get_arg ?syscall:_ _ = Errors.not_yet_implemented "Z80 calling convention"
 
   let get_ret ?syscall:_ () =
-    raise (Errors.not_yet_implemented "Z80 calling convention")
+    Errors.not_yet_implemented "Z80 calling convention"
 
   let make_return ?value:_ () =
-    raise (Errors.not_yet_implemented "Z80 calling convention")
+    Errors.not_yet_implemented "Z80 calling convention"
 
-  let get_stack_pointer () =
-    raise (Errors.not_yet_implemented "Z80 definitions")
-
-  let core _ = raise (Errors.not_yet_implemented "Z80 core")
+  let get_stack_pointer () = Errors.not_yet_implemented "Z80 definitions"
+  let get_dwarf_register _ = Errors.not_yet_implemented "Z80 dwarf mapping"
+  let core _ = Errors.not_yet_implemented "Z80 core"
   let max_instruction_len = Size.Byte.four
 end
 
@@ -1429,11 +1572,15 @@ let get_arch () : (module ARCH) =
   | Z80 -> (module Z80)
   | _ ->
       (* TODO *)
-      raise (Errors.not_yet_implemented "incomplete architecture definition")
+      Errors.not_yet_implemented "incomplete architecture definition"
 
 let get_defs () =
   let module A = (val get_arch ()) in
   A.get_defs ()
+
+let get_return_address () =
+  let module A = (val get_arch ()) in
+  A.get_return_address ()
 
 let get_arg ?syscall i =
   let module A = (val get_arch ()) in
@@ -1458,6 +1605,10 @@ let get_stack_pointer () =
 let get_shortlived_flags () =
   let module A = (val get_arch ()) in
   A.get_shortlived_flags ()
+
+let get_dwarf_register n =
+  let module A = (val get_arch ()) in
+  A.get_dwarf_register n
 
 let max_instruction_len () =
   let module A = (val get_arch ()) in

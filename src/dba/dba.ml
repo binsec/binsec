@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -112,7 +112,7 @@ end
 
 module Var : sig
   module Tag : sig
-    type attribute = Value | Size | Last
+    type attribute = Value | Size | Last | Plt
 
     val pp_attribute : Format.formatter -> attribute -> unit
 
@@ -152,12 +152,13 @@ module Var : sig
   *)
 end = struct
   module Tag = struct
-    type attribute = Value | Size | Last
+    type attribute = Value | Size | Last | Plt
 
     let pp_attribute ppf = function
       | Value -> ()
       | Size -> Format.pp_print_string ppf ":size"
       | Last -> Format.pp_print_string ppf ":last"
+      | Plt -> Format.pp_print_string ppf "@plt"
 
     type t =
       | Flag
@@ -194,7 +195,6 @@ end = struct
       match (a, b) with
       | (Flag | Temp | Register | Empty), (Flag | Temp | Register | Empty) ->
           true
-      | Symbol (attr, _), Symbol (attr', _) -> attr = attr'
       | ( (Flag | Temp | Register | Symbol _ | Empty),
           (Flag | Temp | Register | Symbol _ | Empty) ) ->
           false
@@ -206,6 +206,7 @@ end = struct
       | Symbol (Value, _) -> 543159235
       | Symbol (Size, _) -> 72223805
       | Symbol (Last, _) -> 828390822
+      | Symbol (Plt, _) -> 985696643
       | Empty -> 152507349
 
     let weak_hash = function
@@ -215,6 +216,7 @@ end = struct
       | Symbol (Value, _) -> 543159235
       | Symbol (Size, _) -> 72223805
       | Symbol (Last, _) -> 828390822
+      | Symbol (Plt, _) -> 985696643
       | Empty -> 152507349
   end
 

@@ -19,12 +19,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Definition of command-line & programmatic options for BBSSE *)
-
-include Cli.S
-module MaxBB : Cli.INTEGER_LIST
-module Consolidate : Cli.BOOLEAN
-module FindJumpsBetween : Cli.INTEGER_LIST
-module FindAllJumps : Cli.BOOLEAN
-module CallsToProceed : Cli.INTEGER_SET
-module Directives : Cli.STRING_OPT
+val read_addr : Loader_buf.cursor -> int
+(** [read_addr] reads an address of either 32 or 64 bits
+    according to the current archirecture. *)

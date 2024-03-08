@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -99,8 +99,8 @@ module Make (E : EXPLORATION_STATISTICS) (Q : QUERY_STATISTICS) = struct
       "||      completed/cut               |||+--------------------------+|";
       "||       discontinued               |||+- Simplifications --------+|";
       "|+----------------------------------+|||      total               ||";
-      "|+- Topology -----------------------+|||        sat               ||";
-      "||   branching points               ||||      unsat               ||";
+      "|+- Topology -----------------------+|||       true               ||";
+      "||   branching points               ||||      false               ||";
       "||  max reached depth               ||||       enum               ||";
       "||                                  |||+--------------------------+|";
       "|+----------------------------------+||+- SMT queries ------------+|";
@@ -232,8 +232,8 @@ module Make (E : EXPLORATION_STATISTICS) (Q : QUERY_STATISTICS) = struct
     and max_depth = E.get_max_depth ()
     and instructions = E.get_instructions ()
     and unique_insts = E.get_unique_insts ()
-    and pre_sat = Q.Preprocess.get_sat ()
-    and pre_unsat = Q.Preprocess.get_unsat ()
+    and pre_true = Q.Preprocess.get_true ()
+    and pre_false = Q.Preprocess.get_false ()
     and pre_enum = Q.Preprocess.get_const ()
     and sol_sat = Q.Solver.get_sat ()
     and sol_unsat = Q.Solver.get_unsat ()
@@ -257,9 +257,9 @@ module Make (E : EXPLORATION_STATISTICS) (Q : QUERY_STATISTICS) = struct
     Draw.int 2 55 total_asserts;
     Draw.int 3 55 failed_asserts;
 
-    Draw.int 6 55 (pre_sat + pre_unsat + pre_enum);
-    Draw.int 7 55 pre_sat;
-    Draw.int 8 55 pre_unsat;
+    Draw.int 6 55 (pre_true + pre_false + pre_enum);
+    Draw.int 7 55 pre_true;
+    Draw.int 8 55 pre_false;
     Draw.int 9 55 pre_enum;
 
     Draw.int 12 55 (sol_sat + sol_unsat + sol_err);

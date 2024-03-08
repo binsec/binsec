@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -103,6 +103,11 @@ let pp_value_as (format : Output.format) ppf bv =
   | Dec -> Z.pp_print ppf @@ Bitvector.signed_of bv
   | Hex -> Format.pp_print_string ppf @@ Bitvector.to_hexstring bv
   | Ascii -> Format.fprintf ppf "%S" @@ Bitvector.to_asciistring bv
+
+let same_symbol name attr ((expr : Ast.Expr.t), _) =
+  match expr with
+  | Symbol ((name', attr'), _) -> name = name' && attr = attr'
+  | _ -> false
 
 module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
   module Exploration_stats = Stats.Exploration ()
@@ -237,10 +242,32 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
   let add path = env.worklist <- W.push path env.worklist
   let at_exit_callbacks = Queue.create ()
 
+  let threat_to_completeness () =
+    let max_depth = Exploration_stats.get_status Max_depth in
+    let incomplete_enum = Exploration_stats.get_status Enumeration_limit in
+    let unknown = Exploration_stats.get_status Unresolved_formula in
+    if max_depth + incomplete_enum + unknown > 0 then
+      Logger.warning "@[<v>Threat to completeness :%a@]"
+        (fun ppf (max_depth, incomplete_enum, unknown) ->
+          if max_depth > 0 then
+            Format.fprintf ppf
+              "@ - %d paths have reached the maximal depth and have been cut \
+               (-sse-depth)"
+              max_depth;
+          if incomplete_enum > 0 then
+            Format.fprintf ppf
+              "@ - some jump targets may have been omitted (-sse-jump-enum)";
+          if unknown > 0 then
+            Format.fprintf ppf
+              "@ - %d SMT solver queries remain unsolved (-fml-solver-timeout)"
+              unknown)
+        (max_depth, incomplete_enum, unknown)
+
   let halt () =
     Screen.release ();
     Logger.info "@[<v 0>@[<v 2>SMT queries@,%a@]@,@[<v 2>Exploration@,%a@]@,@]"
       Query_stats.pp () Exploration_stats.pp ();
+    threat_to_completeness ();
     Queue.iter (fun callback -> callback ()) at_exit_callbacks
 
   let ascii_stream name path state =
@@ -640,7 +667,7 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
                 Exploration_stats.add_path ();
                 handle (Path.fork path) depth ip addr x)
               bx;
-            if Exploration_stats.get_paths () - old_paths = n then (
+            if Exploration_stats.get_paths () - old_paths = n - 1 then (
               Logger.warning
                 "Enumeration of jump targets %@ %a hit the limit %d and may be \
                  incomplete"
@@ -836,13 +863,16 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
     in
     let parser_env =
       let wordsize = Kernel_options.Machine.word_size () in
-      let tbl = S.Htbl.create 128 in
+      let tbl = S.Htbl.create 128 and ori = S.Htbl.create 128 in
       List.iter
         (fun (name, var) -> S.Htbl.add tbl (String.lowercase_ascii name) var)
         (Isa_helper.get_defs ());
-      let define (var : Dba.Var.t) =
-        S.Htbl.add tbl (String.lowercase_ascii var.name) (Dba.LValue.v var)
+      let define (var : Dba.Var.t) pos =
+        let name = String.lowercase_ascii var.name in
+        S.Htbl.add tbl name (Dba.LValue.v var);
+        if pos <> Lexing.dummy_pos then S.Htbl.add ori name pos
       in
+      let origin name = S.Htbl.find_opt ori name in
       let lookup name = S.Htbl.find tbl (String.lowercase_ascii name) in
       let tbl = S.Htbl.create 128 in
 
@@ -852,9 +882,7 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
           let value =
             lazy
               (try List.assoc attr (S.Htbl.find_all symbols name)
-               with Not_found ->
-                 Logger.fatal "Can not resolve symbol <%s%a>" name
-                   Dba.Var.Tag.pp_attribute attr)
+               with Not_found -> raise (Unresolved (name, attr)))
           in
           (if S.Htbl.mem shadowing_symbols name then
              let file, sec = S.Htbl.find shadowing_symbols name in
@@ -875,12 +903,13 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
           wordsize;
           endianness = Kernel_options.Machine.endianness ();
           define;
+          origin;
           lookup;
           lookup_symbol;
         }
     in
     (match img with
-    | ELF img ->
+    | ELF img -> (
         let open Loader_elf in
         Array.iter
           (fun sym ->
@@ -906,7 +935,29 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
                 (Size, Bitvector.of_int ~size:addr_size size);
               S.Htbl.add symbols name
                 (Last, Bitvector.of_int ~size:addr_size (addr + size - 1))))
-          (Img.sections img)
+          (Img.sections img);
+        match Img.header img with
+        | { Ehdr.kind = DYN; machine = X86 _; _ } ->
+            let rela_plt, base =
+              Array.fold_left
+                (fun ((rela_opt, base) as r) sec ->
+                  let ({ Shdr.name; addr; _ } as header) = Section.header sec in
+                  match name with
+                  | ".rela.plt" -> (Some header, base)
+                  | ".plt" when base = -1 -> (rela_opt, addr + 16)
+                  | ".plt.sec" -> (rela_opt, addr)
+                  | _ -> r)
+                (None, -1) (Img.sections img)
+            in
+            Option.iter
+              (fun rela_plt ->
+                Array.iteri
+                  (fun i { Rel.symbol = { name; _ }; _ } ->
+                    S.Htbl.add symbols name
+                      (Plt, Bitvector.of_int ~size:addr_size (base + (16 * i))))
+                  (Rel.read img rela_plt))
+              rela_plt
+        | _ -> ())
     | _ ->
         let open Loader in
         Array.iter
@@ -1346,11 +1397,23 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
                           let addr = Virtual_address.of_bitvector bv in
                           if pre then register_hook prehooks addr (anchor, stmts)
                           else register_hook hooks addr (anchor, stmts)
-                        with Non_unique ->
-                          Logger.fatal
-                            "the stub address %s does not resolve to a unique \
-                             value"
-                            anchor)
+                        with
+                        | Non_unique ->
+                            Logger.fatal
+                              "the stub address %s does not resolve to a \
+                               unique value"
+                              anchor
+                        | Unresolved (name, attr) as exn
+                          when same_symbol name attr addr -> (
+                            match MissingSymbol.get () with
+                            | Error -> raise exn
+                            | Warn ->
+                                Logger.warning
+                                  "@[<v>Can not resolve symbol <%s%a>.@ Will \
+                                   ignore the following %a@]"
+                                  name Dba.Var.Tag.pp_attribute attr
+                                  Parse_utils.pp_pos (snd addr)
+                            | Quiet -> ()))
                       addresses;
                     state
                 | Script.Decode (opcode, stmts) ->
@@ -1430,7 +1493,7 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
     env.whooks <- whooks;
     (!start, path, state)
 
-  let unit =
+  let start () =
     let filename = Kernel_options.ExecFile.get () in
     Logger.debug "Running SSE on %s" filename;
     let entry, path, state =
@@ -1459,4 +1522,11 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
       | err ->
           Screen.release ();
           raise err
+
+  let unit =
+    try start ()
+    with err -> (
+      match Printexc.use_printers err with
+      | None -> raise err
+      | Some msg -> Logger.fatal "%s" msg)
 end

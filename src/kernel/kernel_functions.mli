@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,6 +23,7 @@
 
 val get_ep : unit -> Virtual_address.t option
 val get_img : unit -> Loader.Img.t
+val reset_img : unit -> unit
 
 module Loader : sig
   val set_arch : Loader.Img.t -> unit

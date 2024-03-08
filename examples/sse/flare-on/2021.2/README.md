@@ -10,7 +10,7 @@ Linux x86-64 environment with:
 # Setup
 
 ```console
-$ wget https://flare-on.com/files/Flare-On8_Challenges.zip
+$ wget http://flare-on.com/files/Flare-On8_Challenges.zip
 $ unzip Flare-On8_Challenges.zip 2/599EA8F84AD975CFB07E0E5732C9BA14.zip
 $ 7z x -pflare 02_known.7z
 ```

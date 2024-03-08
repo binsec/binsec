@@ -32,7 +32,7 @@
   (:standard -linkall))
  (flags
   (:standard -w -3))
- (libraries str bigarray ocamlgraph zarith dune-site dune-site.plugins)
+ (libraries unix str bigarray ocamlgraph zarith dune-site dune-site.plugins)
  (foreign_stubs
   (language c)
   (names :standard)))

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -337,6 +337,17 @@ module Ct_state = struct
     in
     t.conjunction <- visit constraints t t.conjunction;
     t.constraints <- constraints
+
+  let rec find_root array t =
+    try AxTbl.find t.roots array
+    with Not_found ->
+      let root =
+        match array with
+        | Root | Symbol _ -> array
+        | Layer { over; _ } -> find_root over t
+      in
+      AxTbl.add t.roots array root;
+      root
 end
 
 module Make
@@ -433,6 +444,7 @@ module Make
   let is_unknown_report () =
     Stats.get_pending_paths () > 0
     || !ct_cf_unknown + !ct_mem_unknown > 0
+    || Stats.get_status Non_executable_code > 0
     || Stats.get_status Max_depth > 0
     || Stats.get_status Enumeration_limit > 0
     || Stats.get_status Unresolved_formula > 0
@@ -466,7 +478,7 @@ module Make
                    in
                    let bitsize = Size.Byte.to_bitsize bytesize in
                    let var = Dba.Var.create name ~bitsize ~tag:Empty in
-                   env.define var;
+                   env.define var Lexing.dummy_pos;
                    let state = Eval.fresh var state path in
                    let value = State.lookup var state in
                    let state =
@@ -639,7 +651,7 @@ module Make
     let memory =
       List.fold_left
         (fun memory (Load { label; len; dir; addr; _ } : Ct_state.load) ->
-          let array = AxTbl.find ct_state.roots label in
+          let array = Ct_state.find_root label ct_state in
           let name =
             match array with
             | Root -> "@"
@@ -809,8 +821,12 @@ module Make
                   "@ - timeout has left (at least) %d pending paths \
                    (-sse-timeout)"
                   pendings;
+              let non_exec = Stats.get_status Non_executable_code in
+              if non_exec > 0 then
+                Format.fprintf ppf
+                  "@ - %d paths fell into non executable code segments" non_exec;
               let max_depth = Stats.get_status Max_depth in
-              if Stats.get_status Max_depth > 0 then
+              if max_depth > 0 then
                 Format.fprintf ppf
                   "@ - %d paths have reached the maximal depth and have been \
                    cut (-sse-depth)"

@@ -9,7 +9,7 @@ Linux x86-64 environment with:
 # Setup
 
 ```console
-$ wget https://flare-on.com/files/2015_FLAREOn_Challenges.zip
+$ wget http://flare-on.com/files/2015_FLAREOn_Challenges.zip
 $ unzip 2015_FLAREOn_Challenges.zip 1/Flare-On_start_2015.exe
 $ wine 1/Flare-On_start_2015.exe
 ```

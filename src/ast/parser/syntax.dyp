@@ -79,7 +79,7 @@ let alpha = ['a'-'z''A'-'Z']
 let alpha_num = (alpha | digit)
 let sident = '_'* alpha (alpha_num | '_')* ('.' (alpha_num | '_')+)*
 let tempvar = "%%" digit+
-let wident = [^ ':' '>' ' ' '#' '\n']*
+let wident = [^ ':' '@' '>' ' ' '#' '\n']*
 let comment = '#' [^'\n']*
 
 rule dquote buf = parse
@@ -127,7 +127,7 @@ main lexer =
                             { Scanf.sscanf (Dyp.lexeme lexbuf) "uext%d" Fun.id }
 "sext" digit+             ->  SEXT
                             { Scanf.sscanf (Dyp.lexeme lexbuf) "sext%d" Fun.id }
-'-'? (digit '_'*)+        ->  INT { Z.of_string (Dyp.lexeme lexbuf) }
+(digit '_'*)+             ->  INT { Z.of_string (Dyp.lexeme lexbuf) }
 bin | hex                 ->  INT { Z.of_string (Dyp.lexeme lexbuf) }
 '"'                       ->  CONST { string dquote lexbuf }
 "'"                       ->  CONST { string quote lexbuf }
@@ -140,8 +140,12 @@ space                     ->
 symbol:
   | '<' - wident<name> [ ':' attr ]?<attr> - '>'
     { Ast.Symbol.create name ?attr, dyp.symbol_start_pos () } core
+  | '<' - wident<name> - "@plt" - '>'
+    { Ast.Symbol.create name ~attr:Dba.Var.Tag.Plt,
+      dyp.symbol_start_pos () } core
 
 const:
+  | '-' INT<value>   { Ast.Expr.integer (Z.neg value), dyp.symbol_start_pos () }
   | INT<value>       { Ast.Expr.integer value, dyp.symbol_start_pos () }
   | CONST<value>     { Ast.Expr.constant value, dyp.symbol_start_pos () }
 
@@ -253,9 +257,11 @@ unop:
 
 arith0:
   | '*'        { Ast.Expr.mul }
-  | '/' 'u'?   { Ast.Expr.udiv }
+  | "/u"       { Ast.Expr.udiv }
+  | '/'        { Ast.Expr.udiv }
   | "/s"       { Ast.Expr.sdiv }
-  | '%' 'u'?   { Ast.Expr.umod }
+  | "%u"       { Ast.Expr.umod }
+  | '%'        { Ast.Expr.umod }
   | "%s"       { Ast.Expr.smod }
 
 bitwize0:
@@ -276,10 +282,14 @@ bitwize1:
 
 cmpop:
   | '='        { Ast.Expr.equal }
-  | ">=" 'u'?  { Ast.Expr.uge }
-  | '>' 'u'?   { Ast.Expr.ugt }
-  | "<=" 'u'?  { Ast.Expr.ule }
-  | '<' 'u'?   { Ast.Expr.ult }
+  | ">="       { Ast.Expr.uge }
+  | '>'        { Ast.Expr.ugt }
+  | "<="       { Ast.Expr.ule }
+  | '<'        { Ast.Expr.ult }
+  | ">=u"      { Ast.Expr.uge }
+  | ">u"       { Ast.Expr.ugt }
+  | "<=u"      { Ast.Expr.ule }
+  | "<u"       { Ast.Expr.ult }
   | ">=s"      { Ast.Expr.sge }
   | ">s"       { Ast.Expr.sgt }
   | "<=s"      { Ast.Expr.sle }

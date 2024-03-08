@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,78 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module I386 = struct
-  let eax = Dba.Expr.var "eax" 32
-  let ecx = Dba.Expr.var "ecx" 32
-  let edx = Dba.Expr.var "edx" 32
-  let ebx = Dba.Expr.var "ebx" 32
-  let esp = Dba.Expr.var "esp" 32
-  let ebp = Dba.Expr.var "ebp" 32
-  let esi = Dba.Expr.var "esi" 32
-  let edi = Dba.Expr.var "edi" 32
-  let eip = Dba.Expr.var "eip" 32
-  let stx = Array.init 8 (fun x -> Dba.Expr.var (Format.sprintf "st%d" x) 80)
-  let mmx = Array.init 8 (fun x -> Dba.Expr.var (Format.sprintf "mm%d" x) 64)
-  let xmmx = Array.init 8 (fun x -> Dba.Expr.var (Format.sprintf "xmm%d" x) 128)
-  let es = Dba.Expr.var "es" 16
-  let cs = Dba.Expr.var "cs" 16
-  let ss = Dba.Expr.var "ss" 16
-  let ds = Dba.Expr.var "ds" 16
-  let fs = Dba.Expr.var "fs" 16
-  let gs = Dba.Expr.var "gs" 16
-
-  let map = function
-    | 0 -> eax
-    | 1 -> ecx
-    | 2 -> edx
-    | 3 -> ebx
-    | 4 -> esp
-    | 5 -> ebp
-    | 6 -> esi
-    | 7 -> edi
-    | 8 -> eip
-    | (11 | 12 | 13 | 14 | 15 | 16 | 17 | 18) as x -> stx.(x - 11)
-    | (21 | 22 | 23 | 24 | 25 | 26 | 27 | 28) as x -> xmmx.(x - 21)
-    | (29 | 30 | 31 | 32 | 33 | 34 | 35 | 36) as x -> mmx.(x - 29)
-    | 40 -> es
-    | 41 -> cs
-    | 42 -> ss
-    | 43 -> ds
-    | 44 -> fs
-    | 45 -> gs
-    | x ->
-        Dwarf_options.Logger.fatal
-          "unable to map integer %d to a known expression" x
-end
-
-module ARMv7 = struct
-  let rx = Array.init 10 (fun x -> Dba.Expr.var (Format.sprintf "r%d" x) 32)
-  let sl = Dba.Expr.var "sl" 32
-  let fp = Dba.Expr.var "fp" 32
-  let ip = Dba.Expr.var "ip" 32
-  let sp = Dba.Expr.var "sp" 32
-  let lr = Dba.Expr.var "lr" 32
-  let pc = Dba.Expr.var "pc" 32
-
-  let map = function
-    | (0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9) as x -> rx.(x)
-    | 10 -> sl
-    | 11 -> fp
-    | 12 -> ip
-    | 13 -> sp
-    | 14 -> lr
-    | 15 -> pc
-    | x ->
-        Dwarf_options.Logger.fatal
-          "unable to map integer %d to a known expression" x
-end
-
-let map x =
-  match Kernel_options.Machine.get () with
-  | Machine.X86 { bits = `x32 } -> I386.map x
-  | Machine.ARM { rev = `v7; _ } -> ARMv7.map x
-  | mach ->
-      Dwarf_options.Logger.fatal "unsuported architecture %a" Machine.pp mach
+let map = Isa_helper.get_dwarf_register
 
 open Loader_buf
 
@@ -279,7 +208,7 @@ module Operator = struct
 
   let load format cursor : t =
     match Read.u8 cursor with
-    | 0x03 -> Addr (read format cursor)
+    | 0x03 -> Addr (Dwarf_utils.read_addr cursor)
     | 0x06 -> Deref
     | 0x08 -> Const (Read.u8 cursor)
     | 0x09 -> Const (Read.s8 cursor)
@@ -515,7 +444,7 @@ module Operator = struct
         Dba.Expr.(add reg (constant (Bitvector.of_int ~size a))) :: stack
     | Nop, _ -> stack
     | Call_frame_cfa, _ -> Utils.unsafe_get_opt frame :: stack
-    | _ -> raise (Errors.not_yet_implemented "Non compliant operator")
+    | _ -> Errors.not_yet_implemented "Non compliant operator"
 end
 
 type t = Operator.t list

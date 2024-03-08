@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -297,18 +297,22 @@ module Make (G : ChannelGroup) = struct
 
   (* Tag functions that react to color codes and channel tagging *)
   let tag_functions ppf =
-    let mark_open_tag tag_string =
-      match Color.string_to_terminal_color_codes tag_string with
-      | None -> ""
-      | Some tcolor_code -> sprintf "\027[%sm" tcolor_code
-    and print_open_tag tag_string =
-      if get_tagged_entry () && is_channel_tagstring tag_string then
-        fprintf ppf "[%s] " tag_string
+    let mark_open_stag = function
+      | String_tag tag_string -> (
+          match Color.string_to_terminal_color_codes tag_string with
+          | None -> ""
+          | Some tcolor_code -> sprintf "\027[%sm" tcolor_code)
+      | _ -> ""
+    and print_open_stag = function
+      | String_tag tag_string ->
+          if get_tagged_entry () && is_channel_tagstring tag_string then
+            fprintf ppf "[%s] " tag_string
+      | _ -> ()
     (* otherwise it's assumed to be a color tag string, handled by
        [mark_open_tag] *)
-    and print_close_tag _tag_string = ()
-    and mark_close_tag _ = "\027[0m" in
-    { mark_open_tag; mark_close_tag; print_open_tag; print_close_tag }
+    and print_close_stag _tag_string = ()
+    and mark_close_stag _ = "\027[0m" in
+    { mark_open_stag; mark_close_stag; print_open_stag; print_close_stag }
 
   let log finally channel txt =
     let ppfs = channel.ppfs in
@@ -418,7 +422,7 @@ module Make (G : ChannelGroup) = struct
         let ppfs = channel.ppfs in
         List.iter
           (fun ppf ->
-            pp_set_formatter_tag_functions ppf (tag_functions ppf);
+            pp_set_formatter_stag_functions ppf (tag_functions ppf);
             pp_set_print_tags ppf true)
           ppfs)
       channels

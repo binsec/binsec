@@ -1,3 +1,21 @@
+## 0.8.2 (2024-03-08)
+
+** Misc
+
+  - Best effort handling of `<`*symbol*`@plt>` in SSE script (`x86` for now)
+  - Add an option to ignore or simply warn when trying to `replace`
+    a symbol absent of the binary (`-sse-missing-symbol`)
+  - Warn for different threats to completeness at the end of SSE analysis
+
+** Bugs
+
+  - Fix several issues in `checkct` analysis
+  - Fix *choice* option not showing the alternatives
+  - Fix several parsing issues
+  - Fix some download links in examples
+  - Fix several issues in architecture handling
+  - Fix compilation issues with OCaml 5
+
 ## 0.8.1 (2023-10-31)
 
 ** Misc

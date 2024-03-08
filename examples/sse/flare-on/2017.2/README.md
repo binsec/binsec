@@ -9,7 +9,7 @@ Linux x86-64 environment with:
 # Setup
 
 ```console
-$ wget https://flare-on.com/files/Flare-On4_Challenges.zip
+$ wget http://flare-on.com/files/Flare-On4_Challenges.zip
 $ 7z e Flare-On4_Challenges.zip 02/IgniteMe.exe -pflare
 ```
 

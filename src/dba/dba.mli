@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -97,7 +97,7 @@ end
 
 module Var : sig
   module Tag : sig
-    type attribute = Value | Size | Last
+    type attribute = Value | Size | Last | Plt
 
     val pp_attribute : Format.formatter -> attribute -> unit
 

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -49,6 +49,7 @@ module Bit : sig
   val bits16 : t
   val bits32 : t
   val bits64 : t
+  val bits80 : t
   val bits128 : t
   val bits256 : t
   val bits512 : t

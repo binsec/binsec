@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,7 +22,8 @@
 type env = {
   wordsize : int;
   endianness : Machine.endianness;
-  define : Dba.Var.t -> unit;
+  define : Dba.Var.t -> Lexing.position -> unit;
+  origin : string -> Lexing.position option;
   lookup : string -> Dba.LValue.t;
   lookup_symbol : string -> Dba.Var.Tag.attribute -> Dba.Expr.t;
 }

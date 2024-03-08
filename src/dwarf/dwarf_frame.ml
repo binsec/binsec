@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -440,8 +440,8 @@ module Fde = struct
 
   let load_debug_frame format cursor offset cie =
     (* TODO this code work only for object files... *)
-    let initial_location = read format cursor in
-    let address_range = read format cursor in
+    let initial_location = Dwarf_utils.read_addr cursor in
+    let address_range = Dwarf_utils.read_addr cursor in
     let instructions =
       let rec loop instrs caf daf =
         if at_end cursor then List.rev instrs

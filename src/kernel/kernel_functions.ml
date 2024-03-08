@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,22 +21,20 @@
 
 module KO = Kernel_options
 
-let get_img =
+let get_img, reset_img =
   let img = ref None in
-  fun () ->
-    match !img with
-    | None -> (
-        match KO.ExecFile.get_opt () with
-        | None ->
-            let msg =
-              "Cannot get image since you have not set any binary file"
-            in
-            failwith msg
-        | Some f ->
-            let i = Loader.load_file f in
-            img := Some i;
-            i)
-    | Some i -> i
+  ( (fun () ->
+      match !img with
+      | None -> (
+          match KO.ExecFile.get_opt () with
+          | None ->
+              failwith "Cannot get image since you have not set any binary file"
+          | Some f ->
+              let i = Loader.load_file f in
+              img := Some i;
+              i)
+      | Some i -> i),
+    fun () -> img := None )
 
 let get_ep () =
   match KO.Entry_point.get_opt () with

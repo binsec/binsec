@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -623,12 +623,9 @@ let update_OF op1 op2 res size op =
       assign_flag OF
         Dba.Expr.(logand (diff signbit1 signbit2) (diff signbit1 rres))
   | Sbb ->
-      let open Dba in
-      let cf_flag = Expr.uext size cf_flag in
-      let op2' = Expr.add op1 cf_flag in
-      let signbit2 = Expr.bit_restrict bit op2' in
       (* ov=1 <->  A[n]\= B[n] /\ A[n] \= (A-B)[n] *)
-      assign_flag OF Expr.(logand (diff signbit1 signbit2) (diff signbit1 rres))
+      assign_flag OF
+        Dba.Expr.(logand (diff signbit1 signbit2) (diff signbit1 rres))
   | Xor | Or | And -> clear_flag OF
 
 let update_ZF res size =

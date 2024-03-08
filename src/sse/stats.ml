@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -65,6 +65,19 @@ module Exploration () : Types.EXPLORATION_STATISTICS_FULL = struct
     branches := 0;
     max_depth := 0;
     instructions := 0;
+    List.iter
+      (fun status -> counter status := 0)
+      [
+        Halt;
+        Cut;
+        Unsatisfiable_assumption;
+        Assertion_failed;
+        Max_depth;
+        Enumeration_limit;
+        Unresolved_formula;
+        Non_executable_code;
+        Die;
+      ];
     Virtual_address.Htbl.clear unique_insts;
     init_time.sec <- Unix.gettimeofday ()
 
@@ -134,20 +147,20 @@ end
 
 module Query () : Types.QUERY_STATISTICS = struct
   module Preprocess = struct
-    let sat = ref 0
-    let unsat = ref 0
+    let ctrue = ref 0
+    let cfalse = ref 0
     let const = ref 0
-    let get_sat () = !sat
-    let get_unsat () = !unsat
+    let get_true () = !ctrue
+    let get_false () = !cfalse
     let get_const () = !const
-    let total () = !sat + !unsat + !const
-    let incr_sat () = incr sat
-    let incr_unsat () = incr unsat
+    let total () = !ctrue + !cfalse + !const
+    let incr_true () = incr ctrue
+    let incr_false () = incr cfalse
     let incr_const () = incr const
 
     let reset () =
-      sat := 0;
-      unsat := 0;
+      ctrue := 0;
+      cfalse := 0;
       const := 0
 
     let pp ppf () =
@@ -155,15 +168,15 @@ module Query () : Types.QUERY_STATISTICS = struct
       fprintf ppf
         "@[<v 2>@[<h>Preprocessing simplifications@]@,\
          @[<h>total          %d@]@,\
-         @[<h>sat            %d@]@,\
-         @[<h>unsat          %d@]@,\
-         @[<h>constant enum  %d@]@]" (total ()) !sat !unsat !const
+         @[<h>true           %d@]@,\
+         @[<h>false          %d@]@,\
+         @[<h>constant enum  %d@]@]" (total ()) !ctrue !cfalse !const
 
     let to_toml () =
       Toml.Min.of_key_values
         [
-          (Toml.Min.key "sat", Toml.Types.TInt !sat);
-          (Toml.Min.key "unsat", Toml.Types.TInt !unsat);
+          (Toml.Min.key "sat", Toml.Types.TInt !ctrue);
+          (Toml.Min.key "unsat", Toml.Types.TInt !cfalse);
           (Toml.Min.key "const", Toml.Types.TInt !const);
         ]
   end

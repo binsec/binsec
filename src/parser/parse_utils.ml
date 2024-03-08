@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,6 +25,21 @@ let _ =
   Printexc.register_printer (function
     | UserFriendlyParseError s -> Some s
     | _ -> None)
+
+let pp_pos ppf (pos : Lexing.position) =
+  try
+    let ic = open_in pos.pos_fname in
+    let rec scan ic lnum r =
+      let line = input_line ic in
+      let len = String.length line in
+      if len < r then scan ic (lnum + 1) (r - len - 1)
+      else
+        Format.fprintf ppf "(line %d, column %d in %s)@ %S@ %s^" lnum r
+          pos.pos_fname line
+          (String.make (r + 1) ' ')
+    in
+    scan ic 1 pos.pos_cnum
+  with Sys_error _ | End_of_file -> ()
 
 let try_and_parse ~parser ~lexer ~lexbuf context =
   try parser lexer lexbuf with

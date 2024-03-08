@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -55,6 +55,7 @@ module Bit = struct
   let bits16 = create 16
   let bits32 = create 32
   let bits64 = create 64
+  let bits80 = create 80
   let bits128 = create 128
   let bits256 = create 256
   let bits512 = create 512

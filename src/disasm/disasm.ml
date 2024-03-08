@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -63,19 +63,20 @@ module Program = struct
     }
 
   let ppf_tag_functions ppf =
-    let print_open_tag _ = ()
-    and print_close_tag = function
-      | "function" -> fprintf ppf "@;<8 0> ; <_fun>"
+    let print_open_stag _ = ()
+    and print_close_stag = function
+      | String_tag "function" -> fprintf ppf "@;<8 0> ; <_fun>"
       | _ -> ()
     in
-    let mark_open_tag = function
-      | "function" -> if Logger.get_color () then "\027[0;36m" else ""
+    let mark_open_stag = function
+      | String_tag "function" ->
+          if Logger.get_color () then "\027[0;36m" else ""
       | _ -> ""
-    and mark_close_tag = function
-      | "function" -> if Logger.get_color () then "\027[0m" else ""
+    and mark_close_stag = function
+      | String_tag "function" -> if Logger.get_color () then "\027[0m" else ""
       | _ -> ""
     in
-    { mark_open_tag; mark_close_tag; print_open_tag; print_close_tag }
+    { mark_open_stag; mark_close_stag; print_open_stag; print_close_stag }
 
   let pp_no_dba ppf v =
     match Cfg.V.inst v with
@@ -99,7 +100,7 @@ module Program = struct
           Instruction.Generic.pp_mnemonic binstr
 
   let pp ppf p =
-    pp_set_formatter_tag_functions ppf (ppf_tag_functions ppf);
+    pp_set_formatter_stag_functions ppf (ppf_tag_functions ppf);
     pp_set_mark_tags ppf true;
     pp_set_print_tags ppf true;
     fprintf ppf "@[<v 0>";

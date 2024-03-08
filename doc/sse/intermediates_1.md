@@ -21,7 +21,7 @@ Some knowledge about Windows DLL and reverse-engineering could also help.
 
 We first need to download the [FLARE On 2015 challenge archive](https://flare-on.com/files/2015_FLAREOn_Challenges.zip) and extract its content.
 ```console
-$ wget https://flare-on.com/files/2015_FLAREOn_Challenges.zip
+$ wget http://flare-on.com/files/2015_FLAREOn_Challenges.zip
 $ unzip 2015_FLAREOn_Challenges.zip 1/Flare-On_start_2015.exe
 ```
 `Flare-On_start_2015.exe` is mini-installer GUI as it was originally provided by the FLARE website.  

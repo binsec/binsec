@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -186,7 +186,7 @@ struct
     in
     (content, t)
 
-  let select _ ~addr:_ _ _ _ = raise (Errors.not_yet_implemented "arrays")
+  let select _ ~addr:_ _ _ _ = Errors.not_yet_implemented "arrays"
 
   let empty () =
     let word_size = Kernel_options.Machine.word_size () in
@@ -211,7 +211,7 @@ struct
         Formula_pp.pp_varset keep;
     Formula_transformation.optimize_from_options ?is_controlled:None ~keep fm
 
-  let alloc ~array:_ _ = raise (Errors.not_yet_implemented "arrays")
+  let alloc ~array:_ _ = Errors.not_yet_implemented "arrays"
 
   let assign (lval : Dba.Var.t) value state =
     let value_size = Formula_utils.bv_size value in
@@ -246,7 +246,7 @@ struct
     in
     { state with formula; vmemory; fid }
 
-  let store _ ~addr:_ _ _ _ = raise (Errors.not_yet_implemented "arrays")
+  let store _ ~addr:_ _ _ _ = Errors.not_yet_implemented "arrays"
 
   let memcpy ~addr size img state =
     let reader = Lreader.of_zero_extend_buffer img in
@@ -438,7 +438,7 @@ struct
           _;
         } ->
         assert (v = var);
-        QS.Preprocess.incr_sat ();
+        QS.Preprocess.incr_true ();
         Some { state with formula; fid }
     | Some
         {
@@ -452,7 +452,7 @@ struct
           _;
         } ->
         assert (v = var);
-        QS.Preprocess.incr_unsat ();
+        QS.Preprocess.incr_false ();
         None
     | _ -> (
         let formula =
@@ -484,7 +484,7 @@ struct
           _;
         } ->
         assert (v = var);
-        QS.Preprocess.incr_sat ();
+        QS.Preprocess.incr_true ();
         True { state with formula; fid }
     | Some
         {
@@ -498,7 +498,7 @@ struct
           _;
         } ->
         assert (v = var);
-        QS.Preprocess.incr_unsat ();
+        QS.Preprocess.incr_false ();
         False { state with formula; fid }
     | _ -> (
         let formula = Formula.push_front_assert (Formula.mk_bl_var var) formula
@@ -544,8 +544,8 @@ struct
           _;
         } ->
         assert (v = var);
-        if Bitvector.is_one bv then QS.Preprocess.incr_sat ()
-        else if Bitvector.is_zero bv then QS.Preprocess.incr_unsat ()
+        if Bitvector.is_one bv then QS.Preprocess.incr_true ()
+        else if Bitvector.is_zero bv then QS.Preprocess.incr_false ()
         else QS.Preprocess.incr_const ();
         Logger.debug ~level:4 "Enumeration of %a resolved to constant %a"
           Formula_pp.pp_bv_term e Bitvector.pp bv;

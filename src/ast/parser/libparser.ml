@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,11 +20,10 @@
 (**************************************************************************)
 
 module Syntax = Syntax
-open Ast
 
 type obj =
   ( Ast.Expr.t Ast.loc -> Ast.Expr.t Ast.loc -> Ast.Expr.t,
-    t,
+    Ast.t,
     Ast.Expr.t Ast.loc,
     Ast.Instr.t,
     unit,
@@ -32,7 +31,7 @@ type obj =
     unit,
     Buffer.t,
     Ast.Loc.t Ast.loc,
-    Obj.t,
+    Ast.Obj.t,
     unit,
     string option,
     Dba.Var.Tag.attribute,
@@ -68,9 +67,9 @@ type obj =
     list,
     Machine.endianness,
     unit,
-    int Basic_types.interval,
+    int Interval.t,
     unit,
-    t list,
+    Ast.t list,
     Ast.Instr.t list,
     string,
     Ast.Symbol.t Ast.loc,

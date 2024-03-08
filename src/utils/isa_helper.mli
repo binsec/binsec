@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,9 +27,15 @@ val get_defs : unit -> (string * Dba.LValue.t) list
     Not complete yet.
 *)
 
+val get_return_address : unit -> Dba.Expr.t
+(** [get_return_address ()]
+    returns the way to compute the return address of a function
+    (only valid at the entry of the function).
+*)
+
 val get_arg : ?syscall:bool -> int -> Dba.Expr.t
 (** [get_arg n]
-    return the standard location of the [n]th argument of a function.
+    returns the standard location of the [n]th argument of a function.
 
     If [syscall] is [true], it returns the syscall calling convention instead.
     (Meaningfull for x86 only for now)
@@ -62,6 +68,11 @@ val get_shortlived_flags : unit -> Dba.Var.t list
 
     These flags are very likely to not be alive passed the return of
     a function.
+*)
+
+val get_dwarf_register : int -> Dba.Expr.t
+(** [get_dwarf_register n]
+    returns the DWARF mapping of the [n]th register.
 *)
 
 val core : Loader_elf.Img.t -> Virtual_address.t * (Dba.Var.t * Dba.Expr.t) list

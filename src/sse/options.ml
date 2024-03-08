@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -125,6 +125,21 @@ end)
 module ScriptFiles = Builder.String_list (struct
   let name = "script"
   let doc = "set file containing initializations, directives and stubs"
+end)
+
+type warnerror = Error | Warn | Quiet
+
+module MissingSymbol = Builder.Variant_choice_assoc (struct
+  type t = warnerror
+
+  let name = "missing-symbol"
+
+  let doc =
+    "Select how to handle function replacement when the symbol is not resolved \
+     from the binary"
+
+  let assoc_map = [ ("error", Error); ("warn", Warn); ("quiet", Quiet) ]
+  let default = Error
 end)
 
 module Timeout = Builder.Integer_option (struct

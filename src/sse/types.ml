@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -81,10 +81,19 @@ module Output = struct
 end
 
 exception Unknown
+exception Unresolved of string * Var.Tag.attribute
 exception Undef of Var.t
 exception Uninterp of string
 exception Non_unique
 exception Non_mergeable
+
+let () =
+  Printexc.register_printer (function
+    | Unresolved (name, attr) ->
+        Some
+          (Format.asprintf "Can not resolve symbol <%s%a>" name
+             Dba.Var.Tag.pp_attribute attr)
+    | _ -> None)
 
 type 'a test = True of 'a | False of 'a | Both of { t : 'a; f : 'a }
 type 'a target = ('a * string) list option
@@ -248,11 +257,11 @@ end
 
 module type QUERY_STATISTICS = sig
   module Preprocess : sig
-    val get_sat : unit -> int
-    val get_unsat : unit -> int
+    val get_true : unit -> int
+    val get_false : unit -> int
     val get_const : unit -> int
-    val incr_sat : unit -> unit
-    val incr_unsat : unit -> unit
+    val incr_true : unit -> unit
+    val incr_false : unit -> unit
     val incr_const : unit -> unit
     val pp : Format.formatter -> unit -> unit
     val to_toml : unit -> Toml.Types.table

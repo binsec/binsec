@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2023                                               *)
+(*  Copyright (C) 2016-2024                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -41,6 +41,10 @@ module QMerge : Cli.INTEGER
 module KillFlagsAtReturn : Cli.BOOLEAN
 module Randomize : Cli.BOOLEAN
 module ScriptFiles : Cli.STRING_LIST
+
+type warnerror = Error | Warn | Quiet
+
+module MissingSymbol : Cli.GENERIC with type t := warnerror
 module Timeout : Cli.INTEGER_OPT
 module Monitor : Cli.BOOLEAN
 

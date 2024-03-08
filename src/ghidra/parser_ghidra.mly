@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2023                                               */
+/*  Copyright (C) 2016-2024                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -45,7 +45,7 @@ let instruction :=
     {
       Virtual_address.of_bigint addr,
       Z.to_int size,
-      String.lowercase mnemonic,
+      String.lowercase_ascii mnemonic,
       kind,
       List.map Virtual_address.of_bigint successors
     }
