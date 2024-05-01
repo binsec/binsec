@@ -5,7 +5,7 @@
 
 (name binsec)
 
-(version "0.8.2")
+(version "0.9.0")
 (maintainers "BINSEC <binsec@saxifrage.saclay.cea.fr>")
 (authors
   "Adel Djoudi"
@@ -16,10 +16,12 @@
   "Guillaume Girol"
   "Josselin Feist"
   "Lesly-Ann Daniel"
+  "Mahmudul Faisal Al Ameen"
   "Manh-Dung Nguyen"
   "Mathéo Vergnolle"
   "Mathilde Ollivier"
   "Matthieu Lemerre"
+  "Nicolas Bellec"
   "Olivier Nicole"
   "Richard Bonichon"
   "Robin David"
@@ -27,6 +29,7 @@
   "Soline Ducousso"
   "Ta Thanh Dinh"
   "Yaëlle Vinçont"
+  "Yanis Sellami"
 )
 (license LGPL-2.1-or-later)
 (homepage "https://binsec.github.io")
@@ -67,10 +70,12 @@ An overview of some BINSEC features can be found in our SSPREW'17 tutorial.")
   curses
   llvm
   unisim_archisec
-  bitwuzla)
+  bitwuzla
+  bitwuzla-cxx)
  (conflicts
   (llvm (or (< 6.0.0) (>= 16.0.0)))
   (bitwuzla (< 1.0.4))
+  (bitwuzla-cxx (< 0.4))
   (unisim_archisec (< 0.0.6)))
  (tags
   ("binary code analysis"

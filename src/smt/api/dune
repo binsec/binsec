@@ -1,0 +1,29 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.smt.solver)
+ (name libsolver)
+ (modules :standard)
+ (private_modules :standard \ libsolver)
+ (libraries
+  binsec
+  (select
+   bitwuzla_c_binding.ml
+   from
+   (bitwuzla -> bitwuzla_c_binding.enabled.ml)
+   (!bitwuzla -> bitwuzla_c_binding.stub.ml))
+  (select
+   bitwuzla_cxx_binding.ml
+   from
+   (bitwuzla-cxx -> bitwuzla_cxx_binding.enabled.ml)
+   (!bitwuzla-cxx -> bitwuzla_cxx_binding.stub.ml))))
+
+(rule
+ (target libsolver.mli)
+ (deps common.ml factories.inc)
+ (action
+  (with-stdout-to
+   %{target}
+   (progn
+    (cat common.ml)
+    (cat factories.inc)))))

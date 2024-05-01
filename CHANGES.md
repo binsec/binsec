@@ -1,3 +1,27 @@
+## 0.9.0 (2024-05-01)
+
+** Features
+
+- Add a new SSE engine (`-sse-engine multi-checks`) that tries to reuse the
+  previous SMT solver session (incremental mode)
+- Add a common sub-expression elimination pass in SSE (`-sse-cse`)
+
+** Documentation
+
+- Add some comments in the SSE plugin interface
+
+** Misc
+
+- Reworked SMT solver interface
+- Support for latest version of the `bitwuzla` solver
+- Add some formula rewriting rules
+
+** Bugs
+
+- Fix solver queries taking several order times the given timeout
+- Fix some x86 and RISCV disassembly issues
+- Fix some script parser issues
+
 ## 0.8.2 (2024-03-08)
 
 ** Misc

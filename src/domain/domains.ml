@@ -23,6 +23,8 @@ open Common
 
 exception Empty = Empty
 
+type nonrec trilean = trilean = True | False | Unknown
+
 type nonrec projection = projection =
   | Top
   | Point of Z.t

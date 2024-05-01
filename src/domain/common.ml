@@ -21,6 +21,7 @@
 
 exception Empty
 
+type trilean = True | False | Unknown
 type projection = Top | Point of Z.t | Seq of { start : Z.t; n : Z.t }
 
 module type S = sig
@@ -42,6 +43,9 @@ module type S = sig
 
       @raise [Empty] If there is no intersection.
   *)
+
+  val is_zero : t -> trilean
+  (** [is_zero t] checks if [t] is the least significant bit is [0] *)
 
   val project : size:int -> t -> projection
   val top : int -> t

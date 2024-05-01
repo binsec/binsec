@@ -38,6 +38,7 @@ module MaxDepth : Cli.INTEGER
 module TransientEnum : Cli.INTEGER
 module JumpEnumDepth : Cli.INTEGER
 module QMerge : Cli.INTEGER
+module Cse : Cli.BOOLEAN
 module KillFlagsAtReturn : Cli.BOOLEAN
 module Randomize : Cli.BOOLEAN
 module ScriptFiles : Cli.STRING_LIST

@@ -166,7 +166,7 @@ let parse_result s =
   let open Lexing in
   let lexbuf = from_string s in
   try
-    let res = mk_instruction (Parser.decoder_msg Lexer.token lexbuf) in
+    let res = mk_instruction (Parser.decoder_msg_eof Lexer.token lexbuf) in
     Statistics.incr_decoded res stats;
     Ok res
   with _ -> dummy_parse s

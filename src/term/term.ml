@@ -985,7 +985,7 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     | ( Restrict { hi; lo = 0 },
         Binary
           {
-            f = (Plus | Minus) as bop;
+            f = (Plus | Minus | And | Or | Xor) as bop;
             x =
               (Unary { f = Uext _ | Sext _; _ } | Binary { f = Concat; _ }) as x;
             y = Cst bv;
@@ -1034,6 +1034,24 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
         binary Minus a (constant (Bv.neg bv)) sx
     | Minus, a, Cst bv when Bv.is_neg bv && not (Bv.is_min_sbv bv) ->
         binary Plus a (constant (Bv.neg bv)) sx
+    | Mul, Binary { f = Mul; x = a; y = Cst b; _ }, Cst c ->
+        binary Mul a (constant (Bv.binary Mul b c)) sx
+    | Or, Binary { f = Or; x = a; y = Cst b; _ }, Cst c ->
+        binary Or a (constant (Bv.binary Or b c)) sx
+    | And, Binary { f = And; x = a; y = Cst b; _ }, Cst c ->
+        binary And a (constant (Bv.binary And b c)) sx
+    | Xor, Binary { f = Xor; x = a; y = Cst b; _ }, Cst c ->
+        binary Xor a (constant (Bv.binary Xor b c)) sx
+    | Lsl, Binary { f = Lsl; x = a; y = Cst b; _ }, Cst c ->
+        binary Lsl a (constant (Bv.binary Plus b c)) sx
+    | Lsr, Binary { f = Lsr; x = a; y = Cst b; _ }, Cst c ->
+        binary Lsr a (constant (Bv.binary Plus b c)) sx
+    | Asr, Binary { f = Asr; x = a; y = Cst b; _ }, Cst c ->
+        binary Asr a (constant (Bv.binary Plus b c)) sx
+    | Rol, Binary { f = Rol; x = a; y = Cst b; _ }, Cst c ->
+        binary Rol a (constant (Bv.binary Plus b c)) sx
+    | Ror, Binary { f = Ror; x = a; y = Cst b; _ }, Cst c ->
+        binary Ror a (constant (Bv.binary Plus b c)) sx
     | Concat, Cst bv, Binary { f = Concat; x = Cst bv'; y; _ } ->
         let sz = Bv.size_of bv' in
         binary Concat (constant (Bv.append bv bv')) y (sx + sz)
@@ -1059,7 +1077,7 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     (* absorbing element *)
     | (Mul, _, Cst bv | And, _, Cst bv) when Bv.is_zeros bv -> y
     | Or, _, Cst bv when Bv.is_fill bv -> y
-    | (Lsl, Cst bv, _ | Asr, Cst bv, _ | Rol, Cst bv, _ | Ror, Cst bv, _)
+    | (Lsr | Lsl | Asr | Rol | Ror | Smod | Sdiv | Udiv | Umod), Cst bv, _
       when Bv.is_zeros bv ->
         x
     | (Lsl, x, Cst bv | Lsr, x, Cst bv) when sizeof x <= Bv.to_uint bv ->
@@ -1076,6 +1094,9 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     | Xor, Binary { f = Xor; x = a; y = b; _ }, c
       when compare b c = 0 ->
         a
+    | (Smod | Umod), a, Cst bv when Bv.is_ones bv -> zeros (sizeof a)
+    | (Sdiv | Udiv), x, y when compare x y = 0 -> ones (sizeof x)
+    | (Smod | Umod), x, y when compare x y = 0 -> zeros (sizeof x)
     | (Lsl, x, Cst bv | Lsr, x, Cst bv) when Bv.to_uint bv >= sizeof x ->
         zeros (sizeof x)
     | Asr, x, Cst bv when Bv.to_uint bv >= sizeof x ->
@@ -1257,6 +1278,9 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
           (binary And x
              (constant (Bv.extract ~hi:(sizeof x - 1) ~lo:0 bv))
              (sx - n))
+    | And, Unary { f = Uext n as f; x; _ }, Unary { f = Uext n'; x = x'; _ }
+      when n = n' ->
+        unary f (binary And x x' (sx - n))
     | And, Binary { f = Concat; y; _ }, Cst bv
       when Z.numbits (Bv.value_of bv) <= sizeof y ->
         let sz = sizeof y in

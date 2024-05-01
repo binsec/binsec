@@ -32,8 +32,8 @@ module Printer : sig
   val visit_bl : t -> Sexpr.Expr.t -> unit
   val visit_bv : t -> Sexpr.Expr.t -> unit
   val visit_ax : t -> Sexpr.Memory.t -> unit
-  val pp_print_decls : Format.formatter -> t -> unit
   val pp_print_defs : Format.formatter -> t -> unit
+  val pp_flush_defs : Format.formatter -> t -> unit
   val pp_print_bl : t -> Format.formatter -> Sexpr.Expr.t -> unit
   val pp_print_bv : t -> Format.formatter -> Sexpr.Expr.t -> unit
   val pp_print_ax : t -> Format.formatter -> Sexpr.Memory.t -> unit
@@ -55,4 +55,4 @@ module Cross : sig
   val to_formula : t -> Formula.formula
 end
 
-module Solver () : Solver_sig.S
+module Solver () : Solver.S

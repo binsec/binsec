@@ -235,7 +235,7 @@ module Solver = struct
   let query_stat () = !queries
   let time_stat () = cumulated_time.sec
 
-  type t = Solver.Session.t * float
+  type t = Formula_solver.Session.t * float
 
   let open_session () =
     let timeout = Formula_options.Solver.Timeout.get () in
@@ -248,16 +248,16 @@ module Solver = struct
     in
     let solver = Formula_options.Solver.get () in
     let t = Unix.gettimeofday () in
-    (Solver.Session.create ?file ~timeout solver, t)
+    (Formula_solver.Session.create ?file ~timeout solver, t)
 
-  let put (solver, _) entry = Solver.Session.put_entry solver entry
+  let put (solver, _) entry = Formula_solver.Session.put_entry solver entry
 
   let check_sat (solver, _) =
     incr queries;
-    try Solver.Session.check_sat solver with
+    try Formula_solver.Session.check_sat solver with
     | Failure msg ->
         Logger.warning "SMT solver failed on %s" msg;
-        Solver.Session.destroy solver;
+        Formula_solver.Session.destroy solver;
         if not (KeepGoing.get ()) then (
           Logger.error
             "@[<v 0>@[SMT solver failed with message:@].@ @[%s@]@ @[Aborting. \
@@ -266,7 +266,7 @@ module Solver = struct
           failwith msg);
         Formula.UNKNOWN
     | e ->
-        Solver.Session.destroy solver;
+        Formula_solver.Session.destroy solver;
         Logger.warning "Destroyed session";
         raise e
 
@@ -290,16 +290,16 @@ module Solver = struct
     | _ -> assert false
 
   let get_bv_value (solver, _) e =
-    extract_bv (Solver.Session.get_value solver (Formula.mk_bv_term e))
+    extract_bv (Formula_solver.Session.get_value solver (Formula.mk_bv_term e))
 
   let get_ax_values (solver, _) e =
     let model = Smt_model.create () in
     Smt_model.add_memory_term model
-      (Solver.Session.get_value solver (Formula.mk_ax_term e));
+      (Formula_solver.Session.get_value solver (Formula.mk_ax_term e));
     Smt_model.memory_bindings model
 
   let close_session (solver, t) =
-    Solver.Session.destroy solver;
+    Formula_solver.Session.destroy solver;
     cumulated_time.sec <- cumulated_time.sec +. Unix.gettimeofday () -. t
 
   let check_sat_and_close solver =

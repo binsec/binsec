@@ -27,34 +27,40 @@ let map =
   let open Formula_options in
   let open Smt_options in
   function
-  | Auto | Bitwuzla_native -> assert false
+  | Auto | Bitwuzla_builtin | Bitwuzla_legacy -> assert false
   | Bitwuzla_smtlib -> Bitwuzla
   | Boolector_smtlib -> Boolector
   | Z3_smtlib -> Z3
   | CVC4_smtlib -> CVC4
   | Yices_smtlib -> Yices
 
-let get_solver_factory () =
-  let open Formula_options in
-  let open Smt_options in
+let get_solver () : (module Solver.OPEN) =
+  let module Logger = Smt_options.Logger in
   match Smt_options.SMTSolver.get () with
-  | (Smt_options.Auto | Smt_options.Bitwuzla_native) when Smt_bitwuzla.available
-    ->
-      Logger.debug "Use native Bitwuzla binding.";
-      (module Native_solver.Solver : Solver_sig.FACTORY)
+  | (Smt_options.Auto | Smt_options.Bitwuzla_builtin)
+    when Option.is_some Libsolver.bitwuzla_cxx ->
+      Logger.debug "Use native Bitwuzla binding (cxx).";
+      let module Api = Api_solver.Make ((val Option.get Libsolver.bitwuzla_cxx)) in
+      (module Api.Open)
+  | Smt_options.Auto | Smt_options.Bitwuzla_builtin
+  | Smt_options.Bitwuzla_legacy
+    when Option.is_some Libsolver.bitwuzla_c ->
+      Logger.debug "Use native Bitwuzla binding (c).";
+      let module Api = Api_solver.Make ((val Option.get Libsolver.bitwuzla_c)) in
+      (module Api.Open)
   | Auto -> (
       try
         let solver = List.find Prover.ping solvers in
         Logger.info "Found %a in the path." Prover.pp solver;
-        Solver.set solver;
-        (module Smt2_solver.Solver : Solver_sig.FACTORY)
+        Formula_options.Solver.set solver;
+        (module Smt2_solver.Solver)
       with Not_found -> Logger.fatal "No SMT solver found.")
-  | Bitwuzla_native ->
+  | Bitwuzla_builtin | Bitwuzla_legacy ->
       Logger.fatal "Native bitwuzla binding is required but not available."
   | solver when Prover.ping (map solver) ->
-      Logger.debug "Found %a in the path." Prover.pp (map solver);
-      Solver.set (map solver);
-      (module Smt2_solver.Solver : Solver_sig.FACTORY)
+      Smt_options.Logger.debug "Found %a in the path." Prover.pp (map solver);
+      Formula_options.Solver.set (map solver);
+      (module Smt2_solver.Solver)
   | solver ->
       Logger.fatal "%a is required but not available in path." Prover.pp
         (map solver)
@@ -82,10 +88,11 @@ module R = Basic_types.Int.Htbl
 module K = Basic_types.Int.Set
 
 type _ Types.value += Term : Sexpr.Expr.t Types.value
+type lazy_memory = Solver.lazy_memory
 
 module State
     (D : Domains.S)
-    (F : Solver_sig.FACTORY)
+    (Solver : Solver.GET_MODEL_WITH_STATS)
     (QS : Types.QUERY_STATISTICS) =
 struct
   module Uid = struct
@@ -97,6 +104,15 @@ struct
     let succ = Suid.incr
     let compare = Suid.compare
   end
+
+  module Solver = Solver (QS)
+
+  let addr_space = Kernel_options.Machine.word_size ()
+
+  let timeout =
+    match Formula_options.Solver.Timeout.get () with
+    | 0 -> None
+    | n -> Some (float_of_int n)
 
   type t = {
     constraints : Expr.t list;
@@ -110,10 +126,8 @@ struct
     (* collection of visible arrays *)
     vmemory : Memory.t;
     (* visible memory *)
-    ilocs : (Z.t * Loader_buf.t) BiItM.t;
-    (* set of initialized memory locations *)
-    alocs : (Z.t * char) list ref;
-    (* shared list of already accessed initialized memory locations *)
+    lmem : lazy_memory;
+    (* set of lazily initialized memory locations *)
     model : Model.t; (* a model that satisfy constraints *)
   }
 
@@ -160,9 +174,8 @@ struct
       vsymbols = I.empty;
       varrays = S.empty;
       vmemory = Memory.root;
-      ilocs = BiItM.empty;
-      alocs = ref [];
-      model = Model.empty (Kernel_options.Machine.word_size ());
+      lmem = { content = BiItM.empty; lemmas = []; addr_space };
+      model = Model.empty addr_space;
     }
 
   let alloc ~array state =
@@ -201,178 +214,17 @@ struct
 
   let memcpy ~addr len orig state =
     let base = Bv.value_of addr in
-    let ilocs = BiItM.add ~base len (Bv.value_of addr, orig) state.ilocs in
+    let lmem =
+      {
+        state.lmem with
+        content =
+          BiItM.add ~base len (Bv.value_of addr, orig) state.lmem.content;
+      }
+    in
     let vmemory =
       MMU.source state ~addr:(Expr.constant addr) ~len orig state.vmemory
     in
-    { state with ilocs; vmemory }
-
-  module Engine (Solver : Solver_sig.S) = struct
-    type result = Unsat | Sat of t
-
-    let extract_memory state =
-      match Solver.get_array Memory.root with
-      | (exception Not_found) | [||] -> (BiTbl.create 0, !(state.alocs))
-      | assignment ->
-          let memory = BiTbl.create (Array.length assignment) in
-          let alocs =
-            Array.fold_left
-              (fun alocs (addr, value) ->
-                match BiItM.find addr state.ilocs with
-                | exception Not_found ->
-                    BiTbl.add memory addr value;
-                    alocs
-                | base, img ->
-                    let offset = Z.to_int (Z.sub addr base) in
-                    let value' =
-                      Char.unsafe_chr
-                        (if offset < Bigarray.Array1.dim img then
-                           Bigarray.Array1.get img offset
-                         else 0)
-                    in
-                    if value <> value' then (addr, value') :: alocs else alocs)
-              !(state.alocs) assignment
-          in
-          (memory, alocs)
-
-    let extract_array name =
-      match Solver.get_array name with
-      | (exception Not_found) | [||] -> BiTbl.create 0
-      | assignment ->
-          let array = BiTbl.create (Array.length assignment) in
-          Array.iter
-            (fun (addr, value) -> BiTbl.add array addr value)
-            assignment;
-          array
-
-    let extract_arrays () =
-      let arrays = StTbl.create 5 in
-      Solver.iter_free_arrays (fun name symbol ->
-          StTbl.add arrays name (extract_array symbol));
-      arrays
-
-    let extract_vars () =
-      let vars = StTbl.create 8 and values = BvTbl.create 32 in
-      Solver.iter_free_variables (fun name bv ->
-          StTbl.add vars name bv;
-          BvTbl.add values bv
-            (Bitvector.create
-               Solver.(get_value (Solver.get bv))
-               (Expr.sizeof bv)));
-      (vars, values)
-
-    let rec force_lazy_init alocs state =
-      if alocs == !(state.alocs) = false then
-        match alocs with
-        | [] -> ()
-        | (addr, value) :: alocs ->
-            Solver.set_memory ~addr (Z.of_int (Char.code value));
-            force_lazy_init alocs state
-
-    let enumerate =
-      let rec iter state e expr size n enum =
-        if n = 0 then enum
-        else
-          match Solver.check_sat () with
-          | Unknown ->
-              QS.Solver.incr_err ();
-              raise Unknown
-          | Unsat ->
-              QS.Solver.incr_unsat ();
-              enum
-          | Sat ->
-              QS.Solver.incr_sat ();
-              let memory, alocs = extract_memory state in
-              if alocs == !(state.alocs) = false then (
-                force_lazy_init alocs state;
-                state.alocs := alocs;
-                iter state e expr size n enum)
-              else
-                let x = Solver.get_value expr in
-                let b = Bv.create x size in
-                let cond = Expr.equal e (Expr.constant b) in
-                let vars, values = extract_vars () in
-                let state' =
-                  {
-                    state with
-                    constraints = cond :: state.constraints;
-                    model =
-                      ( vars,
-                        values,
-                        memory,
-                        extract_arrays (),
-                        Kernel_options.Machine.word_size () );
-                  }
-                in
-                ignore (Overapprox.eval state' cond);
-                Overapprox.refine state' cond D.one;
-                Solver.neq expr x;
-                iter state e expr size (n - 1) ((b, state') :: enum)
-      in
-      fun e ?(n = (1 lsl Expr.sizeof e) - 1) ?(except = []) state ->
-        let size = Expr.sizeof e in
-        let expr = Solver.bind Uid.zero e state.constraints in
-        List.iter
-          (fun (addr, value) ->
-            Solver.set_memory ~addr (Z.of_int (Char.code value)))
-          !(state.alocs);
-        let d = Overapprox.eval state e in
-        match D.project ~size d with
-        | Point z ->
-            let bv = Bv.create z size in
-            if List.mem bv except then [] else [ (bv, state) ]
-        | Top | Seq _ ->
-            let init =
-              let bv = Model.eval state.model e in
-              if List.mem bv except then []
-              else (
-                QS.Preprocess.incr_const ();
-                Solver.neq expr (Bitvector.value_of bv);
-                let cond = Expr.equal e (Expr.constant bv) in
-                let state =
-                  { state with constraints = cond :: state.constraints }
-                in
-                ignore (Overapprox.eval state cond);
-                Overapprox.refine state cond D.one;
-                [ (bv, state) ])
-            in
-            List.iter (fun bv -> Solver.neq expr (Bitvector.value_of bv)) except;
-            iter state e expr size (n - 1) init
-
-    let check_sat =
-      let rec check_sat_true state =
-        match Solver.check_sat () with
-        | Unknown -> raise Unknown
-        | Unsat -> Unsat
-        | Sat ->
-            let memory, alocs = extract_memory state in
-            if alocs == !(state.alocs) = false then (
-              force_lazy_init alocs state;
-              state.alocs := alocs;
-              check_sat_true state)
-            else
-              let vars, values = extract_vars () in
-              Sat
-                {
-                  state with
-                  model =
-                    ( vars,
-                      values,
-                      memory,
-                      extract_arrays (),
-                      Kernel_options.Machine.word_size () );
-                }
-      in
-      fun state ->
-        Solver.put Uid.zero state.constraints;
-        List.iter
-          (fun (addr, value) ->
-            Solver.set_memory ~addr (Z.of_int (Char.code value)))
-          !(state.alocs);
-        check_sat_true state
-
-    let close () = Solver.close ()
-  end
+    { state with lmem; vmemory }
 
   let assume cond state =
     if Expr.is_equal cond Expr.one then (
@@ -382,38 +234,29 @@ struct
       QS.Preprocess.incr_false ();
       None)
     else
-      let d = Overapprox.eval state cond in
-      if D.included ~size:1 d D.zero then (
-        QS.Preprocess.incr_false ();
-        None)
-      else if D.included ~size:1 d D.one then (
-        QS.Preprocess.incr_true ();
-        Some { state with constraints = cond :: state.constraints })
-      else
-        let state = { state with constraints = cond :: state.constraints } in
-        if Bitvector.zero = Model.eval state.model cond then (
-          QS.Solver.start_timer ();
-          let open Engine (F ()) in
-          let r =
-            match check_sat state with
-            | exception Unknown ->
-                QS.Solver.incr_err ();
-                raise Unknown
-            | Unsat ->
-                QS.Solver.incr_unsat ();
-                None
-            | Sat state ->
-                QS.Solver.incr_sat ();
-                Overapprox.refine state cond D.one;
-                Some state
-          in
-          close ();
-          QS.Solver.stop_timer ();
-          r)
-        else (
+      match D.is_zero (Overapprox.eval state cond) with
+      | True ->
+          QS.Preprocess.incr_false ();
+          None
+      | False ->
           QS.Preprocess.incr_true ();
-          Overapprox.refine state cond D.one;
-          Some state)
+          Some state
+      | Unknown ->
+          let constraints = cond :: state.constraints in
+          if Bitvector.zero = Model.eval state.model cond then (
+            QS.Solver.start_timer ();
+            let r = Solver.check_sat ?timeout state.lmem constraints in
+            QS.Solver.stop_timer ();
+            match r with
+            | Unknown -> raise Unknown
+            | Unsat -> None
+            | Sat model ->
+                Overapprox.refine state cond D.one;
+                Some { state with constraints; model })
+          else (
+            QS.Preprocess.incr_true ();
+            Overapprox.refine state cond D.one;
+            Some { state with constraints })
 
   let test cond state =
     if Expr.is_equal cond Expr.one then (
@@ -423,85 +266,99 @@ struct
       QS.Preprocess.incr_false ();
       False state)
     else
-      let d = Overapprox.eval state cond in
-      if D.included ~size:1 d D.zero then (
-        QS.Preprocess.incr_false ();
-        False state)
-      else if D.included ~size:1 d D.one then (
-        QS.Preprocess.incr_true ();
-        True state)
-      else
-        let t = { state with constraints = cond :: state.constraints } in
-        let f =
-          { state with constraints = Expr.lognot cond :: state.constraints }
-        in
-        let e = Model.eval state.model cond in
-        let s =
-          if Bv.is_zero e then (
-            Overapprox.refine f cond D.zero;
-            t)
-          else (
-            Overapprox.refine t cond D.one;
-            f)
-        in
-        QS.Solver.start_timer ();
-        let open Engine (F ()) in
-        let r =
-          match check_sat s with
-          | exception Unknown ->
-              QS.Solver.incr_err ();
-              raise Unknown
+      match D.is_zero (Overapprox.eval state cond) with
+      | True ->
+          QS.Preprocess.incr_false ();
+          False state
+      | False ->
+          QS.Preprocess.incr_true ();
+          True state
+      | Unknown -> (
+          let tcons = cond :: state.constraints
+          and fcons = Expr.lognot cond :: state.constraints in
+          let e = Model.eval state.model cond in
+          let to_check, constraints =
+            if Bv.is_zero e then (tcons, fcons) else (fcons, tcons)
+          in
+          QS.Solver.start_timer ();
+          let r = Solver.check_sat ?timeout state.lmem to_check in
+          QS.Solver.stop_timer ();
+          match r with
+          | Unknown -> raise Unknown
           | Unsat ->
-              QS.Solver.incr_unsat ();
-              if Bv.is_zero e then False f else True t
-          | Sat state ->
-              QS.Solver.incr_sat ();
               if Bv.is_zero e then (
-                Overapprox.refine state cond D.one;
-                Both { t = state; f })
-              else (
                 Overapprox.refine state cond D.zero;
-                Both { t; f = state })
-        in
-        close ();
-        QS.Solver.stop_timer ();
-        r
+                False { state with constraints })
+              else (
+                Overapprox.refine state cond D.one;
+                True { state with constraints })
+          | Sat model ->
+              let t, f =
+                if Bv.is_zero e then
+                  ( { state with constraints = to_check; model },
+                    { state with constraints } )
+                else
+                  ( { state with constraints },
+                    { state with constraints = to_check; model } )
+              in
+              Overapprox.refine t cond D.one;
+              Overapprox.refine f cond D.zero;
+              Both { t; f })
 
   let enumerate =
-    let with_solver e ?n ?except state =
+    let with_solver state e n enum except =
       QS.Solver.start_timer ();
-      let open Engine (F ()) in
-      let r = enumerate e ?n ?except state in
-      close ();
-      QS.Solver.stop_timer ();
-      r
+      match
+        Solver.fold_values ?timeout state.lmem state.constraints e ~n ~except
+          (fun bv model enum ->
+            let cond = Expr.equal e (Expr.constant bv) in
+            let state =
+              { state with constraints = cond :: state.constraints; model }
+            in
+            ignore (Overapprox.eval state cond);
+            Overapprox.refine state cond D.one;
+            (bv, state) :: enum)
+          enum
+      with
+      | exception Unknown ->
+          QS.Solver.stop_timer ();
+          raise Unknown
+      | enum ->
+          QS.Solver.stop_timer ();
+          enum
     in
-    fun e ?n ?(except = []) state ->
-      match (e, n) with
-      | Expr.Cst bv, _ when List.mem bv except = false ->
+    fun e ?(n = 1) ?(except = []) state ->
+      match e with
+      | Expr.Cst bv when List.mem bv except = false ->
           QS.Preprocess.incr_const ();
           [ (bv, state) ]
-      | Expr.Cst _, _ ->
+      | Expr.Cst _ ->
           QS.Preprocess.incr_const ();
           []
-      | _, Some 1 ->
+      | _ -> (
           let bv = Model.eval state.model e in
-          if List.mem bv except then with_solver e ?n ~except state
-          else (
-            QS.Preprocess.incr_const ();
-            let cond = Expr.equal e (Expr.constant bv) in
-            [
-              ( bv,
-                {
-                  state with
-                  constraints = cond :: state.constraints (* TODO domains ?? *);
-                } );
-            ])
-      | _, _ -> with_solver e ?n ~except state
+          let n, enum, except =
+            if List.mem bv except then (n, [], except)
+            else (
+              QS.Preprocess.incr_const ();
+              let cond = Expr.equal e (Expr.constant bv) in
+              let state =
+                { state with constraints = cond :: state.constraints }
+              in
+              ignore (Overapprox.eval state cond);
+              Overapprox.refine state cond D.one;
+              (n - 1, [ (bv, state) ], bv :: except))
+          in
+          if n = 0 then enum
+          else
+            let size = Expr.sizeof e and d = Overapprox.eval state e in
+            match D.project ~size d with
+            | Point _ -> enum
+            | Top | Seq _ -> with_solver state e n enum except)
 
   let merge ~parent t t' =
     if t == t' then t
-    else if t.ilocs == t'.ilocs then
+    else if t.lmem == t'.lmem then
       match (t.constraints, t'.constraints) with
       | c :: constraints, c' :: constraints'
         when constraints == constraints' && Expr.is_equal c (Expr.lognot c') ->
@@ -539,8 +396,7 @@ struct
                       raise_notrace Non_mergeable)
                 t.varrays t'.varrays
           and vmemory = MMU.merge parent c t.vmemory t'.vmemory
-          and ilocs = t.ilocs
-          and alocs = t.alocs
+          and lmem = t.lmem
           and model = t.model in
           {
             constraints;
@@ -550,8 +406,7 @@ struct
             vsymbols;
             varrays;
             vmemory;
-            ilocs;
-            alocs;
+            lmem;
             model;
           }
       | _ -> raise_notrace Non_mergeable
@@ -599,8 +454,6 @@ struct
                t.vsymbols [])
     in
     Format.pp_open_vbox ppf 0;
-    (* print declarations *)
-    P.pp_print_decls ppf ctx;
     (* print definitions *)
     P.pp_print_defs ppf ctx;
     List.iter
@@ -640,8 +493,14 @@ struct
   let downcast _ = None
 end
 
-type Options.Engine.t += Vanilla
+type Options.Engine.t += Vanilla | Multi_checks
 
 let () =
   Options.Engine.register "vanilla" Vanilla (fun () ->
-      (module State (Domains.Interval) ((val get_solver_factory ()))))
+      let module Solver = Solver.Once ((val get_solver ())) in
+      (module State (Domains.Interval) (Solver)))
+
+let () =
+  Options.Engine.register "multi-checks" Multi_checks (fun () ->
+      let module Solver = Solver.MultiChecks ((val get_solver ())) in
+      (module State (Domains.Interval) (Solver)))

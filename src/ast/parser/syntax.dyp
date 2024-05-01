@@ -79,7 +79,7 @@ let alpha = ['a'-'z''A'-'Z']
 let alpha_num = (alpha | digit)
 let sident = '_'* alpha (alpha_num | '_')* ('.' (alpha_num | '_')+)*
 let tempvar = "%%" digit+
-let wident = [^ ':' '@' '>' ' ' '#' '\n']*
+let wident = ([^ ':' '@' '>' ' ' '#' '\n'] | "@@" | "::")*
 let comment = '#' [^'\n']*
 
 rule dquote buf = parse
@@ -399,7 +399,7 @@ block:
         | None -> tail, tail_stmts
         | Some stmts ->
            let default = uid () in
-           let default_stmts = List.rev_append stmts tail_stmts in
+           let default_stmts = List.append stmts tail_stmts in
            default, Ast.Instr.label default :: default_stmts in
       aux rev_stmts default default_stmts }
 

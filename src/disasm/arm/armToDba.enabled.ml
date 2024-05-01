@@ -167,7 +167,7 @@ let parse_result s =
   Arm_options.Logger.debug ~level:1 "@[<v 0>Parsing %s@]" s;
   let open Lexing in
   let lexbuf = from_string s in
-  try Ok (mk_instruction (Parser.decoder_msg Lexer.token lexbuf))
+  try Ok (mk_instruction (Parser.decoder_msg_eof Lexer.token lexbuf))
   with _ -> dummy_parse s
 
 let decode_arm addr bytes =

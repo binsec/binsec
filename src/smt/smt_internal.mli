@@ -19,7 +19,4 @@
 (*                                                                        *)
 (**************************************************************************)
 
-val available : bool
-(** [available] is true if [Bitwuzla] binding is available. *)
-
-include Smt_sig.Solver
+module Make (F : Libsolver.F) : Smt_sig.Solver

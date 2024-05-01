@@ -21,7 +21,7 @@
 
 open Types
 
-module Make (Path : Path.S) (State : STATE) = struct
+module Raw (State : RAW_STATE) = struct
   let uop e (o : Dba.Unary_op.t) : Term.unary Term.operator =
     match o with
     | Not -> Not
@@ -73,6 +73,10 @@ module Make (Path : Path.S) (State : STATE) = struct
         State.Value.binary (bop f) (eval x state) (eval y state)
     | Ite (c, r, e) ->
         State.Value.ite (eval c state) (eval r state) (eval e state)
+end
+
+module Make (Path : Path.S) (State : STATE) = struct
+  include Raw (State)
 
   let fresh (var : Dba.Var.t) state path =
     let id = Path.get State.id path in

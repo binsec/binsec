@@ -19,13 +19,13 @@
 (*                                                                        *)
 (**************************************************************************)
 
-val get_solver_factory : unit -> (module Solver_sig.FACTORY)
+val get_solver : unit -> (module Solver.OPEN)
 
 module State
     (D : Domains.S)
-    (F : Solver_sig.FACTORY)
+    (Solver : Solver.GET_MODEL_WITH_STATS)
     (QS : Types.QUERY_STATISTICS) :
   Types.RAW_STATE with type Value.t = Sexpr.Expr.t
 
 type _ Types.value += Term : Sexpr.Expr.t Types.value
-type Options.Engine.t += Vanilla
+type Options.Engine.t += Vanilla | Multi_checks

@@ -94,8 +94,11 @@
 %start body
 %type <(Dba_types.Caddress.Map.key * Dba.Instr.t) list> body
 
-%start decoder_msg
-%type <(string * Parse_helpers.Message.Value.t)  list * (Dba_types.Caddress.Map.key * Dba.Instr.t) list> decoder_msg
+%start decoder_msg_eof
+%type <(string * Parse_helpers.Message.Value.t)  list * (Dba_types.Caddress.Map.key * Dba.Instr.t) list> decoder_msg_eof
+
+%start decoder_msg_list_eof
+%type <((string * Parse_helpers.Message.Value.t)  list * (Dba_types.Caddress.Map.key * Dba.Instr.t) list) list> decoder_msg_list_eof
 
 %start decoder_base
 %type <(string * Parse_helpers.Message.Value.t)  list> decoder_base
@@ -141,14 +144,14 @@ kv:
 decoder_base:
 | opcode=kv; mnemonic=kv; address=kv; size = kv;
     { [opcode; mnemonic; address; size;]  (* Actually the order is not important *) }
-| address=kv; LPAR UNDEFINED RPAR EOF
+| address=kv; LPAR UNDEFINED RPAR
     { [ address ] }
 ;
 
 decoder_msg:
 | base=decoder_base; instructions=body;
     { base, instructions }
-| base=decoder_base; LPAR UNIMPLEMENTED RPAR EOF
+| base=decoder_base; LPAR UNIMPLEMENTED RPAR
     { base,
       match base with
       | [ _, Parse_helpers.Message.Value.Int addr; _; _;
@@ -161,7 +164,15 @@ decoder_msg:
 ;
 
 body:
-| b=list(localized_instruction); EOF { b }
+| b=list(localized_instruction); { b }
+;
+
+decoder_msg_eof:
+| msg=decoder_msg; EOF { msg }
+;
+
+decoder_msg_list_eof:
+| l=list(delimited(LPAR, decoder_msg, RPAR)); EOF { l }
 ;
 
 config:

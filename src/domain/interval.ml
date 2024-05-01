@@ -39,6 +39,9 @@ let included ~size:_ t t' =
   || Z.geq t.min t'.min && Z.leq t.max t'.max && t.stride >= t'.stride
      && Z.trailing_zeros (Z.logxor t.min t'.min) >= t'.stride
 
+let is_zero { stride; min; _ } =
+  if stride > 0 then if Z.testbit min 0 then False else True else Unknown
+
 let project ~size t =
   if size = t.stride then Point t.min
   else if t.stride = 0 && Z.equal t.min Z.zero && Z.popcount t.max = size then
@@ -260,8 +263,9 @@ let logor ~size t t' =
     in
     if stride >= n then constant ~size rem
     else
+      let min = Z.logor (max t.min t'.min) rem in
       let max = round_down n stride rem in
-      { min = rem; max; stride }
+      { min; max; stride }
   else
     let delta, rem, n' =
       if t.stride > t'.stride then (t.stride - t'.stride, t.min, t'.stride)
@@ -274,8 +278,9 @@ let logor ~size t t' =
     in
     if stride >= n then constant ~size rem
     else
+      let min = Z.logor (max t.min t'.min) rem in
       let max = round_down n stride rem in
-      { min = rem; max; stride }
+      if min = max then constant ~size min else { min; max; stride }
 
 let logxor ~size t t' =
   let stride = min t.stride t'.stride in

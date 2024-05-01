@@ -159,15 +159,16 @@ end
 
 module type SHIFT_ROT = sig
   type t
+  type index
 
-  val shift_left : t -> int -> t
-  val shift_right : t -> int -> t
-  val shift_right_signed : t -> int -> t
-  val rotate_left : t -> int -> t
-  val rotate_right : t -> int -> t
+  val shift_left : t -> index -> t
+  val shift_right : t -> index -> t
+  val shift_right_signed : t -> index -> t
+  val rotate_left : t -> index -> t
+  val rotate_right : t -> index -> t
 end
 
 module type BITWISE = sig
   include EXTENDED_LOGICAL
-  include SHIFT_ROT with type t := t
+  include SHIFT_ROT with type t := t and type index := int
 end

@@ -1264,9 +1264,16 @@ end = struct
                 (Binstream.of_bytes (Bytes.unsafe_to_string opcode))
             in
             add_node t vertex (Fallthrough { kind = Hook { addr; info }; succ });
-            add_script t todo
-              (Virtual_address.add_int (Bytes.length opcode) addr)
-              stmts env true;
+            add_script t todo addr
+              (List.append stmts
+                 [
+                   Ast.Instr.Jump
+                     ( Ast.Expr.Int
+                         (Virtual_address.to_bigint
+                            (Virtual_address.add_int (Bytes.length opcode) addr)),
+                       Lexing.dummy_pos );
+                 ])
+              env false;
             vertex)
 
   let rec disasm t todo =
@@ -1659,6 +1666,107 @@ end = struct
         link t todo reloc tail true target;
         link t todo reloc tail false fallthrough
 
+  module Opt () = struct
+    module Env = Cse.Env
+
+    let commit_state t env pred vertex =
+      let env =
+        Var.Set.fold
+          (fun var env -> Env.forget var env)
+          (I.Htbl.find t.killset vertex)
+          env
+      in
+      List.fold_left
+        (fun pred kind ->
+          let head, tail = decorate_fiber (Fallthrough { kind; succ = 0 }) in
+          Fiber.relink ~pred head;
+          tail)
+        pred (Cse.commit env)
+
+    let commit t addr n env pred vertex =
+      commit_addr addr n (commit_state t env pred vertex)
+
+    let rec line t todo reloc addr n env pred vertex =
+      try
+        let fiber = I.Htbl.find t.fibers vertex in
+        Fiber.relink ~pred:(commit t addr n env pred vertex) fiber
+      with Not_found -> (
+        match G.pred t vertex with
+        | _ :: _ :: _ ->
+            Queue.push vertex todo;
+            Queue.push (commit t addr n env pred vertex, false, vertex) reloc
+        | _ -> baseline t todo reloc addr n env pred vertex)
+
+    and baseline t todo reloc addr n env pred vertex =
+      let node = G.node t vertex in
+      match node with
+      | Fallthrough { kind = Nop; succ } | Goto { succ = Some succ; _ } ->
+          line t todo reloc addr n env pred succ
+      | Fallthrough { kind = Instruction inst; succ } ->
+          let pred = make_label node pred in
+          line t todo reloc (Instruction.address inst) (n + 1) env pred succ
+      | Fallthrough { kind = Hook { addr; _ }; succ } ->
+          let pred = make_label node pred in
+          let step = Fiber.Step { addr; n; succ = Halt } in
+          Fiber.relink ~pred step;
+          line t todo reloc addr 0 env step succ
+      | Fallthrough
+          {
+            kind =
+              Assign { var; _ } | Clobber var | Load { var; _ } | Symbolize var;
+            succ;
+          }
+        when Var.Set.mem var (I.Htbl.find t.killset succ) ->
+          line t todo reloc addr n env pred succ
+      | Fallthrough { kind = Assign { var; rval }; succ } ->
+          line t todo reloc addr n (Env.assign var rval env) pred succ
+      | Fallthrough { kind = Clobber var; succ } ->
+          line t todo reloc addr n (Env.clobber var env) pred succ
+      | Fallthrough { kind = Forget var; succ } ->
+          line t todo reloc addr n (Env.forget var env) pred succ
+      | Fallthrough { kind = Load { var; base; dir; addr = ptr }; succ } ->
+          line t todo reloc addr n (Env.load var base dir ptr env) pred succ
+      | Fallthrough { kind = Store { base; dir; addr = ptr; rval }; succ } ->
+          line t todo reloc addr n
+            (Env.store base dir ~addr:ptr rval env)
+            pred succ
+      | Fallthrough { succ; _ } ->
+          let pred = commit_state t env pred vertex in
+          let head, tail = decorate_fiber node in
+          Fiber.relink ~pred head;
+          line t todo reloc addr n Env.empty tail succ
+      | Goto { succ = None; _ } | Terminator _ ->
+          Fiber.relink
+            ~pred:(commit t addr n env pred vertex)
+            (fst (decorate_fiber node))
+      | Branch { test; target; fallthrough } ->
+          let node, target, fallthrough =
+            match test with
+            | Unary (Not, test) ->
+                ( Branch { test; target = fallthrough; fallthrough = target },
+                  fallthrough,
+                  target )
+            | _ -> (node, target, fallthrough)
+          in
+          let head, tail = decorate_fiber node in
+          Fiber.relink ~pred:(commit t addr n env pred vertex) head;
+          link t todo reloc tail true target;
+          link t todo reloc tail false fallthrough
+
+    let run t todo reloc pred vertex =
+      baseline t todo reloc Virtual_address.zero 0 Env.empty pred vertex
+  end
+
+  let assemble =
+    if Options.Cse.get () then
+      let module O = Opt () in
+      fun t todo reloc pred vertex ->
+        if not t.volatile then O.run t todo reloc pred vertex
+        else
+          baseline t todo reloc Virtual_address.zero 0 Var.Map.empty pred vertex
+    else fun t todo reloc pred vertex ->
+      baseline t todo reloc Virtual_address.zero 0 Var.Map.empty pred vertex
+
   let rec closure t todo reloc =
     if Queue.is_empty todo then
       Queue.iter
@@ -1672,7 +1780,7 @@ end = struct
       let placeholder : [ `Assume ] Fiber.t =
         Assume { test = Expr.one; succ = Halt }
       in
-      baseline t todo reloc Virtual_address.zero 0 Var.Map.empty
+      assemble t todo reloc
         (let (Assume _ as head) = placeholder in
          head)
         vertex;

@@ -467,13 +467,15 @@ module Shdr = struct
       ()
 
   let read_all t header =
-    let sections = Array.init header.Ehdr.shnum (read t header) in
-    let shstrndx = sections.(header.Ehdr.shstrndx) in
-    Array.iteri
-      (fun i s ->
-        sections.(i) <- { s with idx = i; name = with_name t shstrndx s })
-      sections;
-    sections
+    if header.Ehdr.shnum = 0 then [||]
+    else
+      let sections = Array.init header.Ehdr.shnum (read t header) in
+      let shstrndx = sections.(header.Ehdr.shstrndx) in
+      Array.iteri
+        (fun i s ->
+          sections.(i) <- { s with idx = i; name = with_name t shstrndx s })
+        sections;
+      sections
 
   let contains addr section =
     (* [Improvement] Maybe there is a better, more generic way to handle the

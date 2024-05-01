@@ -19,19 +19,4 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module Solver () : Solver_sig.S = struct
-  type result = Sat | Unsat | Unknown
-  type term = unit
-
-  let put _ _ = assert false
-  let bind _ _ _ = assert false
-  let get _ = assert false
-  let set_memory ~addr:_ _ = assert false
-  let neq _ _ = assert false
-  let iter_free_variables _ = assert false
-  let iter_free_arrays _ = assert false
-  let get_array _ = assert false
-  let get_value _ = assert false
-  let check_sat _ = assert false
-  let close () = ()
-end
+let factory = None

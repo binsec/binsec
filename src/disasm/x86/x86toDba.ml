@@ -512,7 +512,7 @@ let assign lhs rhs lo hi =
   let bytesize = Natural.to_int Basic_types.Constants.bytesize in
   match lhs with
   | LValue.Store (sz, endian, e, _)
-    when lo mod bytesize = 0 && hi mod bytesize = bytesize - 1 ->
+    when lo land (bytesize - 1) = 0 && hi land (bytesize - 1) = bytesize - 1 ->
       let sz' = Size.(Byte.of_bitsize (Bit.create (hi - lo + 1))) in
       let o' =
         match endian with
@@ -524,7 +524,7 @@ let assign lhs rhs lo hi =
       in
       let lval = LValue.store sz' endian e' in
       Predba.assign lval rhs
-  | LValue.Store (sz, endian, e, _) when lo mod bytesize = 0 ->
+  | LValue.Store (sz, endian, e, _) when lo land (bytesize - 1) = 0 ->
       let top =
         Expr.(
           restrict (hi + 1)
@@ -533,7 +533,8 @@ let assign lhs rhs lo hi =
       in
       let rhs = Expr.append top rhs in
       Predba.assign lhs rhs
-  | LValue.Store (sz, endian, e, _) when hi mod bytesize = bytesize - 1 ->
+  | LValue.Store (sz, endian, e, _) when hi land (bytesize - 1) = bytesize - 1
+    ->
       let bot =
         Expr.(restrict 0 (lo - 1) (load (Size.Byte.create sz) endian e))
       in
@@ -1330,7 +1331,7 @@ let lift_palignr xmm mm ~dst ~src imm sreg =
   [ assign_xmm_expr dst 0 hi restricted xmm mm sreg ]
 
 let lift_enter mode alloc level =
-  let level = level mod 32 in
+  let level = level land (32 - 1) in
   let nbytes = nbytes_mode mode and nbits = size_mode mode in
   let tail =
     assign_register EBP mode (expr_of_reg mode ESP)
@@ -2124,7 +2125,7 @@ let lift_btX ~sreg mode base offset =
       let base_expr = disas_expr base mode sreg in
       match offset with
       | Imm i ->
-          let i = Int64.to_int i mod size in
+          let i = Int64.to_int i land (size - 1) in
           let bit_select = Expr.bit_restrict i base_expr in
           (bit_select, bit_select, Expr.one)
       | Reg _ ->
@@ -2148,10 +2149,11 @@ let lift_btX ~sreg mode base offset =
       match offset with
       | Imm i ->
           let i = Int64.to_int i in
-          let off = bytesize * (i / size) and pos = i mod size in
-          let base_expr =
-            expr_of_mem mode ~sreg (Expr.add base_addr (const_addr off))
-          in
+          let off =
+            Expr.(
+              mul (const_addr bytesize) (udiv (const_addr i) (const_addr size)))
+          and pos = i land (size - 1) in
+          let base_expr = expr_of_mem mode ~sreg (Expr.add base_addr off) in
           let bit_mask = const_expr (1 lsl pos) in
           (Expr.bit_restrict pos base_expr, base_expr, bit_mask)
       | Reg _ ->

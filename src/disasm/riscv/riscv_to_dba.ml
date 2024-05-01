@@ -824,7 +824,7 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
           Bv.concat
             [
               Bv.extract imm6 { lo = 0; hi = 1 };
-              Bv.extract imm6 { lo = 2; hi = 4 };
+              Bv.extract imm6 { lo = 2; hi = 5 };
             ]
         in
         let offset = scale_by 4 (Bv.extend bvoff mode_size) in

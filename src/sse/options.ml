@@ -112,6 +112,11 @@ module QMerge = Builder.Integer (struct
   let doc = "Set maximum look ahead depth for quick merging"
 end)
 
+module Cse = Builder.False (struct
+  let name = "cse"
+  let doc = "Enable Common Subexpression Elimination optimization"
+end)
+
 module KillFlagsAtReturn = Builder.No (struct
   let name = "kill-flags-at-return"
   let doc = "Conservatively always consider flags alive at function return"

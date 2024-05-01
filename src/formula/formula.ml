@@ -840,6 +840,7 @@ let rec bv_term bv_term_desc =
               | BvBnop (BvSub, bv1, bv2) -> mk_bv_sub bv2 bv1
               | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
           | BvRepeat i -> (
+              assert (i > 0);
               if i = 1 then bv
               else
                 match bv.bv_term_desc with
@@ -862,6 +863,8 @@ let rec bv_term bv_term_desc =
                 | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
           | BvRotateLeft i -> (
               if i = 0 then bv
+              else if i >= bv.bv_term_size then
+                bv_term (BvUnop (BvRotateLeft (i mod bv.bv_term_size), bv))
               else
                 match bv.bv_term_desc with
                 | BvUnop (BvRotateLeft j, bv) ->
@@ -873,6 +876,8 @@ let rec bv_term bv_term_desc =
                 | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
           | BvRotateRight i -> (
               if i = 0 then bv
+              else if i >= bv.bv_term_size then
+                bv_term (BvUnop (BvRotateRight (i mod bv.bv_term_size), bv))
               else
                 match bv.bv_term_desc with
                 | BvUnop (BvRotateLeft j, bv) ->
@@ -1150,8 +1155,13 @@ let rec bv_term bv_term_desc =
                     bv_term (Select (n1 + n2, ax1, idx2))
                   else { bv_term_hash; bv_term_desc; bv_term_size }
               | _, _ -> { bv_term_hash; bv_term_desc; bv_term_size })
-          | BvMul | BvUdiv | BvSdiv | BvUrem | BvSrem | BvSmod | BvShl | BvAshr
-          | BvLshr ->
+          | BvUdiv | BvSdiv ->
+              if equal_bv_term bv1 bv2 then mk_bv_ones bv_term_size
+              else { bv_term_hash; bv_term_desc; bv_term_size }
+          | BvUrem | BvSrem | BvSmod ->
+              if equal_bv_term bv1 bv2 then mk_bv_zeros bv_term_size
+              else { bv_term_hash; bv_term_desc; bv_term_size }
+          | BvShl | BvAshr | BvMul | BvLshr ->
               { bv_term_hash; bv_term_desc; bv_term_size })
       | None, Some bv -> (
           match b with
@@ -1274,8 +1284,19 @@ let rec bv_term bv_term_desc =
           | BvUdiv | BvSdiv ->
               if Bitvector.is_ones bv then bv1
               else { bv_term_hash; bv_term_desc; bv_term_size }
-          | BvConcat | BvCmp | BvUrem | BvSrem | BvSmod ->
-              { bv_term_hash; bv_term_desc; bv_term_size })
+          | BvUrem | BvSrem | BvSmod ->
+              if Bitvector.is_ones bv then mk_bv_zeros bv_term_size
+              else { bv_term_hash; bv_term_desc; bv_term_size }
+          | BvConcat -> (
+              match bv1.bv_term_desc with
+              | BvBnop (BvConcat, bv11, bv12) -> (
+                  match is_bv_cst bv12 with
+                  | None -> { bv_term_hash; bv_term_desc; bv_term_size }
+                  | Some bv' ->
+                      mk_bv_bnop BvConcat bv11
+                        (mk_bv_cst (Bitvector.append bv' bv)))
+              | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
+          | BvCmp -> { bv_term_hash; bv_term_desc; bv_term_size })
       | Some bv, None -> (
           match b with
           | BvAnd | BvNand | BvOr | BvNor | BvXor | BvXnor | BvAdd | BvMul
@@ -1296,9 +1317,6 @@ let rec bv_term bv_term_desc =
                 | BvBnop (BvSub, bv1, bv2) ->
                     mk_bv_sub (mk_bv_add bv2 (mk_bv_cst bv)) bv1
                 | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
-          | BvUdiv | BvSdiv ->
-              if Bitvector.is_zeros bv then mk_bv_zeros bv_term_size
-              else { bv_term_hash; bv_term_desc; bv_term_size }
           | BvConcat -> (
               match bv2.bv_term_desc with
               | BvBnop (BvConcat, bv21, bv22) -> (
@@ -1309,32 +1327,50 @@ let rec bv_term bv_term_desc =
                         (mk_bv_cst (Bitvector.append bv bv'))
                         bv22)
               | _ -> { bv_term_hash; bv_term_desc; bv_term_size })
-          | (BvShl | BvAshr | BvLshr) when Bitvector.is_zeros bv -> bv1
-          | BvUrem | BvSrem | BvSmod | BvShl | BvAshr | BvLshr ->
+          | BvShl | BvAshr | BvLshr | BvUdiv | BvSdiv | BvUrem | BvSrem | BvSmod
+            when Bitvector.is_zeros bv ->
+              bv1
+          | BvUdiv | BvSdiv | BvUrem | BvSrem | BvSmod | BvShl | BvAshr | BvLshr
+            ->
               { bv_term_hash; bv_term_desc; bv_term_size })
-      | Some bv1, Some bv2 ->
+      | Some bv1, Some bv2 -> (
           let open Bitvector in
-          mk_bv_cst
-            (match b with
-            | BvConcat -> append bv1 bv2
-            | BvAnd -> logand bv1 bv2
-            | BvNand -> lognot (logand bv1 bv2)
-            | BvOr -> logor bv1 bv2
-            | BvNor -> lognot (logor bv1 bv2)
-            | BvXor -> logxor bv1 bv2
-            | BvXnor -> lognot (logxor bv1 bv2)
-            | BvCmp -> if equal bv1 bv2 then one else zero
-            | BvAdd -> add bv1 bv2
-            | BvSub -> sub bv1 bv2
-            | BvMul -> mul bv1 bv2
-            | BvUdiv -> udiv bv1 bv2
-            | BvSdiv -> sdiv bv1 bv2
-            | BvUrem -> urem bv1 bv2
-            | BvSrem -> srem bv1 bv2
-            | BvSmod -> smod bv1 bv2
-            | BvShl -> shift_left bv1 (Z.to_int (value_of bv2))
-            | BvAshr -> shift_right_signed bv1 (Z.to_int (value_of bv2))
-            | BvLshr -> shift_right bv1 (Z.to_int (value_of bv2))))
+          match b with
+          | BvConcat -> mk_bv_cst (append bv1 bv2)
+          | BvAnd -> mk_bv_cst (logand bv1 bv2)
+          | BvNand -> mk_bv_cst (lognot (logand bv1 bv2))
+          | BvOr -> mk_bv_cst (logor bv1 bv2)
+          | BvNor -> mk_bv_cst (lognot (logor bv1 bv2))
+          | BvXor -> mk_bv_cst (logxor bv1 bv2)
+          | BvXnor -> mk_bv_cst (lognot (logxor bv1 bv2))
+          | BvCmp -> mk_bv_cst (if equal bv1 bv2 then one else zero)
+          | BvAdd -> mk_bv_cst (add bv1 bv2)
+          | BvSub -> mk_bv_cst (sub bv1 bv2)
+          | BvMul -> mk_bv_cst (mul bv1 bv2)
+          | BvUdiv ->
+              if Bitvector.is_zeros bv2 then
+                { bv_term_hash; bv_term_desc; bv_term_size }
+              else mk_bv_cst (udiv bv1 bv2)
+          | BvSdiv ->
+              if Bitvector.is_zeros bv2 then
+                { bv_term_hash; bv_term_desc; bv_term_size }
+              else mk_bv_cst (sdiv bv1 bv2)
+          | BvUrem ->
+              if Bitvector.is_zeros bv2 then
+                { bv_term_hash; bv_term_desc; bv_term_size }
+              else mk_bv_cst (urem bv1 bv2)
+          | BvSrem ->
+              if Bitvector.is_zeros bv2 then
+                { bv_term_hash; bv_term_desc; bv_term_size }
+              else mk_bv_cst (srem bv1 bv2)
+          | BvSmod ->
+              if Bitvector.is_zeros bv2 then
+                { bv_term_hash; bv_term_desc; bv_term_size }
+              else mk_bv_cst (smod bv1 bv2)
+          | BvShl -> mk_bv_cst (shift_left bv1 (Z.to_int (value_of bv2)))
+          | BvAshr ->
+              mk_bv_cst (shift_right_signed bv1 (Z.to_int (value_of bv2)))
+          | BvLshr -> mk_bv_cst (shift_right bv1 (Z.to_int (value_of bv2)))))
   | BvIte (bl, bv1, bv2) -> (
       assert (bv1.bv_term_size = bv2.bv_term_size);
       match is_bl_cst bl with

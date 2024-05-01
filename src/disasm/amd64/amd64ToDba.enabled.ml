@@ -144,7 +144,7 @@ let parse_result s =
   let open Lexing in
   let lexbuf = from_string s in
   try
-    let i = Parser.decoder_msg Lexer.token lexbuf |> mk_instruction in
+    let i = Parser.decoder_msg_eof Lexer.token lexbuf |> mk_instruction in
     Ok i
   with
   | Errors.Mismatched_instruction_size _ -> dummy_parse ~etype:ESize s

@@ -34,6 +34,13 @@ let eq_bv expected actual ctxt =
     ~printer:(fun bv -> Format.asprintf "%a" Formula.Printing.p_bvterm bv)
     expected actual
 
+(** asserts there is not exception thrown when generating the term from the description *)
+let assert_no_raise desc desc_str _ =
+  try ignore (bv_term desc)
+  with _ ->
+    assert_failure
+      (Format.asprintf "failed to create the term associated to %s" desc_str)
+
 let tests = []
 
 (** makes a formula from a list of entries *)
@@ -125,6 +132,74 @@ let tests =
   ("inline true def and prune irrelevant"
   >:: eq_fm expected (Formula_transformation.prune_and_inline formula))
   :: tests
+
+(* test that we do not crash when div/rem/mod with constant 0 in formula *)
+let desc op =
+  BvBnop
+    (op, mk_bv_cst (Bitvector.of_int32 4l), mk_bv_cst (Bitvector.of_int32 0l))
+
+let tests =
+  List.map
+    (fun (op, opstr) ->
+      let term_str = Format.asprintf "4 %s 0" opstr in
+      "no div_by_zero exception when creating " ^ term_str ^ " term"
+      >:: assert_no_raise (desc op) term_str)
+    [
+      (BvUdiv, "udiv");
+      (BvSdiv, "sdiv");
+      (BvSmod, "smod");
+      (BvSrem, "srem");
+      (BvUrem, "urem");
+    ]
+  @ tests
+
+let term =
+  let v = mk_bv_var (bv_var "v" 32) in
+  let cst1 = mk_bv_cst (Bitvector.zeros 2) in
+  let cst2 = mk_bv_cst (Bitvector.zeros 3) in
+  mk_bv_concat (mk_bv_concat v cst1) cst2
+
+let expected =
+  let v = mk_bv_var (bv_var "v" 32) in
+  let cst = mk_bv_cst (Bitvector.zeros 5) in
+  mk_bv_concat v cst
+
+let tests =
+  ("(e ++ bv1) ++ bv2 = e ++ (bv1 ++ bv2)" >:: eq_bv expected term) :: tests
+
+(* test that we do not crash when div/rem/mod with constant 0 in formula *)
+let desc op =
+  BvBnop
+    (op, mk_bv_cst (Bitvector.of_int32 4l), mk_bv_cst (Bitvector.of_int32 0l))
+
+let tests =
+  List.map
+    (fun (op, opstr) ->
+      let term_str = Format.asprintf "4 %s 0" opstr in
+      "no div_by_zero exception when creating " ^ term_str ^ " term"
+      >:: assert_no_raise (desc op) term_str)
+    [
+      (BvUdiv, "udiv");
+      (BvSdiv, "sdiv");
+      (BvSmod, "smod");
+      (BvSrem, "srem");
+      (BvUrem, "urem");
+    ]
+  @ tests
+
+let term =
+  let v = mk_bv_var (bv_var "v" 32) in
+  let cst1 = mk_bv_cst (Bitvector.of_int ~size:2 2) in
+  let cst2 = mk_bv_cst (Bitvector.of_int ~size:2 3) in
+  mk_bv_concat (mk_bv_concat v cst1) cst2
+
+let expected =
+  let v = mk_bv_var (bv_var "v" 32) in
+  let cst = mk_bv_cst (Bitvector.of_int ~size:4 11) in
+  mk_bv_concat v cst
+
+let tests =
+  ("(e ++ bv1) ++ bv2 = e ++ (bv1 ++ bv2)" >:: eq_bv expected term) :: tests
 
 (* run the tests *)
 let () = run_test_tt_main ("formula simplifications" >::: tests)

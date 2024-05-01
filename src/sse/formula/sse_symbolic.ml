@@ -590,7 +590,47 @@ struct
 
   let pp ppf state = Smt_model.pp ppf state.model
 
+  let close_formula =
+    let declare_var marked var formula =
+      match (var : Formula.var) with
+      | BvVar bv_var when not (Formula.VarSet.mem var marked) ->
+          Formula.push_back_declare (Formula.mk_bv_decl bv_var []) formula
+      | _ -> formula
+    in
+    fun formula ->
+      fst
+        (Formula.fold_forward
+           (fun entry (formula, marked) ->
+             match entry.entry_desc with
+             | Declare { decl_desc = BvDecl (bv_var, _); _ } ->
+                 (formula, Formula.VarSet.add (BvVar bv_var) marked)
+             | Declare { decl_desc = BlDecl _ | AxDecl _; _ } ->
+                 (formula, marked)
+             | Define { def_desc = BvDef (bv_var, _, bv_term); _ } ->
+                 let deps = Formula_utils.bv_term_variables bv_term in
+                 ( Formula.VarSet.fold (declare_var marked) deps formula,
+                   Formula.VarSet.add (BvVar bv_var)
+                     (Formula.VarSet.union deps marked) )
+             | Define { def_desc = BlDef (bl_var, _, bl_term); _ } ->
+                 let deps = Formula_utils.bl_term_variables bl_term in
+                 ( Formula.VarSet.fold (declare_var marked) deps formula,
+                   Formula.VarSet.add (BlVar bl_var)
+                     (Formula.VarSet.union deps marked) )
+             | Define { def_desc = AxDef (ax_var, _, ax_term); _ } ->
+                 let deps = Formula_utils.ax_term_variables ax_term in
+                 ( Formula.VarSet.fold (declare_var marked) deps formula,
+                   Formula.VarSet.add (AxVar ax_var)
+                     (Formula.VarSet.union deps marked) )
+             | Assert bl_term | Assume bl_term ->
+                 let deps = Formula_utils.bl_term_variables bl_term in
+                 ( Formula.VarSet.fold (declare_var marked) deps formula,
+                   Formula.VarSet.union deps marked )
+             | Comment _ -> (formula, marked))
+           formula
+           (formula, Formula.VarSet.empty))
+
   let pp_smt slice ppf state =
+    let state = { state with formula = close_formula state.formula } in
     match slice with
     | None -> Formula_pp.pp_formula ppf state.formula
     | Some l ->
@@ -620,7 +660,7 @@ struct
         in
         Formula_pp.pp_formula ppf (do_optimization ~keep state.formula)
 
-  let to_formula { formula; _ } = formula
+  let to_formula { formula; _ } = close_formula formula
   let downcast _ = None
 end
 

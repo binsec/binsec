@@ -26,7 +26,8 @@ end)
 
 type solver =
   | Auto (* try to use the best SMT solver available; in order *)
-  | Bitwuzla_native (* bitwuzla native ocaml binding *)
+  | Bitwuzla_builtin (* bitwuzla native ocaml binding (cxx) *)
+  | Bitwuzla_legacy (* bitwuzla native ocaml binding (c) *)
   | Bitwuzla_smtlib (* bitwuzla external process *)
   | Boolector_smtlib (* boolector external process *)
   | Z3_smtlib (* z3 external process *)
@@ -41,7 +42,9 @@ module SMTSolver = Builder.Variant_choice_assoc (struct
     [
       ("auto", Auto);
       ("bitwuzla", Bitwuzla_smtlib);
-      ("bitwuzla:native", Bitwuzla_native);
+      ("bitwuzla:native", Bitwuzla_legacy);
+      ("bitwuzla:legacy", Bitwuzla_legacy);
+      ("bitwuzla:builtin", Bitwuzla_builtin);
       ("bitwuzla:smtlib", Bitwuzla_smtlib);
       ("boolector", Boolector_smtlib);
       ("boolector:smtlib", Boolector_smtlib);

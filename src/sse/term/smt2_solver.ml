@@ -39,10 +39,12 @@ module Session = struct
   }
 
   let close t =
-    ignore @@ Subprocess.close t.pid;
-    match t.fdlog with None -> () | Some fd -> close_out fd
+    if t.state <> Dead then (
+      t.state <- Dead;
+      ignore @@ Subprocess.close t.pid;
+      match t.fdlog with None -> () | Some fd -> close_out fd)
 
-  let start ?stdlog timeout solver =
+  let start ?stdlog solver =
     Options.Logger.debug "Openning session %d" !n;
     let fdlog =
       match Smt_options.SMT_dir.get_opt () with
@@ -55,7 +57,7 @@ module Session = struct
           Some (open_out filename)
     in
     incr n;
-    let cmd = Prover.command ~incremental:true timeout solver in
+    let cmd = Prover.command ~incremental:true 0 solver in
     let pid = Subprocess.spawn ~pdeathsig:Sys.sigkill cmd in
     let stdin = Subprocess.stdin pid
     and stdout = Subprocess.stdout pid
@@ -108,24 +110,58 @@ module Session = struct
       formatter;
     }
 
-  type status = SAT | UNSAT | UNKNOWN
+  let rec parse_check_with_deadline t fd deadline : Libsolver.status =
+    match deadline with
+    | None -> parse_check_line t fd deadline Float.minus_one
+    | Some deadline' ->
+        let timeout = deadline' -. Unix.gettimeofday () in
+        if Float.sign_bit timeout then (
+          close t;
+          Unknown)
+        else parse_check_line t fd deadline timeout
 
-  let check_sat t =
+  and parse_check_line t fd deadline timeout : Libsolver.status =
+    match Unix.select [ fd ] [] [] timeout with
+    | [ _ ], _, _ -> (
+        Unix.set_nonblock fd;
+        match input_line t.stdout with
+        | "sat" ->
+            Unix.clear_nonblock fd;
+            t.state <- Sat;
+            Sat
+        | "unsat" ->
+            Unix.clear_nonblock fd;
+            t.state <- Unsat;
+            Unsat
+        | "unknown" ->
+            Unix.clear_nonblock fd;
+            t.state <- Assert;
+            Unknown
+        | "" -> parse_check_with_deadline t fd deadline
+        | s ->
+            Options.Logger.error "Solver returned: %s" s;
+            close t;
+            Unknown
+        | exception Sys_blocked_io -> parse_check_with_deadline t fd deadline
+        | exception End_of_file ->
+            close t;
+            Unknown)
+    | _ ->
+        close t;
+        Unknown
+
+  let parse_check t ~timeout =
+    parse_check_with_deadline t
+      (Unix.descr_of_in_channel t.stdout)
+      (Option.map (fun timeout -> Unix.gettimeofday () +. timeout) timeout)
+
+  let check_sat t ~timeout =
     Format.fprintf t.formatter "(check-sat)@.";
-    match input_line t.stdout with
-    | "sat" ->
-        t.state <- Sat;
-        SAT
-    | "unsat" ->
-        t.state <- Unsat;
-        UNSAT
-    | "unknown" ->
-        t.state <- Assert;
-        UNKNOWN
-    | s -> Options.Logger.fatal "Solver returned: %s" s
-    | exception End_of_file ->
-        t.state <- Dead;
-        UNKNOWN
+    parse_check t ~timeout
+
+  let check_sat_assuming t ~timeout e =
+    Format.fprintf t.formatter "(check-sat-assuming (%s))@." e;
+    parse_check t ~timeout
 
   let value_of_constant cst =
     let open Smtlib in
@@ -148,11 +184,6 @@ module Session = struct
     match Smtlib_parser.ivalue Smtlib_lexer.token lexbuf with
     | [ (_, { term_desc = TermSpecConstant cst; _ }) ] -> value_of_constant cst
     | _ -> assert false
-
-  let put t pp x =
-    pp t.formatter x;
-    Format.pp_print_space t.formatter ();
-    t.state <- Assert
 end
 
 (* utils *)
@@ -182,16 +213,15 @@ let pp_bv ppf value size =
 module Printer = struct
   open Sexpr
 
-  type term = string * int
+  type term = string
 
   type access = Select of term * int | Store of term * int
-  and def = Bl of Expr.t | Bv of Expr.t | Ax of Memory.t
+  and def = Bl of Expr.t | Bv of Expr.t | Ax of Memory.t | Decl of string
 
   and t = {
     fvariables : Expr.t StTbl.t;
     farrays : Memory.t StTbl.t;
     mutable id : Suid.t;
-    bv_decl : string BvTbl.t;
     bl_cons : string BvTbl.t;
     bv_cons : string BvTbl.t;
     ax_cons : string AxTbl.t;
@@ -213,7 +243,6 @@ module Printer = struct
       fvariables = StTbl.create 16;
       farrays = StTbl.create 4;
       id = next_id;
-      bv_decl = BvTbl.create 16;
       bl_cons;
       bv_cons;
       ax_cons = AxTbl.create 64;
@@ -224,178 +253,240 @@ module Printer = struct
       debug;
     }
 
+  let copy
+      {
+        fvariables;
+        farrays;
+        id;
+        bl_cons;
+        bv_cons;
+        ax_cons;
+        ax_root;
+        ordered_defs;
+        ordered_mem;
+        word_size;
+        debug;
+      } =
+    let ordered_mem =
+      AxTbl.fold
+        (fun ax history tbl ->
+          AxTbl.add tbl ax (Queue.copy history);
+          tbl)
+        ordered_mem
+        (AxTbl.create (AxTbl.length ordered_mem))
+    in
+    {
+      fvariables = StTbl.copy fvariables;
+      farrays = StTbl.copy farrays;
+      id;
+      bl_cons = BvTbl.copy bl_cons;
+      bv_cons = BvTbl.copy bv_cons;
+      ax_cons = AxTbl.copy ax_cons;
+      ax_root;
+      ordered_defs = Queue.copy ordered_defs;
+      ordered_mem;
+      word_size;
+      debug;
+    }
+
   let pp_int_as_offset size ppf i = pp_bv ppf i size
+
   let once = ""
+  and evicted = "\\"
 
   let rec visit_bl ctx bl =
-    try
-      if BvTbl.find ctx.bl_cons bl == once then (
-        let name = Suid.to_string ctx.id in
-        ctx.id <- Suid.incr ctx.id;
-        BvTbl.replace ctx.bl_cons bl name)
-    with Not_found -> (
-      match bl with
-      | Cst _ -> ()
-      | Load _ (* cannot be a bl<1> *) -> assert false
-      | Unary { f = Not; x; _ } ->
-          BvTbl.add ctx.bl_cons bl once;
-          visit_bl ctx x;
-          Queue.push (Bl bl) ctx.ordered_defs
-      | Binary { f = And | Or; x; y; _ } ->
-          BvTbl.add ctx.bl_cons bl once;
-          visit_bl ctx x;
-          visit_bl ctx y;
-          Queue.push (Bl bl) ctx.ordered_defs
-      | Binary
-          {
-            f = Eq | Diff | Uge | Ule | Ugt | Ult | Sge | Sle | Sgt | Slt;
-            x;
-            y;
-            _;
-          } ->
-          BvTbl.add ctx.bl_cons bl once;
-          visit_bv ctx x;
-          visit_bv ctx y;
-          Queue.push (Bl bl) ctx.ordered_defs
-      | Ite { c; t; e; _ } ->
-          BvTbl.add ctx.bl_cons bl once;
-          visit_bl ctx c;
-          visit_bl ctx t;
-          visit_bl ctx e;
-          Queue.push (Bl bl) ctx.ordered_defs
-      | Var _ | Unary _ | Binary _ -> visit_bv ctx bl)
+    match BvTbl.find ctx.bl_cons bl with
+    | exception Not_found -> visit_and_mark_bl ctx bl BvTbl.add once
+    | label ->
+        if label == once then (
+          let name = Suid.to_string ctx.id in
+          ctx.id <- Suid.incr ctx.id;
+          BvTbl.replace ctx.bl_cons bl name)
+        else if label == evicted then (
+          let name = Suid.to_string ctx.id in
+          ctx.id <- Suid.incr ctx.id;
+          visit_and_mark_bl ctx bl BvTbl.replace name)
+
+  and visit_and_mark_bl ctx (bl : Expr.t) set label =
+    match bl with
+    | Cst _ -> ()
+    | Load _ (* cannot be a bl<1> *) -> assert false
+    | Unary { f = Not; x; _ } ->
+        set ctx.bl_cons bl label;
+        visit_bl ctx x;
+        Queue.push (Bl bl) ctx.ordered_defs
+    | Binary { f = And | Or; x; y; _ } ->
+        set ctx.bl_cons bl label;
+        visit_bl ctx x;
+        visit_bl ctx y;
+        Queue.push (Bl bl) ctx.ordered_defs
+    | Binary
+        {
+          f = Eq | Diff | Uge | Ule | Ugt | Ult | Sge | Sle | Sgt | Slt;
+          x;
+          y;
+          _;
+        } ->
+        set ctx.bl_cons bl label;
+        visit_bv ctx x;
+        visit_bv ctx y;
+        Queue.push (Bl bl) ctx.ordered_defs
+    | Ite { c; t; e; _ } ->
+        set ctx.bl_cons bl label;
+        visit_bl ctx c;
+        visit_bl ctx t;
+        visit_bl ctx e;
+        Queue.push (Bl bl) ctx.ordered_defs
+    | Var _ | Unary _ | Binary _ -> visit_bv ctx bl
 
   and visit_bv ctx bv =
-    try
-      if BvTbl.find ctx.bv_cons bv == once then (
-        let name = Suid.to_string ctx.id in
-        ctx.id <- Suid.incr ctx.id;
-        BvTbl.replace ctx.bv_cons bv name)
-    with Not_found -> (
-      match bv with
-      | Var { name; size; label; _ } ->
-          StTbl.add ctx.fvariables name bv;
-          let name = ctx.debug ~name ~label in
-          BvTbl.add ctx.bv_cons bv name;
-          if size = 1 then
-            BvTbl.add ctx.bl_cons bv (Printf.sprintf "(= %s #b1)" name);
-          BvTbl.add ctx.bv_decl bv
-            (Format.sprintf "(declare-fun %s () (_ BitVec %d))" name size)
-      | Load { len; addr; label; _ } ->
-          BvTbl.add ctx.bv_cons bv once;
-          visit_bv ctx addr;
-          visit_bv ctx addr;
-          visit_ax ctx label;
-          if len > 1 then visit_ax ctx label;
-          Queue.push (Bv bv) ctx.ordered_defs;
-          let root = AxTbl.find ctx.ax_root label in
-          let ordered_mem = AxTbl.find ctx.ordered_mem root in
-          Queue.push
-            (Select ((BvTbl.find ctx.bv_cons addr, Expr.sizeof addr), len))
-            ordered_mem
-      | Cst _ ->
-          BvTbl.add ctx.bv_cons bv once;
-          Queue.push (Bv bv) ctx.ordered_defs
-      | Unary { x; _ } ->
-          BvTbl.add ctx.bv_cons bv once;
-          visit_bv ctx x;
-          Queue.push (Bv bv) ctx.ordered_defs
-      | Binary
-          { f = Eq | Diff | Uge | Ule | Ugt | Ult | Sge | Sle | Sgt | Slt; _ }
-        ->
-          BvTbl.add ctx.bv_cons bv once;
-          visit_bl ctx bv;
-          Queue.push (Bv bv) ctx.ordered_defs
-      | Binary
-          {
-            f = Rol | Ror;
-            x;
-            y = (Load _ | Unary _ | Binary _ | Ite _) as y;
-            _;
-          } ->
-          BvTbl.add ctx.bv_cons bv once;
-          visit_bv ctx x;
-          visit_bv ctx x;
-          visit_bv ctx y;
-          visit_bv ctx y;
-          Queue.push (Bv bv) ctx.ordered_defs
-      | Binary { x; y; _ } ->
-          BvTbl.add ctx.bv_cons bv once;
-          visit_bv ctx x;
-          visit_bv ctx y;
-          Queue.push (Bv bv) ctx.ordered_defs
-      | Ite { c; t; e; _ } ->
-          BvTbl.add ctx.bv_cons bv once;
-          visit_bl ctx c;
-          visit_bv ctx t;
-          visit_bv ctx e;
-          Queue.push (Bv bv) ctx.ordered_defs)
+    match BvTbl.find ctx.bv_cons bv with
+    | exception Not_found -> visit_and_mark_bv ctx bv BvTbl.add once
+    | label ->
+        if label == once then (
+          let name = Suid.to_string ctx.id in
+          ctx.id <- Suid.incr ctx.id;
+          BvTbl.replace ctx.bv_cons bv name)
+        else if label == evicted then (
+          let name = Suid.to_string ctx.id in
+          ctx.id <- Suid.incr ctx.id;
+          visit_and_mark_bv ctx bv BvTbl.replace name)
+
+  and visit_and_mark_bv ctx bv set label' =
+    match bv with
+    | Var { name; size; label; _ } ->
+        StTbl.add ctx.fvariables name bv;
+        let name = ctx.debug ~name ~label in
+        BvTbl.add ctx.bv_cons bv name;
+        if size = 1 then
+          BvTbl.add ctx.bl_cons bv (Printf.sprintf "(= %s #b1)" name);
+        Queue.push
+          (Decl (Format.sprintf "(declare-fun %s () (_ BitVec %d))" name size))
+          ctx.ordered_defs
+    | Load { len; addr; label; _ } ->
+        set ctx.bv_cons bv label';
+        visit_bv ctx addr;
+        visit_bv ctx addr;
+        visit_ax ctx label;
+        if len > 1 then visit_ax ctx label;
+        Queue.push (Bv bv) ctx.ordered_defs;
+        let root = AxTbl.find ctx.ax_root label in
+        let ordered_mem = AxTbl.find ctx.ordered_mem root in
+        Queue.push (Select (BvTbl.find ctx.bv_cons addr, len)) ordered_mem
+    | Cst _ ->
+        set ctx.bv_cons bv label';
+        Queue.push (Bv bv) ctx.ordered_defs
+    | Unary { x; _ } ->
+        set ctx.bv_cons bv label';
+        visit_bv ctx x;
+        Queue.push (Bv bv) ctx.ordered_defs
+    | Binary
+        { f = Eq | Diff | Uge | Ule | Ugt | Ult | Sge | Sle | Sgt | Slt; _ } ->
+        set ctx.bv_cons bv label';
+        visit_bl ctx bv;
+        Queue.push (Bv bv) ctx.ordered_defs
+    | Binary
+        { f = Rol | Ror; x; y = (Load _ | Unary _ | Binary _ | Ite _) as y; _ }
+      ->
+        set ctx.bv_cons bv label';
+        visit_bv ctx x;
+        visit_bv ctx x;
+        visit_bv ctx y;
+        visit_bv ctx y;
+        Queue.push (Bv bv) ctx.ordered_defs
+    | Binary { x; y; _ } ->
+        set ctx.bv_cons bv label';
+        visit_bv ctx x;
+        visit_bv ctx y;
+        Queue.push (Bv bv) ctx.ordered_defs
+    | Ite { c; t; e; _ } ->
+        set ctx.bv_cons bv label';
+        visit_bl ctx c;
+        visit_bv ctx t;
+        visit_bv ctx e;
+        Queue.push (Bv bv) ctx.ordered_defs
 
   and visit_ax ctx (ax : Memory.t) =
-    try
-      if AxTbl.find ctx.ax_cons ax == once then (
-        let name = Suid.to_string ctx.id in
-        ctx.id <- Suid.incr ctx.id;
-        AxTbl.replace ctx.ax_cons ax name)
-    with Not_found -> (
-      match ax with
-      | Root ->
-          AxTbl.add ctx.ax_cons ax
-            (ctx.debug ~name:Suid.(to_string zero) ~label:"memory");
-          AxTbl.add ctx.ax_root ax ax;
-          AxTbl.add ctx.ordered_mem ax (Queue.create ())
-      | Symbol name ->
-          StTbl.add ctx.farrays name ax;
-          AxTbl.add ctx.ax_cons ax name;
-          AxTbl.add ctx.ax_root ax ax;
-          AxTbl.add ctx.ordered_mem ax (Queue.create ())
-      | Layer { addr = Cst _; store; over; _ } ->
-          AxTbl.add ctx.ax_cons ax once;
-          Store.iter_term
-            (fun _ bv ->
-              visit_bv ctx bv;
-              if Expr.sizeof bv > 1 then visit_bv ctx bv)
-            store;
-          visit_ax ctx over;
-          let root = AxTbl.find ctx.ax_root over in
-          AxTbl.add ctx.ax_root ax root;
-          Queue.push (Ax ax) ctx.ordered_defs;
-          let ordered_mem = AxTbl.find ctx.ordered_mem root in
-          Store.iter_term
-            (fun i bv ->
-              let index =
-                Format.asprintf "%a" (pp_int_as_offset ctx.word_size) i
-              in
-              Queue.push
-                (Store ((index, ctx.word_size), Expr.sizeof bv))
-                ordered_mem)
-            store
-      | Layer { addr; store; over; _ } ->
-          AxTbl.add ctx.ax_cons ax once;
-          visit_bv ctx addr;
-          visit_bv ctx addr;
-          Store.iter_term
-            (fun _ bv ->
-              visit_bv ctx bv;
-              if Expr.sizeof bv > 1 then visit_bv ctx bv)
-            store;
-          visit_ax ctx over;
-          let root = AxTbl.find ctx.ax_root over in
-          AxTbl.add ctx.ax_root ax root;
-          Queue.push (Ax ax) ctx.ordered_defs;
-          let ordered_mem = AxTbl.find ctx.ordered_mem root in
-          let index = BvTbl.find ctx.bv_cons addr in
-          Store.iter_term
-            (fun i bv ->
-              let index =
-                Format.asprintf "(bvadd %s %a)" index
-                  (pp_int_as_offset ctx.word_size)
-                  i
-              in
-              Queue.push
-                (Store ((index, ctx.word_size), Expr.sizeof bv))
-                ordered_mem)
-            store)
+    match AxTbl.find ctx.ax_cons ax with
+    | exception Not_found -> visit_and_mark_ax ctx ax AxTbl.add once
+    | label ->
+        if label == once then (
+          let name = Suid.to_string ctx.id in
+          ctx.id <- Suid.incr ctx.id;
+          AxTbl.replace ctx.ax_cons ax name)
+        else if label == evicted then (
+          let name = Suid.to_string ctx.id in
+          ctx.id <- Suid.incr ctx.id;
+          visit_and_mark_ax ctx ax AxTbl.replace name)
+
+  and visit_and_mark_ax ctx (ax : Memory.t) set label =
+    match ax with
+    | Root ->
+        AxTbl.add ctx.ax_cons ax
+          (ctx.debug ~name:Suid.(to_string zero) ~label:"memory");
+        AxTbl.add ctx.ax_root ax ax;
+        AxTbl.add ctx.ordered_mem ax (Queue.create ());
+        Queue.push
+          (Decl
+             (Format.sprintf
+                "(declare-fun %s () (Array (_ BitVec %d) (_ BitVec %d)))"
+                (ctx.debug ~name:Suid.(to_string zero) ~label:"memory")
+                ctx.word_size byte_size))
+          ctx.ordered_defs
+    | Symbol name ->
+        StTbl.add ctx.farrays name ax;
+        AxTbl.add ctx.ax_cons ax name;
+        AxTbl.add ctx.ax_root ax ax;
+        AxTbl.add ctx.ordered_mem ax (Queue.create ());
+        Queue.push
+          (Decl
+             (Format.sprintf
+                "(declare-fun %s () (Array (_ BitVec %d) (_ BitVec %d)))" name
+                ctx.word_size byte_size))
+          ctx.ordered_defs
+    | Layer { addr = Cst _; store; over; _ } ->
+        set ctx.ax_cons ax label;
+        Store.iter_term
+          (fun _ bv ->
+            visit_bv ctx bv;
+            if Expr.sizeof bv <> 8 then visit_bv ctx bv)
+          store;
+        visit_ax ctx over;
+        let root = AxTbl.find ctx.ax_root over in
+        AxTbl.add ctx.ax_root ax root;
+        Queue.push (Ax ax) ctx.ordered_defs;
+        let ordered_mem = AxTbl.find ctx.ordered_mem root in
+        Store.iter_term
+          (fun i bv ->
+            let index =
+              Format.asprintf "%a" (pp_int_as_offset ctx.word_size) i
+            in
+            Queue.push (Store (index, Expr.sizeof bv lsr 3)) ordered_mem)
+          store
+    | Layer { addr; store; over; _ } ->
+        set ctx.ax_cons ax label;
+        visit_bv ctx addr;
+        visit_bv ctx addr;
+        Store.iter_term
+          (fun _ bv ->
+            visit_bv ctx bv;
+            if Expr.sizeof bv <> 8 then visit_bv ctx bv)
+          store;
+        visit_ax ctx over;
+        let root = AxTbl.find ctx.ax_root over in
+        AxTbl.add ctx.ax_root ax root;
+        Queue.push (Ax ax) ctx.ordered_defs;
+        let ordered_mem = AxTbl.find ctx.ordered_mem root in
+        let index = BvTbl.find ctx.bv_cons addr in
+        Store.iter_term
+          (fun i bv ->
+            let index =
+              Format.asprintf "(bvadd %s %a)" index
+                (pp_int_as_offset ctx.word_size)
+                i
+            in
+            Queue.push (Store (index, Expr.sizeof bv lsr 3)) ordered_mem)
+          store
 
   let pp_unop ppf (op : Term.unary Term.operator) =
     match op with
@@ -441,7 +532,7 @@ module Printer = struct
   let rec print_bl ctx ppf bl =
     try
       let name = BvTbl.find ctx.bl_cons bl in
-      if name == once then print_bl_no_cons ctx ppf bl
+      if name == once || name == evicted then print_bl_no_cons ctx ppf bl
       else Format.pp_print_string ppf name
     with Not_found ->
       Format.pp_print_string ppf "(= ";
@@ -509,7 +600,7 @@ module Printer = struct
 
   and print_bv ctx ppf bv =
     let name = BvTbl.find ctx.bv_cons bv in
-    if name == once then print_bv_no_cons ctx ppf bv
+    if name == once || name == evicted then print_bv_no_cons ctx ppf bv
     else Format.pp_print_string ppf name
 
   and print_bv_no_cons ctx ppf bv =
@@ -611,7 +702,7 @@ module Printer = struct
 
   and print_ax ctx ppf ax =
     let name = AxTbl.find ctx.ax_cons ax in
-    if name == once then print_ax_no_cons ctx ppf ax
+    if name == once || name == evicted then print_ax_no_cons ctx ppf ax
     else Format.pp_print_string ppf name
 
   and print_ax_no_cons ctx ppf (ax : Memory.t) =
@@ -686,55 +777,46 @@ module Printer = struct
     | LittleEndian -> print_multi_select_le
     | BigEndian -> print_multi_select_be 0
 
-  let pp_print_decls ppf ctx =
-    BvTbl.iter
-      (fun _ decl ->
-        Format.pp_print_string ppf decl;
-        Format.pp_print_space ppf ())
-      ctx.bv_decl;
-    AxTbl.iter
-      (fun (ax : Memory.t) ordered_mem ->
-        match ax with
-        | Root ->
-            Format.fprintf ppf
-              "(declare-fun %s () (Array (_ BitVec %d) (_ BitVec %d)))@ "
-              (ctx.debug ~name:Suid.(to_string zero) ~label:"memory")
-              ctx.word_size byte_size
-        | Symbol name ->
-            if not (Queue.is_empty ordered_mem) then
-              Format.fprintf ppf
-                "(declare-fun %s () (Array (_ BitVec %d) (_ BitVec %d)))@ " name
-                ctx.word_size byte_size
-        | _ -> assert false)
-      ctx.ordered_mem
-
   let pp_print_defs ppf ctx =
     Queue.iter
       (function
         | Bl bl ->
             let name = BvTbl.find ctx.bl_cons bl in
-            if name != once then (
+            if name == once then BvTbl.replace ctx.bl_cons bl evicted
+            else if name == evicted then ()
+            else (
               Format.fprintf ppf "@[<h>(define-fun %s () Bool " name;
               print_bl_no_cons ctx ppf bl;
               Format.fprintf ppf ")@]@ ")
         | Bv bv ->
             let name = BvTbl.find ctx.bv_cons bv in
-            if name != once then (
+            if name == once then BvTbl.replace ctx.bv_cons bv evicted
+            else if name == evicted then ()
+            else (
               Format.fprintf ppf "@[<h>(define-fun %s () (_ BitVec %d) " name
                 (Expr.sizeof bv);
               print_bv_no_cons ctx ppf bv;
               Format.fprintf ppf ")@]@ ")
         | Ax ax ->
             let name = AxTbl.find ctx.ax_cons ax in
-            if name != once then (
+            if name == once then AxTbl.replace ctx.ax_cons ax evicted
+            else if name == evicted then ()
+            else (
               Format.fprintf ppf
                 "@[<h>(define-fun %s () (Array (_ BitVec %d) (_ BitVec %d)) "
                 name
                 (Kernel_options.Machine.word_size ())
                 byte_size;
               print_ax_no_cons ctx ppf ax;
-              Format.fprintf ppf ")@]@ "))
+              Format.fprintf ppf ")@]@ ")
+        | Decl dl ->
+            Format.pp_print_string ppf dl;
+            Format.pp_print_space ppf ())
       ctx.ordered_defs
+
+  let pp_flush_defs ppf ctx =
+    pp_print_defs ppf ctx;
+    Queue.clear ctx.ordered_defs
 
   let pp_print_bl = print_bl
   let pp_print_bv = print_bv
@@ -1023,7 +1105,9 @@ module Cross = struct
         let addr = mk_bv ctx addr in
         Store.fold_term
           (fun i bv store ->
-            Formula.mk_store 1 store
+            Formula.mk_store
+              (Expr.sizeof bv lsr 3)
+              store
               (Formula.mk_bv_add addr
                  (Formula.mk_bv_cst (Bitvector.create i ctx.word_size)))
               (mk_bv ctx bv))
@@ -1085,81 +1169,70 @@ module Cross = struct
       ctx.ordered
 end
 
-module Solver () : Solver_sig.S = struct
+module Solver () : Solver.S = struct
   open Sexpr
 
-  type result = Sat | Unsat | Unknown
-  type term = Printer.term
-
-  let put (ctx : Printer.t) ppf constraints =
-    Format.pp_open_vbox ppf 0;
-    (* visit assertions *)
-    List.iter (Printer.visit_bl ctx) constraints;
-    (* print declarations *)
-    Printer.pp_print_decls ppf ctx;
-    (* print assertions *)
-    Format.pp_open_hovbox ppf 0;
-    Printer.pp_print_defs ppf ctx;
-    List.iter
-      (fun bl ->
-        Format.pp_print_string ppf "(assert ";
-        Printer.print_bl ctx ppf bl;
-        Format.pp_print_char ppf ')';
-        Format.pp_print_space ppf ())
-      constraints;
-    Format.pp_close_box ppf ();
-    Format.pp_close_box ppf ()
-
   let session =
-    Session.start (* ~stdlog:stderr *)
-      (Formula_options.Solver.Timeout.get ())
-      (Formula_options.Solver.get ())
+    Session.start (* ~stdlog:stderr *) (Formula_options.Solver.get ())
 
-  let ctx = ref None
+  let ctx = ref [ Printer.create ~next_id:Suid.zero () ]
+  let top () = List.hd !ctx
+  let visit_formula = List.iter (Printer.visit_bl (top ()))
+  let iter_free_variables f = StTbl.iter f (top ()).fvariables
+  let iter_free_arrays f = StTbl.iter f (top ()).farrays
 
-  let bind fid e constraints =
-    let ctx =
-      let x = Printer.create ~next_id:fid () in
-      ctx := Some x;
-      x
-    in
-    Printer.visit_ax ctx Memory.root;
-    Printer.visit_bv ctx e;
-    Printer.visit_bv ctx e;
-    put ctx session.formatter constraints;
-    (BvTbl.find ctx.bv_cons e, Expr.sizeof e)
+  let push () =
+    ctx := Printer.copy (List.hd !ctx) :: !ctx;
+    Format.pp_print_string session.formatter "(push 1)"
 
-  let put fid constraints =
-    let ctx =
-      let x = Printer.create ~next_id:fid () in
-      ctx := Some x;
-      x
-    in
-    Printer.visit_ax ctx Memory.root;
-    put ctx session.formatter constraints
+  let pop () =
+    ctx := List.tl !ctx;
+    Format.pp_print_string session.formatter "(pop 1)"
 
-  let get e = (BvTbl.find (Option.get !ctx).bv_cons e, Expr.sizeof e)
+  let flush_bl (ctx : Printer.t) x =
+    match BvTbl.find ctx.bl_cons x with
+    | exception Not_found ->
+        Printer.visit_bl ctx x;
+        Printer.visit_bl ctx x;
+        Printer.pp_flush_defs session.formatter ctx;
+        BvTbl.find ctx.bl_cons x
+    | name ->
+        if name == Printer.once || name == Printer.evicted then (
+          Printer.visit_bl ctx x;
+          Printer.pp_flush_defs session.formatter ctx;
+          BvTbl.find ctx.bl_cons x)
+        else name
 
-  let set_memory ~addr y =
-    Session.put session
-      (fun ppf () ->
-        Format.fprintf ppf "(assert (= (select %s " Suid.(to_string zero);
-        Format.pp_print_char ppf ' ';
-        pp_bv ppf addr (Option.get !ctx).Printer.word_size;
-        Format.pp_print_string ppf ") ";
-        pp_bv ppf y 8;
-        Format.pp_print_string ppf "))")
-      ()
+  let assert_formula bl =
+    let ctx = top () in
+    Format.pp_open_hovbox session.formatter 0;
+    (* print declarations *)
+    let bl = flush_bl ctx bl in
+    (* print assertion *)
+    Format.pp_print_string session.formatter "(assert ";
+    Format.pp_print_string session.formatter bl;
+    Format.pp_print_char session.formatter ')';
+    Format.pp_print_space session.formatter ();
+    Format.pp_close_box session.formatter ()
 
-  let neq (e, s) x =
-    Session.put session
-      (fun ppf () ->
-        Format.fprintf ppf "(assert (not (= %s " e;
-        pp_bv ppf x s;
-        Format.pp_print_string ppf ")))")
-      ()
+  let flush_bv (ctx : Printer.t) x =
+    match BvTbl.find ctx.bv_cons x with
+    | exception Not_found ->
+        Printer.visit_bv ctx x;
+        Printer.visit_bv ctx x;
+        Printer.pp_flush_defs session.formatter ctx;
+        BvTbl.find ctx.bv_cons x
+    | name ->
+        if name == Printer.once || name == Printer.evicted then (
+          Printer.visit_bv ctx x;
+          Printer.pp_flush_defs session.formatter ctx;
+          BvTbl.find ctx.bv_cons x)
+        else name
 
-  let get_value (x, _) = Session.get_value session Format.pp_print_string x
+  let get_value x =
+    let ctx = top () in
+    let bv = flush_bv ctx x in
+    Session.get_value session Format.pp_print_string bv
 
   let get_at name x s =
     Session.get_value session
@@ -1171,53 +1244,54 @@ module Solver () : Solver_sig.S = struct
         Format.pp_print_char ppf ')')
       x
 
-  let iter_free_variables f = StTbl.iter f (Option.get !ctx).fvariables
-  let iter_free_arrays f = StTbl.iter f (Option.get !ctx).farrays
-
-  let get_array ar =
-    match AxTbl.find (Option.get !ctx).ordered_mem ar with
-    | exception Not_found -> [||]
+  let fold_array_values f ar x =
+    let ctx = top () in
+    match AxTbl.find ctx.ordered_mem ar with
+    | exception Not_found -> x
     | history ->
-        if Queue.is_empty history then [||]
+        if Queue.is_empty history then x
         else
           let dirty = BiTbl.create (Queue.length history) in
-          let name =
-            Format.asprintf "%a" (Printer.pp_print_ax (Option.get !ctx)) ar
-          and addr_space = (Option.get !ctx).word_size in
-          let binding =
-            Queue.fold
-              (fun binding (access : Printer.access) ->
-                match access with
-                | Select (index, len) ->
-                    let index = get_value index in
-                    let rec fold index len binding =
-                      if len = 0 then binding
-                      else if BiTbl.mem dirty index then
-                        fold (Z.succ index) (len - 1) binding
-                      else
-                        let k = get_at name index addr_space in
-                        fold (Z.succ index) (len - 1)
-                          ((index, Char.unsafe_chr (Z.to_int k)) :: binding)
-                    in
-                    fold index len binding
-                | Store (index, len) ->
-                    let index = get_value index in
-                    let rec loop index len =
-                      if len <> 0 then (
-                        BiTbl.replace dirty index ();
-                        loop (Z.succ index) (len - 1))
-                    in
-                    loop index len;
-                    binding)
-              [] history
-          in
-          Array.of_list binding
+          let name = Format.asprintf "%a" (Printer.pp_print_ax ctx) ar
+          and addr_space = ctx.word_size in
+          Queue.fold
+            (fun x (access : Printer.access) ->
+              match access with
+              | Select (index, len) ->
+                  let index =
+                    Session.get_value session Format.pp_print_string index
+                  in
+                  let rec fold index len x =
+                    if len = 0 then x
+                    else if BiTbl.mem dirty index then
+                      fold (Z.succ index) (len - 1) x
+                    else
+                      let k = get_at name index addr_space in
+                      fold (Z.succ index) (len - 1) (f index k x)
+                  in
+                  fold index len x
+              | Store (index, len) ->
+                  let index =
+                    Session.get_value session Format.pp_print_string index
+                  in
+                  let rec loop index len =
+                    if len <> 0 then (
+                      BiTbl.replace dirty index ();
+                      loop (Z.succ index) (len - 1))
+                  in
+                  loop index len;
+                  x)
+            x history
 
-  let check_sat () =
-    match Session.check_sat session with
-    | UNKNOWN -> Unknown
-    | UNSAT -> Unsat
-    | SAT -> Sat
+  let check_sat ?timeout () : Libsolver.status =
+    Session.check_sat session ~timeout
+
+  let check_sat_assuming ?timeout bl : Libsolver.status =
+    let ctx = top () in
+    Printer.visit_bl ctx bl;
+    Printer.visit_bl ctx bl;
+    Printer.pp_flush_defs session.formatter ctx;
+    Session.check_sat_assuming session ~timeout (BvTbl.find ctx.bl_cons bl)
 
   let close () = Session.close session
 end

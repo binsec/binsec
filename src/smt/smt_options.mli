@@ -25,7 +25,8 @@ include Cli.Cli_sig
 
 type solver =
   | Auto  (** try to use the best SMT solver available; in order *)
-  | Bitwuzla_native  (** bitwuzla native ocaml binding *)
+  | Bitwuzla_builtin  (** bitwuzla native ocaml binding (cxx) *)
+  | Bitwuzla_legacy  (** bitwuzla native ocaml binding (c) *)
   | Bitwuzla_smtlib  (** bitwuzla external process *)
   | Boolector_smtlib  (** boolector external process *)
   | Z3_smtlib  (** z3 external process *)
