@@ -30,6 +30,7 @@ type solver =
   | Bitwuzla_legacy (* bitwuzla native ocaml binding (c) *)
   | Bitwuzla_smtlib (* bitwuzla external process *)
   | Boolector_smtlib (* boolector external process *)
+  | Z3_builtin (* z3 native ocaml binding *)
   | Z3_smtlib (* z3 external process *)
   | CVC4_smtlib (* cvc4 external process *)
   | Yices_smtlib
@@ -49,6 +50,7 @@ module SMTSolver = Builder.Variant_choice_assoc (struct
       ("boolector", Boolector_smtlib);
       ("boolector:smtlib", Boolector_smtlib);
       ("z3", Z3_smtlib);
+      ("z3:builtin", Z3_builtin);
       ("z3:smtlib", Z3_smtlib);
       ("cvc4", CVC4_smtlib);
       ("cvc4:smtlib", CVC4_smtlib);

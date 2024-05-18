@@ -19,22 +19,4 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Definition of command-line & programmatic options for SSE *)
-
-include Cli.Cli_sig
-
-type solver =
-  | Auto  (** try to use the best SMT solver available; in order *)
-  | Bitwuzla_builtin  (** bitwuzla native ocaml binding (cxx) *)
-  | Bitwuzla_legacy  (** bitwuzla native ocaml binding (c) *)
-  | Bitwuzla_smtlib  (** bitwuzla external process *)
-  | Boolector_smtlib  (** boolector external process *)
-  | Z3_builtin  (** z3 native ocaml binding *)
-  | Z3_smtlib  (** z3 external process *)
-  | CVC4_smtlib  (** cvc4 external process *)
-  | Yices_smtlib  (** yices external process *)
-
-module SMTSolver : Cli.GENERIC with type t = solver
-module KeepGoing : Cli.BOOLEAN
-module SMT_dir : Cli.STRING_OPT
-module SMT_log_directory : Cli.STRING
+let factory = None
