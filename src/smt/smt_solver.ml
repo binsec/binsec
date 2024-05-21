@@ -27,7 +27,7 @@ let map =
   let open Formula_options in
   let open Smt_options in
   function
-  | Auto | Bitwuzla_builtin | Bitwuzla_legacy -> assert false
+  | Auto | Bitwuzla_builtin | Bitwuzla_legacy | Z3_builtin -> assert false
   | Bitwuzla_smtlib -> Bitwuzla
   | Boolector_smtlib -> Boolector
   | Z3_smtlib -> Z3
@@ -45,6 +45,9 @@ let get_solver () =
     when Option.is_some Libsolver.bitwuzla_c ->
       let module Solver = (val Option.get Libsolver.bitwuzla_c) in
       (module Smt_internal.Make (Solver) : Smt_sig.Solver)
+  | (Auto | Z3_builtin) when Option.is_some Libsolver.z3 ->
+      let module Solver = (val Option.get Libsolver.z3) in
+      (module Smt_internal.Make (Solver) : Smt_sig.Solver)
   | Auto -> (
       try
         let solver = List.find Prover.ping solvers in
@@ -54,6 +57,8 @@ let get_solver () =
       with Not_found -> Logger.fatal "No SMT solver found.")
   | Bitwuzla_builtin | Bitwuzla_legacy ->
       Logger.fatal "Native bitwuzla binding is required but not available."
+  | Z3_builtin ->
+      Logger.fatal "Native z3 binding is required but not available."
   | solver when Prover.ping (map solver) ->
       Solver.set (map solver);
       (module Smt_external.Solver : Smt_sig.Solver)

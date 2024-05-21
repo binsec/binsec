@@ -16,7 +16,12 @@
    bitwuzla_cxx_binding.ml
    from
    (bitwuzla-cxx -> bitwuzla_cxx_binding.enabled.ml)
-   (!bitwuzla-cxx -> bitwuzla_cxx_binding.stub.ml))))
+   (!bitwuzla-cxx -> bitwuzla_cxx_binding.stub.ml))
+  (select
+   z3_binding.ml
+   from
+   (z3 -> z3_binding.enabled.ml)
+   (!z3 -> z3_binding.stub.ml))))
 
 (rule
  (target libsolver.mli)

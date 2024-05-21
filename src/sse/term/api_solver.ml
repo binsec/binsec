@@ -21,6 +21,7 @@
 
 module Bv = Sexpr.Bv
 module Expr = Sexpr.Expr
+module Store = Sexpr.Store
 module Memory = Sexpr.Memory
 module StTbl = Sexpr.StTbl
 module BvTbl = Sexpr.BvTbl
@@ -47,7 +48,12 @@ end
 type ('bl, 'bv, 'ax) context =
   (module CONTEXT with type bl = 'bl and type bv = 'bv and type ax = 'ax)
 
-module Context (S : Libsolver.S) :
+module type AXHOOK = sig
+  val visit_load : ([ `Mem ], string, Memory.t) Term.t -> unit
+  val visit_ax : Memory.t -> unit
+end
+
+module Context (H : AXHOOK) (S : Libsolver.S) :
   CONTEXT with type bl = S.Bl.t and type bv = S.Bv.t and type ax = S.Ax.t =
 struct
   open S
@@ -125,6 +131,7 @@ struct
             Bv.const size name
         | Load { len; dir; addr; label; _ } ->
             let index = visit_bv addr and array = visit_ax label in
+            H.visit_load (Term.to_mem_exn bv);
             visit_select len dir index array
         | Cst bv -> Bv.value (Bitvector.size_of bv) (Bitvector.value_of bv)
         | Unary { f = Not; x; _ } -> Bv.lognot (visit_bv x)
@@ -174,7 +181,7 @@ struct
             Ax.const array_sort name
         | Layer { addr; store; over; _ } ->
             let base = visit_bv addr and array = visit_ax over in
-            Sexpr.Store.fold_term
+            Store.fold_term
               (fun i value array ->
                 let s = Expr.sizeof value in
                 let x = visit_bv value
@@ -182,6 +189,7 @@ struct
                 unroll_store array index x s)
               array store
       in
+      H.visit_ax ax;
       AxTbl.add ax_cons ax a;
       a
 
@@ -190,10 +198,15 @@ struct
   let get e = BvTbl.find bv_cons e
 end
 
+module NoHook = struct
+  let visit_load _ = ()
+  let visit_ax _ = ()
+end
+
 module Make (F : Libsolver.F) = struct
   module Open () : Solver.S = struct
     module Solver = F ()
-    module Context = Context (Solver)
+    module Context = Context (NoHook) (Solver)
 
     let visit_formula _ = ()
     let iter_free_variables = Context.iter_free_variables
@@ -208,6 +221,111 @@ module Make (F : Libsolver.F) = struct
 
     let fold_array_values f ar x =
       Solver.fold_ax_values f (Context.visit_ax ar) x
+
+    let push = Solver.push
+    let pop = Solver.pop
+    let close = Solver.close
+  end
+end
+
+module BiTbl = Sexpr.BiTbl
+
+module SafeArray (F : Libsolver.F) = struct
+  (* Some SMT solvers use a default value when they build array models.
+     Yet, the default value is not necessarily handled by the 'fold_ax_values'
+     function.
+     Moreover, the default value conflicts with the lazy initialization of
+     large segments of memory because, either we ignore it and thus, we can
+     miss an address that is constrained but share the same value than default
+     one, either we will have to check for all initialized addresses -- that
+     is what lazy initialization tries to avoid.
+
+     This module proposes an alternative way to query the array models based
+     on the one used in 'Smt2_solver'.
+  *)
+
+  module Open () : Solver.S = struct
+    module Solver = F ()
+
+    type access = Select of Expr.t * int | Store of Expr.t * int
+
+    let ax_root : Memory.t AxTbl.t = AxTbl.create 64
+    let ordered_mem : access Queue.t AxTbl.t = AxTbl.create 4
+
+    module Hook = struct
+      let visit_load
+          (Load { len; addr; label; _ } : ([ `Mem ], string, Memory.t) Term.t) =
+        let root = AxTbl.find ax_root label in
+        let ordered_mem = AxTbl.find ordered_mem root in
+        Queue.push (Select (addr, len)) ordered_mem
+
+      let visit_ax (ax : Memory.t) =
+        match ax with
+        | Root | Symbol _ ->
+            AxTbl.add ax_root ax ax;
+            AxTbl.add ordered_mem ax (Queue.create ())
+        | Layer { addr; store; over; _ } ->
+            let root = AxTbl.find ax_root over in
+            AxTbl.add ax_root ax root;
+            let ordered_mem = AxTbl.find ordered_mem root in
+            Store.iter_term
+              (fun i bv ->
+                Queue.push
+                  (Store (Expr.addz addr i, Expr.sizeof bv lsr 3))
+                  ordered_mem)
+              store
+    end
+
+    module Context = Context (Hook) (Solver)
+
+    let visit_formula _ = ()
+    let iter_free_variables = Context.iter_free_variables
+    let iter_free_arrays = Context.iter_free_arrays
+    let assert_formula bl = Solver.assert_formula (Context.visit_bl bl)
+    let check_sat = Solver.check_sat
+
+    let check_sat_assuming ?timeout bl =
+      Solver.check_sat_assuming ?timeout (Context.visit_bl bl)
+
+    let get_value bv = Solver.get_bv_value (Context.visit_bv bv)
+
+    let fold_array_values f ar x =
+      match AxTbl.find ordered_mem ar with
+      | exception Not_found -> x
+      | history ->
+          if Queue.is_empty history then x
+          else
+            let dirty = BiTbl.create (Queue.length history) in
+            Queue.fold
+              (fun x access ->
+                match access with
+                | Select (index, len) ->
+                    let index = get_value index in
+                    let rec fold index len x =
+                      if len = 0 then x
+                      else if BiTbl.mem dirty index then
+                        fold (Z.succ index) (len - 1) x
+                      else
+                        let k =
+                          get_value
+                            (Expr.load 1 LittleEndian
+                               (Expr.constant
+                                  (Bitvector.create index Context.addr_space))
+                               ar)
+                        in
+                        fold (Z.succ index) (len - 1) (f index k x)
+                    in
+                    fold index len x
+                | Store (index, len) ->
+                    let index = get_value index in
+                    let rec loop index len =
+                      if len <> 0 then (
+                        BiTbl.replace dirty index ();
+                        loop (Z.succ index) (len - 1))
+                    in
+                    loop index len;
+                    x)
+              x history
 
     let push = Solver.push
     let pop = Solver.pop

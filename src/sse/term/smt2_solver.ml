@@ -1175,7 +1175,14 @@ module Solver () : Solver.S = struct
   let session =
     Session.start (* ~stdlog:stderr *) (Formula_options.Solver.get ())
 
-  let ctx = ref [ Printer.create ~next_id:Suid.zero () ]
+  let ctx =
+    ref
+      [
+        Printer.create
+          ~debug:(fun ~name ~label -> label ^ name)
+          ~next_id:Suid.zero ();
+      ]
+
   let top () = List.hd !ctx
   let visit_formula = List.iter (Printer.visit_bl (top ()))
   let iter_free_variables f = StTbl.iter f (top ()).fvariables
@@ -1189,19 +1196,24 @@ module Solver () : Solver.S = struct
     ctx := List.tl !ctx;
     Format.pp_print_string session.formatter "(pop 1)"
 
-  let flush_bl (ctx : Printer.t) x =
-    match BvTbl.find ctx.bl_cons x with
-    | exception Not_found ->
-        Printer.visit_bl ctx x;
-        Printer.visit_bl ctx x;
-        Printer.pp_flush_defs session.formatter ctx;
-        BvTbl.find ctx.bl_cons x
-    | name ->
-        if name == Printer.once || name == Printer.evicted then (
-          Printer.visit_bl ctx x;
-          Printer.pp_flush_defs session.formatter ctx;
-          BvTbl.find ctx.bl_cons x)
-        else name
+  let flush_x find visit (ctx : Printer.t) x =
+    let name =
+      match find ctx x with
+      | exception Not_found ->
+          visit ctx x;
+          visit ctx x;
+          find ctx x
+      | name ->
+          if name == Printer.once || name == Printer.evicted then (
+            visit ctx x;
+            find ctx x)
+          else name
+    in
+    Printer.pp_flush_defs session.formatter ctx;
+    name
+
+  let flush_bl =
+    flush_x (fun ctx bl -> BvTbl.find ctx.bl_cons bl) Printer.visit_bl
 
   let assert_formula bl =
     let ctx = top () in
@@ -1215,19 +1227,8 @@ module Solver () : Solver.S = struct
     Format.pp_print_space session.formatter ();
     Format.pp_close_box session.formatter ()
 
-  let flush_bv (ctx : Printer.t) x =
-    match BvTbl.find ctx.bv_cons x with
-    | exception Not_found ->
-        Printer.visit_bv ctx x;
-        Printer.visit_bv ctx x;
-        Printer.pp_flush_defs session.formatter ctx;
-        BvTbl.find ctx.bv_cons x
-    | name ->
-        if name == Printer.once || name == Printer.evicted then (
-          Printer.visit_bv ctx x;
-          Printer.pp_flush_defs session.formatter ctx;
-          BvTbl.find ctx.bv_cons x)
-        else name
+  let flush_bv =
+    flush_x (fun ctx bv -> BvTbl.find ctx.bv_cons bv) Printer.visit_bv
 
   let get_value x =
     let ctx = top () in

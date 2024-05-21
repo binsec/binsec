@@ -1,3 +1,15 @@
+## 0.9.1 (2024-05-21)
+
+** Misc
+
+- Support native OCaml
+  [z3 binding](https://github.com/Z3Prover/z3/tree/master/src/api/ml)
+  (`-smt-solver z3:builtin`)
+
+** Bugs
+
+- Fix SMTlib formula printer not always flushing the definitions before use
+
 ## 0.9.0 (2024-05-01)
 
 ** Features
