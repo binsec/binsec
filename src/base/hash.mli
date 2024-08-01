@@ -31,4 +31,4 @@ external fold_string : (t[@untagged]) -> string -> (t[@untagged])
   = "cstubs_hash_fold_string" "cstubs_hash_fold_string_untagged"
 [@@noalloc]
 
-val return : t -> int [@@inline]
+val return : t -> int
