@@ -91,6 +91,7 @@ module Machine = struct
         ("ppc64", Machine.ppc64 BigEndian);
         ("riscv", Machine.riscv `x32);
         ("riscv64", Machine.riscv `x64);
+        ("sparcv8", Machine.sparcv8);
         ("z80", Machine.z80);
         ("unknown", Machine.unknown);
       ]

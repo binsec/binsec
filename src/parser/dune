@@ -1,11 +1,6 @@
 (menhir
- (modules parser))
+ (modules parser)
+ (flags --explain --strict))
 
 (ocamllex
  (modules lexer))
-
-(menhir
- (modules dbacsl_parser))
-
-(ocamllex
- (modules dbacsl_token))

@@ -20,6 +20,7 @@
 (**************************************************************************)
 
 let byte_size = Natural.to_int Basic_types.Constants.bytesize
+let memory_name = "@" ^ Suid.(to_string zero)
 
 module Session = struct
   let n = ref 0
@@ -97,7 +98,7 @@ module Session = struct
     in
     Format.fprintf formatter
       "@[<v 0>(set-option :print-success false)@ (set-info :smt-lib-version \
-       2.5)@ (set-logic QF_ABV)@ @]";
+       2.5)@ (set-logic QF_ABV)@ @]@[<hov>";
     {
       solver;
       state = Assert;
@@ -122,31 +123,36 @@ module Session = struct
 
   and parse_check_line t fd deadline timeout : Libsolver.status =
     match Unix.select [ fd ] [] [] timeout with
-    | [ _ ], _, _ -> (
+    | [ _ ], _, _ ->
         Unix.set_nonblock fd;
-        match input_line t.stdout with
-        | "sat" ->
-            Unix.clear_nonblock fd;
-            t.state <- Sat;
-            Sat
-        | "unsat" ->
-            Unix.clear_nonblock fd;
-            t.state <- Unsat;
-            Unsat
-        | "unknown" ->
-            Unix.clear_nonblock fd;
-            t.state <- Assert;
-            Unknown
-        | "" -> parse_check_with_deadline t fd deadline
-        | s ->
-            Options.Logger.error "Solver returned: %s" s;
-            close t;
-            Unknown
-        | exception Sys_blocked_io -> parse_check_with_deadline t fd deadline
-        | exception End_of_file ->
-            close t;
-            Unknown)
+        parse_check_line_nonblock t fd deadline
     | _ ->
+        close t;
+        Unknown
+
+  and parse_check_line_nonblock t fd deadline : Libsolver.status =
+    match input_line t.stdout with
+    | "sat" ->
+        Unix.clear_nonblock fd;
+        t.state <- Sat;
+        Sat
+    | "unsat" ->
+        Unix.clear_nonblock fd;
+        t.state <- Unsat;
+        Unsat
+    | "unknown" ->
+        Unix.clear_nonblock fd;
+        t.state <- Assert;
+        Unknown
+    | "" -> parse_check_line_nonblock t fd deadline
+    | s ->
+        Options.Logger.error "Solver returned: %s" s;
+        close t;
+        Unknown
+    | exception Sys_blocked_io ->
+        Unix.clear_nonblock fd;
+        parse_check_with_deadline t fd deadline
+    | exception End_of_file ->
         close t;
         Unknown
 
@@ -156,11 +162,11 @@ module Session = struct
       (Option.map (fun timeout -> Unix.gettimeofday () +. timeout) timeout)
 
   let check_sat t ~timeout =
-    Format.fprintf t.formatter "(check-sat)@.";
+    Format.fprintf t.formatter "(check-sat)@.@[<hov>";
     parse_check t ~timeout
 
   let check_sat_assuming t ~timeout e =
-    Format.fprintf t.formatter "(check-sat-assuming (%s))@." e;
+    Format.fprintf t.formatter "(check-sat-assuming (%s))@.@[<hov>" e;
     parse_check t ~timeout
 
   let value_of_constant cst =
@@ -178,7 +184,7 @@ module Session = struct
 
   let get_value t pp x =
     assert (t.state = Sat);
-    Format.fprintf t.formatter "(get-value (%a))@." pp x;
+    Format.fprintf t.formatter "(get-value (%a))@.@[<hov>" pp x;
     let lexbuf = Lexing.from_channel t.stdout in
     let open Smtlib in
     match Smtlib_parser.ivalue Smtlib_lexer.token lexbuf with
@@ -315,7 +321,7 @@ module Printer = struct
         set ctx.bl_cons bl label;
         visit_bl ctx x;
         Queue.push (Bl bl) ctx.ordered_defs
-    | Binary { f = And | Or; x; y; _ } ->
+    | Binary { f = And | Or | Xor; x; y; _ } ->
         set ctx.bl_cons bl label;
         visit_bl ctx x;
         visit_bl ctx y;
@@ -337,7 +343,10 @@ module Printer = struct
         visit_bl ctx t;
         visit_bl ctx e;
         Queue.push (Bl bl) ctx.ordered_defs
-    | Var _ | Unary _ | Binary _ -> visit_bv ctx bl
+    | Var _ | Unary _ | Binary _ ->
+        set ctx.bl_cons bl label;
+        visit_bv ctx bl;
+        Queue.push (Bl bl) ctx.ordered_defs
 
   and visit_bv ctx bv =
     match BvTbl.find ctx.bv_cons bv with
@@ -358,13 +367,13 @@ module Printer = struct
         StTbl.add ctx.fvariables name bv;
         let name = ctx.debug ~name ~label in
         BvTbl.add ctx.bv_cons bv name;
-        if size = 1 then
-          BvTbl.add ctx.bl_cons bv (Printf.sprintf "(= %s #b1)" name);
         Queue.push
           (Decl (Format.sprintf "(declare-fun %s () (_ BitVec %d))" name size))
           ctx.ordered_defs
     | Load { len; addr; label; _ } ->
-        set ctx.bv_cons bv label';
+        let name = Suid.to_string ctx.id in
+        ctx.id <- Suid.incr ctx.id;
+        BvTbl.add ctx.bv_cons bv name;
         visit_bv ctx addr;
         visit_bv ctx addr;
         visit_ax ctx label;
@@ -422,15 +431,14 @@ module Printer = struct
   and visit_and_mark_ax ctx (ax : Memory.t) set label =
     match ax with
     | Root ->
-        AxTbl.add ctx.ax_cons ax
-          (ctx.debug ~name:Suid.(to_string zero) ~label:"memory");
+        AxTbl.add ctx.ax_cons ax (ctx.debug ~name:memory_name ~label:"memory");
         AxTbl.add ctx.ax_root ax ax;
         AxTbl.add ctx.ordered_mem ax (Queue.create ());
         Queue.push
           (Decl
              (Format.sprintf
                 "(declare-fun %s () (Array (_ BitVec %d) (_ BitVec %d)))"
-                (ctx.debug ~name:Suid.(to_string zero) ~label:"memory")
+                (ctx.debug ~name:memory_name ~label:"memory")
                 ctx.word_size byte_size))
           ctx.ordered_defs
     | Symbol name ->
@@ -550,10 +558,15 @@ module Printer = struct
         Format.pp_print_space ppf ();
         print_bl ctx ppf x;
         Format.pp_print_char ppf ')'
-    | Binary { f = (And | Or) as f; x; y; _ } ->
+    | Binary { f = (And | Or | Xor) as f; x; y; _ } ->
         Format.pp_print_char ppf '(';
         (Format.pp_print_string ppf
-        @@ match f with And -> "and" | Or -> "or" | _ -> assert false);
+        @@
+        match f with
+        | And -> "and"
+        | Or -> "or"
+        | Xor -> "xor"
+        | _ -> assert false);
         Format.pp_print_space ppf ();
         print_bl ctx ppf x;
         Format.pp_print_space ppf ();
@@ -956,7 +969,7 @@ module Cross = struct
       | Memory.Root ->
           let var =
             Formula.ax_var
-              (ctx.debug ~name:Suid.(to_string zero) ~label:"memory")
+              (ctx.debug ~name:memory_name ~label:"memory")
               ctx.word_size 8
           in
           AxTbl.add ctx.ax_cons ax var;
@@ -1175,16 +1188,17 @@ module Solver () : Solver.S = struct
   let session =
     Session.start (* ~stdlog:stderr *) (Formula_options.Solver.get ())
 
-  let ctx =
-    ref
-      [
-        Printer.create
-          ~debug:(fun ~name ~label -> label ^ name)
-          ~next_id:Suid.zero ();
-      ]
-
+  let ctx = ref [ Printer.create ~next_id:Suid.zero () ]
   let top () = List.hd !ctx
-  let visit_formula = List.iter (Printer.visit_bl (top ()))
+
+  let visit_formula formula =
+    let ctx = top () in
+    List.iter
+      (fun bl ->
+        Printer.visit_bl ctx bl;
+        Printer.visit_bl ctx bl)
+      formula
+
   let iter_free_variables f = StTbl.iter f (top ()).fvariables
   let iter_free_arrays f = StTbl.iter f (top ()).farrays
 
@@ -1217,18 +1231,29 @@ module Solver () : Solver.S = struct
 
   let assert_formula bl =
     let ctx = top () in
-    Format.pp_open_hovbox session.formatter 0;
     (* print declarations *)
     let bl = flush_bl ctx bl in
     (* print assertion *)
     Format.pp_print_string session.formatter "(assert ";
     Format.pp_print_string session.formatter bl;
     Format.pp_print_char session.formatter ')';
-    Format.pp_print_space session.formatter ();
-    Format.pp_close_box session.formatter ()
+    Format.pp_print_space session.formatter ()
 
   let flush_bv =
     flush_x (fun ctx bv -> BvTbl.find ctx.bv_cons bv) Printer.visit_bv
+
+  let assert_distinct x y =
+    let ctx = top () in
+    (* print declarations *)
+    let x = flush_bv ctx x in
+    let y = flush_bv ctx y in
+    (* print assertion *)
+    Format.pp_print_string session.formatter "(assert (not (= ";
+    Format.pp_print_string session.formatter x;
+    Format.pp_print_space session.formatter ();
+    Format.pp_print_string session.formatter y;
+    Format.pp_print_string session.formatter ")))";
+    Format.pp_print_space session.formatter ()
 
   let get_value x =
     let ctx = top () in
@@ -1289,10 +1314,8 @@ module Solver () : Solver.S = struct
 
   let check_sat_assuming ?timeout bl : Libsolver.status =
     let ctx = top () in
-    Printer.visit_bl ctx bl;
-    Printer.visit_bl ctx bl;
-    Printer.pp_flush_defs session.formatter ctx;
-    Session.check_sat_assuming session ~timeout (BvTbl.find ctx.bl_cons bl)
+    let bl = flush_bl ctx bl in
+    Session.check_sat_assuming session ~timeout bl
 
   let close () = Session.close session
 end

@@ -41,7 +41,6 @@ type disassembly_mode =
 
 module Disassembly_mode : Cli.GENERIC with type t = disassembly_mode
 module Decode_instruction : Cli.STRING_OPT
-module Decode_replacement : Cli.STRING_OPT
 module CFG_graph : Cli.BOOLEAN
 module Disasm_at : Cli.STRING
 module Cache_decoder : Cli.BOOLEAN

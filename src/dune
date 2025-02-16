@@ -16,7 +16,8 @@
   armv7decoder
   amd64decoder
   armv8decoder
-  ppc64decoder))
+  ppc64decoder
+  sparcv8decoder))
 
 (library
  (public_name binsec)

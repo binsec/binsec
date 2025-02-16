@@ -88,14 +88,6 @@ module Decode_instruction = Builder.String_option (struct
   let doc = "Decode hexadecimal opcode"
 end)
 
-module Decode_replacement = Builder.String_option (struct
-  let name = "decode-replacement"
-
-  let doc =
-    "Replace instructions with a specific dba blocks. Syntax: (0xaddress -> \
-     dhunk)*"
-end)
-
 module CFG_graph = Builder.False (struct
   let name = "cfgraph"
   let doc = "Print control-flow graph"

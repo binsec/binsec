@@ -60,8 +60,13 @@ let keywords = [
   "register"      , REGISTER;
   "entry_point"   , ENTRYPOINT;
   (* "endianness"    , ENDIANNESS; *)
+  "read"          , READ;
+  "write"         , WRITE;
+  "branch"        , BRANCH;
+  "unsupported"   , UNSUPPORTED;
   "unimplemented" , UNIMPLEMENTED;
   "undefined"     , UNDEFINED;
+  "illegal"       , UNDEFINED;
   "cut"           , CUT;
   "enum"          , ENUMERATE;
   "enumerate"     , ENUMERATE;

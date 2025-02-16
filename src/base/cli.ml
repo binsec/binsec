@@ -259,9 +259,19 @@ end = struct
     pp_close_box ppf ()
 end
 
-module type S = sig
+module type ENABLEABLE = sig
   val is_enabled : unit -> bool
+  (** [is_enabled] is a switch that is automatically set.
+  
+      Can be set programmatically with {val:enable} and {val:disable}.
+   *)
 
+  val enable : unit -> unit
+  val disable : unit -> unit
+end
+
+module type S = sig
+  include ENABLEABLE
   module Logger : Logger.S
 end
 
@@ -310,11 +320,20 @@ module type CLI_DECL = sig
 end
 
 (* Helper module *)
-module Listify (S : Sigs.STR_INJECTIBLE) = struct
+module Listify (S : sig
+  val accept_empty : bool
+
+  include Sigs.STR_INJECTIBLE
+end) =
+struct
   type t = S.t list
 
   let default = []
-  let of_string s = String_utils.cli_split s |> List.map S.of_string
+
+  let of_string s =
+    if String.equal s "" && S.accept_empty then []
+    else String_utils.cli_split s |> List.map S.of_string
+
   let default_str = None
 end
 
@@ -442,6 +461,9 @@ module type Cli_sig = sig
 
     module Variant_list (P : sig
       include CLI_DECL
+
+      val accept_empty : bool
+
       include Sigs.STR_INJECTIBLE
     end) : GENERIC with type t = P.t list
   end
@@ -761,6 +783,7 @@ module Generic_make (D : DECL) = struct
       include Listify (struct
         type t = int
 
+        let accept_empty = false
         let of_string = int_of_string
       end)
 
@@ -819,6 +842,7 @@ module Generic_make (D : DECL) = struct
       include Listify (struct
         type t = float
 
+        let accept_empty = false
         let of_string = float_of_string
       end)
 
@@ -851,6 +875,7 @@ module Generic_make (D : DECL) = struct
       include Listify (struct
         type t = string
 
+        let accept_empty = false
         let of_string = Fun.id
       end)
 
@@ -947,6 +972,9 @@ module Generic_make (D : DECL) = struct
 
     module Variant_list (P : sig
       include CLI_DECL
+
+      val accept_empty : bool
+
       include Sigs.STR_INJECTIBLE
     end) =
     Any (struct
@@ -962,9 +990,11 @@ module Make (D : DECL) = struct
   module Enabled = struct
     (* Add enabled switch *)
     let is_enabled = ref false
+    let enable () = is_enabled := true
+    let disable () = is_enabled := false
     let doc = Printf.sprintf "Enable %s" name
     let key = ""
-    let spec = Unit (fun () -> is_enabled := true)
+    let spec = Unit enable
     let cspec = Cli_spec.simple ~key ~doc ~spec
     let is_enabled () = is_kernel || !is_enabled
     let _ = if not is_kernel then unsafe_extend cspec

@@ -49,7 +49,13 @@ type t =
 let create ?(endianness = Machine.LittleEndian) ?(at = 0) get content =
   Cursor { content; get; pos = at; endianness }
 
-let of_img ?endianness ?at img = create ?endianness ?at Loader.read_address img
+let of_img ?endianness ?at img =
+  let endianness =
+    match endianness with
+    | None -> Machine.ISA.endianness (Loader.Img.arch img)
+    | Some en -> en
+  in
+  create ~endianness ?at Loader.read_address img
 
 let of_zero_extend_buffer =
   let get b x =
@@ -76,6 +82,7 @@ let of_nibbles =
   fun ?endianness ?at str -> create ?endianness ?at get str
 
 let pp ppf (Cursor { pos; _ }) = Format.fprintf ppf "%@%x" pos
+let get_endianness (Cursor t) = t.endianness
 let set_endianness (Cursor t) e = t.endianness <- e
 let get_pos (Cursor t) = t.pos
 

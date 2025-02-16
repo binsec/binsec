@@ -65,7 +65,7 @@ end
 
 and Expr : sig
   type t =
-    | Int of Z.t
+    | Int of Z.t * string option
     | Bv of Bitvector.t
     | Symbol of Symbol.t loc
     | Loc of Loc.t loc
@@ -76,7 +76,7 @@ and Expr : sig
   val zero : t
   val one : t
   val succ : t loc -> t
-  val integer : Z.t -> t
+  val integer : ?src:string -> Z.t -> t
   val constant : Bitvector.t -> t
   val symbol : Symbol.t loc -> t
   val loc : Loc.t loc -> t

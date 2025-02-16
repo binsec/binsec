@@ -57,21 +57,9 @@ let generic_decode reader decode to_generic address =
   let next_address = compute_next_address address ginstr in
   (Instruction.of_generic_instruction address ginstr dhunk, next_address)
 
-exception Decode_error of string
-
 let x86_decode reader (addr : Virtual_address.t) =
-  let result =
-    generic_decode reader X86toDba.decode X86Instruction.to_generic_instruction
-      addr
-  in
-
-  match result with
-  | ({ Instruction.mnemonic = Mnemonic.Unknown; _ } as inst), _ ->
-      let open Instruction in
-      Logger.error "@[<v 0>Unknown instruction opcode prefix %@ %a:@ %a@]"
-        Virtual_address.pp inst.address pp inst;
-      raise (Decode_error "Bad opcode sequence")
-  | res -> res
+  generic_decode reader X86toDba.decode X86Instruction.to_generic_instruction
+    addr
 
 let riscv32_decode reader vaddr =
   generic_decode reader Riscv_to_dba.decode_32 (fun x -> x) vaddr
@@ -87,11 +75,9 @@ let z80_decode reader vaddr =
 let decode_at_address decode reader address =
   let instr, next = decode reader address in
   if Instruction.is_decoded instr then (instr, next)
-  else (
-    Logger.warning "No instruction at %a ... stopping" Virtual_address.pp
-      address;
+  else
     let dba_block = Dba.Instr.stop (Some Dba.KO) |> Dhunk.singleton in
-    (Instruction.set_dba_block instr dba_block, None))
+    (Instruction.set_dba_block instr dba_block, None)
 
 module M = Hashtbl.Make (struct
   type t = Machine.t
@@ -124,70 +110,19 @@ let decoder_of_machine () =
     let msg = Format.asprintf "missing ISA %a" Machine.pp isa in
     Errors.not_yet_implemented msg
 
-let decode_replacement = ref None
-
-(** parses the option -disasm-decode-replacement and memoises the result *)
-let get_decode_replacement () =
-  match !decode_replacement with
-  | None ->
-      let map =
-        match Disasm_options.Decode_replacement.get_opt () with
-        | None -> Virtual_address.Map.empty
-        | Some str ->
-            let l =
-              Parse_utils.read_string ~parser:Parser.dhunk_substitutions_eof
-                ~lexer:Lexer.token ~string:str
-            in
-            let img = Kernel_functions.get_img () in
-            let map =
-              List.fold_left
-                (fun acc (loc, dhunk) ->
-                  match Loader_utils.Binary_loc.to_virtual_address ~img loc with
-                  | Some addr -> Virtual_address.Map.add addr dhunk acc
-                  | None ->
-                      Logger.fatal "unable to parse the address %a"
-                        Loader_utils.Binary_loc.pp loc)
-                Virtual_address.Map.empty l
-            in
-            map
-      in
-      decode_replacement := Some map;
-      map
-  | Some x -> x
-
-let add_replacement addr dhunk =
-  let map = get_decode_replacement () in
-  decode_replacement := Some (Virtual_address.Map.add addr dhunk map)
-
-let decode ?(img = Kernel_functions.get_img ()) (vaddress : Virtual_address.t) =
-  let decoder = decoder_of_machine () in
-  let reader = Lreader.of_img img ~at:(vaddress :> int) in
-  let instr, next = decode_at_address decoder reader vaddress in
-  try
-    let repl = get_decode_replacement () in
-    let subst = Virtual_address.Map.find vaddress repl in
-    let open Instruction in
-    ( Instruction.create instr.address instr.size instr.opcode instr.mnemonic
-        subst,
-      next )
-  with Not_found -> (instr, next)
-
 let decode_from reader (at : Virtual_address.t) =
   let decoder = decoder_of_machine () in
-  let instr, next = decode_at_address decoder reader at in
-  try
-    let repl = get_decode_replacement () in
-    let subst = Virtual_address.Map.find at repl in
-    let open Instruction in
-    ( Instruction.create instr.address instr.size instr.opcode instr.mnemonic
-        subst,
-      next )
-  with Not_found -> (instr, next)
+  decode_at_address decoder reader at
+
+let decode ?(img = Kernel_functions.get_img ()) (vaddress : Virtual_address.t) =
+  decode_from (Lreader.of_img img ~at:(vaddress :> int)) vaddress
 
 let decode_binstream ?(base = Virtual_address.zero) bs =
   try
     let decoder = decoder_of_machine () in
-    let lreader = Lreader.of_binstream bs in
+    let lreader =
+      Lreader.of_binstream ~endianness:(Kernel_options.Machine.endianness ()) bs
+    in
     decode_at_address decoder lreader base
   with Not_found ->
     Logger.error

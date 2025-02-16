@@ -52,6 +52,9 @@ val rewind : t -> int -> unit
 val advance : t -> int -> unit
 (** [advance r n] moves the cursor the cursor [n] bytes. *)
 
+val get_endianness : t -> Machine.endianness
+(** [get_endianness r] gets the current reader endianness r *)
+
 val set_endianness : t -> Machine.endianness -> unit
 (** [set_endianness e r] sets reader to report value w.r.t to endianness r *)
 

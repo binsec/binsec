@@ -215,6 +215,20 @@ module Message = struct
     let vstr v = Str v
     let vint v = Int (Z.of_string v)
   end
+
+  module Instruction = struct
+    type t =
+      | Undefined
+      | Unimplemented
+      | Unsupported of {
+          read : Dba.LValue.t list;
+          write : Dba.LValue.t list;
+          goto : Virtual_address.t;
+        }
+      | Precise of (Dba.address * Dba.Instr.t) list
+  end
+
+  type t = (string * Value.t) list * Instruction.t
 end
 
 module Initialization = struct

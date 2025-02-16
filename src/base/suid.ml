@@ -32,7 +32,7 @@ let incr =
     Bytes.unsafe_to_string t'
   in
   (* to keep it compact, transition rules are impacted by the ASCII encoding:
-        0-9a-zA-Z!$%&*+./<>?@^_~ *)
+        0-9a-zA-Z!$%&*+./?^~ *)
   let rec incr t' i =
     match Bytes.get t' i with
     | '9' -> set t' i 'a'
@@ -41,10 +41,9 @@ let incr =
     | '!' -> set t' i '$'
     | '&' -> set t' i '*'
     | '+' -> set t' i '.'
-    | '/' -> set t' i '<'
-    | '<' -> set t' i '>'
-    | '@' -> set t' i '^'
-    | '_' -> set t' i '~'
+    | '/' -> set t' i '?'
+    | '?' -> set t' i '^'
+    | '^' -> set t' i '~'
     | '~' when i = 0 ->
         (* overflow *)
         let t' = Bytes.(make (length t' + 1) '0') in

@@ -97,6 +97,10 @@ module K = Basic_types.Int.Set
 type _ Types.value += Term : Sexpr.Expr.t Types.value
 type lazy_memory = Solver.lazy_memory
 
+type 'a Types.feature +=
+  | VisibleSymbols : Expr.t Dba_types.Var.Map.t Types.feature
+  | VisibleMemory : Memory.t Types.feature
+
 module State
     (D : Domains.S)
     (Solver : Solver.GET_MODEL_WITH_STATS)
@@ -497,7 +501,20 @@ struct
       t.vsymbols;
     C.to_formula ctx
 
-  let downcast _ = None
+  let getter : type a. a Types.feature -> (t -> a) option = function
+    | VisibleSymbols ->
+        Some
+          (fun state ->
+            I.fold
+              (fun id expr map ->
+                match Dba.Var.from_id id with
+                | exception Not_found -> map
+                | var -> Dba_types.Var.Map.add var expr map)
+              state.vsymbols Dba_types.Var.Map.empty)
+    | VisibleMemory -> Some (fun state -> state.vmemory)
+    | _ -> None
+
+  let setter _ = None
 end
 
 type Options.Engine.t += Vanilla | Multi_checks

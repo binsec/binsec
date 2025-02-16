@@ -73,7 +73,7 @@ let _ =
 let rec eval_expr ?size ((e, p) as t : Expr.t loc) env =
   let e =
     match e with
-    | Int z -> (
+    | Int (z, _) -> (
         match size with
         | None -> raise (Inference_failure t)
         | Some size ->
@@ -82,7 +82,7 @@ let rec eval_expr ?size ((e, p) as t : Expr.t loc) env =
                Options.Logger.warning
                  "integer %a (line %d, column %d) does not fit in a bitvector \
                   of %d bit%s"
-                 Z.pp_print z line column size
+                 Expr.pp e line column size
                  (if size > 1 then "s" else ""));
             Dba.Expr.constant (Bitvector.create z size))
     | Bv bv -> Dba.Expr.constant bv
@@ -141,7 +141,7 @@ and eval_binary ?(first = true) ?size ?op x y env =
 
 and eval_int ((e, _) as t : Expr.t loc) env =
   match e with
-  | Int z ->
+  | Int (z, _) ->
       if not (Z.fits_int z) then raise (Invalid_operation t);
       Z.to_int z
   | Bv bv ->
@@ -301,6 +301,7 @@ type Ast.Instr.t +=
   | Print of Output.t
   | Reach of int * Expr.t loc option * Output.t list
   | Enumerate of int * Expr.t loc
+  | Error of string
 
 type Ast.t +=
   | Starting_from of Expr.t loc * Instr.t list
@@ -310,6 +311,7 @@ type Ast.t +=
   | Concretize_stack_pointer
   | Import_symbols of Symbol.t loc list * string
   | Hook of Expr.t loc list * Instr.t list * bool
+  | Return_hook of Ast.Symbol.t loc * Instr.t list
   | Decode of Binstream.t * Instr.t list
   | Init of Instr.t list
   | Explore_all
@@ -373,6 +375,9 @@ let () =
                 Format.fprintf ppf " then %a" pp_outputs outputs)
             outputs;
           true
+      | Error msg ->
+          Format.fprintf ppf "error %S" msg;
+          true
       | _ -> false)
 
 let pp_stmts = Format.pp_print_list ~pp_sep:Format.pp_print_space Instr.pp
@@ -420,8 +425,11 @@ let pp ppf decl =
         (pp_comma_list (fun ppf (sym, _) -> Symbol.pp ppf sym))
         symbols file
   | Hook (addr, stmts, _) ->
-      Format.fprintf ppf "@[<v>@[<v 2>hook %a by@ %a@]@ end@]" pp_exprs addr
+      Format.fprintf ppf "@[<v>@[<v 2>hook %a with@ %a@]@ end@]" pp_exprs addr
         pp_stmts stmts
+  | Return_hook ((symbol, _), stmts) ->
+      Format.fprintf ppf "@[<v>@[<v 2>hook %a return with@ %a@]@ end@]"
+        Ast.Symbol.pp symbol pp_stmts stmts
   | Decode (opcode, stmts) ->
       Format.fprintf ppf "@[<v>@[<v 2>hook opcode %a by@ %a@]@ end@]"
         Binstream.pp opcode pp_stmts stmts
@@ -565,21 +573,23 @@ let grammar :
           fun _ _ -> (Syntax.Obj (Int 1), []) );
         ( ( "num",
             [
-              Dyp.Regexp (RE_Char '('); Dyp.Ter "INT"; Dyp.Regexp (RE_Char ')');
+              Dyp.Regexp (RE_Char '(');
+              Dyp.Non_ter ("int", No_priority);
+              Dyp.Regexp (RE_Char ')');
             ],
             "default_priority",
             [] ),
           fun _ -> function
-            | [ _; Syntax.Obj_INT n; _ ] -> (Syntax.Obj (Int (Z.to_int n)), [])
+            | [ _; Syntax.Obj_int n; _ ] -> (Syntax.Obj (Int (Z.to_int n)), [])
             | _ -> assert false );
         ( ("times", [], "default_priority", []),
           fun _ _ -> (Syntax.Obj (Int 1), []) );
         ( ( "times",
-            [ Dyp.Ter "INT"; Dyp.Regexp (RE_String "times") ],
+            [ Dyp.Non_ter ("int", No_priority); Dyp.Regexp (RE_String "times") ],
             "default_priority",
             [] ),
           fun _ -> function
-            | [ Syntax.Obj_INT n; _ ] -> (Syntax.Obj (Int (Z.to_int n)), [])
+            | [ Syntax.Obj_int n; _ ] -> (Syntax.Obj (Int (Z.to_int n)), [])
             | _ -> assert false );
         ( ("format", [], "default_priority", []),
           fun _ _ -> (Syntax.Obj (Format Output.Hex), []) );
@@ -1327,6 +1337,128 @@ let grammar :
             | [ _; Syntax.Expr addr; Syntax.Stmt args; Syntax.Stmt stmts ] ->
                 ( Syntax.Decl (Hook ([ addr ], List.rev_append args stmts, true)),
                   [] )
+            | _ -> assert false );
+        ( ( "decl",
+            [
+              Dyp.Regexp (RE_String "hook");
+              Dyp.Non_ter ("symbol", No_priority);
+              Dyp.Regexp (RE_String "return");
+              Dyp.Regexp (RE_String "with");
+              Dyp.Non_ter ("stmts", No_priority);
+              Dyp.Regexp (RE_String "end");
+            ],
+            "default_priority",
+            [] ),
+          fun _ -> function
+            | [ _; Syntax.Symbol sym; _; _; Syntax.Stmt stmts; _ ] ->
+                (Syntax.Decl (Return_hook (sym, stmts)), [])
+            | _ -> assert false );
+        ( ( "decl",
+            [
+              Dyp.Regexp (RE_String "abort");
+              Dyp.Regexp (RE_String "at");
+              Dyp.Non_ter ("symbol", No_priority);
+              Dyp.Regexp (RE_String "return");
+            ],
+            "default_priority",
+            [] ),
+          fun _ -> function
+            | [ _; _; Syntax.Symbol symbol; _ ] ->
+                ( Syntax.Decl
+                    (Return_hook
+                       ( symbol,
+                         [
+                           Instr.dynamic_assert (Expr.zero, Lexing.dummy_pos);
+                           Instr.halt;
+                         ] )),
+                  [] )
+            | _ -> assert false );
+        ( ( "decl",
+            [
+              Dyp.Regexp (RE_String "halt");
+              Dyp.Regexp (RE_String "at");
+              Dyp.Non_ter ("symbol", No_priority);
+              Dyp.Regexp (RE_String "return");
+            ],
+            "default_priority",
+            [] ),
+          fun _ -> function
+            | [ _; _; Syntax.Symbol symbol; _ ] ->
+                (Syntax.Decl (Return_hook (symbol, [ Instr.halt ])), [])
+            | _ -> assert false );
+        ( ( "decl",
+            [
+              Dyp.Regexp (RE_String "reach");
+              Dyp.Non_ter ("symbol", No_priority);
+              Dyp.Regexp (RE_String "return");
+              Dyp.Non_ter ("accept_newline", No_priority);
+              Dyp.Non_ter ("times", No_priority);
+              Dyp.Non_ter ("accept_newline", No_priority);
+              Dyp.Non_ter ("such_that", No_priority);
+              Dyp.Non_ter ("accept_newline", No_priority);
+              Dyp.Non_ter ("outputs", No_priority);
+            ],
+            "default_priority",
+            [] ),
+          fun _ -> function
+            | [
+                _;
+                Syntax.Symbol symbol;
+                _;
+                _;
+                Syntax.Obj (Int n);
+                _;
+                Syntax.Obj (Expr_opt guard);
+                _;
+                Syntax.Obj (Output_list outputs);
+              ] ->
+                ( Syntax.Decl
+                    (Return_hook (symbol, [ Reach (n, guard, outputs) ])),
+                  [] )
+            | _ -> assert false );
+        ( ( "decl",
+            [
+              Dyp.Regexp (RE_String "reach");
+              Dyp.Regexp (RE_Char '*');
+              Dyp.Non_ter ("symbol", No_priority);
+              Dyp.Regexp (RE_String "return");
+              Dyp.Non_ter ("accept_newline", No_priority);
+              Dyp.Non_ter ("such_that", No_priority);
+              Dyp.Non_ter ("accept_newline", No_priority);
+              Dyp.Non_ter ("outputs", No_priority);
+            ],
+            "default_priority",
+            [] ),
+          fun _ -> function
+            | [
+                _;
+                _;
+                Syntax.Symbol symbol;
+                _;
+                _;
+                Syntax.Obj (Expr_opt guard);
+                _;
+                Syntax.Obj (Output_list outputs);
+              ] ->
+                ( Syntax.Decl
+                    (Return_hook (symbol, [ Reach (-1, guard, outputs) ])),
+                  [] )
+            | _ -> assert false );
+        ( ( "decl",
+            [
+              Dyp.Regexp (RE_String "cut");
+              Dyp.Regexp (RE_String "at");
+              Dyp.Non_ter ("symbol", No_priority);
+              Dyp.Regexp (RE_String "return");
+              Dyp.Non_ter ("accept_newline", No_priority);
+              Dyp.Non_ter ("guard", No_priority);
+            ],
+            "default_priority",
+            [] ),
+          fun _ -> function
+            | [ _; _; Syntax.Symbol symbol; _; _; Syntax.Obj (Expr_opt guard) ]
+              ->
+                (Syntax.Decl (Return_hook (symbol, [ Cut guard ])), [])
             | _ -> assert false );
         ( ("rev_program", [], "default_priority", []),
           fun _ _ -> (Syntax.Program [], []) );

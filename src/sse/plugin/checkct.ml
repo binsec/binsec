@@ -71,14 +71,40 @@ module StatsFile = Builder.String_option (struct
 end)
 
 module Kind = struct
-  type t = Control_flow | Memory_access
+  type t = Control_flow | Memory_access | Multiplication | Dividend | Divisor
 
   let to_string = function
     | Control_flow -> "control flow"
     | Memory_access -> "memory access"
+    | Multiplication -> "multiplication"
+    | Dividend -> "dividend"
+    | Divisor -> "divisor"
+
+  let of_string = function
+    | "control-flow" -> Control_flow
+    | "memory-access" -> Memory_access
+    | "multiplication" -> Multiplication
+    | "dividend" -> Dividend
+    | "divisor" -> Divisor
+    | _ -> raise (Invalid_argument "of_string")
 
   let pp ppf t = Format.pp_print_string ppf (to_string t)
 end
+
+module Features = Builder.Variant_list (struct
+  let name = "features"
+
+  let doc =
+    "Set of CT check points : control-flow, memory-access, multiplication, \
+     dividend and divisor. Multiplication and division checks are \
+     experimental."
+
+  let accept_empty = true
+
+  type t = Kind.t
+
+  let of_string = Kind.of_string
+end)
 
 module Report = struct
   type t = {
@@ -169,8 +195,8 @@ end
 
 type Ast.Obj.t += Bool of bool
 type Ast.Instr.t += Secret of Ast.Loc.t Ast.loc
+type Ast.Instr.t += Se_check
 type Ast.t += Globals of bool * string list
-type builtin += Mirror of Dba.Var.t | Check of Dba.Expr.t * Kind.t
 
 module type OPTIONS = sig
   val leak_info : leak_info
@@ -178,6 +204,11 @@ module type OPTIONS = sig
   val cv : bool
   val relse : bool
   val stats_file : string option
+  val check_branch : bool
+  val check_memory : bool
+  val check_mult : bool
+  val check_dividend : bool
+  val check_divisor : bool
 end
 
 let make_options : unit -> (module OPTIONS) =
@@ -188,7 +219,20 @@ let make_options : unit -> (module OPTIONS) =
     let cv = ChosenValues.get ()
     let relse = Relse.get ()
     let stats_file = StatsFile.get_opt ()
+
+    let features =
+      if Features.is_set () then Features.get ()
+      else [ Control_flow; Memory_access ]
+
+    let check_branch = List.memq Kind.Control_flow features
+    let check_memory = List.memq Kind.Memory_access features
+    let check_mult = List.memq Kind.Multiplication features
+    let check_dividend = List.memq Kind.Dividend features
+    let check_divisor = List.memq Kind.Divisor features
   end)
+
+let ( === ) = Sexpr.Expr.is_equal
+let ( /== ) e e' = not (e === e')
 
 module Ct_state = struct
   open Sexpr
@@ -226,10 +270,6 @@ module Ct_state = struct
       mirror_m = AxTbl.copy t.mirror_m;
       secrets = BvTbl.copy t.secrets;
       roots = AxTbl.copy t.roots;
-      models =
-        List.map
-          (fun (i, (_, _, _, _, addr_space)) -> (i, Model.empty addr_space))
-          t.models;
     }
 
   let mirror (e : Expr.t) t =
@@ -241,7 +281,7 @@ module Ct_state = struct
     | _ -> raise_notrace (Invalid_argument "mirror")
 
   let rec is_tainted (e : Expr.t) t =
-    try e != BvTbl.find t.mirror_e e
+    try e /== BvTbl.find t.mirror_e e
     with Not_found ->
       (match e with
       | Cst _ -> false
@@ -273,20 +313,21 @@ module Ct_state = struct
             t.loads <- Term.to_mem_exn e :: t.loads;
             let label' = make_mirror_m label t in
             let addr' = make_mirror_e addr t in
-            if (not (Memory.equal label label')) || addr != addr' then
+            if (not (Memory.equal label label')) || (addr /== addr') then
               Expr.load len dir addr' label'
             else e
         | Unary { x; f; _ } ->
             let x' = make_mirror_e x t in
-            if x != x' then Expr.unary f x' else e
+            if x /== x' then Expr._unary f x' else e
         | Binary { x; y; f; _ } ->
             let x' = make_mirror_e x t and y' = make_mirror_e y t in
-            if x != x' || y != y' then Expr.binary f x' y' else e
+            if (x /== x') || (y /== y') then Expr._binary f x' y' else e
         | Expr.Ite { c; t = x; e = y; _ } ->
             let c' = make_mirror_e c t
             and x' = make_mirror_e x t
             and y' = make_mirror_e y t in
-            if c != c' || x != x' || y != y' then Expr.ite c' x' y' else e
+            if (c /== c') || (x /== x') || (y /== y') then Expr._ite c' x' y'
+            else e
       in
       BvTbl.add t.mirror_e e e';
       e'
@@ -314,10 +355,10 @@ module Ct_state = struct
                     let value = Chunk.to_term chunk in
                     let value' = make_mirror_e value t in
                     ( Store.store offset' (Chunk.of_term value') store',
-                      dirty || value != value' ))
+                      dirty || (value /== value') ))
                 (Store.empty, false) store
             in
-            if addr != addr' || dirty || not (Memory.equal over over') then
+            if (addr /== addr') || dirty || not (Memory.equal over over') then
               Memory.layer addr' store' over'
             else m
       in
@@ -333,7 +374,7 @@ module Ct_state = struct
         | e :: constraints ->
             let e' = make_mirror_e e t in
             visit constraints t
-              (if e != e' then Expr.logand e' conjunction else conjunction)
+              (if e /== e' then Expr.logand e' conjunction else conjunction)
     in
     t.conjunction <- visit constraints t t.conjunction;
     t.constraints <- constraints
@@ -361,6 +402,11 @@ module Make
 
   let key = Path.register_key (Ct_state.empty ())
 
+  type builtin +=
+    | Mirror of Dba.Var.t
+    | Ct_check of Dba.Expr.t * Kind.t
+    | Se_check
+
   let () =
     Path.register_at_fork (fun path path' ->
         Path.set key (Ct_state.fork (Path.get key path)) path')
@@ -373,6 +419,12 @@ module Make
   and ct_mem_secure = ref 0
   and ct_mem_insecure = ref 0
   and ct_mem_unknown = ref 0
+  and ct_mult_secure = ref 0
+  and ct_mult_insecure = ref 0
+  and ct_mult_unknown = ref 0
+  and ct_div_secure = ref 0
+  and ct_div_insecure = ref 0
+  and ct_div_unknown = ref 0
 
   let ct_status (kind : Kind.t) (status : Status.t) =
     match (kind, status) with
@@ -382,6 +434,12 @@ module Make
     | Memory_access, Secure -> ct_mem_secure
     | Memory_access, Insecure _ -> ct_mem_insecure
     | Memory_access, Unknown -> ct_mem_unknown
+    | Multiplication, Secure -> ct_mult_secure
+    | Multiplication, Insecure _ -> ct_mult_insecure
+    | Multiplication, Unknown -> ct_mult_unknown
+    | (Dividend | Divisor), Secure -> ct_div_secure
+    | (Dividend | Divisor), Insecure _ -> ct_div_insecure
+    | (Dividend | Divisor), Unknown -> ct_div_unknown
 
   let ct_addr_status : Status.t Virtual_address.Htbl.t =
     Virtual_address.Htbl.create 128
@@ -519,24 +577,68 @@ module Make
                   Builtin (Mirror var');
                   Store { base; dir; addr; rval };
                 ])
+        | Se_check -> [ Builtin Se_check ]
         | _ -> [])
 
   let process_handler : type a. (module Ir.GRAPH with type t = a) -> a -> unit =
    fun graph ->
     let module G = (val graph) in
+    let rec visit_expr graph vertex (e : Dba.Expr.t) =
+      match e with
+      | Cst _ | Var _ | Load _ -> ()
+      | Unary (_, x) -> visit_expr graph vertex x
+      | Binary (Mult, x, y) ->
+          if Options.check_mult then (
+            ignore
+              (G.insert_before graph vertex
+                 (Builtin (Ct_check (x, Multiplication))));
+            ignore
+              (G.insert_before graph vertex
+                 (Builtin (Ct_check (y, Multiplication)))));
+          visit_expr graph vertex x;
+          visit_expr graph vertex y
+      | Binary ((DivU | DivS | ModU | ModS), dividend, divisor) ->
+          if Options.check_dividend then
+            ignore
+              (G.insert_before graph vertex
+                 (Builtin (Ct_check (dividend, Dividend))));
+          if Options.check_divisor then
+            ignore
+              (G.insert_before graph vertex
+                 (Builtin (Ct_check (divisor, Divisor))));
+          visit_expr graph vertex dividend;
+          visit_expr graph vertex divisor
+      | Binary (_, x, y) ->
+          visit_expr graph vertex x;
+          visit_expr graph vertex y
+      | Ite (c, x, y) ->
+          visit_expr graph vertex c;
+          visit_expr graph vertex x;
+          visit_expr graph vertex y
+    in
     fun graph ->
       G.iter_new_vertex
         (fun vertex ->
           match G.node graph vertex with
-          | Fallthrough { kind = Load { addr; _ } | Store { addr; _ }; _ } ->
-              ignore
-                (G.insert_before graph vertex
-                   (Builtin (Check (addr, Memory_access))))
+          | Fallthrough { kind = Load { addr; _ }; _ } ->
+              if Options.check_memory then
+                ignore
+                  (G.insert_before graph vertex
+                     (Builtin (Ct_check (addr, Memory_access))))
+          | Fallthrough { kind = Store { addr; rval; _ }; _ } ->
+              if Options.check_memory then
+                ignore
+                  (G.insert_before graph vertex
+                     (Builtin (Ct_check (addr, Memory_access))));
+              visit_expr graph vertex rval
+          | Fallthrough { kind = Assign { rval; _ }; _ } ->
+              visit_expr graph vertex rval
           | Branch { test = expr; _ } | Terminator (Jump { target = expr; _ })
             ->
-              ignore
-                (G.insert_before graph vertex
-                   (Builtin (Check (expr, Control_flow))))
+              if Options.check_branch then
+                ignore
+                  (G.insert_before graph vertex
+                     (Builtin (Ct_check (expr, Control_flow))))
           | _ -> ())
         graph
 
@@ -596,7 +698,7 @@ module Make
                   try BvTbl.find ct_state.mirror_e value
                   with Not_found -> value
                 in
-                if value != value' then
+                if value /== value' then
                   ( public,
                     State.get_a_value value state :: secret1,
                     Model.eval model value' :: secret2 )
@@ -619,13 +721,22 @@ module Make
     | models -> (
         Ct_state.make_context (State.assertions state) ct_state;
         let e' = Ct_state.make_mirror_e e ct_state in
-        if e == e' then Secure
+        if e === e' then Secure
         else
           let memory = cv_memory state in
           ct_state.models <-
             List.fold_left
-              (fun models (i, model) ->
+              (fun models (i, ((_, _, _, _, addr_space) as model)) ->
                 let symbols = cv_symbol ct_state state i in
+                let model =
+                  if
+                    List.exists
+                      (fun e ->
+                        Bv.is_zero (Model.eval ~symbols ~memory model e))
+                      ct_state.constraints
+                  then Model.empty addr_space
+                  else model
+                in
                 if
                   Bv.is_one
                     (Model.eval ~symbols ~memory model ct_state.conjunction)
@@ -674,7 +785,7 @@ module Make
       S.Map.partition
         (fun _ values ->
           let value = List.hd values in
-          try value != BvTbl.find ct_state.mirror_e value
+          try value /== BvTbl.find ct_state.mirror_e value
           with Not_found -> false)
         symbols
     in
@@ -701,7 +812,7 @@ module Make
 
   let relse_analysis e ct_state symbols state : Status.t =
     let e' = Ct_state.make_mirror_e e ct_state in
-    if e == e' then Secure
+    if e === e' then Secure
     else (
       Ct_state.make_context (State.assertions state) ct_state;
       match
@@ -736,8 +847,8 @@ module Make
       (Path.get State.symbols path)
       state analyses
 
-  let check expr (kind : Kind.t) addr path _ state : (State.t, status) Result.t
-      =
+  let ct_check expr (kind : Kind.t) addr path _ state :
+      (State.t, status) Result.t =
     if Options.leak_info = InstrLeak && is_addr_insecure addr then Ok state
     else
       let expr, state = Eval.safe_eval expr state path in
@@ -754,22 +865,41 @@ module Make
           add_addr_status addr status;
           Ok state
 
+  let se_check _ path _ state : (State.t, status) Result.t =
+    let addr =
+      State.Value.var (Path.get State.id path) "secret_seeker"
+        (Kernel_options.Machine.word_size ())
+    in
+    let read, state = State.read ~addr 1 LittleEndian state in
+    let symbols = Path.get State.symbols path in
+    Path.set State.symbols (S.Map.add "secret_seeker" [ addr ] symbols) path;
+    (match analyze read path state with
+    | Unknown -> Logger.warning "unknown status"
+    | Secure -> ()
+    | Insecure report -> Logger.error "%a" Report.pp report);
+    Path.set State.symbols symbols path;
+    Ok state
+
   let builtin_callback =
     Some
       (function
       | Mirror var -> Some (mirror var)
-      | Check (expr, kind) -> Some (check expr kind)
+      | Ct_check (expr, kind) -> Some (ct_check expr kind)
+      | Se_check -> Some se_check
       | _ -> None)
 
   let builtin_printer =
     Some
       (fun ppf -> function
         | Mirror { name; _ } ->
-            Format.fprintf ppf "ct secret mirror(%s)" name;
+            Format.fprintf ppf "secret mirror(%s)" name;
             true
-        | Check (expr, kind) ->
+        | Ct_check (expr, kind) ->
             Format.fprintf ppf "ct %a check(%a)" Kind.pp kind
               Dba_printer.Ascii.pp_bl_term expr;
+            true
+        | Se_check ->
+            Format.pp_print_string ppf "secret-erasure check";
             true
         | _ -> false)
 
@@ -808,10 +938,18 @@ module Make
             (if paths > 1 then "s" else "")
             static_instrs
             (if static_instrs > 1 then "s" else "");
-          Logger.info "%d / %d control flow checks pass" !ct_cf_secure
-            (!ct_cf_secure + !ct_cf_insecure + !ct_cf_unknown);
-          Logger.info "%d / %d memory access checks pass" !ct_mem_secure
-            (!ct_mem_secure + !ct_mem_insecure + !ct_mem_unknown));
+          if Options.check_branch then
+            Logger.info "%d / %d control flow checks pass" !ct_cf_secure
+              (!ct_cf_secure + !ct_cf_insecure + !ct_cf_unknown);
+          if Options.check_memory then
+            Logger.info "%d / %d memory access checks pass" !ct_mem_secure
+              (!ct_mem_secure + !ct_mem_insecure + !ct_mem_unknown);
+          if Options.check_mult then
+            Logger.info "%d / %d multiplication checks pass" !ct_mult_secure
+              (!ct_mult_secure + !ct_mult_insecure + !ct_mult_unknown);
+          if Options.check_dividend || Options.check_divisor then
+            Logger.info "%d / %d division checks pass" !ct_div_secure
+              (!ct_div_secure + !ct_div_insecure + !ct_div_unknown));
         if is_unknown_report () then
           Logger.warning "@[<v>Exploration is incomplete:%a@]"
             (fun ppf () ->
@@ -911,6 +1049,23 @@ let () =
                     ] ->
                       (Libparser.Syntax.(Decl (Globals (secret, names))), [])
                   | _ -> raise Dyp.Giveup );
+              ( ( "decl",
+                  [
+                    Dyp.Regexp (RE_String "check");
+                    Dyp.Regexp (RE_String "secret");
+                    Dyp.Regexp (RE_String "erasure");
+                    Dyp.Regexp (RE_String "over");
+                    Dyp.Non_ter ("symbol", No_priority);
+                  ],
+                  "default_priority",
+                  [] ),
+                fun _ -> function
+                  | [ _; _; _; _; Libparser.Syntax.Symbol symbol ] ->
+                      ( Libparser.Syntax.Decl
+                          (Script.Return_hook
+                             (symbol, [ Se_check; Script.Instr.halt ])),
+                        [] )
+                  | _ -> assert false );
               ( ( "fallthrough",
                   [
                     Dyp.Non_ter ("loc", No_priority);
@@ -922,6 +1077,17 @@ let () =
                 fun _ -> function
                   | [ Libparser.Syntax.Loc lval; _; _ ] ->
                       (Libparser.Syntax.Instr (Secret lval), [])
+                  | _ -> raise Dyp.Giveup );
+              ( ( "fallthrough",
+                  [
+                    Dyp.Regexp (RE_String "check");
+                    Dyp.Regexp (RE_String "secret");
+                    Dyp.Regexp (RE_String "erasure");
+                  ],
+                  "default_priority",
+                  [] ),
+                fun _ -> function
+                  | [ _; _; _ ] -> (Libparser.Syntax.Instr Se_check, [])
                   | _ -> raise Dyp.Giveup );
               ( ( "instr",
                   [
@@ -964,6 +1130,9 @@ let () =
             | Secret (loc, _) ->
                 Format.fprintf ppf "%a := secret" Ast.Loc.pp loc;
                 true
+            | Se_check ->
+                Format.fprintf ppf "check secret erasure";
+                true
             | _ -> false)
 
       let declaration_printer =
@@ -995,6 +1164,7 @@ let () =
                 if Options.Logger.is_debug_enabled () then
                   Logger.set_log_level "debug";
                 Logger.set_debug_level (Options.Logger.get_debug_level ());
+
                 Some
                   (module Make ((val make_options ())) ((val stats))
                             ((val path))

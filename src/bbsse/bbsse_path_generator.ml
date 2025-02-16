@@ -160,7 +160,9 @@ let prefetch state v =
     (function
       | v, Call, _ when not (V.Set.mem v state.ctp) -> ()
       | _, Return r, _ when not (V.Set.mem r state.ctp) -> fallthrough := true
-      | v, Presumed, _ -> caller := Some v
+      | v, Presumed, _ ->
+          if not (V.Set.mem v state.ctp) then fallthrough := true;
+          caller := Some v
       | v, _, _ when A.Htbl.mem state.dis (A.of_virtual_address v) -> ()
       | v, _, _ -> fetch state v)
     state.cfg v;

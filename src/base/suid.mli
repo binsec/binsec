@@ -27,6 +27,9 @@ type t = private string
     To never clash with reserved keywords, generated identifiers
     always start with one of the special characters *)
 
+(** Generated identifier follows the syntax :
+    [!$%&*+./?^~][0-9a-zA-Z!$%&*+./?^~]+ *)
+
 external to_string : t -> string = "%identity"
 val pp : Format.formatter -> t -> unit
 val zero : t

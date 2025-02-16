@@ -90,7 +90,6 @@ module Make (Key : HashedType) : S with type key = Key.t = struct
           with Not_found -> j)
         [] b
   end
-  [@@inlined]
 
   type 'a t =
     | Empty
@@ -114,11 +113,10 @@ module Make (Key : HashedType) : S with type key = Key.t = struct
         (i land 0x0f0f0f0f0f0f0f0f) + ((i lsr 4) land 0x0f0f0f0f0f0f0f0f)
       in
       (i * 0x0101010101010101) lsr (64 - 8)
-    [@@inlined]
 
-    let mem x b : bool = b land select x != 0 [@@inlined]
-    let get x v b : 'a = v.(popcnt (b land mask x)) [@@inlined]
-    let set x a v b : unit = v.(popcnt (b land mask x)) <- a [@@inlined]
+    let mem x b : bool = b land select x != 0
+    let get x v b : 'a = v.(popcnt (b land mask x))
+    let set x a v b : unit = v.(popcnt (b land mask x)) <- a
     let single x a = Knot ([| a |], select x)
 
     let add x a v b =

@@ -129,9 +129,9 @@ module Ehdr = struct
     (* | 0x02 -> Machine.SPARC *)
     | 0x03 -> Machine.x86
     (* | 0x08 -> Machine.MIPS
-     * | 0x0a -> Machine.MIPS
-     * | 0x12 -> Machine.SPARC
-     * | 0x14 -> Machine.PowerPC *)
+     * | 0x0a -> Machine.MIPS *)
+    | 0x12 -> Machine.sparcv8
+    (* | 0x14 -> Machine.PowerPC *)
     | 0x15 -> Machine.ppc64 endianness
     | 0x28 -> Machine.armv7 endianness
     (* | 0x2b -> Machine.SPARC
@@ -823,11 +823,12 @@ module Note = struct
   type t = { name : string; kind : int; offset : int; size : int }
 
   let read t =
+    let base = t.position in
     let namesz = Read.u32 t in
     let size = Read.u32 t in
     let kind = Read.u32 t in
     let name = Read.fixed_string t namesz in
-    seek t ((t.position + 3) land -4);
+    seek t (base + ((t.position - base + 3) land -4));
     let offset = t.position in
     advance t ((size + 3) land -4);
     { name; kind; offset; size }

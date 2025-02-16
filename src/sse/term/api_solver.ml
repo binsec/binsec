@@ -212,6 +212,11 @@ module Make (F : Libsolver.F) = struct
     let iter_free_variables = Context.iter_free_variables
     let iter_free_arrays = Context.iter_free_arrays
     let assert_formula bl = Solver.assert_formula (Context.visit_bl bl)
+
+    let assert_distinct x y =
+      Solver.assert_formula
+        (Solver.Bv.diff (Context.visit_bv x) (Context.visit_bv y))
+
     let check_sat = Solver.check_sat
 
     let check_sat_assuming ?timeout bl =
@@ -282,6 +287,11 @@ module SafeArray (F : Libsolver.F) = struct
     let iter_free_variables = Context.iter_free_variables
     let iter_free_arrays = Context.iter_free_arrays
     let assert_formula bl = Solver.assert_formula (Context.visit_bl bl)
+
+    let assert_distinct x y =
+      Solver.assert_formula
+        (Solver.Bv.diff (Context.visit_bv x) (Context.visit_bv y))
+
     let check_sat = Solver.check_sat
 
     let check_sat_assuming ?timeout bl =

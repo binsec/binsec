@@ -28,6 +28,7 @@ module type S = sig
   val iter_free_variables : (string -> Expr.t -> unit) -> unit
   val iter_free_arrays : (string -> Memory.t -> unit) -> unit
   val assert_formula : Expr.t -> unit
+  val assert_distinct : Expr.t -> Expr.t -> unit
   val check_sat : ?timeout:float -> unit -> Libsolver.status
   val check_sat_assuming : ?timeout:float -> Expr.t -> Libsolver.status
   val get_value : Expr.t -> Z.t
@@ -186,7 +187,7 @@ module Common (QS : Types.QUERY_STATISTICS) = struct
             let model =
               (vars, values, memory, extract_arrays solver, lmem.addr_space)
             in
-            Solver.assert_formula (Expr.diff e (Expr.constant bv));
+            Solver.assert_distinct e (Expr.constant bv);
             fold_values solver deadline lmem e size (n - 1) f (f bv model acc)
 end
 
@@ -225,9 +226,7 @@ module Once (Session : OPEN) (QS : Types.QUERY_STATISTICS) : GET_MODEL = struct
     Solver.visit_formula formula;
     List.iter Solver.assert_formula formula;
     List.iter Solver.assert_formula lmem.lemmas;
-    List.iter
-      (fun bv -> Solver.assert_formula (Expr.diff e (Expr.constant bv)))
-      except;
+    List.iter (fun bv -> Solver.assert_distinct e (Expr.constant bv)) except;
     match
       fold_values
         (module Solver : S)
@@ -323,9 +322,7 @@ struct
     let solver = set_context lmem.lemmas formula in
     let module Solver = (val solver) in
     Solver.push ();
-    List.iter
-      (fun bv -> Solver.assert_formula (Expr.diff e (Expr.constant bv)))
-      except;
+    List.iter (fun bv -> Solver.assert_distinct e (Expr.constant bv)) except;
     match
       fold_values
         (module Solver : S)

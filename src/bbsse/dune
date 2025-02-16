@@ -10,7 +10,8 @@
  (libraries binsec smt sse))
 
 (menhir
- (modules bbsse_parser))
+ (modules bbsse_parser)
+ (flags --explain --strict))
 
 (ocamllex
  (modules bbsse_lexer))

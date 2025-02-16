@@ -8,8 +8,8 @@ https://github.com/binsec/binsec.
 Dependencies can be automatically installed via
 [*opam*](https://opam.ocaml.org/doc/Install.html).  
 ```bash
-$ opam install dune menhir grain_dypgen ocamlgraph zarith toml
-$ opam install bitwuzla # optional -- for native SMT solver binding
+$ opam install dune dune-site menhir grain_dypgen ocamlgraph zarith toml
+$ opam install bitwuzla bitwuzla-cxx z3 # optional -- for native SMT solver bindings
 $ opam install unisim_archisec # optional -- for x86-64, ARMv7 and ARMv8
 $ opam install curses # optional -- for real time summary window
 ```
@@ -28,6 +28,7 @@ $ opam install curses # optional -- for real time summary window
 - [zarith >= 1.4](https://github.com/ocaml/Zarith)
 - *[unisim_archisec](https://github.com/binsec/unisim_archisec) (optional)*
 - *[bitwuzla](https://github.com/bitwuzla/ocaml-bitwuzla) (optional)*
+- *[z3](https://github.com/Z3Prover/z3) (optional)*
 - *[curses](https://github.com/mbacarella/curses) (optional)*
 - [odoc](https://github.com/ocaml/odoc) (*documentation*)
 - [qcheck](https://github.com/c-cube/qcheck) (*test*)
@@ -44,7 +45,7 @@ When `opam` is available, using the command `make` will automatically install th
 :information_source: **Local opam switch**  
 If `opam` is available, using the following command will create a new OCaml switch inside the BINSEC tree.
 ```bash
-OCAML_COMPILER=4.11.2 make switch
+OCAML_COMPILER=4.13.1 make switch
 ```
 A local switch makes the installation of dependencies, including ocaml supported version, not impacting the system wide ocaml configuration.  
 *Doing so, everything installed will be readily available but only inside the BINSEC directory.*

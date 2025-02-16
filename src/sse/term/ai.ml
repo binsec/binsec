@@ -106,14 +106,15 @@ module Make (D : Domains.S) (C : CONTEXT with type v := D.t) :
             C.add_dependency ctx x ~parent:e;
             C.add_dependency ctx y ~parent:e;
             (binary f) ~size:(Expr.sizeof x) (eval ctx x) (eval ctx y)
-        | Ite { c; t; e = r; _ } ->
+        | Ite { c; t; e = r; _ } -> (
             C.add_dependency ctx c ~parent:e;
             C.add_dependency ctx t ~parent:e;
             C.add_dependency ctx r ~parent:e;
             let c' = eval ctx c in
-            if included ~size:1 c' one then eval ctx t
-            else if included ~size:1 c' zero then eval ctx r
-            else union ~size:(Expr.sizeof t) (eval ctx t) (eval ctx r)
+            match is_zero c' with
+            | False -> eval ctx t
+            | True -> eval ctx r
+            | Unknown -> union ~size:(Expr.sizeof t) (eval ctx t) (eval ctx r))
       in
       C.add ctx e d;
       d
@@ -174,11 +175,13 @@ module Make (D : Domains.S) (C : CONTEXT with type v := D.t) :
                   ~size2:(Expr.sizeof y) (C.find ctx y)
             | Binary { f; x; y; _ } ->
                 binary f ~size:(Expr.sizeof x) (C.find ctx x) (C.find ctx y)
-            | Ite { c; t; e = r; _ } ->
+            | Ite { c; t; e = r; _ } -> (
                 let c' = C.find ctx c in
-                if included ~size:1 c' one then C.find ctx t
-                else if included ~size:1 c' zero then C.find ctx r
-                else union ~size:(Expr.sizeof t) (C.find ctx t) (C.find ctx r)
+                match is_zero c' with
+                | False -> C.find ctx t
+                | True -> C.find ctx r
+                | Unknown ->
+                    union ~size:(Expr.sizeof t) (C.find ctx t) (C.find ctx r))
           in
           if included ~size:(Expr.sizeof e) o n then loop_up todo ctx locked
           else

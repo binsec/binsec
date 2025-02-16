@@ -109,6 +109,49 @@ let same_symbol name attr ((expr : Ast.Expr.t), _) =
   | Symbol ((name', attr'), _) -> name = name' && attr = attr'
   | _ -> false
 
+module Func : sig
+  type t
+
+  val create : unit -> t
+  val add : t -> Virtual_address.t -> string -> int -> unit
+  val find : t -> Virtual_address.t -> (string * int) option
+end = struct
+  module Range = struct
+    type t = Virtual_address.t * int * string * Virtual_address.t
+
+    let equal = ( = )
+    let len (_, len, _, _) = len
+
+    let crop ~lo ~hi (cur, _, name, base) =
+      (Virtual_address.add_int lo cur, hi - lo + 1, name, base)
+
+    let concat _ _ = assert false
+  end
+
+  module Map = Lmap.Make (Range)
+
+  type t = Map.t ref
+
+  let create () = ref Map.empty
+
+  let add tbl addr name size =
+    tbl :=
+      Map.store (Virtual_address.to_bigint addr) (addr, size, name, addr) !tbl
+
+  let find tbl addr =
+    match
+      Map.select
+        (fun _ _ -> raise_notrace Not_found)
+        (Virtual_address.to_bigint addr)
+        1 !tbl
+    with
+    | exception Not_found -> None
+    | cur, _, name, base -> Some (name, Virtual_address.diff cur base)
+end
+
+let invalid_fallthrough =
+  [ ("", [ Script.Error "Invalid replacement fallthrough" ]) ]
+
 module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
   module Exploration_stats = Stats.Exploration ()
   module Query_stats = Stats.Query ()
@@ -228,6 +271,15 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
       endianness = Kernel_options.Machine.endianness ();
     }
 
+  let hook_anchors = Virtual_address.Htbl.create 4
+
+  let pp_virtual_address ppf addr =
+    Virtual_address.pp ppf addr;
+    try
+      let anchor = Virtual_address.Htbl.find hook_anchors addr in
+      Format.fprintf ppf " (%s)" anchor
+    with Not_found -> ()
+
   let choose () =
     try
       let thunk, worklist = W.pop env.worklist in
@@ -310,10 +362,10 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
   let print addr path state (output : Output.t) =
     match output with
     | Model ->
-        Logger.result "@[<v 0>Model %@ %a@ %a@]" Virtual_address.pp addr
+        Logger.result "@[<v 0>Model %@ %a@ %a@]" pp_virtual_address addr
           State.pp state
     | Formula ->
-        Logger.result "Formula %@ %a@\n%a" Virtual_address.pp addr
+        Logger.result "Formula %@ %a@\n%a" pp_virtual_address addr
           (State.pp_smt None) state
     | Slice slice ->
         let slice =
@@ -326,7 +378,7 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
           in
           proceed slice state
         in
-        Logger.result "Formula for %a %@ %a@\n%a" Virtual_address.pp addr
+        Logger.result "Formula for %a %@ %a@\n%a" pp_virtual_address addr
           (Format.pp_print_list ~pp_sep:Format.pp_print_space (fun ppf (_, n) ->
                Format.pp_print_string ppf n))
           slice
@@ -423,7 +475,7 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
         Exploration_stats.terminate_path Cut;
         Path.terminate path Cut;
         Logger.debug ~level:0 "@[<hov>Cut path %d (directive) %@ %a@]"
-          (Path.id path) Virtual_address.pp ip;
+          (Path.id path) pp_virtual_address ip;
         yield mode ~max_depth
     | Halt -> (
         match mode with
@@ -431,7 +483,7 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
             Exploration_stats.terminate_path Halt;
             Path.terminate path Halt;
             Logger.debug ~level:0 "@[<hov>End of path %d %@ %a@]" (Path.id path)
-              Virtual_address.pp ip;
+              pp_virtual_address ip;
             yield mode ~max_depth
         | Linear -> state
         | Merge -> { path; depth; ip; state; fiber })
@@ -439,7 +491,7 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
         Exploration_stats.terminate_path Die;
         Path.terminate path Die;
         Logger.error "@[<hov>Cut path %d (uninterpreted %S) %@ %a@]"
-          (Path.id path) msg Virtual_address.pp ip;
+          (Path.id path) msg pp_virtual_address ip;
         yield mode ~max_depth
 
   and assume :
@@ -470,7 +522,7 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
         | None ->
             Logger.warning
               "@[<hov>Cut path %d (unsatisfiable assumption) %@ %a@]"
-              (Path.id path) Virtual_address.pp ip;
+              (Path.id path) pp_virtual_address ip;
             Exploration_stats.terminate_path Unsatisfiable_assumption;
             Path.terminate path Unsatisfiable_assumption;
             yield mode ~max_depth
@@ -498,7 +550,7 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
               exec mode path depth ~max_depth state ip succ
             else (
               Logger.error "@[<v 2> Assertion failed %@ %a@ %a@]"
-                Virtual_address.pp ip State.pp state;
+                pp_virtual_address ip State.pp state;
               Exploration_stats.add_failed_assert ();
               { path; depth; ip; state; fiber = Cut }))
     | Default -> (
@@ -511,14 +563,14 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
         | True state -> exec mode path depth ~max_depth state ip succ
         | False state ->
             Logger.error "@[<v 2> Assertion failed %@ %a@ %a@]"
-              Virtual_address.pp ip State.pp state;
+              pp_virtual_address ip State.pp state;
             Exploration_stats.add_failed_assert ();
             Exploration_stats.terminate_path Assertion_failed;
             Path.terminate path Assertion_failed;
             yield mode ~max_depth
         | Both { t = state; f } ->
             Logger.error "@[<v 2> Assertion failed %@ %a@ %a@]"
-              Virtual_address.pp ip State.pp f;
+              pp_virtual_address ip State.pp f;
             Exploration_stats.add_failed_assert ();
             exec mode path depth ~max_depth state ip succ)
 
@@ -756,7 +808,7 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
     let opcode =
       Expr.load
         (Isa_helper.max_instruction_len ())
-        Machine.LittleEndian
+        env.endianness
         (Expr.constant
            (Bitvector.of_int
               ~size:(Kernel_options.Machine.word_size ())
@@ -809,7 +861,7 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
           Logger.result
             "@[<hov 0>Directive :: enumerate@ possible values (%d) for %a %@ \
              %a:@ @[<hov 0>%a@]@]"
-            k Dba_printer.Ascii.pp_bl_term enum Virtual_address.pp ip
+            k Dba_printer.Ascii.pp_bl_term enum pp_virtual_address ip
             (Print_utils.pp_list ~sep:",@ " (pp_value_as format))
             values;
           e.k <- k;
@@ -825,11 +877,15 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
         | Merge -> { path; depth; ip; state; fiber }
         | Default -> (
             match Eval.assume guard state path with
+            | exception Unknown ->
+                Exploration_stats.terminate_path Unresolved_formula;
+                Path.terminate path Unresolved_formula;
+                yield mode ~max_depth
             | None -> exec mode path depth ~max_depth state ip succ
             | Some state' ->
                 let addr = ip in
                 Logger.result "@[<h>Path %d reached address %a (%a to go)@]"
-                  (Path.id path) Virtual_address.pp addr
+                  (Path.id path) pp_virtual_address addr
                   (fun ppf n ->
                     if n = -1 then Format.pp_print_char ppf '*'
                     else Format.pp_print_int ppf (n - 1))
@@ -861,6 +917,8 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
     and core_symbols : (Dba.Var.Tag.attribute * Bitvector.t) S.Htbl.t S.Htbl.t =
       S.Htbl.create 1
     in
+    let functions = Func.create () in
+    let return_instructions = S.Htbl.create 16 in
     let parser_env =
       let wordsize = Kernel_options.Machine.word_size () in
       let tbl = S.Htbl.create 128 and ori = S.Htbl.create 128 in
@@ -914,15 +972,17 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
         Array.iter
           (fun sym ->
             match Symbol.header sym with
-            | { kind = SECTION; sh = SEC { name; addr; size; _ }; _ }
-            | { sh = SEC _; name; value = addr; size; _ }
+            | { kind = SECTION as kind; sh = SEC { name; addr; size; _ }; _ }
+            | { sh = SEC _; name; value = addr; size; kind; _ }
               when not (Utils.is_ifunc img sym) ->
                 S.Htbl.add symbols name
                   (Value, Bitvector.of_int ~size:addr_size addr);
                 S.Htbl.add symbols name
                   (Size, Bitvector.of_int ~size:addr_size size);
                 S.Htbl.add symbols name
-                  (Last, Bitvector.of_int ~size:addr_size (addr + size - 1))
+                  (Last, Bitvector.of_int ~size:addr_size (addr + size - 1));
+                if kind = FUNC then
+                  Func.add functions (Virtual_address.create addr) name size
             | _ -> ())
           (Img.symbols img);
         Array.iter
@@ -1037,171 +1097,206 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
                    { Loader_elf.addresses = { lo; hi }; offset; name = fname } ->
                 if S.Set.mem fname fmap then (vmap, fmap, xcode, state)
                 else
-                  let img = Loader_elf.load_file fname in
-                  let size = Virtual_address.diff hi lo + 1 in
-                  let section =
-                    Option.get
-                      (Loader_utils.find_section
-                         ~p:(fun s ->
-                           let { Loader_types.raw; _ } = Loader.Section.pos s in
-                           Loader.Section.has_flag Loader_types.Read s
-                           && offset <= raw
-                           && raw < offset + size)
-                         (Loader.ELF img))
-                  in
-                  let { Loader_types.raw; virt } = Loader.Section.pos section in
-                  let base =
-                    Virtual_address.diff
-                      (Virtual_address.add_int (raw - offset) lo)
-                      (Virtual_address.create virt)
-                  in
-                  Logger.debug "%08x :: %a-%a %08x %s" base Virtual_address.pp
-                    lo Virtual_address.pp hi offset fname;
-                  let private_symbols :
-                      (Dba.Var.Tag.attribute * Bitvector.t) S.Htbl.t =
-                    S.Htbl.create 100
-                  in
-                  Array.iter
-                    (fun sym ->
-                      match Loader_elf.Symbol.header sym with
-                      | { kind = SECTION; sh = SEC { name; addr; size; _ }; _ }
-                      | { sh = SEC _; name; value = addr; size; _ }
-                        when not (Loader_elf.Utils.is_ifunc img sym) ->
-                          if S.Htbl.mem symbols name then (
-                            S.Htbl.remove symbols name;
-                            S.Htbl.replace shadowing_symbols name (fname, None));
-                          let value =
-                            ( Dba.Var.Tag.Value,
-                              Bitvector.of_int ~size:addr_size (base + addr) )
-                          in
-                          S.Htbl.add private_symbols name value;
-                          S.Htbl.add symbols name value;
-                          let last =
-                            ( Dba.Var.Tag.Last,
-                              Bitvector.of_int ~size:addr_size
-                                (base + addr + size - 1) )
-                          in
-                          S.Htbl.add private_symbols name last;
-                          S.Htbl.add symbols name last;
-                          let size =
-                            ( Dba.Var.Tag.Size,
-                              Bitvector.of_int ~size:addr_size size )
-                          in
-                          S.Htbl.add private_symbols name size;
-                          S.Htbl.add symbols name size
-                      | _ -> ())
-                    (Loader_elf.Img.symbols img);
-                  Array.iter
-                    (fun section ->
-                      let name = Loader_elf.Section.name section
-                      and { Loader_types.virt = addr; _ } =
-                        Loader_elf.Section.pos section
-                      and { Loader_types.virt = size; _ } =
-                        Loader_elf.Section.size section
+                  match Loader.load_file fname with
+                  | (Raw _ | PE _ | TI83 _) as img ->
+                      let base = Virtual_address.to_bigint lo
+                      and size = Virtual_address.diff hi lo + 1
+                      and { Loader_buf.buffer; _ } = Loader.Img.cursor img in
+                      let vmap = Imap.add ~base size true vmap in
+                      let state =
+                        State.memcpy
+                          ~addr:(Bitvector.create base addr_size)
+                          size
+                          (Bigarray.Array1.sub buffer offset
+                             (min size (Bigarray.Array1.dim buffer - offset)))
+                          state
                       in
-                      S.Htbl.add private_symbols name
-                        (Value, Bitvector.of_int ~size:addr_size (base + addr));
-                      S.Htbl.add private_symbols name
-                        (Size, Bitvector.of_int ~size:addr_size size);
-                      S.Htbl.add private_symbols name
-                        ( Last,
-                          Bitvector.of_int ~size:addr_size
-                            (base + addr + size - 1) ))
-                    (Loader_elf.Img.sections img);
-                  S.Htbl.add core_symbols (Filename.basename fname)
-                    private_symbols;
-                  let sections = Loader_elf.Img.sections img in
-                  let vmap, xcode, state =
-                    Array.fold_left
-                      (fun (vmap, xcode, state) s ->
-                        let open Loader_elf in
-                        let hdr = Section.header s in
-                        let pos = hdr.Shdr.addr and size = hdr.Shdr.size in
-                        let addr =
-                          Bitvector.of_int ~size:addr_size (pos + base)
-                        in
-                        let base = Bitvector.value_of addr in
-                        (if hdr.kind = RELA || hdr.kind = REL then
-                           let lname =
-                             Section.name (Array.get sections hdr.Shdr.info)
-                           in
-                           if
-                             String_utils.start_with ~prefix:".got" lname
-                             || String_utils.start_with ~prefix:".plt" lname
-                           then
-                             Array.iter
-                               (fun Rel.
-                                      {
-                                        offset;
-                                        kind = _;
-                                        symbol = { name; _ };
-                                        addend;
-                                      } ->
-                                 if name <> "" then
-                                   let addend =
-                                     Option.value ~default:0 addend
-                                   in
-                                   let reader =
-                                     Lreader.create ~endianness:env.endianness
-                                       ~at:(Z.to_int base + offset - pos)
-                                       Loader_elf.read_address img'
-                                   in
-                                   let value =
-                                     Bitvector.add_int
-                                       (Lreader.Read.read reader
-                                          (addr_size lsr 3))
-                                       (-addend)
-                                   in
-                                   Queue.add
-                                     (name, value, lname, fname)
-                                     dyn_symbols)
-                               (Rel.read img hdr));
-                        if
-                          (not (Section.has_flag Loader_types.Read s))
-                          || Imap.mem base vmap
-                        then (vmap, xcode, state)
-                        else
-                          let vmap = Imap.add ~base size true vmap in
-                          let xcode =
-                            if Section.has_flag Loader_types.Exec s then
-                              let p =
-                                if Section.has_flag Loader_types.Write s then
-                                  if transient then RWX
-                                  else (
-                                    Logger.warning
-                                      "Section %S [%a, 0x%x] has both Write \
-                                       and Execute flags.@ Self-modifying code \
-                                       is disabled and writes will be \
-                                       ignored.@ Use '-sse-self-written-enum \
-                                       N' to enable symbolic reasoning up to \
-                                       'N - 1' forks."
-                                      (Section.name s) Virtual_address.pp
-                                      (Virtual_address.create pos)
-                                      size;
-                                    RX
-                                      {
-                                        base = Virtual_address.create pos;
-                                        size;
-                                        content = Img.content img s;
-                                      })
-                                else
-                                  RX
-                                    {
-                                      base = Virtual_address.of_bitvector addr;
-                                      size;
-                                      content = Img.content img s;
-                                    }
+                      (vmap, fmap, xcode, state)
+                  | ELF img ->
+                      let size = Virtual_address.diff hi lo + 1 in
+                      let section =
+                        Option.get
+                          (Loader_utils.find_section
+                             ~p:(fun s ->
+                               let { Loader_types.raw; _ } =
+                                 Loader.Section.pos s
+                               in
+                               Loader.Section.has_flag Loader_types.Read s
+                               && offset <= raw
+                               && raw < offset + size)
+                             (Loader.ELF img))
+                      in
+                      let { Loader_types.raw; virt } =
+                        Loader.Section.pos section
+                      in
+                      let base =
+                        Virtual_address.diff
+                          (Virtual_address.add_int (raw - offset) lo)
+                          (Virtual_address.create virt)
+                      in
+                      Logger.debug "%08x :: %a-%a %08x %s" base
+                        Virtual_address.pp lo Virtual_address.pp hi offset fname;
+                      let private_symbols :
+                          (Dba.Var.Tag.attribute * Bitvector.t) S.Htbl.t =
+                        S.Htbl.create 100
+                      in
+                      Array.iter
+                        (fun sym ->
+                          match Loader_elf.Symbol.header sym with
+                          | {
+                              kind = SECTION as kind;
+                              sh = SEC { name; addr; size; _ };
+                              _;
+                            }
+                          | { sh = SEC _; name; value = addr; size; kind; _ }
+                            when not (Loader_elf.Utils.is_ifunc img sym) ->
+                              if kind = FUNC then
+                                Func.add functions
+                                  (Virtual_address.create (base + addr))
+                                  name size;
+                              if S.Htbl.mem symbols name then (
+                                S.Htbl.remove symbols name;
+                                S.Htbl.replace shadowing_symbols name
+                                  (fname, None));
+                              let value =
+                                ( Dba.Var.Tag.Value,
+                                  Bitvector.of_int ~size:addr_size (base + addr)
+                                )
                               in
-                              Imap.add ~base size p xcode
-                            else xcode
+                              S.Htbl.add private_symbols name value;
+                              S.Htbl.add symbols name value;
+                              let last =
+                                ( Dba.Var.Tag.Last,
+                                  Bitvector.of_int ~size:addr_size
+                                    (base + addr + size - 1) )
+                              in
+                              S.Htbl.add private_symbols name last;
+                              S.Htbl.add symbols name last;
+                              let size =
+                                ( Dba.Var.Tag.Size,
+                                  Bitvector.of_int ~size:addr_size size )
+                              in
+                              S.Htbl.add private_symbols name size;
+                              S.Htbl.add symbols name size
+                          | _ -> ())
+                        (Loader_elf.Img.symbols img);
+                      Array.iter
+                        (fun section ->
+                          let name = Loader_elf.Section.name section
+                          and { Loader_types.virt = addr; _ } =
+                            Loader_elf.Section.pos section
+                          and { Loader_types.virt = size; _ } =
+                            Loader_elf.Section.size section
                           in
-                          let state =
-                            State.memcpy ~addr size (Img.content img s) state
-                          in
-                          (vmap, xcode, state))
-                      (vmap, xcode, state) sections
-                  in
-                  (vmap, S.Set.add fname fmap, xcode, state))
+                          S.Htbl.add private_symbols name
+                            ( Value,
+                              Bitvector.of_int ~size:addr_size (base + addr) );
+                          S.Htbl.add private_symbols name
+                            (Size, Bitvector.of_int ~size:addr_size size);
+                          S.Htbl.add private_symbols name
+                            ( Last,
+                              Bitvector.of_int ~size:addr_size
+                                (base + addr + size - 1) ))
+                        (Loader_elf.Img.sections img);
+                      S.Htbl.add core_symbols (Filename.basename fname)
+                        private_symbols;
+                      let sections = Loader_elf.Img.sections img in
+                      let vmap, xcode, state =
+                        Array.fold_left
+                          (fun (vmap, xcode, state) s ->
+                            let open Loader_elf in
+                            let hdr = Section.header s in
+                            let pos = hdr.Shdr.addr and size = hdr.Shdr.size in
+                            let addr =
+                              Bitvector.of_int ~size:addr_size (pos + base)
+                            in
+                            let base = Bitvector.value_of addr in
+                            (if hdr.kind = RELA || hdr.kind = REL then
+                               let lname =
+                                 Section.name (Array.get sections hdr.Shdr.info)
+                               in
+                               if
+                                 String_utils.start_with ~prefix:".got" lname
+                                 || String_utils.start_with ~prefix:".plt" lname
+                               then
+                                 Array.iter
+                                   (fun Rel.
+                                          {
+                                            offset;
+                                            kind = _;
+                                            symbol = { name; _ };
+                                            addend;
+                                          } ->
+                                     if name <> "" then
+                                       let addend =
+                                         Option.value ~default:0 addend
+                                       in
+                                       let reader =
+                                         Lreader.create
+                                           ~endianness:env.endianness
+                                           ~at:(Z.to_int base + offset - pos)
+                                           Loader_elf.read_address img'
+                                       in
+                                       let value =
+                                         Bitvector.add_int
+                                           (Lreader.Read.read reader
+                                              (addr_size lsr 3))
+                                           (-addend)
+                                       in
+                                       Queue.add
+                                         (name, value, lname, fname)
+                                         dyn_symbols)
+                                   (Rel.read img hdr));
+                            if
+                              (not (Section.has_flag Loader_types.Read s))
+                              || Imap.mem base vmap
+                            then (vmap, xcode, state)
+                            else
+                              let vmap = Imap.add ~base size true vmap in
+                              let xcode =
+                                if Section.has_flag Loader_types.Exec s then
+                                  let p =
+                                    if Section.has_flag Loader_types.Write s
+                                    then
+                                      if transient then RWX
+                                      else (
+                                        Logger.warning
+                                          "Section %S [%a, 0x%x] has both \
+                                           Write and Execute flags.@ \
+                                           Self-modifying code is disabled and \
+                                           writes will be ignored.@ Use \
+                                           '-sse-self-written-enum N' to \
+                                           enable symbolic reasoning up to 'N \
+                                           - 1' forks."
+                                          (Section.name s) Virtual_address.pp
+                                          (Virtual_address.create pos)
+                                          size;
+                                        RX
+                                          {
+                                            base = Virtual_address.create pos;
+                                            size;
+                                            content = Img.content img s;
+                                          })
+                                    else
+                                      RX
+                                        {
+                                          base =
+                                            Virtual_address.of_bitvector addr;
+                                          size;
+                                          content = Img.content img s;
+                                        }
+                                  in
+                                  Imap.add ~base size p xcode
+                                else xcode
+                              in
+                              let state =
+                                State.memcpy ~addr size (Img.content img s)
+                                  state
+                              in
+                              (vmap, xcode, state))
+                          (vmap, xcode, state) sections
+                      in
+                      (vmap, S.Set.add fname fmap, xcode, state))
               (vmap, S.Set.empty, env.code, state)
               (Loader_elf.files img')
           in
@@ -1324,17 +1419,25 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
                 | Script.Load_sections names ->
                     List.fold_left
                       (fun ss name ->
-                        let section =
-                          Loader_utils.find_section_by_name name img
-                        in
-                        let addr =
-                          Bitvector.of_int ~size:addr_size
-                            (Loader.Section.pos section).virt
-                        and size = (Loader.Section.size section).virt in
-                        Logger.info "Load section %s (%a, %#x)" name
-                          Bitvector.pp_hex_or_bin addr size;
-                        State.memcpy ~addr size
-                          (Loader.Img.content img section)
+                        try
+                          let section =
+                            Loader_utils.find_section_by_name name img
+                          in
+                          let addr =
+                            Bitvector.of_int ~size:addr_size
+                              (Loader.Section.pos section).virt
+                          and size = (Loader.Section.size section).virt in
+                          Logger.info "Load section %s (%a, %#x)" name
+                            Bitvector.pp_hex_or_bin addr size;
+                          State.memcpy ~addr size
+                            (Loader.Img.content img section)
+                            ss
+                        with Not_found ->
+                          (match MissingSymbol.get () with
+                          | Error -> Logger.fatal ?e:None
+                          | Warn -> Logger.warning ?level:None
+                          | Quiet -> fun _ _ -> ())
+                            "Can not load the section %S from the file." name;
                           ss)
                       state names
                 | Script.Load_data (load, _) -> (
@@ -1395,6 +1498,7 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
                             Dba_printer.Ascii.pp_bl_term addr
                             Bitvector.pp_hex_or_bin bv;
                           let addr = Virtual_address.of_bitvector bv in
+                          Virtual_address.Htbl.add hook_anchors addr anchor;
                           if pre then register_hook prehooks addr (anchor, stmts)
                           else register_hook hooks addr (anchor, stmts)
                         with
@@ -1416,6 +1520,106 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
                             | Quiet -> ()))
                       addresses;
                     state
+                | Script.Return_hook (((name, _), pos), stmts) ->
+                    let addresses =
+                      try S.Htbl.find return_instructions name
+                      with Not_found -> (
+                        try
+                          let addr =
+                            match parser_env.lookup_symbol name Value with
+                            | Var { info = Symbol (_, (lazy value)); _ } ->
+                                value
+                            | _ -> raise Not_found
+                          in
+                          let size =
+                            match parser_env.lookup_symbol name Size with
+                            | Var { info = Symbol (_, (lazy value)); _ } ->
+                                Bitvector.to_int value
+                            | _ -> raise Not_found
+                          in
+                          Logger.debug ~level:5 "Return hook for <%s> [%a..%a]"
+                            name Bitvector.pp_hex_or_bin addr
+                            Bitvector.pp_hex_or_bin
+                            (Bitvector.add_int addr size);
+                          let addr = Virtual_address.of_bitvector addr in
+                          let body =
+                            match
+                              Imap.find
+                                (Virtual_address.to_bigint addr)
+                                env.code
+                            with
+                            | RWX -> raise_notrace Not_found
+                            | RX { base; content; _ } ->
+                                Bigarray.Array1.sub content
+                                  (Virtual_address.diff addr base)
+                                  size
+                          in
+                          let code =
+                            Dcode.create ~task:env.tasks addr
+                              (Lreader.of_zero_extend_buffer
+                                 ~endianness:env.endianness body)
+                              size
+                          in
+                          let vertex = Dcode.disasm code addr in
+                          let rec visit ir marked todo rets =
+                            match todo with
+                            | [] -> rets
+                            | (addr, vertex) :: todo -> (
+                                if I.Set.mem vertex marked then
+                                  visit ir marked todo rets
+                                else
+                                  let marked = I.Set.add vertex marked in
+                                  match Dcode.G.node ir vertex with
+                                  | Terminator (Jump { tag = Return; _ }) ->
+                                      visit ir marked todo (addr :: rets)
+                                  | Fallthrough
+                                      { kind = Instruction inst; succ } ->
+                                      visit ir marked
+                                        ((Instruction.address inst, succ)
+                                        :: todo)
+                                        rets
+                                  | Fallthrough
+                                      { kind = Hook { addr; _ }; succ } ->
+                                      visit ir marked ((addr, succ) :: todo)
+                                        rets
+                                  | Fallthrough { succ; _ }
+                                  | Goto { succ = Some succ; _ } ->
+                                      visit ir marked ((addr, succ) :: todo)
+                                        rets
+                                  | Branch { target; fallthrough; _ } ->
+                                      visit ir marked
+                                        ((addr, target) :: (addr, fallthrough)
+                                       :: todo)
+                                        rets
+                                  | Goto
+                                      { succ = None; tag = Call { base; _ }; _ }
+                                  | Terminator
+                                      (Jump { tag = Call { base; _ }; _ }) ->
+                                      let vertex = Dcode.disasm ir base in
+                                      visit ir marked ((base, vertex) :: todo)
+                                        rets
+                                  | Goto { succ = None; _ } | Terminator _ ->
+                                      raise_notrace Not_found)
+                          in
+                          let addresses =
+                            visit code I.Set.empty [ (addr, vertex) ] []
+                          in
+                          if addresses = [] then raise_notrace Not_found;
+                          S.Htbl.add return_instructions name addresses;
+                          addresses
+                        with Not_found ->
+                          Logger.fatal
+                            "Can not resolve symbol return instruction(s) for \
+                             <%s> %a."
+                            name Parse_utils.pp_pos pos)
+                    in
+                    let anchor = Format.sprintf "<%s> return" name in
+                    List.iter
+                      (fun addr ->
+                        Virtual_address.Htbl.add hook_anchors addr anchor;
+                        register_hook prehooks addr (anchor, stmts))
+                      addresses;
+                    state
                 | Script.Decode (opcode, stmts) ->
                     Dcode.register_opcode_hook (fun reader ->
                         if
@@ -1434,6 +1638,16 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
                       !declaration_callbacks)
               state script )
     in
+    Dcode.set_annotation_printer
+      (Some
+         (fun ppf vaddr ->
+           Option.iter
+             (fun (name, offset) ->
+               Format.pp_print_string ppf "\t# <";
+               Format.pp_print_string ppf name;
+               Format.pp_print_char ppf '>';
+               if offset > 0 then Format.fprintf ppf " + %#x" offset)
+             (Func.find functions vaddr)));
     let in_section lo hi addr _ =
       let z = Virtual_address.to_bigint addr in
       Z.leq lo z && Z.leq z hi
@@ -1444,9 +1658,11 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
           match (prehooks, hooks) with
           | None, None -> assert false
           | Some prehooks, None -> Some (List.rev prehooks)
-          | None, Some hooks -> Some (List.rev hooks)
+          | None, Some hooks -> Some (List.rev_append hooks invalid_fallthrough)
           | Some prehooks, Some hooks ->
-              Some (List.rev_append prehooks (List.rev hooks)))
+              Some
+                (List.rev_append prehooks
+                   (List.rev_append hooks invalid_fallthrough)))
         !prehooks !hooks
     in
     let dcode, whooks, hooks =

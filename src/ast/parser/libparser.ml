@@ -66,6 +66,7 @@ type obj =
     * Ast.Expr.t Ast.loc)
     list,
     Machine.endianness,
+    Z.t,
     unit,
     int Interval.t,
     unit,

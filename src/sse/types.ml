@@ -196,12 +196,19 @@ module type RAW_STATE = sig
   val pp_smt : Value.t target -> Format.formatter -> t -> unit
   val to_formula : t -> Formula.formula
 
-  val downcast : 'a feature -> (t -> 'a) option
-  (** [downcast feature]
-      returns a cast function from a state to an extended state.
+  val getter : 'a feature -> (t -> 'a) option
+  (** [getter feature]
+      returns a getter function from a state to an extended feature.
       It returns [None] if the current implementation does not support the
       queried feature.
-   *)
+  *)
+
+  val setter : 'a feature -> ('a -> t -> t) option
+  (** [setter feature]
+      returns a setter function to update an extended feature.
+      It returns [None] if the current implementation does not support the
+      queried feature.
+  *)
 end
 
 type _ key

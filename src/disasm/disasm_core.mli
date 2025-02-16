@@ -19,7 +19,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-exception Decode_error of string
 (** Core functionalities for disassembly *)
 
 val register_decoder :
@@ -55,9 +54,6 @@ module Successors : sig
   val linear : Instruction.t -> Virtual_address.Set.t
   val linear_bytewise : Instruction.t -> Virtual_address.Set.t
 end
-
-val get_decode_replacement : unit -> Dhunk.t Virtual_address.Map.t
-val add_replacement : Virtual_address.t -> Dhunk.t -> unit
 
 val decode :
   ?img:Loader.Img.t ->

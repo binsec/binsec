@@ -62,6 +62,10 @@ module Make
 
   val get : t -> Virtual_address.t -> [ `All ] Fiber.t
 
+  module G : Ir.GRAPH with type t = t
+
+  val disasm : t -> Virtual_address.t -> G.vertex
+
   module type CALLBACK = sig
     val instruction_callback :
       (Ast.Instr.t -> Script.env -> Ir.fallthrough list) option
@@ -84,4 +88,7 @@ module Make
 
   val register_opcode_hook :
     (Lreader.t -> (Script.Instr.t list * Script.env) option) -> unit
+
+  val set_annotation_printer :
+    (Format.formatter -> Virtual_address.t -> unit) option -> unit
 end

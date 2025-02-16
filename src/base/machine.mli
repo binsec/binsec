@@ -31,6 +31,7 @@ type isa = private
   | ARM of { rev : [ `v7 | `v8 ]; endianness : endianness }
   | PPC of { bits : [ `x32 | `x64 ]; endianness : endianness }
   | RISCV of { bits : [ `x32 | `x64 | `x128 ] }
+  | SPARC of { rev : [ `v8 ] }
   | X86 of { bits : [ `x16 | `x32 | `x64 ] }
   | Z80
 
@@ -61,6 +62,7 @@ val armv7 : endianness -> t
 val armv8 : endianness -> t
 val ppc64 : endianness -> t
 val riscv : [ `x32 | `x64 | `x128 ] -> t
+val sparcv8 : t
 val x86 : t
 val z80 : t
 val unknown : t

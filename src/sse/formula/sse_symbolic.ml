@@ -661,7 +661,8 @@ struct
         Formula_pp.pp_formula ppf (do_optimization ~keep state.formula)
 
   let to_formula { formula; _ } = close_formula formula
-  let downcast _ = None
+  let getter _ = None
+  let setter _ = None
 end
 
 type Options.Engine.t += Legacy

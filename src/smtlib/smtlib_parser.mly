@@ -169,13 +169,8 @@ model :
 ;
 
 ivalue :
-| LPAREN LPAREN t=term v=term RPAREN RPAREN
-    { [ t, v ] }
-  | LPAREN LPAREN ts=nonempty_list(delimited(LPAREN, pair(term, term), RPAREN));
-    RPAREN RPAREN
-  { ts }
-| LPAREN RPAREN
-  { [] }
+| LPAREN ts=list(delimited(LPAREN, pair(term, term), RPAREN)); RPAREN
+    { ts }
 ;
 
 value :

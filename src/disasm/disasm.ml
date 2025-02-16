@@ -323,7 +323,7 @@ module Recursive = struct
             in
             loop p' visited wl'
           with
-          | Disasm_core.Decode_error s | Invalid_address s ->
+          | Invalid_address s ->
               Logger.warning "@[%s %@ %a@]" s Virtual_address.pp address;
               loop program visited worklist
           | Invalid_argument s -> Logger.fatal "@[invalid argument (%s)@]" s
@@ -445,7 +445,7 @@ module Extended_linear = struct
               in
               loop succ_addr p
         with
-        | Disasm_core.Decode_error s | Invalid_address s ->
+        | Invalid_address s ->
             Logger.error "%s %@ %a" s Virtual_address.pp addr;
             program
         | Invalid_argument s ->

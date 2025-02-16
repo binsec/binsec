@@ -37,7 +37,3 @@ val read_string :
 (** parses the content of a string with nice error messages *)
 
 val read_dba_file : string -> Dba_types.program
-
-exception Invalid_dba_string of string
-
-val instruction_of_string : string -> Dba.Instr.t

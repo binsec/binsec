@@ -45,6 +45,8 @@ module Concretize_regs = struct
       "List of registers to concretize; use <stack> for stack and frame \
        pointers; and <all> for all"
 
+    let accept_empty = false
+
     let of_string = function
       | "all" -> `All
       | "stack" -> `Stack

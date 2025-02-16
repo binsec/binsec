@@ -199,7 +199,7 @@ module type S = sig
 
   type t = ([ `Exp ], a, b) term
 
-  (** {2 Constructors} *)
+  (** {2 Smart constructors} *)
 
   val var : string -> size -> a -> t
   (** [var name bitsize label] *)
@@ -305,6 +305,19 @@ module type S = sig
     (int -> Machine.endianness -> t -> 'b -> t) ->
     (_, 'a, 'b) term ->
     t
+
+  (** {2 Raw constructors} *)
+  val _unary : unary op -> t -> t
+  (** [_unary f x] creates a unary application of [f] on [x].
+  *)
+
+  val _binary : binary op -> t -> t -> t
+  (** [_binary f x y] creates a binary application of [f] on [x] and [y].
+  *)
+
+  val _ite : t -> t -> t -> t
+  (** [_ite c t e] creates an if-then-else expression [c] ? [t] : [e].
+  *)
 end
 
 module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :

@@ -104,6 +104,15 @@ let signed_of t =
 
 let equal = ( = )
 let compare = compare
+
+let ucompare bv1 bv2 =
+  assert (size_of bv1 = size_of bv2);
+  Z.compare (value_of bv1) @@ value_of bv2
+
+let scompare bv1 bv2 =
+  assert (size_of bv1 = size_of bv2);
+  Z.compare (signed_of bv1) @@ signed_of bv2
+
 let hash = Hashtbl.hash
 
 exception Bad_bound of string
@@ -400,6 +409,8 @@ module type Common = sig
   val signed_of : t -> Z.t
   val size_of : t -> int
   val compare : t -> t -> int
+  val ucompare : t -> t -> int
+  val scompare : t -> t -> int
   val hash : t -> int
   val zero : t
   val one : t

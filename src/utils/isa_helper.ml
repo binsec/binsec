@@ -425,7 +425,7 @@ module X86 : ARCH = struct
     | 45 -> gs_r
     | n ->
         Kernel_options.Logger.fatal
-          "unable to map integer %d to a known expression" n
+          "unable to map integer %d to a known DWARF register" n
 end
 
 module AMD64 : ARCH = struct
@@ -862,6 +862,9 @@ module AMD64 : ARCH = struct
   let rsp_l = Dba.LValue.v rsp
   and rsp_r = Dba.Expr.v rsp
   and rax_l = Dba.LValue.v rax
+  and rax_r = Dba.Expr.v rax
+  and rbx_r = Dba.Expr.v rbx
+  and rbp_r = Dba.Expr.v rbp
   and rdi_r = Dba.Expr.v rdi
   and rsi_r = Dba.Expr.v rsi
   and rdx_r = Dba.Expr.v rdx
@@ -869,6 +872,11 @@ module AMD64 : ARCH = struct
   and r8_r = Dba.Expr.v r8
   and r9_r = Dba.Expr.v r9
   and r10_r = Dba.Expr.v r10
+  and r11_r = Dba.Expr.v r11
+  and r12_r = Dba.Expr.v r12
+  and r13_r = Dba.Expr.v r13
+  and r14_r = Dba.Expr.v r14
+  and r15_r = Dba.Expr.v r15
   and eight = Dba.Expr.constant (Bitvector.of_int ~size:64 8)
 
   let return_address = Dba.Expr.load Size.Byte.eight LittleEndian rsp_r
@@ -923,7 +931,28 @@ module AMD64 : ARCH = struct
     | Some value -> val_return value
 
   let get_stack_pointer () = (rsp, Bitvector.of_int64 0x7fff000000000000L)
-  let get_dwarf_register _ = Errors.not_yet_implemented "AMD64 dwarf mapping"
+
+  let get_dwarf_register = function
+    | 0 -> rax_r
+    | 1 -> rdx_r
+    | 2 -> rcx_r
+    | 3 -> rbx_r
+    | 4 -> rsi_r
+    | 5 -> rdi_r
+    | 6 -> rbp_r
+    | 7 -> rsp_r
+    | 8 -> r8_r
+    | 9 -> r9_r
+    | 10 -> r10_r
+    | 11 -> r11_r
+    | 12 -> r12_r
+    | 13 -> r13_r
+    | 14 -> r14_r
+    | 15 -> r15_r
+    | n ->
+        Kernel_options.Logger.fatal
+          "unable to map integer %d to a known DWARF register" n
+
   let max_instruction_len = Size.Byte.fifteen
 end
 
@@ -1103,7 +1132,46 @@ module AARCH64 : ARCH = struct
   and z = Dba.Var.create "z" ~bitsize:Size.Bit.bits1 ~tag:info
   and c = Dba.Var.create "c" ~bitsize:Size.Bit.bits1 ~tag:info
   and v = Dba.Var.create "v" ~bitsize:Size.Bit.bits1 ~tag:info
-  and t = Dba.Var.create "t" ~bitsize:Size.Bit.bits1 ~tag:info
+
+  let info = Dba.Var.Tag.Register
+
+  let qx =
+    Array.init 32 (fun i ->
+        Dba.Var.create (Format.sprintf "q%d" i) ~bitsize:Size.Bit.bits128
+          ~tag:info)
+
+  let q0 = Array.get qx 0
+  and q1 = Array.get qx 1
+  and q2 = Array.get qx 2
+  and q3 = Array.get qx 3
+  and q4 = Array.get qx 4
+  and q5 = Array.get qx 5
+  and q6 = Array.get qx 6
+  and q7 = Array.get qx 7
+  and q8 = Array.get qx 8
+  and q9 = Array.get qx 9
+  and q10 = Array.get qx 10
+  and q11 = Array.get qx 11
+  and q12 = Array.get qx 12
+  and q13 = Array.get qx 13
+  and q14 = Array.get qx 14
+  and q15 = Array.get qx 15
+  and q16 = Array.get qx 16
+  and q17 = Array.get qx 17
+  and q18 = Array.get qx 18
+  and q19 = Array.get qx 19
+  and q20 = Array.get qx 20
+  and q21 = Array.get qx 21
+  and q22 = Array.get qx 22
+  and q23 = Array.get qx 23
+  and q24 = Array.get qx 24
+  and q25 = Array.get qx 25
+  and q26 = Array.get qx 26
+  and q27 = Array.get qx 27
+  and q28 = Array.get qx 28
+  and q29 = Array.get qx 29
+  and q30 = Array.get qx 30
+  and q31 = Array.get qx 31
 
   let defs =
     [
@@ -1205,11 +1273,276 @@ module AARCH64 : ARCH = struct
       ("z", Dba.LValue.v z);
       ("c", Dba.LValue.v c);
       ("v", Dba.LValue.v v);
-      ("t", Dba.LValue.v t);
+      ("q0", Dba.LValue.v q0);
+      ("q1", Dba.LValue.v q1);
+      ("q2", Dba.LValue.v q2);
+      ("q3", Dba.LValue.v q3);
+      ("q4", Dba.LValue.v q4);
+      ("q5", Dba.LValue.v q5);
+      ("q6", Dba.LValue.v q6);
+      ("q7", Dba.LValue.v q7);
+      ("q8", Dba.LValue.v q8);
+      ("q9", Dba.LValue.v q9);
+      ("q10", Dba.LValue.v q10);
+      ("q11", Dba.LValue.v q11);
+      ("q12", Dba.LValue.v q12);
+      ("q13", Dba.LValue.v q13);
+      ("q14", Dba.LValue.v q14);
+      ("q15", Dba.LValue.v q15);
+      ("q16", Dba.LValue.v q16);
+      ("q17", Dba.LValue.v q17);
+      ("q18", Dba.LValue.v q18);
+      ("q19", Dba.LValue.v q19);
+      ("q20", Dba.LValue.v q20);
+      ("q21", Dba.LValue.v q21);
+      ("q22", Dba.LValue.v q22);
+      ("q23", Dba.LValue.v q23);
+      ("q24", Dba.LValue.v q24);
+      ("q25", Dba.LValue.v q25);
+      ("q26", Dba.LValue.v q26);
+      ("q27", Dba.LValue.v q27);
+      ("q28", Dba.LValue.v q28);
+      ("q29", Dba.LValue.v q29);
+      ("q30", Dba.LValue.v q30);
+      ("q31", Dba.LValue.v q31);
+      ("d0", Dba.LValue.restrict q0 0 63);
+      ("d1", Dba.LValue.restrict q1 0 63);
+      ("d2", Dba.LValue.restrict q2 0 63);
+      ("d3", Dba.LValue.restrict q3 0 63);
+      ("d4", Dba.LValue.restrict q4 0 63);
+      ("d5", Dba.LValue.restrict q5 0 63);
+      ("d6", Dba.LValue.restrict q6 0 63);
+      ("d7", Dba.LValue.restrict q7 0 63);
+      ("d8", Dba.LValue.restrict q8 0 63);
+      ("d9", Dba.LValue.restrict q9 0 63);
+      ("d10", Dba.LValue.restrict q10 0 63);
+      ("d11", Dba.LValue.restrict q11 0 63);
+      ("d12", Dba.LValue.restrict q12 0 63);
+      ("d13", Dba.LValue.restrict q13 0 63);
+      ("d14", Dba.LValue.restrict q14 0 63);
+      ("d15", Dba.LValue.restrict q15 0 63);
+      ("d16", Dba.LValue.restrict q16 0 63);
+      ("d17", Dba.LValue.restrict q17 0 63);
+      ("d18", Dba.LValue.restrict q18 0 63);
+      ("d19", Dba.LValue.restrict q19 0 63);
+      ("d20", Dba.LValue.restrict q20 0 63);
+      ("d21", Dba.LValue.restrict q21 0 63);
+      ("d22", Dba.LValue.restrict q22 0 63);
+      ("d23", Dba.LValue.restrict q23 0 63);
+      ("d24", Dba.LValue.restrict q24 0 63);
+      ("d25", Dba.LValue.restrict q25 0 63);
+      ("d26", Dba.LValue.restrict q26 0 63);
+      ("d27", Dba.LValue.restrict q27 0 63);
+      ("d28", Dba.LValue.restrict q28 0 63);
+      ("d29", Dba.LValue.restrict q29 0 63);
+      ("d30", Dba.LValue.restrict q30 0 63);
+      ("d31", Dba.LValue.restrict q31 0 63);
+      ("s0", Dba.LValue.restrict q0 0 31);
+      ("s1", Dba.LValue.restrict q1 0 31);
+      ("s2", Dba.LValue.restrict q2 0 31);
+      ("s3", Dba.LValue.restrict q3 0 31);
+      ("s4", Dba.LValue.restrict q4 0 31);
+      ("s5", Dba.LValue.restrict q5 0 31);
+      ("s6", Dba.LValue.restrict q6 0 31);
+      ("s7", Dba.LValue.restrict q7 0 31);
+      ("s8", Dba.LValue.restrict q8 0 31);
+      ("s9", Dba.LValue.restrict q9 0 31);
+      ("s10", Dba.LValue.restrict q10 0 31);
+      ("s11", Dba.LValue.restrict q11 0 31);
+      ("s12", Dba.LValue.restrict q12 0 31);
+      ("s13", Dba.LValue.restrict q13 0 31);
+      ("s14", Dba.LValue.restrict q14 0 31);
+      ("s15", Dba.LValue.restrict q15 0 31);
+      ("s16", Dba.LValue.restrict q16 0 31);
+      ("s17", Dba.LValue.restrict q17 0 31);
+      ("s18", Dba.LValue.restrict q18 0 31);
+      ("s19", Dba.LValue.restrict q19 0 31);
+      ("s20", Dba.LValue.restrict q20 0 31);
+      ("s21", Dba.LValue.restrict q21 0 31);
+      ("s22", Dba.LValue.restrict q22 0 31);
+      ("s23", Dba.LValue.restrict q23 0 31);
+      ("s24", Dba.LValue.restrict q24 0 31);
+      ("s25", Dba.LValue.restrict q25 0 31);
+      ("s26", Dba.LValue.restrict q26 0 31);
+      ("s27", Dba.LValue.restrict q27 0 31);
+      ("s28", Dba.LValue.restrict q28 0 31);
+      ("s29", Dba.LValue.restrict q29 0 31);
+      ("s30", Dba.LValue.restrict q30 0 31);
+      ("s31", Dba.LValue.restrict q31 0 31);
+      ("h0", Dba.LValue.restrict q0 0 15);
+      ("h1", Dba.LValue.restrict q1 0 15);
+      ("h2", Dba.LValue.restrict q2 0 15);
+      ("h3", Dba.LValue.restrict q3 0 15);
+      ("h4", Dba.LValue.restrict q4 0 15);
+      ("h5", Dba.LValue.restrict q5 0 15);
+      ("h6", Dba.LValue.restrict q6 0 15);
+      ("h7", Dba.LValue.restrict q7 0 15);
+      ("h8", Dba.LValue.restrict q8 0 15);
+      ("h9", Dba.LValue.restrict q9 0 15);
+      ("h10", Dba.LValue.restrict q10 0 15);
+      ("h11", Dba.LValue.restrict q11 0 15);
+      ("h12", Dba.LValue.restrict q12 0 15);
+      ("h13", Dba.LValue.restrict q13 0 15);
+      ("h14", Dba.LValue.restrict q14 0 15);
+      ("h15", Dba.LValue.restrict q15 0 15);
+      ("h16", Dba.LValue.restrict q16 0 15);
+      ("h17", Dba.LValue.restrict q17 0 15);
+      ("h18", Dba.LValue.restrict q18 0 15);
+      ("h19", Dba.LValue.restrict q19 0 15);
+      ("h20", Dba.LValue.restrict q20 0 15);
+      ("h21", Dba.LValue.restrict q21 0 15);
+      ("h22", Dba.LValue.restrict q22 0 15);
+      ("h23", Dba.LValue.restrict q23 0 15);
+      ("h24", Dba.LValue.restrict q24 0 15);
+      ("h25", Dba.LValue.restrict q25 0 15);
+      ("h26", Dba.LValue.restrict q26 0 15);
+      ("h27", Dba.LValue.restrict q27 0 15);
+      ("h28", Dba.LValue.restrict q28 0 15);
+      ("h29", Dba.LValue.restrict q29 0 15);
+      ("h30", Dba.LValue.restrict q30 0 15);
+      ("h31", Dba.LValue.restrict q31 0 15);
+      ("b0", Dba.LValue.restrict q0 0 7);
+      ("b1", Dba.LValue.restrict q1 0 7);
+      ("b2", Dba.LValue.restrict q2 0 7);
+      ("b3", Dba.LValue.restrict q3 0 7);
+      ("b4", Dba.LValue.restrict q4 0 7);
+      ("b5", Dba.LValue.restrict q5 0 7);
+      ("b6", Dba.LValue.restrict q6 0 7);
+      ("b7", Dba.LValue.restrict q7 0 7);
+      ("b8", Dba.LValue.restrict q8 0 7);
+      ("b9", Dba.LValue.restrict q9 0 7);
+      ("b10", Dba.LValue.restrict q10 0 7);
+      ("b11", Dba.LValue.restrict q11 0 7);
+      ("b12", Dba.LValue.restrict q12 0 7);
+      ("b13", Dba.LValue.restrict q13 0 7);
+      ("b14", Dba.LValue.restrict q14 0 7);
+      ("b15", Dba.LValue.restrict q15 0 7);
+      ("b16", Dba.LValue.restrict q16 0 7);
+      ("b17", Dba.LValue.restrict q17 0 7);
+      ("b18", Dba.LValue.restrict q18 0 7);
+      ("b19", Dba.LValue.restrict q19 0 7);
+      ("b20", Dba.LValue.restrict q20 0 7);
+      ("b21", Dba.LValue.restrict q21 0 7);
+      ("b22", Dba.LValue.restrict q22 0 7);
+      ("b23", Dba.LValue.restrict q23 0 7);
+      ("b24", Dba.LValue.restrict q24 0 7);
+      ("b25", Dba.LValue.restrict q25 0 7);
+      ("b26", Dba.LValue.restrict q26 0 7);
+      ("b27", Dba.LValue.restrict q27 0 7);
+      ("b28", Dba.LValue.restrict q28 0 7);
+      ("b29", Dba.LValue.restrict q29 0 7);
+      ("b30", Dba.LValue.restrict q30 0 7);
+      ("b31", Dba.LValue.restrict q31 0 7);
     ]
 
   let get_shortlived_flags () = []
-  let core _ = Errors.not_yet_implemented "arm core"
+
+  let core img =
+    Array.fold_left
+      (fun ((entrypoint, defs) as result) -> function
+        | { Loader_elf.Note.name = "CORE"; kind = 1; offset = at; _ } ->
+            let cursor = Lreader.create ~at Loader_elf.read_offset img in
+            Lreader.advance cursor 0x70;
+            let vx0 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx1 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx2 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx3 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx4 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx5 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx6 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx7 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx8 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx9 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx10 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx11 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx12 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx13 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx14 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx15 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx16 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx17 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx18 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx19 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx20 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx21 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx22 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx23 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx24 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx25 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx26 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx27 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx28 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx29 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vx30 = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vsp = Dba.Expr.constant (Lreader.Read.bv64 cursor) in
+            let vpc = Virtual_address.of_bitvector (Lreader.Read.bv64 cursor) in
+            Lreader.advance cursor 3;
+            let spsr_31_24 = Lreader.Read.u8 cursor in
+            let vn =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((spsr_31_24 lsr 7) land 0b1))
+            and vz =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((spsr_31_24 lsr 6) land 0b1))
+            and vc =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((spsr_31_24 lsr 5) land 0b1))
+            and vv =
+              Dba.Expr.constant
+                (Bitvector.of_int ~size:1 ((spsr_31_24 lsr 4) land 0b1))
+            in
+            ( vpc,
+              List.rev_append
+                [
+                  (x0, vx0);
+                  (x1, vx1);
+                  (x2, vx2);
+                  (x3, vx3);
+                  (x4, vx4);
+                  (x5, vx5);
+                  (x6, vx6);
+                  (x7, vx7);
+                  (x8, vx8);
+                  (x9, vx9);
+                  (x10, vx10);
+                  (x11, vx11);
+                  (x12, vx12);
+                  (x13, vx13);
+                  (x14, vx14);
+                  (x15, vx15);
+                  (x16, vx16);
+                  (x17, vx17);
+                  (x18, vx18);
+                  (x19, vx19);
+                  (x20, vx20);
+                  (x21, vx21);
+                  (x22, vx22);
+                  (x23, vx23);
+                  (x24, vx24);
+                  (x25, vx25);
+                  (x26, vx26);
+                  (x27, vx27);
+                  (x28, vx28);
+                  (x29, vx29);
+                  (x30, vx30);
+                  (sp, vsp);
+                  (n, vn);
+                  (z, vz);
+                  (c, vc);
+                  (v, vv);
+                ]
+                defs )
+        | { Loader_elf.Note.name = "CORE"; kind = 2; offset = at; _ } ->
+            let cursor = Lreader.create ~at Loader_elf.read_offset img in
+            ( entrypoint,
+              Array.fold_left
+                (fun defs q ->
+                  (q, Dba.Expr.constant (Lreader.Read.read cursor 16)) :: defs)
+                defs qx )
+        | _ -> result)
+      (Virtual_address.create 0, [])
+      (Loader_elf.notes img)
+
   let get_defs () = defs
 
   let x0_l = Dba.LValue.v x0
@@ -1529,6 +1862,184 @@ module RISCV64 = RISCV (struct
   let size = 64
 end)
 
+module SPARCV8 : ARCH = struct
+  let info = Dba.Var.Tag.Register
+
+  let rr =
+    Array.init 32 (fun i ->
+        Dba.Var.create
+          (Format.sprintf "%c%d" (String.get "goli" (i / 8)) (i mod 8))
+          ~bitsize:Size.Bit.bits32 ~tag:info)
+
+  let r0 = Array.get rr 0
+  and r1 = Array.get rr 1
+  and r2 = Array.get rr 2
+  and r3 = Array.get rr 3
+  and r4 = Array.get rr 4
+  and r5 = Array.get rr 5
+  and r6 = Array.get rr 6
+  and r7 = Array.get rr 7
+  and r8 = Array.get rr 8
+  and r9 = Array.get rr 9
+  and r10 = Array.get rr 10
+  and r11 = Array.get rr 11
+  and r12 = Array.get rr 12
+  and r13 = Array.get rr 13
+  and r14 = Array.get rr 14
+  and r15 = Array.get rr 15
+  and r16 = Array.get rr 16
+  and r17 = Array.get rr 17
+  and r18 = Array.get rr 18
+  and r19 = Array.get rr 19
+  and r20 = Array.get rr 20
+  and r21 = Array.get rr 21
+  and r22 = Array.get rr 22
+  and r23 = Array.get rr 23
+  and r24 = Array.get rr 24
+  and r25 = Array.get rr 25
+  and r26 = Array.get rr 26
+  and r27 = Array.get rr 27
+  and r28 = Array.get rr 28
+  and r29 = Array.get rr 29
+  and r30 = Array.get rr 30
+  and r31 = Array.get rr 31
+
+  let info = Dba.Var.Tag.Flag
+
+  let n = Dba.Var.create "n" ~bitsize:Size.Bit.bits1 ~tag:info
+  and z = Dba.Var.create "z" ~bitsize:Size.Bit.bits1 ~tag:info
+  and c = Dba.Var.create "c" ~bitsize:Size.Bit.bits1 ~tag:info
+  and v = Dba.Var.create "v" ~bitsize:Size.Bit.bits1 ~tag:info
+
+  let defs =
+    [
+      ("r0", Dba.LValue.v r0);
+      ("r1", Dba.LValue.v r1);
+      ("r2", Dba.LValue.v r2);
+      ("r3", Dba.LValue.v r3);
+      ("r4", Dba.LValue.v r4);
+      ("r5", Dba.LValue.v r5);
+      ("r6", Dba.LValue.v r6);
+      ("r7", Dba.LValue.v r7);
+      ("r8", Dba.LValue.v r8);
+      ("r9", Dba.LValue.v r9);
+      ("r10", Dba.LValue.v r10);
+      ("r11", Dba.LValue.v r11);
+      ("r12", Dba.LValue.v r12);
+      ("r13", Dba.LValue.v r13);
+      ("r14", Dba.LValue.v r14);
+      ("r15", Dba.LValue.v r15);
+      ("r16", Dba.LValue.v r16);
+      ("r17", Dba.LValue.v r17);
+      ("r18", Dba.LValue.v r18);
+      ("r19", Dba.LValue.v r19);
+      ("r20", Dba.LValue.v r20);
+      ("r21", Dba.LValue.v r21);
+      ("r22", Dba.LValue.v r22);
+      ("r23", Dba.LValue.v r23);
+      ("r24", Dba.LValue.v r24);
+      ("r25", Dba.LValue.v r25);
+      ("r26", Dba.LValue.v r26);
+      ("r27", Dba.LValue.v r27);
+      ("r28", Dba.LValue.v r28);
+      ("r29", Dba.LValue.v r29);
+      ("r30", Dba.LValue.v r30);
+      ("r31", Dba.LValue.v r31);
+      ("g0", Dba.LValue.v r0);
+      ("g1", Dba.LValue.v r1);
+      ("g2", Dba.LValue.v r2);
+      ("g3", Dba.LValue.v r3);
+      ("g4", Dba.LValue.v r4);
+      ("g5", Dba.LValue.v r5);
+      ("g6", Dba.LValue.v r6);
+      ("g7", Dba.LValue.v r7);
+      ("o0", Dba.LValue.v r8);
+      ("o1", Dba.LValue.v r9);
+      ("o2", Dba.LValue.v r10);
+      ("o3", Dba.LValue.v r11);
+      ("o4", Dba.LValue.v r12);
+      ("o5", Dba.LValue.v r13);
+      ("o6", Dba.LValue.v r14);
+      ("o7", Dba.LValue.v r15);
+      ("l0", Dba.LValue.v r16);
+      ("l1", Dba.LValue.v r17);
+      ("l2", Dba.LValue.v r18);
+      ("l3", Dba.LValue.v r19);
+      ("l4", Dba.LValue.v r20);
+      ("l5", Dba.LValue.v r21);
+      ("l6", Dba.LValue.v r22);
+      ("l7", Dba.LValue.v r23);
+      ("i0", Dba.LValue.v r24);
+      ("i1", Dba.LValue.v r25);
+      ("i2", Dba.LValue.v r26);
+      ("i3", Dba.LValue.v r27);
+      ("i4", Dba.LValue.v r28);
+      ("i5", Dba.LValue.v r29);
+      ("i6", Dba.LValue.v r30);
+      ("i7", Dba.LValue.v r31);
+      ("sp", Dba.LValue.v r14);
+      ("fp", Dba.LValue.v r30);
+      ("n", Dba.LValue.v n);
+      ("z", Dba.LValue.v z);
+      ("c", Dba.LValue.v c);
+      ("v", Dba.LValue.v v);
+    ]
+
+  let get_shortlived_flags () = []
+  let core _ = Errors.not_yet_implemented "SPARC core"
+  let get_defs () = defs
+
+  let o0_l = Dba.LValue.v r8
+  and o0_r = Dba.Expr.v r8
+  and o1_r = Dba.Expr.v r9
+  and o2_r = Dba.Expr.v r10
+  and o3_r = Dba.Expr.v r11
+  and o4_r = Dba.Expr.v r12
+  and o5_r = Dba.Expr.v r13
+  and sp = r14
+
+  let ret = o0_l
+
+  let return_address =
+    Dba.Expr.add (Dba.Expr.v r15)
+      (Dba.Expr.constant (Bitvector.of_int ~size:32 8))
+
+  let get_return_address () = return_address
+
+  let get_arg ?(syscall = false) i =
+    if syscall then Errors.not_yet_implemented "syscall";
+    match i with
+    | 0 -> o0_r
+    | 1 -> o1_r
+    | 2 -> o2_r
+    | 3 -> o3_r
+    | 4 -> o4_r
+    | 5 -> o5_r
+    | _ -> Errors.not_yet_implemented "SPARC calling convention"
+
+  let get_ret ?syscall:_ () = ret
+
+  let void_return =
+    Dhunk.singleton (Dba.Instr.dynamic_jump ~tag:Return return_address)
+
+  and val_return value =
+    Dhunk.init 2 (function
+      | 0 -> Dba.Instr.assign o0_l value 1
+      | _ -> Dba.Instr.dynamic_jump ~tag:Return return_address)
+
+  let make_return ?value () =
+    match (value : Dba.Expr.t option) with
+    | None -> void_return
+    | Some (Var v) when Dba.Var.equal v r8 -> void_return
+    | Some value -> val_return value
+
+  let get_dwarf_register _ =
+    Errors.not_yet_implemented "SPARC DWARF register mapping"
+
+  let get_stack_pointer () = (sp, Bitvector.of_int64 0x7fff000000000000L)
+  let max_instruction_len = Size.Byte.four
+end
+
 module Z80 : ARCH = struct
   let defs =
     let add r l =
@@ -1569,6 +2080,7 @@ let get_arch () : (module ARCH) =
   | PPC { bits = `x64; _ } -> (module PPC64)
   | RISCV { bits = `x32 } -> (module RISCV32)
   | RISCV { bits = `x64 } -> (module RISCV64)
+  | SPARC { rev = `v8 } -> (module SPARCV8)
   | Z80 -> (module Z80)
   | _ ->
       (* TODO *)

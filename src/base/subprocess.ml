@@ -96,6 +96,7 @@ let close t =
   please close_out t.stdin;
   please close_in t.stdout;
   please close_in t.stderr;
+  (try kill t.pid Sys.sigkill with Unix_error (ESRCH, "kill", _) -> ());
   snd (waitpid_non_intr t.pid)
 
 let pid { pid; _ } = pid

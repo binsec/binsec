@@ -45,7 +45,7 @@ module type S = sig
   *)
 
   val is_zero : t -> trilean
-  (** [is_zero t] checks if [t] is the least significant bit is [0] *)
+  (** [is_zero t] checks if [t] least significant bit is [0] *)
 
   val project : size:int -> t -> projection
   val top : int -> t

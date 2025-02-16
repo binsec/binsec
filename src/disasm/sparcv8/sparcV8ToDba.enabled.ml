@@ -20,13 +20,14 @@
 (**************************************************************************)
 
 include Cli.Options (struct
-  let name = "aarch64"
-  let shortname = name
+  let name = "SPARCv8"
+  let shortname = "sparcv8"
 end)
 
 module Parser = Unisim_helper.Make (Logger)
 
-let decode addr bytes = Aarch64dba.decode ~addr bytes |> Parser.parse_message
+let decode addr opcode delayslot =
+  Sparcdba.decode ~addr opcode delayslot |> Parser.parse_message
 
 let decode_from_reader (addr : Virtual_address.t) reader =
   if (addr :> int) mod 4 <> 0 then
@@ -34,17 +35,22 @@ let decode_from_reader (addr : Virtual_address.t) reader =
   else
     match Lreader.Read.i32 reader with
     | exception _ -> (Unisim_helper.empty_instruction, Unisim_helper.die)
-    | bytes ->
-        let ins, dhunk, status = decode (Virtual_address.to_int64 addr) bytes in
+    | opcode ->
+        let delayslot, n =
+          try (Lreader.Peek.i32 reader, 8) with _ -> (0l, 4)
+        in
+        let ins, dhunk, status =
+          decode (Int32.of_int (Virtual_address.to_int addr)) opcode delayslot
+        in
         (match status with
         | None ->
-            Lreader.rewind reader (4 - Size.Byte.to_int ins.size);
+            Lreader.rewind reader (n - Size.Byte.to_int ins.size);
             Parser.incr_success ins.opcode
         | Some Undefined ->
-            Lreader.rewind reader 4;
-            Parser.incr_error Undefined (Format.sprintf "%08lx" bytes)
+            Lreader.rewind reader n;
+            Parser.incr_error Undefined (Format.sprintf "%08lx" opcode)
         | Some err ->
-            Lreader.rewind reader (4 - Size.Byte.to_int ins.size);
+            Lreader.rewind reader (n - Size.Byte.to_int ins.size);
             Parser.incr_error err ins.opcode);
         (ins, dhunk)
 
@@ -64,4 +70,4 @@ let cached_decode reader =
         Virtual_address.Htbl.add h addr res;
         res
 
-let () = Disasm_core.register_decoder (Machine.armv8 LittleEndian) decode Fun.id
+let () = Disasm_core.register_decoder Machine.sparcv8 cached_decode Fun.id

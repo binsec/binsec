@@ -27,6 +27,7 @@ type isa =
   | ARM of { rev : [ `v7 | `v8 ]; endianness : endianness }
   | PPC of { bits : [ `x32 | `x64 ]; endianness : endianness }
   | RISCV of { bits : [ `x32 | `x64 | `x128 ] }
+  | SPARC of { rev : [ `v8 ] }
   | X86 of { bits : [ `x16 | `x32 | `x64 ] }
   | Z80
 
@@ -42,6 +43,7 @@ module ISA = struct
     | ARM { endianness; _ } -> endianness
     | PPC { endianness; _ } -> endianness
     | RISCV _ -> LittleEndian
+    | SPARC { rev = `v8 } -> BigEndian
     | X86 _ -> LittleEndian
     | Z80 -> LittleEndian
 
@@ -51,6 +53,7 @@ module ISA = struct
     | ARM { rev = `v8; _ } -> `x64
     | PPC { bits; _ } -> (bits :> bitwidth)
     | RISCV { bits; _ } -> (bits :> bitwidth)
+    | SPARC { rev = `v8 } -> `x32
     | X86 { bits; _ } -> (bits :> bitwidth)
     | Z80 -> `x16
 
@@ -59,7 +62,10 @@ module ISA = struct
     | ARM _ -> "sp"
     | PPC _ -> "r1"
     | RISCV _ -> "x2"
-    | X86 _ -> "esp"
+    | SPARC { rev = `v8 } -> "o6"
+    | X86 { bits = `x16 } -> "sp"
+    | X86 { bits = `x32 } -> "esp"
+    | X86 { bits = `x64 } -> "rsp"
     | Z80 -> "sp"
 
   let to_string = function
@@ -68,6 +74,7 @@ module ISA = struct
     | ARM { rev = `v8; _ } -> "armv8"
     | PPC _ -> "powerpc"
     | RISCV _ -> "risk-v"
+    | SPARC { rev = `v8 } -> "sparcv8"
     | X86 _ -> "x86"
     | Z80 -> "Z80"
 
@@ -110,6 +117,7 @@ let armv7 endianness = ARM { rev = `v7; endianness }
 let armv8 endianness = ARM { rev = `v8; endianness }
 let ppc64 endianness = PPC { bits = `x64; endianness }
 let riscv bits = RISCV { bits }
+let sparcv8 = SPARC { rev = `v8 }
 let x86 = X86 { bits = `x32 }
 let z80 = Z80
 let unknown = Unknown

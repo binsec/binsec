@@ -591,13 +591,13 @@ end
 module BitVec = BV (Make (struct
   type t = Bitvector.t
 
-  let compare x y = Bitvector.compare x y
+  let compare x y = Bitvector.ucompare x y
 end))
 
 module BitVecFlat = BV (Flat (struct
   type t = Bitvector.t
 
-  let compare x y = Bitvector.compare x y
+  let compare x y = Bitvector.ucompare x y
   let succ x = if Bitvector.is_max_ubv x then x else Bitvector.succ x
   let pred x = if Bitvector.is_zeros x then x else Bitvector.pred x
 end))

@@ -74,6 +74,7 @@ type Ast.Instr.t +=
   | Print of Output.t
   | Reach of int * Expr.t loc option * Output.t list
   | Enumerate of int * Expr.t loc
+  | Error of string
 
 type Ast.t +=
   | Starting_from of Expr.t loc * Instr.t list
@@ -83,6 +84,7 @@ type Ast.t +=
   | Concretize_stack_pointer
   | Import_symbols of Symbol.t loc list * string
   | Hook of Expr.t loc list * Instr.t list * bool
+  | Return_hook of Ast.Symbol.t loc * Instr.t list
   | Decode of Binstream.t * Instr.t list
   | Init of Instr.t list
   | Explore_all

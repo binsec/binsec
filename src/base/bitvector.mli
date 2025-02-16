@@ -33,7 +33,35 @@ module type Common = sig
   val value_of : t -> Z.t
   val signed_of : t -> Z.t
   val size_of : t -> int
+
   val compare : t -> t -> int
+  (** [compare t t']
+      returns the structural comparison of [t] and [t'].
+
+      The result is not sorted according to the values of [t] and [t'],
+      thus, they can be of different sizes.
+
+      It is useful for key comparison for structures like `Set` or `Map`.
+  *)
+
+  val ucompare : t -> t -> int
+  (** [ucompare t t']
+      returns the comparison of the unsigned values of [t] and [t'].
+
+      It is equivalent of [Z.compare (value_of t) (value_of t')].
+
+      The bitvector [t] and [t'] should be of the same size.
+  *)
+
+  val scompare : t -> t -> int
+  (** [scompare t t']
+      returns the comparison of the signed values of [t] and [t'].
+
+      It is equivalent of [Z.compare (signed_of t) (signed_of t')].
+
+      The bitvector [t] and [t'] should be of the same size.
+  *)
+
   val hash : t -> int
   val zero : t (* zero = { value = 0; size = 1 } *)
   val one : t (* one  = { value = 1; size = 1 } *)

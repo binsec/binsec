@@ -1,5 +1,6 @@
 (menhir
- (modules smtlib_parser))
+ (modules smtlib_parser)
+ (flags --explain --strict))
 
 (ocamllex
  (modules smtlib_lexer))

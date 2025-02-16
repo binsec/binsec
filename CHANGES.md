@@ -1,3 +1,26 @@
+## 0.10.0 (2025-02-17)
+
+** Features
+
+- Add a new configuration option to tune the `checkct` instrumentation
+  (`-checkct-features control-flow,memory-access,multiplication,dividend,divisor`)
+- Add the secret-erasure check command in `checkct`
+  (`check secret erasure over` *symbol*)
+- Add an experimental *hook function return* command in SE
+
+** Misc
+
+- Add support for `AARCH64` core dump in SE
+- Improve debug with symbol offset annotation (`-sse-debug-level 2`)
+
+** Bugs
+
+- Fix some ARM and x86 disassembly issues
+- Fix some rewriting rule issues
+- Fix compilation issues with latest OCaml compilers
+- Refactor parsers and suppress conflicts
+
+
 ## 0.9.1 (2024-05-21)
 
 ** Misc

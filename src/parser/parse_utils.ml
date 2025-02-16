@@ -91,7 +91,7 @@ let read_string ~parser ~lexer ~string =
   try_and_parse ~parser ~lexer ~lexbuf context
 
 let read_dba_file filename =
-  let program = read_file ~parser:Parser.dba ~lexer:Lexer.token ~filename in
+  let program = read_file ~parser:Parser.dba_eof ~lexer:Lexer.token ~filename in
   let start_address = Kernel_functions.get_ep () in
   match start_address with
   | None -> program
@@ -100,27 +100,3 @@ let read_dba_file filename =
         program with
         Dba_types.start_address = Dba_types.Caddress.of_virtual_address address;
       }
-
-exception Invalid_dba_string of string
-
-let instruction_of_string data =
-  let lexbuf = Lexing.from_string data in
-  try Dbacsl_parser.term Dbacsl_token.token lexbuf with
-  | Failure s ->
-      let pos = Lexing.lexeme_end_p lexbuf in
-      let l = pos.Lexing.pos_lnum in
-      let c = pos.Lexing.pos_cnum - pos.Lexing.pos_bol in
-      let s =
-        Format.sprintf "%s: Lexing error at line %d, character %d." s l c
-      in
-      raise (Invalid_dba_string s)
-  | Parsing.Parse_error ->
-      let pos = Lexing.lexeme_end_p lexbuf in
-      let w = Lexing.lexeme lexbuf in
-      let l = pos.Lexing.pos_lnum in
-      let c = pos.Lexing.pos_cnum - pos.Lexing.pos_bol - 1 in
-      let s =
-        Format.sprintf "Parse error at word \"%s\", line %d, character %d." w l
-          c
-      in
-      raise (Invalid_dba_string s)

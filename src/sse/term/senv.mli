@@ -29,3 +29,7 @@ module State
 
 type _ Types.value += Term : Sexpr.Expr.t Types.value
 type Options.Engine.t += Vanilla | Multi_checks
+
+type 'a Types.feature +=
+  | VisibleSymbols : Sexpr.Expr.t Dba_types.Var.Map.t Types.feature
+  | VisibleMemory : Sexpr.Memory.t Types.feature

@@ -55,7 +55,8 @@
 %token RETURNFLAG
 %token FLAG TEMPORARY REGISTER VAR TEMPTAG FLAGTAG
 %token ENUMERATE REACH CUT CONSEQUENT ALTERNATIVE ALTERNATE UNCONTROLLED
-%token UNIMPLEMENTED UNDEFINED EOF
+%token READ WRITE BRANCH
+%token UNIMPLEMENTED UNSUPPORTED UNDEFINED EOF
 
 %token <string> INT
 %token <string> IDENT TMP
@@ -75,12 +76,13 @@
 %left AND
 
 %nonassoc NOT
+%nonassoc BSWAP
 
 %start expr_eof
 %type <Dba.Expr.t> expr_eof
 
-%start dba
-%type <Dba_types.program> dba
+%start dba_eof
+%type <Dba_types.program> dba_eof
 
 %start dhunk_eof
 %type <Dhunk.t> dhunk_eof
@@ -88,20 +90,14 @@
 %start instruction_eof
 %type <Dba.Instr.t> instruction_eof
 
-%start dhunk_substitutions_eof
-%type <(Loader_utils.Binary_loc.t * Dhunk.t) list> dhunk_substitutions_eof
-
-%start body
-%type <(Dba_types.Caddress.Map.key * Dba.Instr.t) list> body
+%start decoder_base
+%type <(string * Parse_helpers.Message.Value.t) list> decoder_base
 
 %start decoder_msg_eof
-%type <(string * Parse_helpers.Message.Value.t)  list * (Dba_types.Caddress.Map.key * Dba.Instr.t) list> decoder_msg_eof
+%type <Parse_helpers.Message.t> decoder_msg_eof
 
 %start decoder_msg_list_eof
-%type <((string * Parse_helpers.Message.Value.t)  list * (Dba_types.Caddress.Map.key * Dba.Instr.t) list) list> decoder_msg_list_eof
-
-%start decoder_base
-%type <(string * Parse_helpers.Message.Value.t)  list> decoder_base
+%type <Parse_helpers.Message.t list> decoder_msg_list_eof
 
 %start patchmap
 %type <Binstream.t Virtual_address.Map.t> patchmap
@@ -130,6 +126,10 @@ dba:
    { Mk.program initialization config decls instructions }
 ;
 
+dba_eof:
+| dba=dba; EOF { dba }
+;
+
 value:
 | HEXA     { Message.Value.vint $1}
 | BIN      { Message.Value.vint $1}
@@ -144,23 +144,32 @@ kv:
 decoder_base:
 | opcode=kv; mnemonic=kv; address=kv; size = kv;
     { [opcode; mnemonic; address; size;]  (* Actually the order is not important *) }
-| address=kv; LPAR UNDEFINED RPAR
-    { [ address ] }
+;
+
+decoder_read:
+| LPAR READ read=list(lvalue); RPAR
+  { read }
+;
+
+decoder_write:
+| LPAR WRITE write=list(lvalue); RPAR
+  { write }
+;
+
+decoder_goto:
+| LPAR BRANCH addr=HEXA; RPAR
+  { Virtual_address.of_string addr }
 ;
 
 decoder_msg:
-| base=decoder_base; instructions=body;
-    { base, instructions }
+| address=kv; LPAR UNDEFINED RPAR
+  { [ address ], Parse_helpers.Message.Instruction.Undefined }
 | base=decoder_base; LPAR UNIMPLEMENTED RPAR
-    { base,
-      match base with
-      | [ _, Parse_helpers.Message.Value.Int addr; _; _;
-	  _, Parse_helpers.Message.Value.Str mnemonic ] ->
-	 [ Dba_types.Caddress.of_virtual_address
-	     (Virtual_address.of_bigint addr),
-	   Dba.Instr.stop (Some (Dba.Unsupported mnemonic)) ]
-      | _ -> assert false }
-
+  { base, Parse_helpers.Message.Instruction.Unimplemented }
+| base=decoder_base; LPAR UNSUPPORTED RPAR read=decoder_read; write=decoder_write; goto=decoder_goto;
+  { base, Parse_helpers.Message.Instruction.Unsupported { read; write; goto } }
+| base=decoder_base; instructions=body;
+    { base, Parse_helpers.Message.Instruction.Precise instructions }
 ;
 
 body:
@@ -352,14 +361,6 @@ dhunk:
 dhunk_eof:
 | l=dhunk; EOF { l }
 ;
-
-dhunk_substitution:
-| addr=binary_loc; ARROW; dh=dhunk
-  { (addr, dh)}
-;
-
-dhunk_substitutions_eof:
-| l=list(dhunk_substitution); EOF {l}
 
 %inline addressOption:
 | GOTO INT { int_of_string $2 }
@@ -571,20 +572,6 @@ directive:
    { Directive.choose_consequent ~alternate }
  | alternative alternate=boption(ALTERNATE);
    { Directive.choose_alternative ~alternate }
-;
-
-bin_loc_with_id:
- | id=IDENT; { Loader_utils.Binary_loc.name id }
- | bloc=bin_loc_with_id; PLUS n=integer;
-    { Loader_utils.Binary_loc.offset n bloc }
- | bloc=bin_loc_with_id; MINUS n=integer;
-    { Loader_utils.Binary_loc.offset (-n) bloc }
-;
-
-binary_loc:
- | address=integer
-    { Loader_utils.Binary_loc.address @@ Virtual_address.create address }
- | loc=delimited(INFER, bin_loc_with_id, SUPER); { loc }
 ;
 
 located_directive:

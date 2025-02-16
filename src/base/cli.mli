@@ -93,9 +93,19 @@ module type DETAILED_CLI_DECL = sig
   val default_str : string option
 end
 
-module type S = sig
+module type ENABLEABLE = sig
   val is_enabled : unit -> bool
+  (** [is_enabled] is a switch that is automatically set.
+  
+      Can be set programmatically with {val:enable} and {val:disable}.
+   *)
 
+  val enable : unit -> unit
+  val disable : unit -> unit
+end
+
+module type S = sig
+  include ENABLEABLE
   module Logger : Logger.S
 end
 
@@ -205,6 +215,9 @@ module type Cli_sig = sig
 
     module Variant_list (P : sig
       include CLI_DECL
+
+      val accept_empty : bool
+
       include Sigs.STR_INJECTIBLE
     end) : GENERIC with type t = P.t list
   end
@@ -214,9 +227,7 @@ end
 
 (** Call [Cli.Make] to create a kind of command line namespace *)
 module Make (D : DECL) : sig
-  val is_enabled : unit -> bool
-  (** [is_enabled] is a switch that is automatically set. *)
-
+  include ENABLEABLE
   include Cli_sig
 end
 

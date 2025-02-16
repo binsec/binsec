@@ -408,13 +408,34 @@ end = struct
     Load (nbytes, endianness, e, array)
 
   module Straight = struct
+    let unary op e = Unary (op, e)
+    let lognot = unary Unary_op.Not
+    let uminus = unary Unary_op.UMinus
+    let sext bits = unary (Unary_op.Sext bits)
+    let uext bits = unary (Unary_op.Uext bits)
+
+    let restrict lo hi e =
+      if hi >= size_of e || hi < lo || lo < 0 then raise bad_bound;
+      unary (Unary_op.Restrict { Interval.lo; Interval.hi }) e
+
     let binary op e1 e2 = Binary (op, e1, e2)
     let append = binary Concat
-    let shift_left = binary LShift
-    let shift_right = binary RShiftU
-    let shift_right_signed = binary RShiftS
-    let rotate_left = binary LeftRotate
-    let rotate_right = binary RightRotate
+
+    let shift_binary op e1 e2 =
+      let s1 = size_of e1 and s2 = size_of e2 in
+      if s1 < s2 then raise mismatched_operands
+      else if s2 < s1 then
+        binary op e1
+          (match e2 with
+          | Cst bv -> constant (Bitvector.extend bv s1)
+          | _ -> uext s1 e2)
+      else binary op e1 e2
+
+    let shift_left = shift_binary LShift
+    let shift_right = shift_binary RShiftU
+    let shift_right_signed = shift_binary RShiftS
+    let rotate_left = shift_binary LeftRotate
+    let rotate_right = shift_binary RightRotate
 
     let symmetric_binary op e1 e2 =
       if size_of e1 <> size_of e2 then raise mismatched_operands;
@@ -440,15 +461,6 @@ end = struct
     let sge = symmetric_binary GeqS
     let ugt = symmetric_binary GtU
     let sgt = symmetric_binary GtS
-    let unary op e = Unary (op, e)
-    let lognot = unary Unary_op.Not
-    let uminus = unary Unary_op.UMinus
-    let sext bits = unary (Unary_op.Sext bits)
-    let uext bits = unary (Unary_op.Uext bits)
-
-    let restrict lo hi e =
-      if hi >= size_of e || hi < lo || lo < 0 then raise bad_bound;
-      unary (Unary_op.Restrict { Interval.lo; Interval.hi }) e
   end
 
   (* f e1 (e2::e3) -> g (f e1_(|e3|..|e1| - 1) e2) (f e1_(0..|e3| - 1) e3) *)

@@ -1,5 +1,6 @@
 (menhir
- (modules parser_ghidra))
+ (modules parser_ghidra)
+ (flags --explain --strict))
 
 (ocamllex
  (modules lexer_ghidra))

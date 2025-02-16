@@ -1002,7 +1002,7 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
         lui st ~dst ~offset
 
       let bz name branch_f st ~src ~imm3 ~imm5 =
-        let bvoff =
+        let offset =
           let open Basic_types in
           Bv.concat
             [
@@ -1011,9 +1011,9 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
               cut imm5 0;
               Bv.extract imm3 { lo = 0; hi = 1 };
               Bv.extract imm5 { lo = 1; hi = 2 };
+              Bv.zero;
             ]
         in
-        let offset = scale_by 2 bvoff in
         let _, dba = branch_f st ~src1:src ~src2:Rar.(bvnum zero) ~offset in
         ( Format.asprintf "%s %s,%a" name (reg_name src) Virtual_address.pp
             (jmp_offset st offset),

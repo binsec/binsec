@@ -65,6 +65,20 @@ module Message : sig
     val vstr : string -> t
     val vint : string -> t
   end
+
+  module Instruction : sig
+    type t =
+      | Undefined
+      | Unimplemented
+      | Unsupported of {
+          read : Dba.LValue.t list;
+          write : Dba.LValue.t list;
+          goto : Virtual_address.t;
+        }
+      | Precise of (Dba.address * Dba.Instr.t) list
+  end
+
+  type t = (string * Value.t) list * Instruction.t
 end
 
 module Declarations : sig

@@ -412,7 +412,7 @@ module type S = sig
 
   type t = ([ `Exp ], a, b) term
 
-  (** {2 Constructors} *)
+  (** {2 Smart constructors} *)
 
   val var : string -> size -> a -> t
   (** [var name bitsize label] *)
@@ -518,6 +518,19 @@ module type S = sig
     (int -> Machine.endianness -> t -> 'b -> t) ->
     (_, 'a, 'b) term ->
     t
+
+  (** {2 Raw constructors} *)
+  val _unary : unary op -> t -> t
+  (** [_unary f x] creates a unary application of [f] on [x].
+  *)
+
+  val _binary : binary op -> t -> t -> t
+  (** [_binary f x y] creates a binary application of [f] on [x] and [y].
+  *)
+
+  val _ite : t -> t -> t -> t
+  (** [_ite c t e] creates an if-then-else expression [c] ? [t] : [e].
+  *)
 end
 
 module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
@@ -985,13 +998,24 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     | ( Restrict { hi; lo = 0 },
         Binary
           {
-            f = (Plus | Minus | And | Or | Xor) as bop;
+            f = (Plus | Minus | Mul | And | Or | Xor) as bop;
             x =
               (Unary { f = Uext _ | Sext _; _ } | Binary { f = Concat; _ }) as x;
             y = Cst bv;
             _;
           } ) ->
         binary bop (unary f x) (constant (Bv.extract ~lo:0 ~hi bv)) (hi + 1)
+    | ( Restrict { hi; lo = 0 },
+        Binary
+          {
+            f = (Plus | Minus | Mul | And | Or | Xor) as bop;
+            x =
+              (Unary { f = Uext _ | Sext _; _ } | Binary { f = Concat; _ }) as x;
+            y =
+              (Unary { f = Uext _ | Sext _; _ } | Binary { f = Concat; _ }) as y;
+            _;
+          } ) ->
+        binary bop (unary f x) (unary f y) (hi + 1)
     | ( Restrict { hi; lo },
         Binary
           {
@@ -1002,6 +1026,40 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
             _;
           } ) ->
         binary bop (unary f x) (constant (Bv.extract ~hi ~lo bv)) (hi - lo + 1)
+    (* bit test *)
+    | (Restrict { hi; lo } as f), Binary { f = And; x; y; size; _ } when hi = lo
+      ->
+        binary And (unary f x) (unary f y) size
+    (* sign extraction *)
+    | ( Restrict { hi; lo },
+        Binary
+          { f = Minus; x = Unary { f = Sext n; x; _ }; y = Cst bv; size; _ } )
+      when hi = lo && hi = size - 1 && Z.numbits (Bv.value_of bv) < size - n ->
+        binary Slt x
+          (constant (Bv.extract ~hi:(size - n - 1) ~lo:0 bv))
+          (size - n)
+    | ( Restrict { hi; lo },
+        Unary
+          {
+            f = Not;
+            x =
+              Binary
+                {
+                  f = Minus;
+                  x = Unary { f = Sext n; x; _ };
+                  y = Cst bv;
+                  size;
+                  _;
+                };
+            _;
+          } )
+      when hi = lo && hi = size - 1 && Z.numbits (Bv.value_of bv) < size - n ->
+        binary Sge x
+          (constant (Bv.extract ~hi:(size - n - 1) ~lo:0 bv))
+          (size - n)
+    (* parity *)
+    (* | Restrict { hi = 0; lo = 0 }, Binary { f = Xor | Plus; x; y; _ } -> *)
+    (*     binary Xor (unary f x) (unary f y) 1 *)
     (* forward ite *)
     | f, Ite { c; t = Cst bv; e; _ } ->
         ite c (constant (Bv.unary f bv)) (unary f e)
@@ -1032,7 +1090,7 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
         binary Minus (constant (Bv.binary f a c)) b sx
     | Plus, a, Cst bv when Bv.is_neg bv && not (Bv.is_min_sbv bv) ->
         binary Minus a (constant (Bv.neg bv)) sx
-    | Minus, a, Cst bv when Bv.is_neg bv && not (Bv.is_min_sbv bv) ->
+    | Minus, a, Cst bv when Bv.is_neg bv ->
         binary Plus a (constant (Bv.neg bv)) sx
     | Mul, Binary { f = Mul; x = a; y = Cst b; _ }, Cst c ->
         binary Mul a (constant (Bv.binary Mul b c)) sx
@@ -1099,17 +1157,16 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     | (Smod | Umod), x, y when compare x y = 0 -> zeros (sizeof x)
     | (Lsl, x, Cst bv | Lsr, x, Cst bv) when Bv.to_uint bv >= sizeof x ->
         zeros (sizeof x)
-    | Asr, x, Cst bv when Bv.to_uint bv >= sizeof x ->
-        let size = sizeof x in
-        unary (Sext size) (unary (Restrict { hi = size - 1; lo = size - 1 }) x)
+    | Asr, x, Cst bv when Bv.to_uint bv >= sizeof x - 1 ->
+        let hi = sizeof x - 1 in
+        unary (Sext hi) (unary (Restrict { hi; lo = hi }) x)
     (* factorisation *)
-    | Plus, a, b when compare a b = 0 ->
-        binary Mul a (constant (Bv.of_int ~size:(sizeof a) 2)) sx
+    | Plus, a, b when compare a b = 0 -> binary Lsl a (constant (Bv.ones sx)) sx
     (* commutativity -- keep sorted *)
     (* special cases for + - *)
-    | Plus, a, Binary { f = Minus; x = b; y = c; _ } when compare a b < 0 ->
+    | Plus, a, Binary { f = Minus; x = b; y = c; _ } when compare a b <= 0 ->
         binary Minus (binary Plus b a sx) c sx
-    | Plus, Binary { f = Minus; x = a; y = b; _ }, c when compare b c < 0 ->
+    | Plus, Binary { f = Minus; x = a; y = b; _ }, c when compare b c <= 0 ->
         binary Minus (binary Plus a c sx) b sx
     | Plus, Binary { f = Minus; _ }, c -> mk_binary Plus x c
     | Minus, Binary { f = Plus; x = a; y = b; _ }, c when compare b c < 0 ->
@@ -1159,17 +1216,22 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     (* condition reduction *)
     | Eq, x, Cst bv when Bv.is_one bv -> x
     | Eq, x, Cst bv when Bv.is_zero bv -> unary Not x
-    | Eq, Unary { f = Uext _; x; size; _ }, Cst bv
-      when not (Bv.is_zeros (Bv.extract ~lo:(sizeof x) ~hi:(size - 1) bv)) ->
-        zero
-    | Diff, Unary { f = Uext _; x; size; _ }, Cst bv
-      when not (Bv.is_zeros (Bv.extract ~lo:(sizeof x) ~hi:(size - 1) bv)) ->
-        one
-    | Eq, Unary { f = Uext _; x = a; _ }, Cst bv (* see check above *)
-    | Diff, Unary { f = Uext _; x = a; _ }, Cst bv ->
-        (* see check above *)
-        let sa = sizeof a in
-        binary f a (constant (Bv.extract ~lo:0 ~hi:(sa - 1) bv)) sa
+    | Eq, Unary { f = Uext n; x = a; size; _ }, Cst bv (* see check above *)
+    | Diff, Unary { f = Uext n; x = a; size; _ }, Cst bv ->
+        let sa = size - n in
+        let bv' = Bv.extract ~hi:(sa - 1) ~lo:0 bv in
+        if Bv.is_zeros (Bv.extract ~hi:(size - 1) ~lo:sa bv) then
+          binary f a (constant bv') sa
+        else if f = Eq then zero
+        else one
+    | Eq, Unary { f = Sext n; x = a; size; _ }, Cst bv
+    | Diff, Unary { f = Sext n; x = a; size; _ }, Cst bv ->
+        let sa = size - n in
+        let bv' = Bv.extract ~hi:(sa - 1) ~lo:0 bv in
+        if Bv.equal bv (Bv.extend_signed bv' size) then
+          binary f a (constant bv') sa
+        else if f = Eq then zero
+        else one
     | Eq, Unary { f = Not; x = a; _ }, Unary { f = Not; x = b; _ }
     | Eq, Unary { f = Minus; x = a; _ }, Unary { f = Minus; x = b; _ }
     | Diff, Unary { f = Not; x = a; _ }, Unary { f = Not; x = b; _ }
@@ -1181,6 +1243,22 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     | Diff, Unary { f = Sext _; x = a; _ }, Unary { f = Sext _; x = b; _ }
       when sizeof a = sizeof b ->
         binary f a b (sizeof a)
+    | ( Or,
+        Binary { f = (Ugt | Ult | Sgt | Slt) as cmp; x; y; _ },
+        Binary { f = Eq; x = x'; y = y'; _ } )
+    | ( Or,
+        Binary { f = Eq; x = x'; y = y'; _ },
+        Binary { f = (Ugt | Ult | Sgt | Slt) as cmp; x; y; _ } )
+      when (is_equal x x' && is_equal y y') || (is_equal x y' && is_equal y x')
+      ->
+        binary
+          (match cmp with
+          | Ugt -> Uge
+          | Ult -> Ule
+          | Sgt -> Sge
+          (* Slt *)
+          | _ -> Sle)
+          x y 1
     (* split condition *)
     | Eq, Binary { f = Concat; x = a; y = b; _ }, Cst bv ->
         let sb = sizeof b in
@@ -1231,18 +1309,20 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     | Minus, Unary { f = Uext n; x; _ }, Cst b when sizeof x = 1 && Bv.is_ones b
       ->
         unary (Sext n) (unary Not x)
+    | And, x, Cst bv when Bv.is_ones bv ->
+        unary (Uext (sx - 1)) (unary (Restrict { hi = 0; lo = 0 }) x)
     (* concatenation normalization -- extension on top *)
     | Concat, Cst bv, a when Bv.is_zeros bv -> unary (Uext (Bv.size_of bv)) a
     | Concat, Unary { f = Uext n; x = a; _ }, b ->
         unary (Uext n) (binary Concat a b (sizeof a))
     | Concat, Unary { f = Sext n; x = a; _ }, b ->
         unary (Sext n) (binary Concat a b (sizeof a))
-    | ( Or,
+    | ( (Or | Xor),
         Binary { f = Lsl; x = a; y = Cst bv; _ },
         Unary { f = Uext n; x = b; _ } )
       when sizeof b = Bv.to_uint bv ->
         binary Concat (unary (Restrict { lo = 0; hi = n - 1 }) a) b n
-    | Or, Binary { f = Lsl; x = a; y = Cst bv; size; _ }, Cst bv' ->
+    | (Or | Xor), Binary { f = Lsl; x = a; y = Cst bv; size; _ }, Cst bv' ->
         let shift = Bv.to_uint bv in
         let sz = size - shift in
         binary Concat
@@ -1281,6 +1361,12 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     | And, Unary { f = Uext n as f; x; _ }, Unary { f = Uext n'; x = x'; _ }
       when n = n' ->
         unary f (binary And x x' (sx - n))
+    | And, Unary { f = Sext n; x; _ }, Cst bv
+      when Z.numbits (Bv.value_of bv) <= sx - n ->
+        unary (Uext n)
+          (binary And x
+             (constant (Bv.extract ~hi:(sx - n - 1) ~lo:0 bv))
+             (sx - n))
     | And, Binary { f = Concat; y; _ }, Cst bv
       when Z.numbits (Bv.value_of bv) <= sizeof y ->
         let sz = sizeof y in
@@ -1312,12 +1398,54 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     | f, (Cst bv as x), Ite { c; t; e = Cst bv'; _ } ->
         ite c (binary f x t sx) (constant (Bv.binary f bv bv'))
     (* basic equation *)
-    | Eq, Binary { f = Plus; x; y = Cst bv; _ }, Cst bv' ->
-        binary Eq x (constant (Bv.sub bv' bv)) sx
-    | Eq, Binary { f = Minus; x; y = Cst bv; _ }, Cst bv' ->
-        binary Eq x (constant (Bv.add bv' bv)) sx
-    | Eq, Binary { f = Minus; x = Cst bv; y; _ }, Cst bv' ->
-        binary Eq y (constant (Bv.sub bv bv')) sx (* default case *)
+    | (Eq | Diff), Binary { f = Plus; x; y = Cst bv; _ }, Cst bv' ->
+        binary f x (constant (Bv.sub bv' bv)) sx
+    | (Eq | Diff), Binary { f = Minus; x; y = Cst bv; _ }, Cst bv' ->
+        binary f x (constant (Bv.add bv' bv)) sx
+    | (Eq | Diff), Binary { f = Minus; x = Cst bv; y; _ }, Cst bv' ->
+        binary f y (constant (Bv.sub bv bv')) sx
+    | (Eq | Diff), Binary { f = Xor; x; y = Cst bv; _ }, Cst bv' ->
+        binary f x (constant (Bv.logxor bv bv')) sx
+    | (Eq | Diff), Binary { f = And; x; y = Cst bv; _ }, Cst bv'
+      when Bv.equal bv bv' && Z.popcount (Bv.value_of bv) = 1 ->
+        let hi = Z.trailing_zeros (Bv.value_of bv) in
+        let b = unary (Restrict { hi; lo = hi }) x in
+        if f = Diff then unary Not b else b
+    | (Eq | Diff), Binary { f = And; x; y = Cst bv; _ }, Cst bv'
+      when Z.popcount (Bv.value_of bv) = 1 && Bv.is_zeros bv' ->
+        let hi = Z.trailing_zeros (Bv.value_of bv) in
+        let b = unary (Restrict { hi; lo = hi }) x in
+        if f = Eq then unary Not b else b
+    | (Eq | Diff), Binary { f = Lsl; x; y = Cst bv; _ }, Cst bv' ->
+        let shift = Bv.to_uint bv in
+        let y = Bv.value_of bv' in
+        if Z.trailing_zeros y >= shift then
+          binary f
+            (unary (Restrict { hi = sx - shift - 1; lo = 0 }) x)
+            (constant (Bv.create (Z.shift_right y shift) (sx - shift)))
+            1
+        else if f = Eq then zero
+        else one
+    | ( And,
+        Binary { f = Diff; x = a; y = Cst bv; _ },
+        Binary { f = Eq; x = a'; y = Cst bv'; _ } )
+      when is_equal a a' ->
+        if Bv.equal bv bv' then zero else y
+    | ( Or,
+        Binary { f = Diff; x = a; y = Cst bv; _ },
+        Binary { f = Eq; x = a'; y = Cst bv'; _ } )
+      when is_equal a a' ->
+        if Bv.equal bv bv' then one else x
+    (* basic arithmetic *)
+    | Minus, Binary { f = Lsl; x; y = Cst bv; size; _ }, y when is_equal x y ->
+        let one = Bv.ones size in
+        binary Mul x (constant (Bv.sub (Bv.binary Lsl one bv) one)) size
+    | Mul, x, Cst bv ->
+        let z = Bv.value_of bv in
+        if Z.popcount z = 1 then
+          binary Lsl x (constant (Bv.of_int ~size:sx (Z.trailing_zeros z))) sx
+        else mk_binary Mul x y
+    (* default case *)
     | _, _, _ -> mk_binary f x y
 
   and ite c t e =
@@ -1336,6 +1464,14 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     | c, Cst bv, Cst bv' when Bv.is_zeros bv && Bv.is_fill bv' ->
         unary (Sext (Bv.size_of bv - 1)) (unary Not c)
     | Unary { f = Not; x = c; _ }, t, e -> ite c e t
+    | c, Ite { c = c'; t = t'; e = e'; _ }, e when is_equal e e' ->
+        ite (binary And c c' 1) t' e
+    | c, Ite { c = c'; t = t'; e = e'; _ }, e when is_equal e t' ->
+        ite (binary And c (unary Not c') 1) e' e
+    | c, t, Ite { c = c'; t = t'; e = e'; _ } when is_equal t t' ->
+        ite (binary Or c c' 1) t e'
+    | c, t, Ite { c = c'; t = t'; e = e'; _ } when is_equal t e' ->
+        ite (binary Or c (unary Not c') 1) t t'
     | _, _, _ -> mk_ite c t e
 
   let binary f x y =
@@ -1392,4 +1528,8 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
     | Term (Unary { f; x; _ }) -> unary f (map a b x)
     | Term (Binary { f; x; y; _ }) -> binary f (map a b x) (map a b y)
     | Term (Ite { c; t; e; _ }) -> ite (map a b c) (map a b t) (map a b e)
+
+  let _unary = mk_unary
+  let _binary = mk_binary
+  let _ite = mk_ite
 end

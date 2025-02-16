@@ -19,35 +19,5 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Cli.Options (struct
-  let name = "arm"
-  let shortname = name
-end)
-
-type supported_modes = Both | Thumb | Arm
-
-module SupportedModes = Builder.Variant_choice (struct
-  type t = supported_modes
-
-  let name = "supported-modes"
-  let default = Arm
-
-  let doc =
-    "Can be used to only decode thumb instructions, arm instructions or both \
-     (default: arm)."
-
-  let to_string = function Both -> "both" | Thumb -> "thumb" | Arm -> "arm"
-
-  let of_string = function
-    | "both" -> Both
-    | "thumb" -> Thumb
-    | "arm" -> Arm
-    | x ->
-        raise
-          (Invalid_argument
-             (x
-            ^ " is not a valid arm decoding mode. Expected one of both, thumb \
-               or arm."))
-
-  let choices = [ "both"; "thumb"; "arm" ]
-end)
+let cached_decode _ = failwith "not linked with 'unisim_archisec'"
+let decode _ = cached_decode

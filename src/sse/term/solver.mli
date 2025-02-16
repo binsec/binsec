@@ -26,6 +26,7 @@ module type S = sig
   val iter_free_variables : (string -> Expr.t -> unit) -> unit
   val iter_free_arrays : (string -> Memory.t -> unit) -> unit
   val assert_formula : Expr.t -> unit
+  val assert_distinct : Expr.t -> Expr.t -> unit
   val check_sat : ?timeout:float -> unit -> Libsolver.status
   val check_sat_assuming : ?timeout:float -> Expr.t -> Libsolver.status
   val get_value : Expr.t -> Z.t

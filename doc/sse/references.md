@@ -230,7 +230,10 @@ Note that even the last instruction of a chunk, before the "end" keyword, must b
            | "load" <mem> "from" "file" 
            | "load" "section" <section> "from" "file" 
            | "load" "sections" <section> ["," <section> ..] "from" "file"
+           | "hook" <e> ["(" <ident> ["," <ident> ..] ")"] "with" <chunk> "end"
+           | "hook" "<" <name> ">" "return" "with" <chunk> "end"
            | "replace" <e> ["(" <ident> ["," <ident> ..] ")"] "by" <chunk> "end"
+           | "replace" "opcode" <hexa> [<hexa> ..] "by" <chunk> "end"
            | "with" "concrete" "stack" "pointer"
 <goal> ::= "reach" <e> [<n> "times"] ["such" "that" <e>] ["then" <action> ["and" <action> ..]]
            | "cut" "at" <e> ["if" <e>]
@@ -262,12 +265,24 @@ Note that even the last instruction of a chunk, before the "end" keyword, must b
 #### Make the stack pointer concrete with an architecture-appropriate value `with` `concrete` `stack` `pointer`
   (e.g. `with concrete stack pointer`)
   
+#### Set a DBA hook `hook` *addr* `with` *chunk* `end`
+  (e.g. `hook 0x4000 with print eax; end`)
+
+#### Set a DBA hook with arguments `hook` *addr* `with` *chunk* `end`
+  (e.g. `hook <fgets> (_, size, _) with print size; end`)
+
 #### Set a DBA stub `replace` *addr* `by` *chunk* `end`
   (e.g. `replace <printf> by esp := esp + 4; jump at @[esp - 4] end`)
   
 #### Set a DBA stub with arguments `replace` *addr* `(` *arg* `,` *arg* .. `)` `by` *chunk* `end`
   (e.g. `replace <fgets> (ptr, size, _) by return ptr end`)
+
+#### Set a DBA stub `replace` `opcode` *opcode* `by` *chunk* `end`
+  (e.g. `replace opcode 0f ae f0 by print ascii "mfence"; end`)
   
+#### Set a DBA hook at function return `hook` *symbol* `return` `with` *chunk* `end`
+  (e.g. `hook <main> return with print eax; end`)
+
 #### Set reach target `reach` *addr [n* `times`*] [*`such` `that` *bool] [*`then` *actions]*
   (e.g. `reach 0x4000 such that al = 0 then print ecx`)
   

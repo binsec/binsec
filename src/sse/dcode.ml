@@ -65,6 +65,10 @@ module Make
 
   val get : t -> Virtual_address.t -> [ `All ] Fiber.t
 
+  module G : Ir.GRAPH with type t = t
+
+  val disasm : t -> Virtual_address.t -> G.vertex
+
   module type CALLBACK = sig
     val instruction_callback :
       (Ast.Instr.t -> Script.env -> Ir.fallthrough list) option
@@ -87,7 +91,13 @@ module Make
 
   val register_opcode_hook :
     (Lreader.t -> (Script.Instr.t list * Script.env) option) -> unit
+
+  val set_annotation_printer :
+    (Format.formatter -> Virtual_address.t -> unit) option -> unit
 end = struct
+  let annotation_printer = ref None
+  let set_annotation_printer fopt = annotation_printer := fopt
+
   module type CALLBACK = sig
     val instruction_callback :
       (Ast.Instr.t -> Script.env -> Ir.fallthrough list) option
@@ -736,20 +746,14 @@ end = struct
                    kind = Store { base; dir; addr; rval };
                    succ = vertex + succ;
                  })
-        | Undef (Var var, succ) ->
+        | Nondet (Var var, succ) | Undef (Var var, succ) ->
             if var.info = Var.Tag.Temp then temps := Var.Set.add var !temps;
-            add_node t cur
-              (Fallthrough { kind = Clobber var; succ = vertex + succ })
-        | Undef _ ->
-            raise
-              (Invalid_argument
-                 (Format.asprintf "unexpected instruction kind %a"
-                    Dba_printer.Ascii.pp_instruction inst))
-        | Nondet (Var var, succ) ->
-            if var.info = Var.Tag.Temp then temps := Var.Set.add var !temps;
-            add_node t cur
-              (Fallthrough { kind = Symbolize var; succ = vertex + succ })
-        | Nondet (Restrict (var, { hi; lo }), succ) ->
+            let kind =
+              match inst with Nondet _ -> Symbolize var | _ -> Clobber var
+            in
+            add_node t cur (Fallthrough { kind; succ = vertex + succ })
+        | Nondet (Restrict (var, { hi; lo }), succ)
+        | Undef (Restrict (var, { hi; lo }), succ) ->
             if var.info = Var.Tag.Temp then temps := Var.Set.add var !temps;
             let size' = hi - lo + 1 in
             let name' = entropy size' in
@@ -758,17 +762,24 @@ end = struct
             let rval = Dba_utils.Expr.complement (Expr.v var') ~lo ~hi var in
             let succ' = !next in
             incr next;
-            add_node t cur (Fallthrough { kind = Symbolize var'; succ = succ' });
+            let kind =
+              match inst with Nondet _ -> Symbolize var' | _ -> Clobber var'
+            in
+            add_node t cur (Fallthrough { kind; succ = succ' });
             add_node t succ'
               (Fallthrough { kind = Assign { var; rval }; succ = vertex + succ })
-        | Nondet (Store (bytes, dir, addr, base), succ) ->
+        | Nondet (Store (bytes, dir, addr, base), succ)
+        | Undef (Store (bytes, dir, addr, base), succ) ->
             let size' = 8 * bytes in
             let name' = entropy size' in
             let var' = Dba.Var.temporary name' (Size.Bit.create size') in
             let rval = Expr.v var' in
             let succ' = !next in
             incr next;
-            add_node t cur (Fallthrough { kind = Symbolize var'; succ = succ' });
+            let kind =
+              match inst with Nondet _ -> Symbolize var' | _ -> Clobber var'
+            in
+            add_node t cur (Fallthrough { kind; succ = succ' });
             add_node t succ'
               (Fallthrough
                  {
@@ -1189,6 +1200,9 @@ end = struct
             in
             let hunk = Isa_helper.make_return ?value () in
             inline_dhunk t todo labels tolink temps exits vertex hunk
+        | Script.Error msg ->
+            add_node t !vertex (Terminator (Die msg));
+            incr vertex
         | inst ->
             List.iter
               (fun kind ->
@@ -1269,8 +1283,9 @@ end = struct
                  [
                    Ast.Instr.Jump
                      ( Ast.Expr.Int
-                         (Virtual_address.to_bigint
-                            (Virtual_address.add_int (Bytes.length opcode) addr)),
+                         ( Virtual_address.to_bigint
+                             (Virtual_address.add_int (Bytes.length opcode) addr),
+                           None ),
                        Lexing.dummy_pos );
                  ])
               env false;
@@ -1495,9 +1510,24 @@ end = struct
 
   let make_label =
     if debug_level >= 2 then (fun node pred ->
-      let debug =
-        Fiber.Debug { msg = Format.asprintf "%a" pp_node node; succ = Halt }
+      let msg =
+        match (node, !annotation_printer) with
+        | Instruction inst, Some pp ->
+            Format.asprintf "%a %-25s%a" Virtual_address.pp
+              (Instruction.address inst)
+              (Mnemonic.to_string (Instruction.mnemonic inst))
+              pp (Instruction.address inst)
+        | Hook { addr; info }, Some pp ->
+            Format.asprintf "%a %-25s%a" Virtual_address.pp addr info pp addr
+        | Instruction inst, None ->
+            Format.asprintf "%a %a" Virtual_address.pp
+              (Instruction.address inst) Mnemonic.pp
+              (Instruction.mnemonic inst)
+        | Hook { addr; info }, None ->
+            Format.asprintf "%a %s" Virtual_address.pp addr info
+        | _ -> assert false
       in
+      let debug = Fiber.Debug { msg; succ = Halt } in
       Fiber.relink ~pred debug;
       debug)
     else fun _ pred -> pred
@@ -1607,11 +1637,11 @@ end = struct
     | Fallthrough { kind = Nop | Forget _; succ } | Goto { succ = Some succ; _ }
       ->
         line t todo reloc addr n vars pred succ
-    | Fallthrough { kind = Instruction inst; succ } ->
-        let pred = make_label node pred in
+    | Fallthrough { kind = Instruction inst as info; succ } ->
+        let pred = make_label info pred in
         line t todo reloc (Instruction.address inst) (n + 1) vars pred succ
-    | Fallthrough { kind = Hook { addr; _ }; succ } ->
-        let pred = make_label node pred in
+    | Fallthrough { kind = Hook { addr; _ } as info; succ } ->
+        let pred = make_label info pred in
         let step = Fiber.Step { addr; n; succ = Halt } in
         Fiber.relink ~pred step;
         line t todo reloc addr 0 vars step succ
@@ -1702,11 +1732,11 @@ end = struct
       match node with
       | Fallthrough { kind = Nop; succ } | Goto { succ = Some succ; _ } ->
           line t todo reloc addr n env pred succ
-      | Fallthrough { kind = Instruction inst; succ } ->
-          let pred = make_label node pred in
+      | Fallthrough { kind = Instruction inst as info; succ } ->
+          let pred = make_label info pred in
           line t todo reloc (Instruction.address inst) (n + 1) env pred succ
-      | Fallthrough { kind = Hook { addr; _ }; succ } ->
-          let pred = make_label node pred in
+      | Fallthrough { kind = Hook { addr; _ } as info; succ } ->
+          let pred = make_label info pred in
           let step = Fiber.Step { addr; n; succ = Halt } in
           Fiber.relink ~pred step;
           line t todo reloc addr 0 env step succ
@@ -1802,6 +1832,13 @@ end = struct
           Queue.add vertex todo;
           closure t todo (Queue.create ());
           I.Htbl.find t.fibers vertex)
+
+  let disasm t addr =
+    try Virtual_address.Htbl.find t.entries addr
+    with Not_found ->
+      disasm t (ref (Virtual_address.Map.singleton addr []));
+      process t;
+      Virtual_address.Htbl.find t.entries addr
 
   let single ?hooks ~task addr reader size =
     let hooks =

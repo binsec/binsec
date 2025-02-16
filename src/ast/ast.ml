@@ -113,7 +113,7 @@ end
 
 and Expr : sig
   type t =
-    | Int of Z.t
+    | Int of Z.t * string option
     | Bv of Bitvector.t
     | Symbol of Symbol.t loc
     | Loc of Loc.t loc
@@ -124,7 +124,7 @@ and Expr : sig
   val zero : t
   val one : t
   val succ : t loc -> t
-  val integer : Z.t -> t
+  val integer : ?src:string -> Z.t -> t
   val constant : Bitvector.t -> t
   val symbol : Symbol.t loc -> t
   val loc : Loc.t loc -> t
@@ -160,7 +160,7 @@ and Expr : sig
   val pp : Format.formatter -> t -> unit
 end = struct
   type t =
-    | Int of Z.t
+    | Int of Z.t * string option
     | Bv of Bitvector.t
     | Symbol of Symbol.t loc
     | Loc of Loc.t loc
@@ -170,8 +170,8 @@ end = struct
 
   let zero = Bv Bitvector.zero
   let one = Bv Bitvector.one
-  let succ x = Binary (Plus, x, (Int Z.one, Lexing.dummy_pos))
-  let integer z = Int z
+  let succ x = Binary (Plus, x, (Int (Z.one, None), Lexing.dummy_pos))
+  let integer ?src z = Int (z, src)
   let constant bv = Bv bv
   let symbol sym = Symbol sym
   let loc lval = Loc lval
@@ -211,7 +211,8 @@ end = struct
 
   let rec pp ppf e =
     match e with
-    | Int z -> Z.pp_print ppf z
+    | Int (_, Some str) -> Format.pp_print_string ppf str
+    | Int (z, None) -> Z.pp_print ppf z
     | Bv bv -> Bitvector.pp_hex_or_bin ppf bv
     | Symbol (sym, _) -> Symbol.pp ppf sym
     | Loc (lval, _) -> Loc.pp ppf lval
