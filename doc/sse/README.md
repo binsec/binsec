@@ -12,6 +12,7 @@
 
 - [How to #1: Solving self-modifying CTF with BINSEC SSE (advanced)](advanced_users.md)
 - [How to #2: Read the SSE exploration board](exploration_board.md)
+- [How to #3: Reproduce the TOPS 2023 secret erasure experiments](secret-erasure.md)
 
 # Write up
 
