@@ -15,7 +15,7 @@ Find the secret such that the output isn't `Liar!!`.
 # Command
 
 ```console
-$ binsec -sse -sse-script poly.ini polygraph.exe -sse-depth 10000000 | egrep bread | sort
+$ binsec -sse -sse-script crackme.ini polygraph.exe -sse-depth 10000000 | egrep bread | sort
 ```
 
 # Expect
