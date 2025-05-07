@@ -5,7 +5,7 @@ Linux x86-64 environment with:
 
 # Sources
 
-- binary challenge:     [polygraph.exe](./polygraph.exe)
+- binary challenge:     [polygraph.exe](https://hackropole.fr/fr/challenges/reverse/fcsc2025-reverse-polygraph/)
 - SSE script:           [crackme.ini](./crackme.ini)
 
 # Goal
@@ -15,7 +15,7 @@ Find the secret such that the output isn't `Liar!!`.
 # Command
 
 ```console
-$ binsec -sse -sse-script poly.ini polygraph2.exe -sse-depth 10000000 | egrep bread | sort
+$ binsec -sse -sse-script poly.ini polygraph.exe -sse-depth 10000000 | egrep bread | sort
 ```
 
 # Expect
