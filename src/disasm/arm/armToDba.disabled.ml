@@ -19,7 +19,22 @@
 (*                                                                        *)
 (**************************************************************************)
 
+let fails _ = failwith "not linked with 'unisim_archisec'"
+
+module Logger = Logger.Make (struct
+  let name = "arm"
+end)
+
 type supported_modes = Both | Thumb | Arm
 
-let cached_decode _ = failwith "not linked with 'unisim_archisec'"
+module SupportedModes : Cli.GENERIC with type t = supported_modes = struct
+  type t = supported_modes
+
+  let get = fails
+  let set = fails
+  let is_set = Fun.const false
+  let is_default = fails
+end
+
+let cached_decode _ = fails ()
 let decode _ = cached_decode

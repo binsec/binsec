@@ -91,7 +91,8 @@ let pp_term ppf tm = Smtlib_pp.pp_term ppf (Formula_to_smtlib.term tm)
 let pp_entry ppf en =
   match en.entry_desc with
   | Assume bl ->
-      Format.fprintf ppf "@[<v 1>(assert; assume\n%a)@]" pp_bl_term bl
+      Format.fprintf ppf "@[<v 1>(assert; assume@ %a)@]" pp_bl_term bl
+  | Custom _ -> Format.fprintf ppf "@[<v 1>%a@]" Formula.Printing.p_entry en
   | _ -> Smtlib_pp.pp_command ppf (Formula_to_smtlib.entry en)
 
 let pp_formula ppf fm =
@@ -127,9 +128,8 @@ let pp_varset ppf set =
 let print_varset set = Format.asprintf "@[<v 0>%a@]" pp_varset set
 
 let pp_header ppf () =
-  let theory = if Formula_options.Flatten_memory.get () then "BV" else "ABV" in
-  fprintf ppf "@[<v 0>(set-logic QF_%s)@ (set-info :smt-lib-version 2.0)@ @]"
-    theory
+  fprintf ppf "@[<v 0>(set-logic %s)@ (set-info :smt-lib-version 2.0)@ @]"
+    (Formula_options.Theory.get ())
 
 let print_header () = Print_utils.string_from_pp pp_header ()
 

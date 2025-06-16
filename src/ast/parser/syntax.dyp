@@ -154,6 +154,12 @@ const:
   | INT<value>
     { Ast.Expr.integer ~src:value (Z.of_string value),
       dyp.symbol_start_pos () }
+  | '-' INT<value> - '<' - int<size> - '>'
+    { Ast.Expr.constant (Bitvector.create (Z.neg (Z.of_string value)) (Z.to_int size)),
+      dyp.symbol_start_pos () }
+  | INT<value> - '<' - int<size> - '>'
+    { Ast.Expr.constant (Bitvector.create (Z.of_string value) (Z.to_int size)),
+      dyp.symbol_start_pos () }
   | CONST<value>     { Ast.Expr.constant value, dyp.symbol_start_pos () }
 
 range:

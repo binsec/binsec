@@ -500,17 +500,10 @@ module Linear = struct
       ( p',
         Virtual_address.Set.fold
           (fun vaddr w ->
-            let dst, w =
-              if should_stop vaddr then
-                let inst = Instruction.of_dba_block vaddr Dhunk.stop in
-                (Cfg.V.of_inst vaddr inst, w)
-              else
-                (* The disassembled instruction will be added later on.
-                   Just put in the addres vertex for now. *)
-                (Cfg.V.of_addr vaddr, W.add vaddr w)
-            in
-            Cfg.add_vertex g dst;
-            w)
+            if should_stop vaddr then w
+            else (
+              Cfg.add_vertex g (Cfg.V.of_addr vaddr);
+              W.add vaddr w))
           disasm_succs worklist )
     in
     I.fold step program worklist
@@ -682,7 +675,7 @@ let file ~filename =
   disassemble_slice ~program:Program.empty ~slice_start ~slice_end
 
 let disassemble parameters =
-  let dba_file = DbaOutputFile.get ()
+  let dba_file = Option.value ~default:"none" (DbaOutputFile.get_opt ())
   and opcode_file =
     if OpcodeOutputFile.is_set () then OpcodeOutputFile.get () else "stdout"
   in
@@ -736,12 +729,13 @@ let disassemble parameters =
 
 let run () =
   let parameters = Infos.default in
-  Logger.result "Entry points: @[%a@]"
-    (fun ppf vset ->
-      Virtual_address.Set.iter
-        (fun e -> Format.fprintf ppf "%a;@ " Virtual_address.pp e)
-        vset)
-    parameters.Infos.entry_points;
+  if not (Virtual_address.Set.is_empty parameters.Infos.entry_points) then
+    Logger.result "Entry points: @[%a@]"
+      (fun ppf vset ->
+        Virtual_address.Set.iter
+          (fun e -> Format.fprintf ppf "%a;@ " Virtual_address.pp e)
+          vset)
+      parameters.Infos.entry_points;
   let program = disassemble parameters in
   if OpcodeOutputFile.is_set () then
     Print_utils.pp_to_file ~filename:(OpcodeOutputFile.get ()) Program.pp
@@ -751,7 +745,9 @@ let run () =
       program;
   if ShowInstructionCount.get () then
     Logger.result "@[%a@]" Program.pp_mnemonic_summary program;
-  Print_utils.pp_to_file ~filename:(DbaOutputFile.get ()) Program.pp_dba program
+  Option.iter
+    (fun filename -> Print_utils.pp_to_file ~filename Program.pp_dba program)
+    (DbaOutputFile.get_opt ())
 
 (* Other functionalities *)
 let custom_pp_dbainstrs opc ppf dba_block =

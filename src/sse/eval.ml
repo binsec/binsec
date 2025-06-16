@@ -71,8 +71,12 @@ module Raw (State : RAW_STATE) = struct
     | Unary (f, x) -> State.Value.unary (uop x f) (eval x state)
     | Binary (f, x, y) ->
         State.Value.binary (bop f) (eval x state) (eval y state)
-    | Ite (c, r, e) ->
-        State.Value.ite (eval c state) (eval r state) (eval e state)
+    | Ite (c, r, e) -> (
+        let c' = eval c state in
+        match State.Value.is_zero c' with
+        | False -> eval r state
+        | True -> eval e state
+        | Unknown -> State.Value.ite c' (eval r state) (eval e state))
 end
 
 module Make (Path : Path.S) (State : STATE) = struct

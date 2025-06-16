@@ -19,7 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-val get_solver : unit -> (module Solver.OPEN)
+val get_solver : ?solver:Smt.Smt_options.solver -> unit -> (module Solver.OPEN)
 
 module State
     (D : Domains.S)

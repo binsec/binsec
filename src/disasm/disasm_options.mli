@@ -23,7 +23,7 @@ include Cli.S
 
 (** Command-line options specific to disassembly *)
 
-module DbaOutputFile : Cli.STRING
+module DbaOutputFile : Cli.STRING_OPT
 module OpcodeOutputFile : Cli.STRING_OPT
 
 module NoLoaderMode : Cli.BOOLEAN

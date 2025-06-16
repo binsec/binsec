@@ -63,6 +63,7 @@
 %token <string> HEXA
 %token <string> BIN
 %token <string> STRING
+%token <int> UEXTN SEXTN
 
 %nonassoc LBRACE
 %nonassoc ELSE
@@ -75,7 +76,7 @@
 %left XOR
 %left AND
 
-%nonassoc NOT
+%nonassoc NOT UEXTN SEXTN
 %nonassoc BSWAP
 
 %start expr_eof
@@ -146,13 +147,19 @@ decoder_base:
     { [opcode; mnemonic; address; size;]  (* Actually the order is not important *) }
 ;
 
+decoder_lvalue:
+| lv=lvalue;
+  { lv }
+| lv=delimited(LPAR, lvalue, RPAR);
+  { lv }
+
 decoder_read:
-| LPAR READ read=list(lvalue); RPAR
+| LPAR READ read=list(decoder_lvalue); RPAR
   { read }
 ;
 
 decoder_write:
-| LPAR WRITE write=list(lvalue); RPAR
+| LPAR WRITE write=list(decoder_lvalue); RPAR
   { write }
 ;
 
@@ -410,6 +417,8 @@ constant:
 %inline offsets:
 | LBRACE loff=INT; COMMA roff=INT; RBRACE
   { int_of_string loff, int_of_string roff }
+  | LBRACE loff=INT; DOTDOT roff=INT; RBRACE
+  { int_of_string roff, int_of_string loff }
 | LBRACE boff=INT; RBRACE
   { let n = int_of_string boff in n, n}
 ;
@@ -447,8 +456,12 @@ expr:
  | MINUS e=expr;     { Dba.Expr.uminus e }
  | EXTU e=expr; size=INT;
    { Dba.Expr.uext (int_of_string size) e }
+ | size=UEXTN; e=expr;
+   { Dba.Expr.uext size e }
  | EXTS e=expr; size=INT;
    { Dba.Expr.sext (int_of_string size) e }
+ | size=SEXTN e=expr;
+   { Dba.Expr.sext size e }
  | IF c=expr; THEN  then_e=expr; ELSE else_e=expr;
    { Dba.Expr.ite c then_e else_e }
  | le=expr; bop=bin_op; re=expr;

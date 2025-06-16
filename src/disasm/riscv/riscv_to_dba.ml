@@ -1711,22 +1711,20 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
     L.debug "Decoding RISC-V bits %a (%d)" Bv.pp_hex bits (uint bits);
     let st = D_status.create vaddr in
     let s = lift st bits in
+    let opcode = String_utils.to_hex (Bitvector.to_asciistring bits) in
     match s with
     | Unhandled mnemonic_hint ->
-        let opcode = Bitvector.to_hexstring bits in
         let mnemonic = Mnemonic.unsupported ~mnemonic_hint () in
         let ginst = Instruction.Generic.create size opcode mnemonic in
         L.debug "unhandled %s" mnemonic_hint;
         (ginst, Dhunk.empty)
     | Unknown _ ->
-        let opcode = Bitvector.to_hexstring bits in
         let mnemonic = Mnemonic.unknown in
         let ginst = Instruction.Generic.create size opcode mnemonic in
         L.debug "unknown %s" opcode;
         (ginst, Dhunk.empty)
     | Inst i ->
         let open Inst in
-        let opcode = Bitvector.to_hexstring i.opcode in
         let mnemonic = Mnemonic.supported i.mnemonic Format.pp_print_string in
         let ginst = Instruction.Generic.create size opcode mnemonic in
         let dhunk = D.Block.to_dba i.dba in

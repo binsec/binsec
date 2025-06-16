@@ -44,6 +44,7 @@ module type S = sig
   val rev_fold : (Z.t -> v -> 'a -> 'a) -> 'a -> t -> 'a
   val map : (Z.t -> v -> v) -> t -> t
   val merge : (Z.t -> v option -> v option -> v option) -> t -> t -> t
+  val extract : Z.t -> Z.t -> t -> t * t
   val choose : t -> Z.t * v
   val bindings : t -> (Z.t * v) list
 end

@@ -34,43 +34,44 @@ let map =
   | CVC4_smtlib -> CVC4
   | Yices_smtlib -> Yices
 
-let get_solver () : (module Solver.OPEN) =
+let get_solver : ?solver:Smt.Smt_options.solver -> unit -> (module Solver.OPEN)
+    =
+ fun ?(solver = Smt_options.SMTSolver.get ()) () ->
   let module Logger = Smt_options.Logger in
-  match Smt_options.SMTSolver.get () with
-  | (Smt_options.Auto | Smt_options.Bitwuzla_builtin)
-    when Option.is_some Libsolver.bitwuzla_cxx ->
-      Logger.debug "Use native Bitwuzla binding (cxx).";
+  match solver with
+  | (Auto | Bitwuzla_builtin) when Option.is_some Libsolver.bitwuzla_cxx ->
+      Smt_options.Logger.debug "Use native Bitwuzla binding (cxx).";
       let module Api = Api_solver.Make ((val Option.get Libsolver.bitwuzla_cxx)) in
       (module Api.Open)
-  | Smt_options.Auto | Smt_options.Bitwuzla_builtin
-  | Smt_options.Bitwuzla_legacy
+  | (Auto | Bitwuzla_builtin | Bitwuzla_legacy)
     when Option.is_some Libsolver.bitwuzla_c ->
-      Logger.debug "Use native Bitwuzla binding (c).";
+      Smt_options.Logger.debug "Use native Bitwuzla binding (c).";
       let module Api = Api_solver.Make ((val Option.get Libsolver.bitwuzla_c)) in
       (module Api.Open)
-  | (Smt_options.Auto | Smt_options.Z3_builtin) when Option.is_some Libsolver.z3
-    ->
-      Logger.debug "Use native z3 binding.";
+  | (Auto | Z3_builtin) when Option.is_some Libsolver.z3 ->
+      Smt_options.Logger.debug "Use native z3 binding.";
       let module Api = Api_solver.SafeArray ((val Option.get Libsolver.z3)) in
       (module Api.Open)
   | Auto -> (
       try
         let solver = List.find Prover.ping solvers in
-        Logger.info "Found %a in the path." Prover.pp solver;
+        Smt_options.Logger.info "Found %a in the path." Prover.pp solver;
         Formula_options.Solver.set solver;
         (module Smt2_solver.Solver)
       with Not_found -> Logger.fatal "No SMT solver found.")
   | Bitwuzla_builtin | Bitwuzla_legacy ->
-      Logger.fatal "Native bitwuzla binding is required but not available."
+      Smt_options.Logger.fatal
+        "Native bitwuzla binding is required but not available."
   | Z3_builtin ->
-      Logger.fatal "Native z3 binding is required but not available."
+      Smt_options.Logger.fatal
+        "Native z3 binding is required but not available."
   | solver when Prover.ping (map solver) ->
       Smt_options.Logger.debug "Found %a in the path." Prover.pp (map solver);
       Formula_options.Solver.set (map solver);
       (module Smt2_solver.Solver)
   | solver ->
-      Logger.fatal "%a is required but not available in path." Prover.pp
-        (map solver)
+      Smt_options.Logger.fatal "%a is required but not available in path."
+        Prover.pp (map solver)
 
 exception Undef = Types.Undef
 exception Uninterp = Types.Uninterp
@@ -117,8 +118,6 @@ struct
   end
 
   module Solver = Solver (QS)
-
-  let addr_space = Kernel_options.Machine.word_size ()
 
   let timeout =
     match Formula_options.Solver.Timeout.get () with
@@ -177,6 +176,7 @@ struct
   let pp ppf state = Model.pp ppf state.model
 
   let empty () =
+    let addr_space = Kernel_options.Machine.word_size () in
     {
       constraints = [];
       deps = BvMap.empty;
@@ -262,12 +262,14 @@ struct
             | Unknown -> raise Unknown
             | Unsat -> None
             | Sat model ->
+                let state = { state with constraints; model } in
                 Overapprox.refine state cond D.one;
-                Some { state with constraints; model })
+                Some state)
           else (
             QS.Preprocess.incr_true ();
+            let state = { state with constraints } in
             Overapprox.refine state cond D.one;
-            Some { state with constraints })
+            Some state)
 
   let test cond state =
     if Expr.is_equal cond Expr.one then (
@@ -298,11 +300,13 @@ struct
           | Unknown -> raise Unknown
           | Unsat ->
               if Bv.is_zero e then (
+                let state = { state with constraints } in
                 Overapprox.refine state cond D.zero;
-                False { state with constraints })
-              else (
+                False state)
+              else
+                let state = { state with constraints } in
                 Overapprox.refine state cond D.one;
-                True { state with constraints })
+                True state
           | Sat model ->
               let t, f =
                 if Bv.is_zero e then
@@ -432,6 +436,11 @@ struct
     let unary = Expr.unary
     let binary = Expr.binary
     let ite = Expr.ite
+    let is_symbolic : t -> bool = function Cst _ -> true | _ -> false
+
+    let is_zero : t -> Types.trilean = function
+      | Cst bv -> if Bv.is_zeros bv then True else False
+      | _ -> Unknown
   end
 
   let assertions t = t.constraints
@@ -497,7 +506,10 @@ struct
     List.iter (C.assert_bl ctx) t.constraints;
     C.define_ax ctx "memory" t.vmemory;
     I.iter
-      (fun id expr -> C.define_bv ctx (Dba.Var.from_id id).name expr)
+      (fun id expr ->
+        match Dba.Var.from_id id with
+        | exception Not_found -> ()
+        | { name; _ } -> C.define_bv ctx name expr)
       t.vsymbols;
     C.to_formula ctx
 

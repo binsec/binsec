@@ -154,6 +154,41 @@ type entry_desc =
   | Assert of bl_term
   | Assume of bl_term
   | Comment of string
+  | Custom of custom_desc
+
+and custom_desc = ..
+(** An user defined entry.
+
+    Custom entry support is experimental and very limited.
+    For now, it will work only for formula creation (no transformation)
+    and printing (and by extension, call to external SMT solver).
+ *)
+
+type custom_handler = {
+  hash : custom_desc -> int option;
+  pp : Format.formatter -> custom_desc -> bool;
+}
+
+val register_custom : custom_handler -> unit
+(** [register_custom { hash; pp }]
+    registers a hash and a pretty printer functions for custom entries.
+
+    The hash function should return [Some h] for the custom entries the
+    handler supports, [None] otherwise.
+    The pretty printer should print the entry without the surrounding
+    parenthesis and return [true] for the custom entries the handler
+    supports, [false] otherwise.
+
+    Handlers will be scanned in the reverse order of the call to the
+    [register_custom] function. Using a custom entry without any registered
+    handler will raise [Invalid_custom].
+*)
+
+exception Invalid_custom
+(** An exception raised by a function that can not handle a custom entry,
+    either because no hander has been registered for this entry
+    or because the function does not support entry extension.
+*)
 
 type entry = private { entry_hash : int; entry_desc : entry_desc }
 type formula = private { entries : entry Sequence.t }

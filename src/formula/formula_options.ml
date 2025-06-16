@@ -68,9 +68,10 @@ module OptimLst = Builder.Integer (struct
   let default = 0
 end)
 
-module Flatten_memory = Builder.False (struct
-  let name = "flat-mem"
-  let doc = "Remove memory reads if indexes are constant"
+module Theory = Builder.String (struct
+  let name = "theory"
+  let doc = "Select the formula theory"
+  let default = "QF_ABV"
 end)
 
 type solver = Boolector | Bitwuzla | Z3 | CVC4 | Yices

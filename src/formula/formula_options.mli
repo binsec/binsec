@@ -21,13 +21,8 @@
 
 include Cli.S
 
-module Flatten_memory : Cli.BOOLEAN
-(** Remove the array theory from formula generated.
-
-    {b Warning:
-    only works when providing a full concrete memory addressing
-    as concretization policy}
-*)
+module Theory : Cli.STRING
+(** Select the formula theory (default: ["QF_ABV"]) *)
 
 module No_stitching : Cli.BOOLEAN
 

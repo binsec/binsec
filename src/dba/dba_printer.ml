@@ -43,11 +43,11 @@ module AsciiRenderer = struct
       (Dba.Binary_op.And, "&");
       (Dba.Binary_op.Xor, "^");
       (Dba.Binary_op.Concat, "::");
-      (Dba.Binary_op.LShift, "<<");
-      (Dba.Binary_op.RShiftU, ">>u");
-      (Dba.Binary_op.RShiftS, ">>s");
-      (Dba.Binary_op.LeftRotate, "lrot");
-      (Dba.Binary_op.RightRotate, "rrot");
+      (Dba.Binary_op.LShift, "lsl");
+      (Dba.Binary_op.RShiftU, "lsr");
+      (Dba.Binary_op.RShiftS, "asr");
+      (Dba.Binary_op.LeftRotate, "rol");
+      (Dba.Binary_op.RightRotate, "ror");
       (Dba.Binary_op.Eq, "=");
       (Dba.Binary_op.Diff, "<>");
       (Dba.Binary_op.LeqU, "<=u");
@@ -61,7 +61,7 @@ module AsciiRenderer = struct
     ]
 
   let unary_ops = [ (Dba.Unary_op.UMinus, "-"); (Dba.Unary_op.Not, "!") ]
-  let endiannesses = [ (Machine.BigEndian, "B"); (Machine.LittleEndian, "L") ]
+  let endiannesses = [ (Machine.BigEndian, "->"); (Machine.LittleEndian, "<-") ]
   let string_of_digit_char c = Format.sprintf "%c" c
   let left_right_parentheses = ("(", ")")
 end
@@ -159,7 +159,7 @@ module Make (R : Renderer) : DbaPrinter = struct
   let pp_unary_op ppf uop =
     fprintf ppf "%s" (find_or_default unary_op_tbl uop "?uop?")
 
-  let _pp_endianness ppf endianness =
+  let pp_endianness ppf endianness =
     fprintf ppf "%s" (find_or_default endianness_tbl endianness "")
 
   let pp_size ppf size =
@@ -177,7 +177,7 @@ module Make (R : Renderer) : DbaPrinter = struct
       (string_of_int size);
     fprintf ppf "%s" (Buffer.contents b)
 
-  let pp_code_address ppf addr =
+  let pp_code_address ppf (addr : Dba.address) =
     fprintf ppf "(%a, %d)" Virtual_address.pp addr.Dba.base addr.Dba.id
 
   let pp_opt pp_value ppf = function
@@ -209,18 +209,18 @@ module Make (R : Renderer) : DbaPrinter = struct
 
   let rec pp_bl_term ppf = function
     | Dba.Expr.Var { name; size; _ } -> fprintf ppf "%s<%a>" name pp_size size
-    | Dba.Expr.Load (size, _endian, expr, array) ->
-        fprintf ppf "%a[%a,%a]" pp_array array pp_bl_term expr pp_size size
-        (* pp_endianness endian *)
+    | Dba.Expr.Load (size, endian, expr, array) ->
+        fprintf ppf "%a[%a,%a,%a]" pp_array array pp_bl_term expr pp_endianness
+          endian pp_size size
     | Dba.Expr.Cst bv -> pp_constant ppf bv
     | Dba.Expr.Unary (Dba.Unary_op.Uext n, expr) ->
-        fprintf ppf "@[(extu %a %d)@]" pp_bl_term expr n
+        fprintf ppf "@[(uext%d %a)@]" n pp_bl_term expr
     | Dba.Expr.Unary (Dba.Unary_op.Sext n, expr) ->
-        fprintf ppf "@[(exts %a %d)@]" pp_bl_term expr n
+        fprintf ppf "@[(sext%d %a)@]" n pp_bl_term expr
     | Dba.Expr.Unary
         (Dba.Unary_op.Restrict { Interval.lo = i; Interval.hi = j }, expr) ->
         if i = j then fprintf ppf "%a{%d}" pp_bl_term expr i
-        else fprintf ppf "%a{%d,%d}" pp_bl_term expr i j
+        else fprintf ppf "%a{%d..%d}" pp_bl_term expr j i
     | Dba.Expr.Unary (unary_op, expr) ->
         fprintf ppf "@[%a@ (%a)@]" pp_unary_op unary_op pp_bl_term expr
     | Dba.Expr.Binary (binary_op, lexpr, rexpr) ->
@@ -235,9 +235,9 @@ module Make (R : Renderer) : DbaPrinter = struct
     | Dba.(LValue.Restrict ({ name; size; _ }, { Interval.lo; Interval.hi })) ->
         if lo <> hi then fprintf ppf "%s<%d>{%d, %d}" name size lo hi
         else fprintf ppf "%s<%d>{%d}" name size lo
-    | Dba.LValue.Store (size, _endian, expr, array) ->
-        fprintf ppf "%a[%a,%a]" pp_array array pp_bl_term expr pp_size size
-  (* pp_endianness endian *)
+    | Dba.LValue.Store (size, endian, expr, array) ->
+        fprintf ppf "%a[%a,%a,%a]" pp_array array pp_bl_term expr pp_endianness
+          endian pp_size size
 
   let pp_address ppf = function
     | Dba.JInner id -> fprintf ppf "%d" id

@@ -10,6 +10,7 @@
  (libraries
   binsec
   libparser
+  smt
   sse
   bbsse
   dtrace

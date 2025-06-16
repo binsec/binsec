@@ -268,6 +268,7 @@ module Session (Solver : Libsolver.S) : Session = struct
     | Assert bl_term | Assume bl_term ->
         Solver.assert_formula (bl_map [] bl_term)
     | Comment _ -> ()
+    | Custom _ -> raise Formula.Invalid_custom
 
   let bv_lookup e =
     Bitvector.create (Solver.get_bv_value (bv_map [] e)) e.bv_term_size

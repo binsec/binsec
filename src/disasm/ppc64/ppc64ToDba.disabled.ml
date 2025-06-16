@@ -19,5 +19,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Logger = Logger.Make (struct
+  let name = "ppc64"
+end)
+
 let cached_decode _ = failwith "not linked with 'unisim_archisec'"
 let decode _ = cached_decode

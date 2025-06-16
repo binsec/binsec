@@ -44,7 +44,7 @@ module Output : sig
     | Slice of (Expr.t loc * string) list
     | Value of format * Expr.t loc
     | Stream of string
-    | String of string
+    | String of string option * Expr.t loc * Expr.t loc option
 
   val eval : env -> t -> Types.Output.t
   val pp : Format.formatter -> t -> unit

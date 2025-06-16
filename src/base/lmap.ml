@@ -44,6 +44,7 @@ module type S = sig
   val rev_fold : (Z.t -> v -> 'a -> 'a) -> 'a -> t -> 'a
   val map : (Z.t -> v -> v) -> t -> t
   val merge : (Z.t -> v option -> v option -> v option) -> t -> t -> t
+  val extract : Z.t -> Z.t -> t -> t * t
   val choose : t -> Z.t * v
   val bindings : t -> (Z.t * v) list
 end
@@ -848,100 +849,119 @@ module Make (E : Value) : S with type v := E.t = struct
       let kh = Z.add k' (Z.of_int (E.len eh - E.len e')) in
       d_fill f kh u' eh r
 
-  (* let rec merge :
-   *     type a b c.
-   *     (Z.t -> E.t option -> E.t option -> E.t option) -> a tree -> b tree -> t =
-   *  fun f t t' ->
-   *   match (t, t') with
-   *   | Z, Z -> T Z
-   *   | N { k; e }, Z -> (
-   *       match f k (Some e) None with
-   *       | None -> T Z
-   *       | Some x -> if e == x then T t else T (N { k; e = x }))
-   *   | LN { k; e; l }, Z -> (
-   *       match (f k (Some e) None, merge f l Z) with
-   *       | None, T Z -> T Z
-   *       | None, T y -> T y
-   *       | Some x, T Z -> T (N { k; e = x })
-   *       | Some x, T ((N _ | LN _ | NR _ | LNR _ | LR _) as y) ->
-   *           if e == x && T l == T y then T t else T (LN { k; e = x; l = y }))
-   *   | NR { k; e; r }, Z -> (
-   *       match (f k (Some e) None, merge f r Z) with
-   *       | None, T Z -> T Z
-   *       | None, T y -> T y
-   *       | Some x, T Z -> T (N { k; e = x })
-   *       | Some x, T ((N _ | LN _ | NR _ | LNR _ | LR _) as z) ->
-   *           if e == x && T r == T z then T t else T (NR { k; e = x; r = z }))
-   *   | LNR { k; e; l; r }, Z -> (
-   *       match (f k (Some e) None, merge f l Z, merge f r Z) with
-   *       | Some x, T Z, T Z -> T (N { k; e = x })
-   *       | Some x, T ((N _ | LN _ | NR _ | LNR _ | LR _) as y), T Z ->
-   *           T (LN { k; e = x; l = y })
-   *       | Some x, T Z, T ((N _ | LN _ | NR _ | LNR _ | LR _) as z) ->
-   *           T (NR { k; e = x; r = z })
-   *       | ( Some x,
-   *           T ((N _ | LN _ | NR _ | LNR _ | LR _) as y),
-   *           T ((N _ | LN _ | NR _ | LNR _ | LR _) as z) ) ->
-   *           if e == x && T l == T y && T r == T z then T t
-   *           else T (LNR { k; e = x; l = y; r = z })
-   *       | None, T Z, T Z -> T Z
-   *       | None, T y, T Z -> T y
-   *       | None, T Z, T z -> T z
-   *       | None, T ((N _ | LN _ | NR _ | LNR _ | LR _) as y), T z ->
-   *           T (fold (fun k e t -> d_add k e t (upper_bound k e)) y z))
-   *   | LR { k; l; r }, Z -> (
-   *       match (merge f l Z, merge f r Z) with
-   *       | T Z, T Z -> T Z
-   *       | T y, T Z -> T y
-   *       | T Z, T z -> T z
-   *       | ( T ((N _ | LN _ | NR _ | LNR _ | LR _) as y),
-   *           T ((N _ | LN _ | NR _ | LNR _ | LR _) as z) ) ->
-   *           if T l == T y && T r == T z then T t else T (LR { k; l = y; r = z })
-   *       )
-   *   | Z, t' -> merge (fun k o o' -> f k o' o) t' Z
-   *   | N { k; e }, N { k = k'; e = e' } when Z.equal k k' && E.len e = E.len e'
-   *     -> (
-   *       match f k (Some e) (Some e') with
-   *       | Some x ->
-   *           if e == x then T t else if e' == x then T t' else T (N { k; e = x })
-   *       | None -> T Z)
-   *   | LN { k; e; l }, N { k = k'; e = e' }
-   *     when Z.equal k k' && E.len e = E.len e' -> (
-   *       match (f k (Some e) (Some e'), merge f l Z) with
-   *       | None, T Z -> T Z
-   *       | None, T y -> T y
-   *       | Some x, T Z -> if e' == x then T t' else T (N { k; e = x })
-   *       | Some x, T ((N _ | LN _ | NR _ | LNR _ | LR _) as y) ->
-   *           T (LN { k; e = x; l = y }))
-   *   | NR { k; e; r }, N { k = k'; e = e' }
-   *     when Z.equal k k' && E.len e = E.len e' -> (
-   *       match (f k (Some e) (Some e'), merge f r Z) with
-   *       | None, T Z -> T Z
-   *       | None, T z -> T z
-   *       | Some x, T Z -> if e' == x then T t' else T (N { k; e = x })
-   *       | Some x, T ((N _ | LN _ | NR _ | LNR _ | LR _) as z) ->
-   *           T (NR { k; e = x; r = z }))
-   *   | LNR { k; e; l; r }, N { k = k'; e = e' }
-   *     when Z.equal k k' && E.len e = E.len e' -> (
-   *       match (f k (Some e) (Some e'), merge f l Z, merge f r Z) with
-   *       | None, T Z, T Z -> T Z
-   *       | None, T y, T Z -> T y
-   *       | None, T Z, T z -> T z
-   *       | None, T ((N _ | LN _ | NR _ | LNR _ | LR _) as y), T z ->
-   *           T (fold (fun k e t -> d_add k e t (upper_bound k e)) y z)
-   *       | Some x, T Z, T Z -> if e' == x then T t' else T (N { k; e = x })
-   *       | Some x, T ((N _ | LN _ | NR _ | LNR _ | LR _) as y), T Z ->
-   *           T (LN { k; e = x; l = y })
-   *       | Some x, T Z, T ((N _ | LN _ | NR _ | LNR _ | LR _) as z) ->
-   *           T (NR { k; e = x; r = z })
-   *       | ( Some x,
-   *           T ((N _ | LN _ | NR _ | LNR _ | LR _) as y),
-   *           T ((N _ | LN _ | NR _ | LNR _ | LR _) as z) ) ->
-   *           if e == x && T l == T y && T r == T z then T t
-   *           else T (LNR { k; e = x; l = y; r = z }))
-   *   | t, N _ -> slow_merge f t t'
-   *   | N _, t' -> merge (fun k o o' -> f k o' o) t' t
-   *   | _ -> assert false *)
+  let sibling_union : type a b. a tree -> b tree -> t =
+   fun l r ->
+    match (l, r) with
+    | Z, r -> T r
+    | l, Z -> T l
+    | ( ((N { k; _ } | LN { k; _ } | NR { k; _ } | LNR { k; _ } | LR { k; _ })
+         as l),
+        (( N { k = k'; _ }
+         | LN { k = k'; _ }
+         | NR { k = k'; _ }
+         | LNR { k = k'; _ }
+         | LR { k = k'; _ } ) as r) ) ->
+        let kb =
+          Z.logand (Z.max k k') (Z.shift_left Z.minus_one (diff k k' - 1))
+        in
+        T (branch kb l r)
+
+  let rec d_extract : type a. Z.t -> Z.t -> a tree -> t * t =
+   fun k' u' t ->
+    match t with
+    | Z -> (T Z, T Z)
+    | N { k; e } -> n_extract k' u' t k e Z Z
+    | LN { k; e; l } -> n_extract k' u' t k e l Z
+    | NR { k; e; r } -> n_extract k' u' t k e Z r
+    | LNR { k; e; l; r } -> n_extract k' u' t k e l r
+    | LR { k; l; r } -> b_extract k' u' t k l r
+
+  and n_extract :
+      type a b c.
+      Z.t -> Z.t -> a tree -> Z.t -> E.t -> b tree -> c tree -> t * t =
+   fun k' u' t k e l r ->
+    if Z.geq k u' then
+      (* case 1                     *
+       *               [ k  .. u  ] *
+       * [ k' .. u' ]               *
+       *)
+      let i, T o = d_extract k' u' l in
+      (i, if T o = T l then T t else T (create k e o r))
+    else
+      let s = E.len e in
+      let u = Z.add k (Z.of_int s) in
+      if Z.geq k' u then
+        (* case 2                     *
+         * [ k  .. u  ]               *
+         *               [ k' .. u' ] *
+         *)
+        let i, T o = d_extract k' u' r in
+        (i, if T o = T r then T t else T (create k e l o))
+      else if Z.geq k k' then
+        let T li, T lo = d_extract k' u' l in
+        if Z.geq u u' then
+          let d = distance u' u in
+          if d = 0 then
+            (* case 3                     *
+             *       [ k  .. u  ]         *
+             *    [ k'    .. u' ]         *
+             *)
+            (T (create k e li Z), sibling_union lo r)
+          else
+            (* case 4                     *
+             *         [ k  .. u  ]       *
+             *     [ k' .. u' ]           *
+             *)
+            let s = E.len e in
+            let (T o) = sibling_union lo r in
+            ( T (d_add k (E.crop ~lo:0 ~hi:(s - d - 1) e) li u'),
+              T (d_add u' (E.crop ~lo:(s - d) ~hi:(s - 1) e) o u) )
+        else
+          (* case 5                     *
+             *       [ k  .. u  ]         *
+             *    [ k'    ..    u' ]      *
+          *)
+          let T ri, T ro = d_extract k' u' r in
+          ( (if T li = T l && T ri = T r then T t else T (create k e li ri)),
+            sibling_union lo ro )
+      else
+        let d = distance k k' in
+        let eo = E.crop ~lo:0 ~hi:(d - 1) e in
+        (* let (T lo) = T (d_add k (E.crop ~lo:0 ~hi:(d - 1) e) l k') in *)
+        let e = E.crop ~lo:d ~hi:(s - 1) e in
+        if Z.geq u' u then
+          (* case 6                     *
+           *     [ k  .. u  ]           *
+           *         [ k' .. u' ]       *
+           *)
+          let T ri, T ro = d_extract k' u' r in
+          (T (d_add k' e ri u), T (create k eo l ro))
+        else
+          (* case 7                     *
+           *    [ k     ..    u  ]      *
+           *       [ k' .. u' ]         *
+           *)
+          let s' = s - d in
+          let d' = distance u' u in
+          let e, T ro =
+            if d' = 0 then (e, T r)
+            else
+              ( E.crop ~lo:0 ~hi:(s' - d' - 1) e,
+                T (d_add u' (E.crop ~lo:(s' - d') ~hi:(s' - 1) e) r u) )
+          in
+          (T (create k' e Z Z), T (create k eo l ro))
+
+  and b_extract :
+      type a.
+      Z.t -> Z.t -> a tree -> Z.t -> nonempty tree -> nonempty tree -> t * t =
+   fun k' u' t k l r ->
+    let T li, T lo = d_extract k' u' l in
+    if Z.geq k u' then (T li, if T li = T Z then T t else sibling_union lo r)
+    else
+      let T ri, T ro = d_extract k' u' r in
+      if T li = T Z && T ri = T Z then (T Z, T t)
+      else if T lo = T Z && T ro = T Z then (T t, T Z)
+      else (sibling_union li ri, sibling_union lo ro)
 
   let empty = T Z
   let is_empty t = t == empty
@@ -1052,5 +1072,6 @@ module Make (E : Value) : S with type v := E.t = struct
     merge_bindings f bindings bindings' (T Z)
 
   let merge f (T t) (T t') = slow_merge f t t'
+  let extract k' u' (T t') = d_extract k' (Z.succ u') t'
   let bindings (T t) = bindings t
 end

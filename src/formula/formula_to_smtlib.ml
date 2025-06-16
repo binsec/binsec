@@ -394,6 +394,7 @@ and visit_entry_desc env = function
       let bl = visit_bl_term env bl in
       mk_command (Smtlib.CmdAssert bl)
   | Comment c -> mk_command (Smtlib.CmdComment c)
+  | Custom _ -> raise Invalid_custom
 
 and visit_entry env { entry_desc; _ } = visit_entry_desc env entry_desc
 
@@ -411,7 +412,8 @@ let formula ast =
   let open Smtlib in
   let script_commands =
     visit_formula () ast
-    |> Sequence.push_back (mk_command (CmdSetLogic (mk_symbol "QF_ABV")))
+    |> Sequence.push_back
+         (mk_command (CmdSetLogic (mk_symbol (Formula_options.Theory.get ()))))
     |> Sequence.push_front (mk_command CmdCheckSat)
     |> Sequence.push_front (mk_command CmdExit)
     |> list_of_sequence

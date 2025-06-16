@@ -50,13 +50,10 @@ module Disassembly_mode = struct
   end)
 end
 
-module DbaOutputFile = struct
-  include Builder.String (struct
-    let name = "o-dba"
-    let default = "out.dba"
-    let doc = Format.sprintf " Set DBA instructions output file"
-  end)
-end
+module DbaOutputFile = Builder.String_option (struct
+  let name = "o-dba"
+  let doc = Format.sprintf " Set DBA instructions output file"
+end)
 
 module OpcodeOutputFile = Builder.String_option (struct
   let name = "dump"

@@ -222,7 +222,7 @@ and eval_loc ?size ((l, p) as t : Loc.t loc) env =
         match eval_var ?size t' name annot env with
         | Var var -> Dba.LValue.restrict var lo hi
         | Restrict (var, { hi = hi'; lo = lo' }) ->
-            if hi' > hi + lo' then raise (Inference_failure (Expr.loc t, p));
+            if hi' < hi + lo' then raise (Invalid_operation (Expr.loc t, p));
             Dba.LValue.restrict var (lo + lo') (hi + lo')
         | _ -> raise (Invalid_operation (Expr.loc t, p)))
     | Sub _ -> raise (Invalid_operation (Expr.loc t, p))
@@ -243,7 +243,7 @@ module Output = struct
     | Slice of (Expr.t loc * string) list
     | Value of format * Expr.t loc
     | Stream of string
-    | String of string
+    | String of string option * Expr.t loc * Expr.t loc option
 
   let eval env (t : t) : Types.Output.t =
     match t with
@@ -253,7 +253,13 @@ module Output = struct
         Slice (List.map (fun (e, name) -> (eval_expr e env, name)) values)
     | Value (fmt, e) -> Value (fmt, eval_expr e env)
     | Stream name -> Stream name
-    | String name -> String name
+    | String (array, offset, size) ->
+        String
+          {
+            array;
+            offset = eval_expr ~size:env.wordsize offset env;
+            size = Option.map (fun e -> eval_expr ~size:env.wordsize e env) size;
+          }
 
   let format_str = function
     | Bin -> "bin"
@@ -274,7 +280,14 @@ module Output = struct
     | Value (fmt, (e, _)) ->
         Format.fprintf ppf "%s %a" (format_str fmt) Expr.pp e
     | Stream name -> Format.fprintf ppf "ascii stream %s" name
-    | String name -> Format.fprintf ppf "c string %s" name
+    | String (array, (offset, _), size) ->
+        Format.fprintf ppf "c string %s[%a, %a]"
+          (Option.value ~default:"@" array)
+          Expr.pp offset
+          (fun ppf -> function
+            | None -> Format.pp_print_char ppf '*'
+            | Some (size, _) -> Expr.pp ppf size)
+          size
 end
 
 type Ast.Obj.t +=
@@ -284,6 +297,7 @@ type Ast.Obj.t +=
   | Output of Output.t
   | Output_list of Output.t list
   | String_list of string list
+  | String_slice of Expr.t loc * Expr.t loc option
   | Key_val of (string * string)
   | Key_val_list of (string * string) list
   | Symbol_list of Symbol.t loc list
@@ -471,6 +485,7 @@ let grammar :
         ("output", "Obj");
         ("and_separated_output_rev_list", "Obj");
         ("outputs", "Obj");
+        ("string_slice", "Obj");
         ("times", "Obj");
         ("such_that", "Obj");
         ("guard", "Obj");
@@ -686,18 +701,71 @@ let grammar :
             | [ _; _; _; Syntax.String name ] ->
                 (Syntax.Obj (Output (Output.Stream name)), [])
             | _ -> assert false );
+        ( ("string_slice", [], "default_priority", []),
+          fun _ -> function
+            | _ ->
+                ( Syntax.Obj
+                    (String_slice ((Expr.integer Z.zero, Lexing.dummy_pos), None)),
+                  [] ) );
+        ( ( "string_slice",
+            [
+              Dyp.Regexp (RE_Char '[');
+              Dyp.Non_ter ("expr", No_priority);
+              Dyp.Regexp (RE_Char ']');
+            ],
+            "default_priority",
+            [] ),
+          fun _ -> function
+            | [ _; Syntax.Expr expr; _ ] ->
+                (Syntax.Obj (String_slice (expr, None)), [])
+            | _ -> assert false );
+        ( ( "string_slice",
+            [
+              Dyp.Regexp (RE_Char '[');
+              Dyp.Non_ter ("expr", No_priority);
+              Dyp.Regexp (RE_Char ',');
+              Dyp.Regexp (RE_Char '*');
+              Dyp.Regexp (RE_Char ']');
+            ],
+            "default_priority",
+            [] ),
+          fun _ -> function
+            | [ _; Syntax.Expr expr; _; _; _ ] ->
+                (Syntax.Obj (String_slice (expr, None)), [])
+            | _ -> assert false );
+        ( ( "string_slice",
+            [
+              Dyp.Regexp (RE_Char '[');
+              Dyp.Non_ter ("expr", No_priority);
+              Dyp.Regexp (RE_Char ',');
+              Dyp.Non_ter ("expr", No_priority);
+              Dyp.Regexp (RE_Char ']');
+            ],
+            "default_priority",
+            [] ),
+          fun _ -> function
+            | [ _; Syntax.Expr offset; _; Syntax.Expr size; _ ] ->
+                (Syntax.Obj (String_slice (offset, Some size)), [])
+            | _ -> assert false );
         ( ( "output",
             [
               Dyp.Regexp (RE_String "print");
               Dyp.Regexp (RE_String "c");
               Dyp.Regexp (RE_String "string");
-              Dyp.Non_ter ("ident", No_priority);
+              Dyp.Non_ter ("array", No_priority);
+              Dyp.Non_ter ("string_slice", No_priority);
             ],
             "default_priority",
             [] ),
           fun _ -> function
-            | [ _; _; _; Syntax.String name ] ->
-                (Syntax.Obj (Output (Output.String name)), [])
+            | [
+                _;
+                _;
+                _;
+                Syntax.Obj_array array;
+                Syntax.Obj (String_slice (offset, size));
+              ] ->
+                (Syntax.Obj (Output (Output.String (array, offset, size))), [])
             | _ -> assert false );
         ( ( "and_separated_output_rev_list",
             [ Dyp.Non_ter ("output", No_priority) ],

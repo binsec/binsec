@@ -339,24 +339,38 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
     @@ S.Map.find name (Path.get State.symbols path);
     Buffer.contents buf
 
-  let c_string array state =
+  let c_string :
+      string option -> Expr.t -> Expr.t option -> Path.t -> State.t -> string =
+   fun array offset size path state ->
     try
       let buf = Buffer.create 16 in
-      let rec iter addr =
-        let byte =
-          State.get_a_value
-            (Eval.eval
-               (Expr.load ~array Size.Byte.one Machine.LittleEndian
-                  (Expr.constant addr))
-               state)
-            state
-        in
-        if Bitvector.is_zeros byte then Buffer.contents buf
-        else (
-          Buffer.add_char buf (Bitvector.to_char byte);
-          iter (Bitvector.succ addr))
+      let rec iter addr limit state =
+        if Bitvector.equal addr limit then Buffer.contents buf
+        else
+          let byte =
+            State.get_a_value
+              (Eval.eval
+                 (Expr.load ?array Size.Byte.one Machine.LittleEndian
+                    (Expr.constant addr))
+                 state)
+              state
+          in
+          if Bitvector.is_zeros byte then Buffer.contents buf
+          else
+            (Buffer.add_char buf (Bitvector.to_char byte);
+             iter (Bitvector.succ addr))
+              limit state
       in
-      iter (Bitvector.zeros (Kernel_options.Machine.word_size ()))
+      let offset, state = Eval.safe_eval offset state path in
+      let offset = State.get_a_value offset state in
+      let limit, state =
+        match size with
+        | None -> (offset, state)
+        | Some size ->
+            let size, state = Eval.safe_eval size state path in
+            (Bitvector.add offset (State.get_a_value size state), state)
+      in
+      iter offset (Bitvector.pred limit) state
     with Uninterp _ -> ""
 
   let print addr path state (output : Output.t) =
@@ -391,8 +405,9 @@ module Run (SF : STATE_FACTORY) (W : WORKLIST) () = struct
     | Stream name ->
         Logger.result "@[<v 0>Ascii stream %s : %S@]" name
           (ascii_stream name path state)
-    | String name ->
-        Logger.result "@[<v 0>C string %s : %S@]" name (c_string name state)
+    | String { array; offset; size } ->
+        Logger.result "@[<v 0>%a : %S@]" Output.pp output
+          (c_string array offset size path state)
 
   let rec exec :
       type a.

@@ -19,7 +19,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Logger : Logger.S
+
 type supported_modes = Both | Thumb | Arm
+
+module SupportedModes : Cli.GENERIC with type t = supported_modes
 
 val decode : Lreader.t -> Virtual_address.t -> Instruction.Generic.t * Dhunk.t
 (** [decode r addr] decodes what is at address [addr] in reader [r].

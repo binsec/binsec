@@ -61,6 +61,9 @@ let executable = function
 
 let name_of = executable
 
+let rec any ic =
+  match input_char ic with exception End_of_file -> true | _ -> any ic
+
 let check_version = function
   | Bitwuzla ->
       fun version ->
@@ -77,7 +80,7 @@ let check_version = function
              >=0.2)."
             pp Bitwuzla;
         check
-  | _ -> Fun.const true
+  | _ -> any
 (* TODO ? *)
 
 let ping solver =

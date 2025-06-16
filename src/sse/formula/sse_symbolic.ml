@@ -173,6 +173,15 @@ struct
       | Sgt -> Dba.Binary_op.GtS
 
     let binary op e1 e2 = binary (binary_op op) e1 e2
+
+    let is_symbolic : t -> bool = function
+      | { bv_term_desc = BvCst _; _ } -> false
+      | _ -> true
+
+    let is_zero : t -> trilean = function
+      | { bv_term_desc = BvCst bv; _ } ->
+          if Bitvector.is_zeros bv then True else False
+      | _ -> Unknown
   end
 
   let lookup (v : Dba.Var.t) t =
@@ -319,6 +328,7 @@ struct
                   ( Formula.VarSet.fold (declare_var session marked) deps vars,
                     Formula.VarSet.union deps marked )
               | Comment _ -> (vars, marked)
+              | Custom _ -> assert false
             in
             Solver.put session entry;
             (vars, marked))
@@ -401,12 +411,8 @@ struct
     | Some
         {
           entry_desc =
-            Formula.Define
-              {
-                def_desc =
-                  Formula.BvDef (v, _, { bv_term_desc = Formula.BvCst bv; _ });
-                _;
-              };
+            Define
+              { def_desc = BvDef (v, _, { bv_term_desc = BvCst bv; _ }); _ };
           _;
         } ->
         assert (v = var);
@@ -429,12 +435,7 @@ struct
     | Some
         {
           entry_desc =
-            Formula.Define
-              {
-                def_desc =
-                  Formula.BlDef (v, _, { bl_term_desc = Formula.BlTrue; _ });
-                _;
-              };
+            Define { def_desc = BlDef (v, _, { bl_term_desc = BlTrue; _ }); _ };
           _;
         } ->
         assert (v = var);
@@ -625,7 +626,8 @@ struct
                  let deps = Formula_utils.bl_term_variables bl_term in
                  ( Formula.VarSet.fold (declare_var marked) deps formula,
                    Formula.VarSet.union deps marked )
-             | Comment _ -> (formula, marked))
+             | Comment _ -> (formula, marked)
+             | Custom _ -> assert false)
            formula
            (formula, Formula.VarSet.empty))
 

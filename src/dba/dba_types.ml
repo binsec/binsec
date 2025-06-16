@@ -354,14 +354,25 @@ module Instruction = struct
     | Instr.Nondet (lval, _) | Instr.Undef (lval, _) ->
         { defs = LValue.temporaries lval; uses = Basic_types.String.Set.empty }
 
+  let rec collect_addresses :
+      Virtual_address.Set.t -> Dba.Expr.t -> Virtual_address.Set.t =
+   fun acc e ->
+    match e with
+    | Cst bv -> Virtual_address.Set.add (Virtual_address.of_bitvector bv) acc
+    | Var _ | Load _ | Unary _ | Binary _ -> acc
+    | Ite (_, x, y) -> collect_addresses (collect_addresses acc y) x
+
   let outer_jumps instr =
     match instr with
     | Instr.Assign _ | Instr.Stop _ | Instr.Assert _ | Instr.Assume _
-    | Instr.Nondet _ | Instr.Undef _
-    | Instr.DJump (_, (Return | Default)) ->
+    | Instr.Nondet _ | Instr.Undef _ ->
         Virtual_address.Set.empty
-    | Instr.DJump (_, Call a) ->
-        Virtual_address.Set.singleton (Caddress.to_virtual_address a)
+    | Instr.DJump (dt, tag) -> (
+        let outer_jumps = collect_addresses Virtual_address.Set.empty dt in
+        match tag with
+        | Return | Default -> outer_jumps
+        | Call a ->
+            Virtual_address.Set.add (Caddress.to_virtual_address a) outer_jumps)
     | Instr.SJump (jt, Call a) ->
         Virtual_address.Set.add
           (Caddress.to_virtual_address a)

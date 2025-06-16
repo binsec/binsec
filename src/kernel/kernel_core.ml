@@ -45,7 +45,7 @@ let read_configuration_file () =
 
 let binary_descr () =
   if Describe_binary.get () && ExecFile.is_set () then
-    Logger.result "@\n%a" Kernel_functions.Loader.pp_loader_summary
+    Logger.result "@]@\n@[<v>%a" Kernel_functions.Loader.pp_loader_summary
       (ExecFile.get ())
 
 let version () =

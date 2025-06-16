@@ -51,6 +51,7 @@ module X86 : ARCH = struct
   and ds = Dba.Var.create "ds" ~bitsize:Size.Bit.bits16 ~tag:info
   and es = Dba.Var.create "es" ~bitsize:Size.Bit.bits16 ~tag:info
   and fs = Dba.Var.create "fs" ~bitsize:Size.Bit.bits16 ~tag:info
+  and fs_base = Dba.Var.create "fs_base" ~bitsize:Size.Bit.bits32 ~tag:info
   and gs = Dba.Var.create "gs" ~bitsize:Size.Bit.bits16 ~tag:info
   and gs_base = Dba.Var.create "gs_base" ~bitsize:Size.Bit.bits32 ~tag:info
   and ss = Dba.Var.create "ss" ~bitsize:Size.Bit.bits16 ~tag:info
@@ -118,13 +119,21 @@ module X86 : ARCH = struct
       ("cl", Dba.LValue.restrict ecx 0 7);
       ("ch", Dba.LValue.restrict ecx 8 15);
       ("cx", Dba.LValue.restrict ecx 0 15);
-      ("dl", Dba.LValue.restrict ebx 0 7);
-      ("dh", Dba.LValue.restrict ebx 8 15);
-      ("dx", Dba.LValue.restrict ebx 0 15);
+      ("dl", Dba.LValue.restrict edx 0 7);
+      ("dh", Dba.LValue.restrict edx 8 15);
+      ("dx", Dba.LValue.restrict edx 0 15);
       ("di", Dba.LValue.restrict edi 0 15);
       ("si", Dba.LValue.restrict esi 0 15);
       ("sp", Dba.LValue.restrict esp 0 15);
       ("bp", Dba.LValue.restrict ebp 0 15);
+      ("cs", Dba.LValue.v cs);
+      ("ds", Dba.LValue.v ds);
+      ("es", Dba.LValue.v es);
+      ("fs", Dba.LValue.v fs);
+      ("gs", Dba.LValue.v gs);
+      ("ss", Dba.LValue.v ss);
+      ("fs_base", Dba.LValue.v fs_base);
+      ("gs_base", Dba.LValue.v gs_base);
       ("CF", Dba.LValue.v cf);
       ("PF", Dba.LValue.v pf);
       ("AF", Dba.LValue.v af);
@@ -537,9 +546,9 @@ module AMD64 : ARCH = struct
       ("cl", Dba.LValue.restrict rcx 0 7);
       ("ch", Dba.LValue.restrict rcx 8 15);
       ("cx", Dba.LValue.restrict rcx 0 15);
-      ("dl", Dba.LValue.restrict rbx 0 7);
-      ("dh", Dba.LValue.restrict rbx 8 15);
-      ("dx", Dba.LValue.restrict rbx 0 15);
+      ("dl", Dba.LValue.restrict rdx 0 7);
+      ("dh", Dba.LValue.restrict rdx 8 15);
+      ("dx", Dba.LValue.restrict rdx 0 15);
       ("dil", Dba.LValue.restrict rdi 0 7);
       ("di", Dba.LValue.restrict rdi 0 15);
       ("sil", Dba.LValue.restrict rsi 0 7);

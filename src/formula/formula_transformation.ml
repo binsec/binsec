@@ -494,6 +494,7 @@ module ConstantPropagation = struct
         bind_assert env bl;
         mk_assume bl
     | Comment s -> mk_comment s
+    | Custom _ -> raise Invalid_custom
 end
 
 let constant_propagation ?(keep = VarSet.empty) fm =
@@ -520,7 +521,8 @@ let constant_propagation ?(keep = VarSet.empty) fm =
             push_front entry fm)
       | Assume bl ->
           ConstantPropagation.set_assertbl env bl;
-          push_front entry fm)
+          push_front entry fm
+      | Custom _ -> raise Invalid_custom)
     fm empty
 
 (* Prune and inline *)
@@ -713,6 +715,7 @@ module PruneAndInline = struct
         bind_assert env bl;
         count_bl_term env bl
     | Comment _ -> ()
+    | Custom _ -> raise Invalid_custom
 
   let visit_list : 'env 'a. ('env -> 'a -> 'b) -> 'env -> 'a list -> 'b list =
    fun f env ls -> List.map (f env) ls
@@ -884,6 +887,7 @@ module PruneAndInline = struct
     | Assert bl -> mk_assert (visit_bl_term env bl)
     | Assume bl -> mk_assume (visit_bl_term env bl)
     | Comment s -> mk_comment s
+    | Custom _ -> raise Invalid_custom
 end
 
 let prune_and_inline ?(keep = VarSet.empty) fm =
@@ -909,7 +913,8 @@ let prune_and_inline ?(keep = VarSet.empty) fm =
             | AxDef (v, _, ax) -> PruneAndInline.keep_ax_def env v ax
           then push_back entry fm
           else fm
-      | Assert _ | Assume _ | Comment _ -> push_back entry fm)
+      | Assert _ | Assume _ | Comment _ -> push_back entry fm
+      | Custom _ -> raise Invalid_custom)
     fm empty
 
 (* Read over write *)
@@ -1783,6 +1788,7 @@ module ReadOverWrite = struct
         assert_interval env bl;
         mk_assume bl
     | Comment c -> mk_comment c
+    | Custom _ -> raise Invalid_custom
 end
 
 let read_over_write ?lst ?(rbs = true) ?(itv = true) fm =
@@ -1799,7 +1805,8 @@ let read_over_write ?lst ?(rbs = true) ?(itv = true) fm =
             push_front entry fm)
       | Assume bl ->
           ReadOverWrite.set_assertbl env bl;
-          push_front entry fm)
+          push_front entry fm
+      | Custom _ -> raise Invalid_custom)
     fm empty
 
 (* Static single assignment *)
@@ -1970,6 +1977,7 @@ module StaticSingleAssignment = struct
     | Assert _ | Assume _ | Comment _ -> ()
     | Declare dc -> Basic_types.String.Htbl.add env.names (decl_name dc) 0
     | Define df -> Basic_types.String.Htbl.add env.names (def_name df) 0
+    | Custom _ -> raise Invalid_custom
 
   let visit_list :
         'env 'a 'b.
@@ -2125,6 +2133,7 @@ module StaticSingleAssignment = struct
         let seq, bl = visit_bl_term k_identity false ("assume", env) seq bl in
         push_front_assume bl seq
     | Comment c -> push_front_comment c seq
+    | Custom _ -> raise Invalid_custom
 end
 
 let static_single_assignment fm =
@@ -2416,6 +2425,7 @@ module Taint = struct
     | Define df -> visit_define env fm df
     | Assert bl -> push_front_assert (visit_bl_term env bl) fm
     | Assume _ | Comment _ -> fm
+    | Custom _ -> raise Invalid_custom
 end
 
 let taint vars fm =

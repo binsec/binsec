@@ -78,6 +78,11 @@ let keywords = [
   "min"           , MIN;
   "max"           , MAX;
   "BSwp"          , BSWAP;
+  "lsl"           , LSHIFT;
+  "lsr"           , RSHIFTU;
+  "asr"           , RSHIFTS;
+  "rol"           , LROTATE;
+  "ror"           , RROTATE;
 ]
 
 let keyword_tbl =
@@ -158,6 +163,10 @@ rule token = parse
   | "\\undef"       { UNDEF }
   | ('"' (([^'>''"']|'>'[^'>''"'])* as st) '"')
                     { STRING st }
+  | "uext" (digit+ as n)
+                    { UEXTN (int_of_string n)}
+  | "sext" (digit+ as n)
+                    { SEXTN (int_of_string n)}
   | ident as s      { kwd_or_ident s }
   | '%' '%' digit+ as s { TMP s }
   | hex as s        { HEXA s }

@@ -54,7 +54,7 @@ module Output = struct
     | Slice of (Expr.t * string) list
     | Value of format * Expr.t
     | Stream of string
-    | String of string
+    | String of { array : string option; offset : Expr.t; size : Expr.t option }
 
   let format_str = function
     | Bin -> "bin"
@@ -77,8 +77,19 @@ module Output = struct
         Format.fprintf ppf "%s %a" (format_str fmt) Dba_printer.Ascii.pp_bl_term
           e
     | Stream name -> Format.fprintf ppf "ascii stream %s" name
-    | String name -> Format.fprintf ppf "c string %s" name
+    | String { array; offset; size } ->
+        Format.fprintf ppf "C string %s[%a, %a]"
+          (Option.value ~default:"@" array)
+          Dba_printer.Ascii.pp_bl_term offset
+          (fun ppf -> function
+            | None -> Format.pp_print_char ppf '*'
+            | Some size -> Dba_printer.Ascii.pp_bl_term ppf size)
+          size
 end
+
+type trilean = True | False | Unknown
+type 'a test = True of 'a | False of 'a | Both of { t : 'a; f : 'a }
+type 'a target = ('a * string) list option
 
 exception Unknown
 exception Unresolved of string * Var.Tag.attribute
@@ -94,9 +105,6 @@ let () =
           (Format.asprintf "Can not resolve symbol <%s%a>" name
              Dba.Var.Tag.pp_attribute attr)
     | _ -> None)
-
-type 'a test = True of 'a | False of 'a | Both of { t : 'a; f : 'a }
-type 'a target = ('a * string) list option
 
 type size = Term.size
 and 'a interval = 'a Term.interval
@@ -154,11 +162,19 @@ module type VALUE = sig
   type state
 
   val kind : t value
+
+  (** {3 Creation} *)
+
   val constant : Bitvector.t -> t
   val var : id -> string -> int -> t
   val unary : unary operator -> t -> t
   val binary : binary operator -> t -> t -> t
   val ite : t -> t -> t -> t
+
+  (** {3 Inspection} *)
+
+  val is_symbolic : t -> bool
+  val is_zero : t -> trilean
 end
 
 type 'a feature = ..

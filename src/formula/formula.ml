@@ -153,9 +153,24 @@ type entry_desc =
   | Assert of bl_term
   | Assume of bl_term
   | Comment of string
+  | Custom of custom_desc
+
+and custom_desc = ..
 
 type entry = { entry_hash : int; entry_desc : entry_desc }
 type formula = { entries : entry Sequence.t }
+
+type custom_handler = {
+  hash : custom_desc -> int option;
+  pp : Format.formatter -> custom_desc -> bool;
+}
+
+exception Invalid_custom
+
+let custom_handlers = ref []
+
+let register_custom : custom_handler -> unit =
+ fun handler -> custom_handlers := handler :: !custom_handlers
 
 (* Basic printing of formulas, usable here *)
 module Printing = struct
@@ -385,6 +400,11 @@ module Printing = struct
           (AxSort (idx_size, elt_size))
           p_axterm ax
 
+  let rec resolve_custom_pp fmt x = function
+    | [] -> raise Invalid_custom
+    | { pp; _ } :: handlers ->
+        if not (pp fmt x) then resolve_custom_pp fmt x handlers
+
   let p_entry fmt e =
     fprintf fmt "@[<hv2>(";
     (match e.entry_desc with
@@ -392,7 +412,8 @@ module Printing = struct
     | Define def -> fprintf fmt "define@ %a" p_define def
     | Assert _assert -> fprintf fmt "assert@ @[<hv>%a@]" p_blterm _assert
     | Assume assume -> fprintf fmt "assume@ @[<hv>%a@]" p_blterm assume
-    | Comment com -> fprintf fmt "comment@ %s" com);
+    | Comment com -> fprintf fmt "comment@ %s" com
+    | Custom x -> resolve_custom_pp fmt x !custom_handlers);
     fprintf fmt ")@]"
 
   let p_formula fmt fm =
@@ -1508,12 +1529,18 @@ let mk_bl_decl v lst = decl (BlDecl (v, lst))
 let mk_bv_decl v lst = decl (BvDecl (v, lst))
 let mk_ax_decl v lst = decl (AxDecl (v, lst))
 
+let rec resolve_custom_hash x = function
+  | [] -> raise Invalid_custom
+  | { hash; _ } :: handlers -> (
+      match hash x with None -> resolve_custom_hash x handlers | Some h -> h)
+
 let entry_desc_hash = function
   | Declare dc -> Hashtbl.hash dc.decl_hash
   | Define df -> Hashtbl.hash df.def_hash
   | Assert bl -> Hashtbl.hash bl.bl_term_hash
   | Assume bl -> Hashtbl.hash bl.bl_term_hash
   | Comment s -> Hashtbl.hash s
+  | Custom x -> resolve_custom_hash x !custom_handlers
 
 let entry entry_desc =
   let entry_hash = entry_desc_hash entry_desc in
