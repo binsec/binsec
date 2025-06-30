@@ -1,4 +1,15 @@
-## 0.10.0 (2025-02-17)
+## 0.10.1 (2025-06-30)
+
+** Misc
+
+- Minor changes in the DBA printer (sync operator names with `sse` script)
+- Experimental support for extensible *custom* entries in formulas
+
+** Bugs
+
+- Fix some issues with x86 and RISCV disassembly
+
+## 0.10.0 (2025-02-16)
 
 ** Features
 

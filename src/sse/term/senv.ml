@@ -127,6 +127,7 @@ struct
   type t = {
     constraints : Expr.t list;
     (* reversed sequence of assertions *)
+    clauses : int;
     mutable deps : BvSet.t BvMap.t;
     mutable domains : D.t BvMap.t;
     mutable anchors : K.t;
@@ -179,6 +180,7 @@ struct
     let addr_space = Kernel_options.Machine.word_size () in
     {
       constraints = [];
+      clauses = 0;
       deps = BvMap.empty;
       domains = BvMap.empty;
       anchors = K.empty;
@@ -253,7 +255,8 @@ struct
           QS.Preprocess.incr_true ();
           Some state
       | Unknown ->
-          let constraints = cond :: state.constraints in
+          let constraints = cond :: state.constraints
+          and clauses = state.clauses + 1 in
           if Bitvector.zero = Model.eval state.model cond then (
             QS.Solver.start_timer ();
             let r = Solver.check_sat ?timeout state.lmem constraints in
@@ -262,12 +265,12 @@ struct
             | Unknown -> raise Unknown
             | Unsat -> None
             | Sat model ->
-                let state = { state with constraints; model } in
+                let state = { state with constraints; clauses; model } in
                 Overapprox.refine state cond D.one;
                 Some state)
           else (
             QS.Preprocess.incr_true ();
-            let state = { state with constraints } in
+            let state = { state with constraints; clauses } in
             Overapprox.refine state cond D.one;
             Some state)
 
@@ -288,7 +291,8 @@ struct
           True state
       | Unknown -> (
           let tcons = cond :: state.constraints
-          and fcons = Expr.lognot cond :: state.constraints in
+          and fcons = Expr.lognot cond :: state.constraints
+          and clauses = state.clauses + 1 in
           let e = Model.eval state.model cond in
           let to_check, constraints =
             if Bv.is_zero e then (tcons, fcons) else (fcons, tcons)
@@ -300,21 +304,21 @@ struct
           | Unknown -> raise Unknown
           | Unsat ->
               if Bv.is_zero e then (
-                let state = { state with constraints } in
+                let state = { state with constraints; clauses } in
                 Overapprox.refine state cond D.zero;
                 False state)
               else
-                let state = { state with constraints } in
+                let state = { state with constraints; clauses } in
                 Overapprox.refine state cond D.one;
                 True state
           | Sat model ->
               let t, f =
                 if Bv.is_zero e then
-                  ( { state with constraints = to_check; model },
-                    { state with constraints } )
+                  ( { state with constraints = to_check; clauses; model },
+                    { state with constraints; clauses } )
                 else
-                  ( { state with constraints },
-                    { state with constraints = to_check; model } )
+                  ( { state with constraints; clauses },
+                    { state with constraints = to_check; clauses; model } )
               in
               Overapprox.refine t cond D.one;
               Overapprox.refine f cond D.zero;
@@ -328,7 +332,12 @@ struct
           (fun bv model enum ->
             let cond = Expr.equal e (Expr.constant bv) in
             let state =
-              { state with constraints = cond :: state.constraints; model }
+              {
+                state with
+                constraints = cond :: state.constraints;
+                clauses = state.clauses + 1;
+                model;
+              }
             in
             ignore (Overapprox.eval state cond);
             Overapprox.refine state cond D.one;
@@ -358,7 +367,11 @@ struct
               QS.Preprocess.incr_const ();
               let cond = Expr.equal e (Expr.constant bv) in
               let state =
-                { state with constraints = cond :: state.constraints }
+                {
+                  state with
+                  constraints = cond :: state.constraints;
+                  clauses = state.clauses + 1;
+                }
               in
               ignore (Overapprox.eval state cond);
               Overapprox.refine state cond D.one;
@@ -371,60 +384,88 @@ struct
             | Point _ -> enum
             | Top | Seq _ -> with_solver state e n enum except)
 
-  let merge ~parent t t' =
+  let rec zip c0 n0 c1 n1 c0' c1' =
+    if n0 < n1 then
+      zip c0 n0 (List.tl c1) (n1 - 1) c0' (Expr.logand c1' (List.hd c1))
+    else if n1 < n0 then
+      zip (List.tl c0) (n0 - 1) c1 n1 (Expr.logand c0' (List.hd c0)) c1'
+    else if c0 == c1 then (c0', c1', c0, n0)
+    else
+      zip (List.tl c0) (n0 - 1) (List.tl c1) (n1 - 1)
+        (Expr.logand c0' (List.hd c0))
+        (Expr.logand c1' (List.hd c1))
+
+  let zip c0 n0 c1 n1 =
+    let c0', c1', common, n = zip c0 n0 c1 n1 Expr.one Expr.one in
+    (c0', c1', common, n)
+
+  let merge ~parent:_ t t' =
     if t == t' then t
-    else if t.lmem == t'.lmem then
-      match (t.constraints, t'.constraints) with
-      | c :: constraints, c' :: constraints'
-        when constraints == constraints' && Expr.is_equal c (Expr.lognot c') ->
-          let domains = parent.domains
-          and anchors = K.union t.anchors t'.anchors
-          and deps =
-            BvMap.merge
-              (fun _ o o' ->
-                match (o, o') with
-                | None, None -> assert false
-                | None, Some _ -> o'
-                | Some _, None -> o
-                | Some d, Some d' -> Some (BvSet.union d d'))
-              t.deps t'.deps
-          and vsymbols =
-            if t.vsymbols == t'.vsymbols then t.vsymbols
-            else
-              I.merge
-                (fun _ o0 o1 ->
-                  match (o0, o1) with
-                  | Some e0, Some e1 ->
-                      if Expr.is_equal e0 e1 then o0
-                      else Some (Expr.ite c e0 e1)
-                  | (Some _ | None), (Some _ | None) ->
-                      raise_notrace Non_mergeable)
-                t.vsymbols t'.vsymbols
-          and varrays =
-            if t.varrays == t'.varrays then t.varrays
-            else
-              S.merge
-                (fun _ o0 o1 ->
-                  match (o0, o1) with
-                  | Some a0, Some a1 -> Some (MMU.merge parent c a0 a1)
-                  | (Some _ | None), (Some _ | None) ->
-                      raise_notrace Non_mergeable)
-                t.varrays t'.varrays
-          and vmemory = MMU.merge parent c t.vmemory t'.vmemory
-          and lmem = t.lmem
-          and model = t.model in
-          {
-            constraints;
-            deps;
-            domains;
-            anchors;
-            vsymbols;
-            varrays;
-            vmemory;
-            lmem;
-            model;
-          }
-      | _ -> raise_notrace Non_mergeable
+    else if t.lmem == t'.lmem then (
+      let c, c', common, n =
+        zip t.constraints t.clauses t'.constraints t'.clauses
+      in
+      let cu = Expr.logor c c' in
+      let constraints = cu :: common
+      and clauses = n + 1
+      and domains =
+        BvMap.merge
+          (fun e o0 o1 ->
+            match (o0, o1) with
+            | None, None -> assert false
+            | Some d0, Some d1 -> Some (D.union ~size:(Expr.sizeof e) d0 d1)
+            | (Some _ | None), (Some _ | None) -> Some (D.top (Expr.sizeof e)))
+          t.domains t'.domains
+      and anchors = K.union t.anchors t'.anchors
+      and deps =
+        BvMap.merge
+          (fun _ o o' ->
+            match (o, o') with
+            | None, None -> assert false
+            | None, Some _ -> o'
+            | Some _, None -> o
+            | Some d, Some d' -> Some (BvSet.union d d'))
+          t.deps t'.deps
+      and vsymbols =
+        if t.vsymbols == t'.vsymbols then t.vsymbols
+        else
+          I.merge
+            (fun _ o0 o1 ->
+              match (o0, o1) with
+              | None, None -> assert false
+              | Some e0, Some e1 ->
+                  if Expr.is_equal e0 e1 then o0 else Some (Expr.ite c' e1 e0)
+              | Some _, None -> o0
+              | None, Some _ -> o1)
+            t.vsymbols t'.vsymbols
+      and lmem = t.lmem
+      and model = t.model in
+      let t'' =
+        {
+          t with
+          constraints;
+          clauses;
+          deps;
+          domains;
+          anchors;
+          vsymbols;
+          lmem;
+          model;
+        }
+      in
+      ignore (Overapprox.eval t'' cu);
+      let varrays =
+        if t.varrays == t'.varrays then t.varrays
+        else
+          S.merge
+            (fun _ o0 o1 ->
+              match (o0, o1) with
+              | Some a0, Some a1 -> Some (MMU.merge t'' c' a1 a0)
+              | (Some _ | None), (Some _ | None) -> raise_notrace Non_mergeable)
+            t.varrays t'.varrays
+      and vmemory = MMU.merge t'' c' t'.vmemory t.vmemory in
+      Overapprox.refine t'' cu D.one;
+      { t'' with varrays; vmemory })
     else raise_notrace Non_mergeable
 
   module Value = struct
