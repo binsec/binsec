@@ -3,6 +3,14 @@
 Linux x86-64 environment with:
 - `binsec`
 
+# Setup
+Using MSYS2 terminal:
+
+```
+$ curl --output polygraph.exe 'https://hackropole.fr/challenges/fcsc2025-reverse-polygraph/public/polygraph.exe'
+$ ./polygraph.exe <<< '00112233445566778899AABBCCDDEEFF'
+```
+
 # Sources
 
 - binary challenge:     [polygraph.exe](https://hackropole.fr/fr/challenges/reverse/fcsc2025-reverse-polygraph/)
@@ -15,28 +23,26 @@ Find the secret such that the output isn't `Liar!!`.
 # Command
 
 ```console
-$ binsec -sse -sse-script crackme.ini polygraph.exe -sse-depth 10000000 | egrep bread | sort
+$ binsec -sse -sse-script crackme.ini polygraph.exe -sse-depth 10000000
 ```
 
 # Expect
 
-Each byte of the non-printable secret is stored in `bread`.
+The value `secret_key` holds the secret.
+BINSEC log should contain the following entry.
 
 ```console
-             bread!4 : 0x2a
-             bread!5 : 0xb8
-             bread!6 : 0x57
-             bread!7 : 0xa5
-             bread!8 : 0xfb
-             bread!9 : 0xe0
-             bread!a : 0xa8
-             bread!b : 0x67
-             bread!c : 0xbf
-             bread!d : 0xd8
-             bread!e : 0xab
-             bread!f : 0xeb
-             bread!g : 0xf1
-             bread!h : 0xe9
-             bread!i : 0xc8
-             bread!j : 0x31
+[sse:result] Value secret_key<128> : 0x2ab857a5fbe0a867bfd8abebf1e9c831
 ```
+
+`secret_value` can be converted to hex value using python:
+
+```py
+>>> secret_key = 0x2ab857a5fbe0a867bfd8abebf1e9c831
+>>> secret_key.to_bytes(128//8, "big").hex()
+'2ab857a5fbe0a867bfd8abebf1e9c831'
+```
+
+## Credit
+
+[sheidan](https://github.com/Sh3idan)
