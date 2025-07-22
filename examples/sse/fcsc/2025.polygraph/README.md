@@ -35,14 +35,6 @@ BINSEC log should contain the following entry.
 [sse:result] Value secret_key<128> : 0x2ab857a5fbe0a867bfd8abebf1e9c831
 ```
 
-`secret_value` can be converted to hex value using python:
-
-```py
->>> secret_key = 0x2ab857a5fbe0a867bfd8abebf1e9c831
->>> secret_key.to_bytes(128//8, "big").hex()
-'2ab857a5fbe0a867bfd8abebf1e9c831'
-```
-
 ## Credit
 
 [sheidan](https://github.com/Sh3idan)
