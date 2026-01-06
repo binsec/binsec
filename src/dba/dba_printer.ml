@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,7 +24,7 @@ open Format
 module type Renderer = sig
   val binary_ops : (Dba.Binary_op.t * string) list
   val unary_ops : (Dba.Unary_op.t * string) list
-  val endiannesses : (Machine.endianness * string) list
+  val endiannesses : (Dba.endianness * string) list
   val string_of_digit_char : char -> string
   val left_right_parentheses : string * string
 end
@@ -37,8 +37,8 @@ module AsciiRenderer = struct
       (Dba.Binary_op.Mult, "*");
       (Dba.Binary_op.DivU, "/u");
       (Dba.Binary_op.DivS, "/s");
-      (Dba.Binary_op.ModU, "%u");
-      (Dba.Binary_op.ModS, "%s");
+      (Dba.Binary_op.RemU, "%u");
+      (Dba.Binary_op.RemS, "%s");
       (Dba.Binary_op.Or, "|");
       (Dba.Binary_op.And, "&");
       (Dba.Binary_op.Xor, "^");
@@ -61,7 +61,7 @@ module AsciiRenderer = struct
     ]
 
   let unary_ops = [ (Dba.Unary_op.UMinus, "-"); (Dba.Unary_op.Not, "!") ]
-  let endiannesses = [ (Machine.BigEndian, "->"); (Machine.LittleEndian, "<-") ]
+  let endiannesses = [ (Dba.BigEndian, "->"); (Dba.LittleEndian, "<-") ]
   let string_of_digit_char c = Format.sprintf "%c" c
   let left_right_parentheses = ("(", ")")
 end
@@ -74,8 +74,8 @@ module UnicodeRenderer : Renderer = struct
       (Dba.Binary_op.Mult, "*");
       (Dba.Binary_op.DivU, "/");
       (Dba.Binary_op.DivS, "/𝒔");
-      (Dba.Binary_op.ModU, "mod𝒖");
-      (Dba.Binary_op.ModS, "mod𝒔");
+      (Dba.Binary_op.RemU, "%𝒖");
+      (Dba.Binary_op.RemS, "%𝒔");
       (Dba.Binary_op.Or, "||");
       (Dba.Binary_op.And, "&&");
       (Dba.Binary_op.Xor, "⨁");
@@ -98,8 +98,7 @@ module UnicodeRenderer : Renderer = struct
     ]
 
   let unary_ops = [ (Dba.Unary_op.UMinus, "-"); (Dba.Unary_op.Not, "¬") ]
-
-  let endiannesses = [ (Machine.LittleEndian, "𝐿"); (Machine.BigEndian, "𝐵") ]
+  let endiannesses = [ (Dba.LittleEndian, "𝐿"); (Dba.BigEndian, "𝐵") ]
 
   let string_of_digit_char = function
     (* Unicode lowercase digits starts at 0x2080 *)

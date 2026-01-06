@@ -1,0 +1,33 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.smtlib.bindings)
+ (name binsec_smtlib_bindings)
+ (modules :standard)
+ (libraries
+  binsec.base
+  (select
+   bitwuzla_c_binding.ml
+   from
+   (bitwuzla -> bitwuzla_c_binding.enabled.ml)
+   (!bitwuzla -> bitwuzla_c_binding.stub.ml))
+  (select
+   bitwuzla_cxx_binding.ml
+   from
+   (bitwuzla-cxx -> bitwuzla_cxx_binding.enabled.ml)
+   (!bitwuzla-cxx -> bitwuzla_cxx_binding.stub.ml))
+  (select
+   z3_binding.ml
+   from
+   (z3 -> z3_binding.enabled.ml)
+   (!z3 -> z3_binding.stub.ml))))
+
+(rule
+ (target binsec_smtlib_bindings.mli)
+ (deps common.ml factories.inc)
+ (action
+  (with-stdout-to
+   %{target}
+   (progn
+    (cat common.ml)
+    (cat factories.inc)))))

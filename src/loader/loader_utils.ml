@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,8 +19,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Basic_types.Integers
+
 let get_byte_at img addr =
-  Bitvector.value_of addr |> Z.to_int |> Loader.read_address img
+  Bitvector.value_of addr |> Virtual_address.of_bigint
+  |> Loader.read_address img |> Uint8.to_int
 
 (* { Manipulation of symbols } *)
 
@@ -40,7 +43,7 @@ let address_of_symbol_by_name ~name img =
   | Some symbol -> Some (address_of_symbol symbol)
   | None -> None
 
-let size_of_symbol symbol =
+let size_of_symbol symbol : int =
   let header = Loader.Symbol.header symbol in
   match header with
   | Loader.ELF elf -> elf.Loader_elf.Sym.size
@@ -56,8 +59,8 @@ let size_of_symbol_by_name ~name img =
 let symbol_interval symbol =
   let start_addr = address_of_symbol symbol in
   let size = size_of_symbol symbol in
-  let end_addr = start_addr + size in
-  (Virtual_address.create start_addr, Virtual_address.create end_addr)
+  let end_addr = Virtual_address.add_int size start_addr in
+  (start_addr, end_addr)
 
 let symbol_interval_by_name ~name img =
   match symbol_by_name ~name img with
@@ -79,14 +82,18 @@ let belongs_to_symbol_by_name ~name img addr =
 let interval section =
   let open Loader_types in
   let sec_start = (Loader.Section.pos section).virt in
-  let sec_end = sec_start + (Loader.Section.size section).virt - 1 in
+  let sec_end =
+    Virtual_address.add_bigint
+      (Z.pred (Loader.Section.size section).virt)
+      sec_start
+  in
   (sec_start, sec_end)
 
 let in_section section addr =
   let open Loader_types in
   let lo = (Loader.Section.pos section).virt
   and sz = (Loader.Section.size section).virt in
-  let hi = lo + sz in
+  let hi = Virtual_address.add_bigint sz lo in
   addr >= lo && addr < hi
 
 let find_section ~p img =
@@ -110,7 +117,7 @@ let section_slice_by_name section_name img =
 let section_slice_by_address ~address img =
   find_section_by_address_exn img ~address |> interval
 
-let entry_point img = Loader.Img.entry img |> Virtual_address.create
+let entry_point img = Loader.Img.entry img
 
 let address_of_symbol_or_section_by_name ~name img =
   match address_of_symbol_by_name ~name img with
@@ -127,8 +134,9 @@ let size_of_symbol_or_section_by_name ~name img =
   | None -> (
       try
         Some
-          (Loader.Section.size (find_section_by_name name img))
-            .Loader_types.virt
+          (Z.to_int
+             (Loader.Section.size (find_section_by_name name img))
+               .Loader_types.virt)
       with Not_found -> None)
 
 let interval_of_symbol_or_section_by_name ~name img =
@@ -139,7 +147,7 @@ let interval_of_symbol_or_section_by_name ~name img =
         let section = find_section_by_name name img in
         let p = (Loader.Section.pos section).Loader_types.virt
         and s = (Loader.Section.size section).Loader_types.virt in
-        Some (Virtual_address.create p, Virtual_address.create (p + s))
+        Some (p, Virtual_address.add_bigint s p)
       with Not_found -> None)
 
 module Binary_loc = struct
@@ -185,11 +193,7 @@ module Binary_loc = struct
    * | exception Failure "int_of_string" -> Name s *)
 
   let ( >> ) g f = match g with None -> None | Some v -> Some (f v)
-
-  let address_from_img name img =
-    match address_of_symbol_by_name img ~name with
-    | None -> None
-    | Some i -> Some (Virtual_address.create i)
+  let address_from_img name img = address_of_symbol_by_name img ~name
 
   let to_virtual_address_from_file ~filename t =
     let rec eval = function

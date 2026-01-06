@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,13 +19,16 @@
 (*                                                                        *)
 (**************************************************************************)
 
+type 'a id = ..
+
 exception Empty
 
-type trilean = True | False | Unknown
+type trilean = False | True | Unknown
 type projection = Top | Point of Z.t | Seq of { start : Z.t; n : Z.t }
 
 module type S = sig
   type t
+  type 'a id += T : t id
 
   val pp : Format.formatter -> t -> unit
 
@@ -41,12 +44,18 @@ module type S = sig
   val inter : size:int -> t -> t -> t
   (** [inter ~size t t'] returns the intersection of the intervals [t] and [t'].
 
-      @raise [Empty] If there is no intersection.
+      @raise Empty If there is no intersection.
   *)
+
+  val is_point : size:int -> t -> bool
+  (** [is_point ~size t] checks if [t] has a unique value *)
 
   val is_zero : t -> trilean
   (** [is_zero t] checks if [t] least significant bit is [0] *)
 
+  val cardinal : size:int -> t -> Z.t
+  val iter : (Z.t -> unit) -> size:int -> t -> unit
+  val fold : (Z.t -> 'a -> 'a) -> 'a -> size:int -> t -> 'a
   val project : size:int -> t -> projection
   val top : int -> t
   val constant : size:int -> Z.t -> t
@@ -60,10 +69,10 @@ module type S = sig
   val sub_feedback : size:int -> t -> t -> t -> t * t
   val mul : size:int -> t -> t -> t
   val mul_feedback : size:int -> t -> t -> t -> t * t
-  val smod : size:int -> t -> t -> t
-  val smod_feedback : size:int -> t -> t -> t -> t * t
-  val umod : size:int -> t -> t -> t
-  val umod_feedback : size:int -> t -> t -> t -> t * t
+  val srem : size:int -> t -> t -> t
+  val srem_feedback : size:int -> t -> t -> t -> t * t
+  val urem : size:int -> t -> t -> t
+  val urem_feedback : size:int -> t -> t -> t -> t * t
   val udiv : size:int -> t -> t -> t
   val udiv_feedback : size:int -> t -> t -> t -> t * t
   val sdiv : size:int -> t -> t -> t

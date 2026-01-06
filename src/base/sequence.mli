@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -26,7 +26,7 @@ val empty : 'a t
 val length : 'a t -> int
 
 val append : 'a t -> 'a t -> 'a t
-(** append a b is the equivalent of b @ a with lists *)
+(** append a b is the equivalent of b \@ a with lists *)
 
 (*
 

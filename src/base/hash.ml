@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -32,10 +32,11 @@ external fold_string : (t[@untagged]) -> string -> (t[@untagged])
 [@@noalloc]
 
 let return h =
-  let h = h lxor (h lsr 16) in
-  let h = h * 0x85ebca6b in
-  let h = h lxor (h lsr 13) in
-  let h = h * 0xc2b2ae35 in
-  let h = h lxor (h lsr 16) in
-  h land 0x3fffffff
+  let h = Nativeint.of_int h in
+  let h = Nativeint.logxor h (Nativeint.shift_right_logical h 16) in
+  let h = Nativeint.mul h 0x85ebca6bn in
+  let h = Nativeint.logxor h (Nativeint.shift_right_logical h 13) in
+  let h = Nativeint.mul h 0xc2b2ae35n in
+  let h = Nativeint.logxor h (Nativeint.shift_right_logical h 16) in
+  Nativeint.to_int h land 0x3fffffff
 [@@inline]

@@ -1,0 +1,17 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.isa.ppc64)
+ (name binsec_isa_ppc64)
+ (modules (:standard))
+ (library_flags
+  (:standard -linkall))
+ (flags
+  (:standard -w -3 -open Binsec_kernel))
+ (libraries
+  binsec.kernel
+  (select
+   ppc64ToDba.ml
+   from
+   (unisim_archisec.ppc64dba -> ppc64ToDba.enabled.ml)
+   (-> ppc64ToDba.disabled.ml))))

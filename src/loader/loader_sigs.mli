@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,9 +27,8 @@ module type S = sig
     type header
 
     val name : t -> string
-    val flag : t -> int
-    val pos : t -> int map
-    val size : t -> int map
+    val pos : t -> (int, Virtual_address.t) map
+    val size : t -> (int, Z.t) map
     val header : t -> header
     val has_flag : section_flag -> t -> bool
   end
@@ -39,7 +38,7 @@ module type S = sig
     type header
 
     val name : t -> string
-    val value : t -> int
+    val value : t -> Virtual_address.t
     val header : t -> header
   end
 
@@ -48,23 +47,21 @@ module type S = sig
     type header
 
     val arch : t -> Machine.t
-    val entry : t -> int
+    val entry : t -> Virtual_address.t
     val sections : t -> Section.t array
     val symbols : t -> Symbol.t array
     val header : t -> header
-    val cursor : ?at:int -> t -> Loader_buf.cursor
-    val content : t -> Section.t -> Loader_buf.t
+    val cursor : ?at:int -> t -> int Reader.t
+    val content : t -> Section.t -> buffer
+    val buffer : t -> buffer
 
     include Sigs.PRINTABLE with type t := t
   end
 
-  val check_magic : Loader_buf.t -> bool
-  val load : Loader_buf.t -> Img.t
+  val check_magic : buffer -> bool
+  val load : buffer -> Img.t
   val load_file_descr : Unix.file_descr -> Img.t
   val load_file : string -> Img.t
   val read_offset : Img.t -> int -> u8
-  val read_address : Img.t -> int -> u8
-
-  module Offset : Loader_buf.S with type t = Img.t
-  module Address : Loader_buf.S with type t = Img.t
+  val read_address : Img.t -> Virtual_address.t -> u8
 end

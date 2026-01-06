@@ -66,14 +66,14 @@ Let us write the corresponding script.
 ```
 starting from <main>
 
-concretize stack
+with concrete stack pointer
 secret global s1
 public global s2, n
 
 assume 0 < n < 10
 
 halt at <exit>
-reach all
+explore all
 ```
 
 The analysis will start from `main`, trying to explore all path that reach `exit`. We mark the variable `s1` as `secret` while `s2` and `n` are tagged `public`.

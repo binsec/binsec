@@ -1,0 +1,48 @@
+(include_subdirs no)
+
+(executable
+ (public_name binsec)
+ (package binsec)
+ (name main)
+ (modules main)
+ (flags
+  (:standard -open Binsec_cli -open Binsec))
+ (libraries
+  binsec
+  binsec.cli.disasm
+  binsec.cli.sse
+  binsec.cli.bbsse
+  binsec.cli.xtrasec))
+
+(library
+ (public_name binsec)
+ (modules :standard \ main)
+ (library_flags
+  (:standard -linkall))
+ (flags
+  (:standard
+   -open
+   Binsec_base
+   -open
+   Binsec_kernel
+   -open
+   Binsec_unix
+   -open
+   Binsec_cli
+   -w
+   -3-69))
+ (libraries
+  unix
+  ocamlgraph
+  binsec.base
+  binsec.kernel
+  binsec.isa.armv7
+  binsec.isa.armv8
+  binsec.isa.ppc64
+  binsec.isa.riscv
+  binsec.isa.sparcv8
+  binsec.isa.x86_32
+  binsec.isa.x86_64
+  binsec.unix
+  binsec.smtlib
+  binsec.cli))

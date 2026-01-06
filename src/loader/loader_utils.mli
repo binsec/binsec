@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,24 +23,28 @@
 
 val find_section_by_name : string -> Loader.Img.t -> Loader.Section.t
 
-val section_slice_by_name : string -> Loader.Img.t -> int * int
+val section_slice_by_name :
+  string -> Loader.Img.t -> Virtual_address.t * Virtual_address.t
 (** [section_slice section_name img] returns the interval [lo, hi] of virtual
     addresses defining the section [section_name].
 *)
 
 val find_section_by_address :
-  address:int -> Loader.Img.t -> Loader.Section.t option
+  address:Virtual_address.t -> Loader.Img.t -> Loader.Section.t option
 
 val find_section_by_address_exn :
-  address:int -> Loader.Img.t -> Loader.Section.t
+  address:Virtual_address.t -> Loader.Img.t -> Loader.Section.t
 (** @raise Failure exception if no such section exists *)
 
-val section_slice_by_address : address:int -> Loader.Img.t -> int * int
+val section_slice_by_address :
+  address:Virtual_address.t ->
+  Loader.Img.t ->
+  Virtual_address.t * Virtual_address.t
 
 val find_section :
   p:(Loader.Section.t -> bool) -> Loader.Img.t -> Loader.Section.t option
 
-(** { Manipulation of symbols } **)
+(** {2 Manipulation of symbols } *)
 
 (** Functions that are of the form [f_by_name] call the function
     [symbol_by_name] which is costly because it compares all the symbols in the
@@ -51,11 +55,13 @@ val symbol_by_name : name:String.t -> Loader.Img.t -> Loader.Symbol.t option
 (** [symbol_by_name ~name img] Returns [Some] symbol [name] in [img].
     If [img] contains no symbol [name], returns [None]. *)
 
-val address_of_symbol : Loader.Symbol.t -> int
+val address_of_symbol : Loader.Symbol.t -> Virtual_address.t
 (** [address_of_symbol symbol] finds [Some address] where the symbole
     is defined. Otherwise returns [None]. *)
 
-val address_of_symbol_by_name : name:string -> Loader.Img.t -> int option
+val address_of_symbol_by_name :
+  name:string -> Loader.Img.t -> Virtual_address.t option
+
 val size_of_symbol : Loader.Symbol.t -> int
 val size_of_symbol_by_name : name:string -> Loader.Img.t -> int option
 
@@ -76,7 +82,7 @@ val belongs_to_symbol_by_name :
   name:string -> Loader.Img.t -> Virtual_address.t -> bool
 
 val address_of_symbol_or_section_by_name :
-  name:string -> Loader.Img.t -> int option
+  name:string -> Loader.Img.t -> Virtual_address.t option
 
 val size_of_symbol_or_section_by_name :
   name:string -> Loader.Img.t -> int option
@@ -97,14 +103,14 @@ module Binary_loc : sig
     | Offset of t * int
 
   val of_string : string -> t
-  (** {6 Constructors} *)
+  (** {4 Constructors} *)
 
   val name : string -> t
   val address : Virtual_address.t -> t
   val offset : int -> t -> t
   val pp : Format.formatter -> t -> unit
 
-  (** {6 Accessors} *)
+  (** {4 Accessors} *)
 
   val to_virtual_address_from_file :
     filename:string -> t -> Virtual_address.t option

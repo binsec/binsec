@@ -1,6 +1,16 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.kernel.parser)
+ (name binsec_kernel_parser)
+ (modules :standard)
+ (flags
+  (:standard -open Binsec_base -open Binsec_kernel_dba -w "-58"))
+ (libraries binsec.base binsec_kernel_dba))
+
 (menhir
  (modules parser)
- (flags --explain --strict))
+ (flags --explain --strict --fixed-exception))
 
 (ocamllex
  (modules lexer))

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,15 +24,16 @@
 (** Abstract representation of hardware architecture *)
 
 type bitwidth = [ `x16 | `x32 | `x64 | `x128 ]
-type endianness = LittleEndian | BigEndian
+type endianness = Basic_types.endianness = LittleEndian | BigEndian
+type thumb_mode = Basic_types.Ternary.t = False | True | Unknown
 
 type isa = private
   | Unknown
-  | ARM of { rev : [ `v7 | `v8 ]; endianness : endianness }
+  | ARM of { rev : [ `v7 of thumb_mode | `v8 ]; endianness : endianness }
   | PPC of { bits : [ `x32 | `x64 ]; endianness : endianness }
   | RISCV of { bits : [ `x32 | `x64 | `x128 ] }
   | SPARC of { rev : [ `v8 ] }
-  | X86 of { bits : [ `x16 | `x32 | `x64 ] }
+  | X86 of { bits : [ `x32 | `x64 ] }
   | Z80
 
 module ISA : sig
@@ -40,6 +41,7 @@ module ISA : sig
 
   val endianness : t -> endianness
   val bits : t -> bitwidth
+  val word_size : t -> int
   val stack_register : t -> string
   val to_string : isa -> string
 end
@@ -58,7 +60,7 @@ module Endianness : Sigs.PRINTABLE with type t = endianness
 type t = isa
 
 val amd64 : t
-val armv7 : endianness -> t
+val armv7 : ?thumb:thumb_mode -> endianness -> t
 val armv8 : endianness -> t
 val ppc64 : endianness -> t
 val riscv : [ `x32 | `x64 | `x128 ] -> t

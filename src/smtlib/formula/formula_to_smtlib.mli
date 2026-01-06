@@ -1,0 +1,29 @@
+(**************************************************************************)
+(*  This file is part of BINSEC.                                          *)
+(*                                                                        *)
+(*  Copyright (C) 2016-2026                                               *)
+(*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
+(*         alternatives)                                                  *)
+(*                                                                        *)
+(*  you can redistribute it and/or modify it under the terms of the GNU   *)
+(*  Lesser General Public License as published by the Free Software       *)
+(*  Foundation, version 2.1.                                              *)
+(*                                                                        *)
+(*  It is distributed in the hope that it will be useful,                 *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of        *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *)
+(*  GNU Lesser General Public License for more details.                   *)
+(*                                                                        *)
+(*  See the GNU Lesser General Public License version 2.1                 *)
+(*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
+(*                                                                        *)
+(**************************************************************************)
+
+(** Translation functions from BINSEC inner representation to SMT-LIB terms *)
+
+val bl_term : Formula.bl_term -> Smtlib.term
+val bv_term : Formula.bv_term -> Smtlib.term
+val ax_term : Formula.ax_term -> Smtlib.term
+val term : Formula.term -> Smtlib.term
+val entry : Formula.entry -> Smtlib.command
+val formula : theory:string -> Formula.formula -> Smtlib.script

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -75,37 +75,10 @@ module type ITERABLE = sig
   val pred : t -> t
 end
 
-module type Eq = sig
+module type EQ = sig
   type t
 
   val equal : t -> t -> bool
-end
-
-module type Collection = sig
-  include HASHABLE
-
-  module Map : sig
-    include Map.S with type key = t
-
-    val pop : 'a t -> (key * 'a) * 'a t
-    val keys : 'a t -> key list
-    val values : 'a t -> 'a list
-  end
-
-  module Set : sig
-    include Set.S with type elt = t
-
-    val pop : t -> elt * t
-  end
-
-  module Hamt : Hashamt.S with type key = t
-
-  module Htbl : sig
-    include Hashtbl.S with type key = t
-
-    val filter : (key -> 'a -> bool) -> 'a t -> 'a t
-    val bindings : 'a t -> (key * 'a) list
-  end
 end
 
 module type COMPARISON = sig

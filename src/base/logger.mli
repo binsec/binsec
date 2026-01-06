@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -92,7 +92,6 @@ module type S = sig
       You cannot turn off [fatal_channel] or [result_channel].
   *)
 
-  val cli_handler : Arg.spec
   val quiet : unit -> unit
 
   val channel_set_color : bool -> channel -> unit
@@ -137,24 +136,22 @@ module type S = sig
   *)
 
   val get_color : unit -> bool
-
-  val set_zmq_logging_only : send:(string -> unit) -> bool -> unit
-  (** [set_zmq_logging_only ~send b identity] diverts all formatting operations
-      to an identity if [b] is [true].
-
-      Warning: all other formatters are erased.
-
-      If [b] is false, formatters are reset to default initial values.
-   *)
+  val set_logging : (string -> unit) option -> channel -> unit
 end
-
-(* {2 Functors} *)
 
 module type ChannelGroup = sig
   val name : string
 end
 
-module Make (G : ChannelGroup) : S
+module type GROUP = sig
+  include S
+  module Sub (_ : ChannelGroup) : S with type channel = channel
+end
+
+(* {2 Functors} *)
+
+module Make (_ : ChannelGroup) : S
+module Group (_ : ChannelGroup) : GROUP
 
 (* {2 Generic utilites} *)
 

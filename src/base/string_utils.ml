@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,15 +19,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-let start_with =
-  let rec iter prefix str n i =
-    if i = n then true
-    else
-      String.unsafe_get prefix i = String.unsafe_get str i
-      && iter prefix str n (i + 1)
-  in
-  fun ~prefix str -> iter prefix str (String.length prefix) 0
-
 let replace_chars f s =
   let b = Buffer.create (String.length s) in
   String.iter (fun c -> Buffer.add_string b (f c)) s;
@@ -42,30 +33,9 @@ let filter p s =
   String.iter (fun c -> if p c then Buffer.add_char b c) s;
   Buffer.contents b
 
-let fold f acc s =
-  let acc_ref = ref acc in
-  String.iter (fun c -> acc_ref := f !acc_ref c) s;
-  !acc_ref
-
 let char_codes s = Array.init (String.length s) (fun i -> Char.code s.[i])
 let remove_char c s = filter (fun c' -> c <> c') s
 let remove_newline = remove_char '\n'
-
-let for_all p s =
-  let len = String.length s in
-  let rec loop i = i >= len || (p s.[i] && loop (i + 1)) in
-  loop 0
-
-let exists p s =
-  let len = String.length s in
-  let rec loop i = if i >= len then false else p s.[i] || loop (i + 1) in
-  loop 0
-
-let split ~sep s =
-  let rexp = Str.regexp sep in
-  Str.split rexp s
-
-let cli_split s = split ~sep:"," s
 
 let lchop n s =
   assert (n >= 0);
@@ -95,16 +65,16 @@ let lfindi s p =
   in
   loop 0
 
-let contains subs s =
-  let ls = String.length s and lsubs = String.length subs in
-  lsubs = 0
-  || lsubs <= ls
-     &&
-     let rec loop = function
-       | -1 -> false
-       | n -> String.sub s n lsubs |> String.compare subs = 0 || loop (n - 1)
-     in
-     loop (ls - lsubs)
+let contains =
+  let rec scan pattern str len_pat len cur i j =
+    if j = len_pat then true
+    else if cur + len_pat > len + j then false
+    else if String.unsafe_get str i = String.unsafe_get pattern j then
+      scan pattern str len_pat len cur (i + 1) (j + 1)
+    else scan pattern str len_pat len (cur + 1) (cur + 1) 0
+  in
+  fun ~pattern str ->
+    scan pattern str (String.length pattern) (String.length str) 0 0 0
 
 let is_hex_char c =
   (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')

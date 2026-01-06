@@ -1,0 +1,10 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.unix)
+ (name binsec_unix)
+ (modules :standard)
+ (foreign_stubs
+  (language c)
+  (names subprocess))
+ (libraries unix))

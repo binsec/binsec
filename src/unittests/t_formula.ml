@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,18 +20,18 @@
 (**************************************************************************)
 
 open OUnit2
-open Formula
+open Binsec_smtlib.Formula
 
 (** asserts that two formulas are equal *)
 let eq_fm expected actual ctxt =
   assert_equal ~ctxt
-    ~printer:(fun fm -> Format.asprintf "%a" Formula_pp.pp_formula fm)
+    ~printer:(fun fm -> Format.asprintf "%a" pp_formula fm)
     expected actual
 
 (** asserts that two bv terms are equal *)
 let eq_bv expected actual ctxt =
   assert_equal ~ctxt
-    ~printer:(fun bv -> Format.asprintf "%a" Formula.Printing.p_bvterm bv)
+    ~printer:(fun bv -> Format.asprintf "%a" pp_bv_term bv)
     expected actual
 
 (** asserts there is not exception thrown when generating the term from the description *)
@@ -52,8 +52,8 @@ let from_list l = List.fold_left (fun fm entry -> push_front entry fm) empty l
 let from_string s =
   let smt =
     try
-      Parse_utils.read_string ~parser:Smtlib_parser.script
-        ~lexer:Smtlib_lexer.token ~string:s
+      Parse_utils.read_string ~parser:Binsec_smtlib.Lang.Parser.script
+        ~lexer:Binsec_smtlib.Lang.Lexer.token ~string:s
     with Failure s as e ->
       Format.eprintf "Failure: %s" s;
       raise e

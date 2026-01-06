@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,10 +19,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Basic_types.Integers
 open Loader_types
 
 module Section = struct
-  type t = Loader_buf.t
+  type t = buffer
 
   let has_flag f _ = match f with Read | Exec -> true | Write -> false
 
@@ -32,10 +33,9 @@ module Section = struct
 
   let size t =
     let raw = Bigarray.Array1.dim t in
-    { raw; virt = raw }
+    { raw; virt = Z.of_int raw }
 
-  let pos _ = { raw = 0; virt = 0 }
-  let flag _ = 0b110
+  let pos _ = { raw = 0; virt = Virtual_address.create 0 }
   let name _ = ".raw"
 end
 
@@ -56,29 +56,23 @@ module Img = struct
   let symbols _ = [||]
   let arch t = t.arch
   let header _ = ()
-  let entry _ = 0
-
-  let cursor ?(at = 0) t =
-    Loader_buf.cursor ~at Machine.LittleEndian (Array.get t.sections 0)
-
+  let entry _ = Virtual_address.create 0
+  let cursor ?at t = Reader.of_bigarray ?pos:at (Array.get t.sections 0)
   let content _ buf = buf
+  let buffer { content; _ } = content
   let pp ppf _ = Format.pp_print_string ppf "Raw image"
 end
 
 let check_magic _ = assert false
 
-let read_address img i =
-  try Bigarray.Array1.get img.Img.content i
+let read_offset img i =
+  try Int.unsafe_to_uint8 (Bigarray.Array1.get img.Img.content i)
   with Invalid_argument _ -> raise Not_found
 
-let read_offset = read_address
+let read_address img a = read_offset img (Virtual_address.to_int a)
 
 let load content =
-  {
-    Img.arch = Kernel_options.Machine.get ();
-    content;
-    sections = [| content |];
-  }
+  { Img.arch = Machine.unknown; content; sections = [| content |] }
 
 let load_file_descr file_descr =
   load
@@ -91,12 +85,3 @@ let load_file path =
   let img = load_file_descr file_descr in
   Unix.close file_descr;
   img
-
-module Offset = Loader_buf.Make (struct
-  type t = Img.t
-
-  let get t i = read_address t i
-  let dim t = Bigarray.Array1.dim t.Img.content
-end)
-
-module Address = Offset

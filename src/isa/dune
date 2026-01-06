@@ -1,0 +1,21 @@
+(include_subdirs unqualified)
+
+(library
+ (public_name binsec.kernel.isa)
+ (name binsec_kernel_isa)
+ (modules :standard)
+ (flags
+  :standard
+  -open
+  Binsec_base
+  -open
+  Binsec_kernel_dba
+  -open
+  Binsec_kernel_parser
+  -open
+  Binsec_kernel_loader)
+ (libraries
+  binsec.base
+  binsec_kernel_dba
+  binsec_kernel_parser
+  binsec_kernel_loader))

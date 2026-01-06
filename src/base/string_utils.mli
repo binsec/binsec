@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,9 +21,6 @@
 
 (** Extra functions over strings *)
 
-val start_with : prefix:string -> string -> bool
-(** [start_with ~prefix str] check if [str] starts with [prefix] *)
-
 val replace_chars : (char -> string) -> string -> string
 (** [replace_chars f s] creates a new string where all characters [c] from [s]
     have been replaced by the result of [f c]
@@ -36,14 +33,6 @@ val filter : (char -> bool) -> string -> string
 (** [filter p s] creates a copy of [s] containing the characters of [s]
     such that [p c = true],
 *)
-
-val fold : ('a -> char -> 'a) -> 'a -> string -> 'a
-(** [fold f acc s] computes (f .... (f (f acc s.[1]) s.[2]) .... s.[n]) where
-    [n] is String.length s - 1
- **)
-
-val for_all : (char -> bool) -> string -> bool
-val exists : (char -> bool) -> string -> bool
 
 val lfindi : string -> (char -> bool) -> int option
 (** [lfindi s p] retrieves the first index of a character verifying predicate
@@ -79,17 +68,9 @@ val size_of_hexstring : string -> int
     Unsafe function: it does not fully check that [s] is a valid hexstring.
 *)
 
-val contains : string -> string -> bool
-(** [contains subs s] return [true] if [subs] is a substring of [s]
+val contains : pattern:string -> string -> bool
+(** [contains ~pattern s] return [true] if [pattern] is a substring of [s]
 *)
-
-val split : sep:string -> string -> string list
-(** [split ~sep s] splits the string [s] into substrings, taking the string
-    [sep] as delimiter and returns the list of substrings.
-*)
-
-val cli_split : string -> string list
-(** [cli_split s] is [split ~sep:"," s] *)
 
 val char_codes : string -> int array
 

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,8 +19,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Binsec
-open Domains
+open Binsec.Domains
+module Bitvector = Binsec.Bitvector
 
 exception Skip
 
@@ -132,8 +132,8 @@ let%test "uminus" = unary Interval.uminus Bitvector.neg 4 4
 let%test "add" = binary Interval.add Bitvector.add 4 4
 let%test "sub" = binary Interval.sub Bitvector.sub 4 4
 let%test "mul" = binary Interval.mul Bitvector.mul 4 4
-let%test "smod" = binary Interval.smod (div Bitvector.smod) 4 4
-let%test "umod" = binary Interval.umod (div Bitvector.umod) 4 4
+let%test "srem" = binary Interval.srem (div Bitvector.srem) 4 4
+let%test "urem" = binary Interval.urem (div Bitvector.urem) 4 4
 let%test "udiv" = binary Interval.udiv (div Bitvector.udiv) 4 4
 let%test "sdiv" = binary Interval.sdiv (div Bitvector.sdiv) 4 4
 
@@ -180,7 +180,7 @@ let%test "restrict" =
       let hi = Z.to_int it.max and lo = Z.to_int it.min in
       unary
         (Interval.restrict ~hi ~lo)
-        ((Fun.flip Bitvector.extract) { hi; lo })
+        (Bitvector.extract ~hi ~lo)
         4
         (hi - lo + 1))
 

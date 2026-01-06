@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -31,7 +31,5 @@ val ones : int -> t
 val one : t
 val create : size:int -> min:Z.t -> max:Z.t -> stride:int -> t
 val mem : Z.t -> size:int -> t -> bool
-val iter : (Z.t -> unit) -> size:int -> t -> unit
-val fold : (Z.t -> 'a -> 'a) -> 'a -> size:int -> t -> 'a
 val for_all : (Z.t -> bool) -> size:int -> t -> bool
 val sum : size:int -> t -> Z.t

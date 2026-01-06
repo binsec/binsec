@@ -1,0 +1,20 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.cli.sse)
+ (name binsec_cli_sse)
+ (flags
+  (:standard -open Binsec -open Binsec_sse -open Binsec_cli))
+ (library_flags
+  (:standard -linkall))
+ (libraries
+  binsec.sse
+  binsec.sse.quick_merge
+  binsec.cli
+  binsec
+  threads
+  (select
+   screen.ml
+   from
+   (curses -> screen.enabled.ml)
+   (!curses -> screen.stubs.ml))))

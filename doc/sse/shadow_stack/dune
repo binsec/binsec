@@ -1,0 +1,17 @@
+(library
+ (public_name tuto.shadow_stack)
+ (name shadow_stack)
+ (modules shadow_stack)
+ (libraries binsec.sse))
+
+(library
+ (public_name tuto.registration)
+ (name registration)
+ (modules registration)
+ (libraries binsec.cli.sse tuto.shadow_stack))
+
+(plugin
+ (name tuto)
+ (libraries tuto.registration)
+ (site
+  (binsec plugins)))

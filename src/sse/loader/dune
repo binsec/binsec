@@ -1,0 +1,9 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.sse.loader)
+ (name binsec_sse_loader)
+ (modules :standard)
+ (flags
+  (:standard -open Binsec_kernel))
+ (libraries binsec.kernel binsec.script))

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,39 +19,40 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Loader_buf
+open Basic_types.Integers
+open Reader
 open Loader_types
 
 let read_magic t =
-  (not (dim t.buffer < 0x40))
-  && Read.u8 t = Char.code 'M'
-  && Read.u8 t = Char.code 'Z'
+  (not (dim t < 0x40))
+  && Uint8.to_char (Read.u8 t) = 'M'
+  && Uint8.to_char (Read.u8 t) = 'Z'
   &&
-  (seek t 0x3c;
-   seek t (Read.u32 t);
-   (not (t.position + 4 > dim t.buffer))
-   && Read.u8 t = Char.code 'P'
-   && Read.u8 t = Char.code 'E'
-   && Read.u8 t = 0x0
-   && Read.u8 t = 0x0)
+  (set_pos t 0x3c;
+   set_pos t (Uint32.to_int (Read.u32 t));
+   (not (get_pos t + 4 > dim t))
+   && Uint8.to_char (Read.u8 t) = 'P'
+   && Uint8.to_char (Read.u8 t) = 'E'
+   && Uint8.to_char (Read.u8 t) = '\x00'
+   && Uint8.to_char (Read.u8 t) = '\x00')
 
 let check_magic buffer =
-  let t = cursor Machine.LittleEndian buffer in
+  let t = of_bigarray buffer in
   read_magic t
 
 let init_cursor buffer =
-  let t = cursor Machine.LittleEndian buffer in
+  let t = of_bigarray buffer in
   if not (read_magic t) then invalid_format "No PE magic number";
   t
 
 (* File header *)
 type file_header = {
   machine : u16;
-  number_of_sections : u16;
+  number_of_sections : int;
   time_date_stamp : u32;
-  pointer_to_symbol_table : u32;
-  number_of_symbols : u32;
-  size_of_optional_header : u16;
+  pointer_to_symbol_table : int;
+  number_of_symbols : int;
+  size_of_optional_header : int;
   characteristics : u16;
 }
 
@@ -77,11 +78,11 @@ let arch = function
 let read_file_header t =
   ensure t 20 "File header truncated";
   let machine = Read.u16 t in
-  let number_of_sections = Read.u16 t in
+  let number_of_sections = Uint16.to_int (Read.u16 t) in
   let time_date_stamp = Read.u32 t in
-  let pointer_to_symbol_table = Read.u32 t in
-  let number_of_symbols = Read.u32 t in
-  let size_of_optional_header = Read.u16 t in
+  let pointer_to_symbol_table = Uint32.to_int (Read.u32 t) in
+  let number_of_symbols = Uint32.to_int (Read.u32 t) in
+  let size_of_optional_header = Uint16.to_int (Read.u16 t) in
   let characteristics = Read.u16 t in
   {
     machine;
@@ -99,13 +100,13 @@ type standard_fields = {
   size_of_code : u32;
   size_of_initialized_data : u32;
   size_of_uninitialized_data : u32;
-  address_of_entry_point : u32;
+  address_of_entry_point : Virtual_address.t;
   base_of_code : u32;
   base_of_data : u32 option;
 }
 
 type windows_fields = {
-  image_base : u64;
+  image_base : Virtual_address.t;
   section_alignement : u32;
   file_alignement : u32;
   size_of_image : u32;
@@ -154,7 +155,7 @@ let read_standard_fields32 t magic =
   let size_of_code = Read.u32 t in
   let size_of_initialized_data = Read.u32 t in
   let size_of_uninitialized_data = Read.u32 t in
-  let address_of_entry_point = Read.u32 t in
+  let address_of_entry_point = Virtual_address.of_uint32 (Read.u32 t) in
   let base_of_code = Read.u32 t in
   let base_of_data = Some (Read.u32 t) in
   {
@@ -174,7 +175,7 @@ let read_standard_fields64 t magic =
   let size_of_code = Read.u32 t in
   let size_of_initialized_data = Read.u32 t in
   let size_of_uninitialized_data = Read.u32 t in
-  let address_of_entry_point = Read.u32 t in
+  let address_of_entry_point = Virtual_address.of_uint32 (Read.u32 t) in
   let base_of_code = Read.u32 t in
   let base_of_data = None in
   {
@@ -190,14 +191,14 @@ let read_standard_fields64 t magic =
 let read_standard_fields t =
   ensure t 2 "PE magic number truncated";
   let magic = Read.u16 t in
-  match magic with
+  match Uint16.to_int magic with
   | 0x10b -> read_standard_fields32 t magic
   | 0x20b -> read_standard_fields64 t magic
   | _ -> invalid_format "Invalid PE image file"
 
 let read_windows_fields32 t =
   ensure t 68 "Windows fields truncated";
-  let image_base = Read.u32 t in
+  let image_base = Virtual_address.of_uint32 (Read.u32 t) in
   let section_alignement = Read.u32 t in
   let file_alignement = Read.u32 t in
   let _major_os_version = Read.u16 t in
@@ -206,17 +207,17 @@ let read_windows_fields32 t =
   let _minor_image_version = Read.u16 t in
   let _major_subsystem_version = Read.u16 t in
   let _minor_subsystem_version = Read.u16 t in
-  if not (Read.u32 t = 0) then invalid_format "Invalid Win32 version value";
+  if not (Read.i32 t = 0l) then invalid_format "Invalid Win32 version value";
   let size_of_image = Read.u32 t in
   let size_of_headers = Read.u32 t in
   let checksum = Read.u32 t in
   let subsystem = Read.u16 t in
   let dll_characteristics = Read.u16 t in
-  let size_of_stack_reserve = Read.u32 t in
-  let size_of_stack_commit = Read.u32 t in
-  let size_of_heap_reserve = Read.u32 t in
-  let size_of_heap_commit = Read.u32 t in
-  if not (Read.u32 t = 0) then invalid_format "Invalid loader flags";
+  let size_of_stack_reserve = Uint32.to_uint64 (Read.u32 t) in
+  let size_of_stack_commit = Uint32.to_uint64 (Read.u32 t) in
+  let size_of_heap_reserve = Uint32.to_uint64 (Read.u32 t) in
+  let size_of_heap_commit = Uint32.to_uint64 (Read.u32 t) in
+  if not (Read.i32 t = 0l) then invalid_format "Invalid loader flags";
   let number_of_rva_and_sizes = Read.u32 t in
   {
     image_base;
@@ -236,7 +237,7 @@ let read_windows_fields32 t =
 
 let read_windows_fields64 t =
   ensure t 88 "Windows fields truncated";
-  let image_base = Read.u64 t in
+  let image_base = Virtual_address.of_uint64 (Read.u64 t) in
   let section_alignement = Read.u32 t in
   let file_alignement = Read.u32 t in
   let _major_os_version = Read.u16 t in
@@ -245,7 +246,7 @@ let read_windows_fields64 t =
   let _minor_image_version = Read.u16 t in
   let _major_subsystem_version = Read.u16 t in
   let _minor_subsystem_version = Read.u16 t in
-  if not (Read.u32 t = 0) then invalid_format "Invalid Win32 version value";
+  if not (Read.i32 t = 0l) then invalid_format "Invalid Win32 version value";
   let size_of_image = Read.u32 t in
   let size_of_headers = Read.u32 t in
   let checksum = Read.u32 t in
@@ -255,7 +256,7 @@ let read_windows_fields64 t =
   let size_of_stack_commit = Read.u64 t in
   let size_of_heap_reserve = Read.u64 t in
   let size_of_heap_commit = Read.u64 t in
-  if not (Read.u32 t = 0) then invalid_format "Invalid loader flags";
+  if not (Read.i32 t = 0l) then invalid_format "Invalid loader flags";
   let number_of_rva_and_sizes = Read.u32 t in
   {
     image_base;
@@ -274,7 +275,7 @@ let read_windows_fields64 t =
   }
 
 let read_windows_fields standard t =
-  match standard.magic with
+  match Uint16.to_int standard.magic with
   | 0x10b -> read_windows_fields32 t
   | 0x20b -> read_windows_fields64 t
   | _ -> invalid_format "Invalid PE image file"
@@ -294,9 +295,9 @@ let read_data_directories t =
   let security_directory = read_data_directory t in
   let basereloc_directory = read_data_directory t in
   let debug_directory = read_data_directory t in
-  if not (Read.u64 t = 0) then invalid_format "Invalid data directories";
+  if not (Read.i64 t = 0L) then invalid_format "Invalid data directories";
   let globalptr_directory = read_data_directory t in
-  if not (globalptr_directory.size = 0) then
+  if not (Uint32.to_int32 globalptr_directory.size = 0l) then
     invalid_format "Invalid data directories";
   let tls_directory = read_data_directory t in
   let load_config_directory = read_data_directory t in
@@ -304,7 +305,7 @@ let read_data_directories t =
   let iat_directory = read_data_directory t in
   let delay_import_directory = read_data_directory t in
   let clr_header_directory = read_data_directory t in
-  if not (Read.u64 t = 0) then invalid_format "Invalid data directories";
+  if not (Read.i64 t = 0L) then invalid_format "Invalid data directories";
   {
     export_directory;
     import_directory;
@@ -328,33 +329,32 @@ let read_optional_header t =
   let data_directories = read_data_directories t in
   { standard_fields; windows_fields; data_directories }
 
-let rebase o i = o.windows_fields.image_base + i
+let rebase o i = Virtual_address.add o.windows_fields.image_base i
 
 (* Section header *)
 type section = {
   section_name : string;
   virtual_size : u32;
-  virtual_address : u32;
-  size_of_raw_data : u32;
-  pointer_to_raw_data : u32;
+  virtual_address : Virtual_address.t;
+  size_of_raw_data : int;
+  pointer_to_raw_data : int;
   characteristics : u32;
 }
 
 let read_section_name t =
-  let position = t.position in
-  let name = Read.fixed_string t 8 in
-  seek t (position + 8);
+  let name = Peek.fixed_string t 8 in
+  advance t 8;
   name
 
 let read_section t file optional n =
-  seek t (optional + file.size_of_optional_header + (n * 40));
+  set_pos t (optional + file.size_of_optional_header + (n * 40));
   (* file header + optional header + nbr * section header *)
   ensure t 40 "Section header truncated";
   let section_name = read_section_name t in
   let virtual_size = Read.u32 t in
-  let virtual_address = Read.u32 t in
-  let size_of_raw_data = Read.u32 t in
-  let pointer_to_raw_data = Read.u32 t in
+  let virtual_address = Virtual_address.of_uint32 (Read.u32 t) in
+  let size_of_raw_data = Uint32.to_int (Read.u32 t) in
+  let pointer_to_raw_data = Uint32.to_int (Read.u32 t) in
   let _pointer_to_relocations = Read.u32 t in
   let _pointer_to_linenumbers = Read.u32 t in
   let _number_of_relocations = Read.u16 t in
@@ -382,15 +382,15 @@ let find_section sections f =
 
 let in_section optional (section : section) addr =
   addr >= rebase optional section.virtual_address
-  && addr < rebase optional section.virtual_address + section.virtual_size
+  && addr
+     < Virtual_address.add_bigint
+         (Uint32.to_bigint section.virtual_size)
+         (rebase optional section.virtual_address)
 
 let in_section_opt optional section_opt addr =
   match section_opt with
   | None -> false
   | Some section -> in_section optional section addr
-
-let _find_section_by_name sections name =
-  find_section sections (fun s -> s.section_name = name)
 
 let find_section_by_addr optional sections addr =
   find_section sections (fun s -> in_section optional s addr)
@@ -398,31 +398,31 @@ let find_section_by_addr optional sections addr =
 (* Symbol header *)
 type symbol = {
   symbol_name : string;
-  value : u32;
+  value : Virtual_address.t;
   section_number : u16;
   storage_class : u8;
   number_of_aux_symbols : u8;
 }
 
 let read_symbol_name t strtab strsize =
-  let position = t.position in
+  let position = get_pos t in
   let name =
-    if Read.u32 t = 0 then (
-      let n = Read.u32 t in
-      seek t (strtab + n);
+    if Read.i32 t = 0l then (
+      let n = Uint32.to_int (Read.u32 t) in
+      set_pos t (strtab + n);
       Read.zero_string "Unterminated symbol name" t ~maxlen:(strsize - n) ())
     else (
-      seek t position;
+      set_pos t position;
       Read.fixed_string t 8)
   in
-  seek t (position + 8);
+  set_pos t (position + 8);
   name
 
 let read_symbol t file strtab strsize n =
-  seek t (file.pointer_to_symbol_table + (n * 18));
+  set_pos t (file.pointer_to_symbol_table + (n * 18));
   ensure t 18 "Symbol header truncated";
   let symbol_name = read_symbol_name t strtab strsize in
-  let value = Read.u32 t in
+  let value = Virtual_address.of_uint32 (Read.u32 t) in
   let section_number = Read.u16 t in
   let storage_class = Read.u8 t in
   let number_of_aux_symbols = Read.u8 t in
@@ -431,10 +431,10 @@ let read_symbol t file strtab strsize n =
 let read_symbols t file =
   let strtab = file.pointer_to_symbol_table + (18 * file.number_of_symbols) in
   let strsize =
-    seek t strtab;
-    Read.u32 t
+    set_pos t strtab;
+    Uint32.to_int (Read.u32 t)
   in
-  seek t file.pointer_to_symbol_table;
+  set_pos t file.pointer_to_symbol_table;
   Array.init file.number_of_symbols (read_symbol t file strtab strsize)
 
 module Section = struct
@@ -442,22 +442,24 @@ module Section = struct
   type header = section
 
   let name (_, s) = s.section_name
-  let flag ((_, s) : t) = s.characteristics
+  let flag ((_, s) : t) = Uint32.to_int32 s.characteristics
 
   let pos (o, (s : section)) =
     { raw = s.pointer_to_raw_data; virt = rebase o s.virtual_address }
 
-  let size (_, s) = { raw = s.size_of_raw_data; virt = s.virtual_size }
+  let size (_, s) =
+    { raw = s.size_of_raw_data; virt = Uint32.to_bigint s.virtual_size }
+
   let header (_, s) = s
 
   let has_flag f s =
     let mask =
       match f with
-      | Write -> 0x80000000
-      | Read -> 0x40000000
-      | Exec -> 0x20000000
+      | Write -> 0x80000000l
+      | Read -> 0x40000000l
+      | Exec -> 0x20000000l
     in
-    flag s land mask = mask
+    Int32.logand (flag s) mask = mask
 end
 
 module Symbol = struct
@@ -470,7 +472,9 @@ module Symbol = struct
 end
 
 let pp_symbol ppf symbol =
-  Format.fprintf ppf "@[<h>%-8x %s@]" (Symbol.value symbol) (Symbol.name symbol)
+  Format.fprintf ppf "@[<h>%s %s@]"
+    (Z.format "%-8x" (Virtual_address.to_bigint (Symbol.value symbol)))
+    (Symbol.name symbol)
 
 let pp_symbols ppf symbols =
   let nsymbols = Array.length symbols in
@@ -489,11 +493,14 @@ let pp_section i ppf section =
       Loader_types.[ (Read, "r"); (Write, "w"); (Exec, "x") ]
   in
   let pp_imap ppf m =
-    Format.fprintf ppf "@[<h>%8x %8x@]" m.Loader_types.raw m.Loader_types.virt
+    Format.fprintf ppf "@[<h>%8x %s@]" m.Loader_types.raw
+      (Z.format "%8x" m.Loader_types.virt)
   in
-  Format.fprintf ppf "@[<h>%2d %-20s %8x %a %a %a@]" i (Section.name section)
-    (Section.flag section) pp_imap (Section.pos section) pp_imap
-    (Section.size section) pp_flags section
+  let pos = Section.pos section in
+  Format.fprintf ppf "@[<h>%2d %-20s %8lx %8x %s %a %a@]" i
+    (Section.name section) (Section.flag section) pos.raw
+    (Z.format "%8x" (Virtual_address.to_bigint pos.virt))
+    pp_imap (Section.size section) pp_flags section
 
 let pp_sections ppf sections =
   let nsections = Array.length sections in
@@ -504,13 +511,15 @@ let pp_sections ppf sections =
       sections
 
 let pp_arch ppf arch = Format.fprintf ppf "@[Machine: %a@]" Machine.pp arch
-let pp_ep ppf ep = Format.fprintf ppf "@[Entry point address: 0x%x@]" ep
+
+let pp_ep ppf ep =
+  Format.fprintf ppf "@[Entry point address: %a@]" Virtual_address.pp ep
 
 module Img = struct
-  type t = program * section array * symbol array * Loader_buf.t
+  type t = program * section array * symbol array * buffer
   type header = program
 
-  let arch ((f, _), _, _, _) = arch f.machine
+  let arch ((f, _), _, _, _) = arch (Uint16.to_int f.machine)
 
   let entry ((_, o), _, _, _) =
     rebase o o.standard_fields.address_of_entry_point
@@ -518,12 +527,12 @@ module Img = struct
   let sections ((_, o), s, _, _) = Array.map (fun s -> (o, s)) s
   let symbols (_, _, s, _) = Array.copy s
   let header (h, _, _, _) = h
-
-  let cursor ?(at = 0) (_, _, _, b) =
-    Loader_buf.cursor ~at Machine.LittleEndian b
+  let cursor ?at (_, _, _, b) = Reader.of_bigarray ?pos:at b
 
   let content (_, _, _, b) (_, s) =
     Bigarray.Array1.sub b s.pointer_to_raw_data s.size_of_raw_data
+
+  let buffer (_, _, _, b) = b
 
   let pp_header ppf img =
     Format.fprintf ppf "@[<v 2># Header@ %a@ %a@]" pp_arch (arch img) pp_ep
@@ -537,7 +546,7 @@ end
 let load buffer =
   let t = init_cursor buffer in
   let file_header = read_file_header t in
-  let position = t.position in
+  let position = get_pos t in
   let optional_header = read_optional_header t in
   let sections = read_sections t file_header position in
   let symbols = read_symbols t file_header in
@@ -557,7 +566,7 @@ let load_file path =
   Unix.close file_descr;
   img
 
-let read_offset (_, _, _, b) offset = b.{offset}
+let read_offset (_, _, _, b) offset = Int.unsafe_to_uint8 b.{offset}
 let cache = ref None
 
 let find_section_by_addr_with_cache optional sections addr =
@@ -568,23 +577,11 @@ let find_section_by_addr_with_cache optional sections addr =
 let read_address ((_, o), s, _, b) addr =
   match find_section_by_addr_with_cache o s addr with
   | None ->
-      let msg = Format.sprintf "Unreachable virtual address %x" addr in
+      let msg =
+        Format.asprintf "Unreachable virtual address %a" Virtual_address.pp addr
+      in
       invalid_arg msg
   | Some (s : section) ->
-      let offset = addr - rebase o s.virtual_address in
-      if offset >= s.size_of_raw_data then 0
-      else b.{offset + s.pointer_to_raw_data}
-
-module Offset = Loader_buf.Make (struct
-  type t = Img.t
-
-  let get t i = read_offset t i
-  let dim (_, _, _, b) = Bigarray.Array1.dim b
-end)
-
-module Address = Loader_buf.Make (struct
-  type t = Img.t
-
-  let get t i = read_address t i
-  let dim _ = max_int
-end)
+      let offset = Virtual_address.diff addr (rebase o s.virtual_address) in
+      if offset >= s.size_of_raw_data then Int.unsafe_to_uint8 0
+      else Int.unsafe_to_uint8 b.{offset + s.pointer_to_raw_data}

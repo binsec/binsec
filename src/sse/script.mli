@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -18,6 +18,9 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
 (*                                                                        *)
 (**************************************************************************)
+
+module Ast = Binsec_script.Ast
+module Syntax = Binsec_script.Syntax
 
 type env = {
   wordsize : int;
@@ -36,17 +39,10 @@ module Expr : module type of Ast.Expr
 module Instr : module type of Ast.Instr
 
 module Output : sig
-  type format = Types.Output.format = Bin | Dec | Hex | Ascii
+  type format = Output.format = Bin | Dec | Hex | Ascii
+  type t = (Loc.t loc, Expr.t loc) Output.t
 
-  type t =
-    | Model
-    | Formula
-    | Slice of (Expr.t loc * string) list
-    | Value of format * Expr.t loc
-    | Stream of string
-    | String of string option * Expr.t loc * Expr.t loc option
-
-  val eval : env -> t -> Types.Output.t
+  val eval : env -> t -> (Dba.Var.t, Dba.Expr.t) Output.t
   val pp : Format.formatter -> t -> unit
 end
 
@@ -95,10 +91,27 @@ val register_pp : (Format.formatter -> Ast.t -> bool) -> unit
 val pp : Format.formatter -> Ast.t -> unit
 
 val read_files :
-  (unit, Libparser.obj, unit, unit, Libparser.obj Dyp.dyplexbuf) Dyp.dyp_action
+  ( unit,
+    Binsec_script.obj,
+    unit,
+    unit,
+    Binsec_script.obj Dyp.dyplexbuf )
+  Dyp.dyp_action
   list
   list ->
   string list ->
+  Ast.t list
+
+val read_string :
+  ( unit,
+    Binsec_script.obj,
+    unit,
+    unit,
+    Binsec_script.obj Dyp.dyplexbuf )
+  Dyp.dyp_action
+  list
+  list ->
+  string ->
   Ast.t list
 
 exception Inference_failure of Expr.t loc
@@ -107,3 +120,10 @@ exception Invalid_operation of Expr.t loc
 
 val eval_loc : ?size:int -> Loc.t loc -> env -> Dba.LValue.t
 val eval_expr : ?size:int -> Expr.t loc -> env -> Dba.Expr.t
+
+val eval_block :
+  Ast.Instr.t list ->
+  env ->
+  (module Isa_helper.ARCH) ->
+  (Ast.Instr.t -> env -> Ir.fallthrough list) ->
+  Ir.stmt list

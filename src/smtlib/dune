@@ -1,6 +1,7 @@
-(menhir
- (modules smtlib_parser)
- (flags --explain --strict))
+(include_subdirs unqualified)
 
-(ocamllex
- (modules smtlib_lexer))
+(library
+ (public_name binsec.smtlib)
+ (name binsec_smtlib)
+ (flags :standard -open Binsec_base -open Binsec_unix)
+ (libraries binsec.base binsec.unix binsec_smtlib_bindings))

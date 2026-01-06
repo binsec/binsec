@@ -1,29 +1,33 @@
 (include_subdirs no)
 
 (library
- (public_name binsec.sse.shadow_stack)
- (name shadow_stack)
- (modules shadow_stack)
+ (public_name binsec.sse.checkct)
+ (name binsec_sse_checkct)
+ (modules binsec_sse_checkct)
  (flags
-  (:standard -open Binsec -open Libsse -w "-58"))
- (libraries libsse))
-
-(plugin
- (name shadow_stack)
- (libraries binsec.sse.shadow_stack)
- (site
-  (binsec plugins)))
+  (:standard -open Binsec_kernel -open Binsec_sse -w "-58"))
+ (libraries binsec.sse))
 
 (library
- (public_name binsec.sse.checkct)
- (name checkct)
- (modules checkct)
+ (public_name binsec.sse.quick_merge)
+ (name binsec_sse_quick_merge)
+ (modules binsec_sse_quick_merge)
  (flags
-  (:standard -open Binsec -open Libsse -open Libterm -w "-58"))
- (libraries libsse libterm))
+  (:standard -open Binsec_kernel -open Binsec_sse))
+ (libraries binsec.sse))
 
-(plugin
- (name checkct)
- (libraries binsec.sse.checkct)
- (site
-  (binsec plugins)))
+(library
+ (public_name binsec.sse.shadow_stack)
+ (name binsec_sse_shadow_stack)
+ (modules binsec_sse_shadow_stack)
+ (flags
+  (:standard -open Binsec_kernel -open Binsec_sse))
+ (libraries binsec.sse))
+
+(library
+ (public_name binsec.sse.stake)
+ (name binsec_sse_stake)
+ (modules binsec_sse_stake)
+ (flags
+  (:standard -open Binsec_kernel -open Binsec_sse))
+ (libraries binsec.sse))

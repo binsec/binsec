@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,7 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Libparser
+include Binsec_script
 module S = Basic_types.String
 
 type env = {
@@ -79,7 +79,7 @@ let rec eval_expr ?size ((e, p) as t : Expr.t loc) env =
         | Some size ->
             (if Z.numbits z > size then
                let line = p.pos_lnum and column = p.pos_cnum - p.pos_bol - 1 in
-               Options.Logger.warning
+               Logger.warning
                  "integer %a (line %d, column %d) does not fit in a bitvector \
                   of %d bit%s"
                  Expr.pp e line column size
@@ -118,7 +118,7 @@ and eval_binary ?(first = true) ?size ?op x y env =
         (match op with
         | None -> size
         | Some
-            ( Plus | Minus | Mult | DivU | DivS | ModU | ModS | Or | And | Xor
+            ( Plus | Minus | Mult | DivU | DivS | RemU | RemS | Or | And | Xor
             | LShift | RShiftU | RShiftS | LeftRotate | RightRotate ) ->
             size
         | Some _ -> None)
@@ -235,25 +235,22 @@ and eval_loc ?size ((l, p) as t : Loc.t loc) env =
   lval
 
 module Output = struct
-  type format = Types.Output.format = Bin | Dec | Hex | Ascii
+  type format = Output.format = Bin | Dec | Hex | Ascii
+  type t = (Loc.t loc, Expr.t loc) Output.t
 
-  type t =
-    | Model
-    | Formula
-    | Slice of (Expr.t loc * string) list
-    | Value of format * Expr.t loc
-    | Stream of string
-    | String of string option * Expr.t loc * Expr.t loc option
-
-  let eval env (t : t) : Types.Output.t =
+  let eval env (t : t) : (Dba.Var.t, Dba.Expr.t) Output.t =
     match t with
     | Model -> Model
     | Formula -> Formula
     | Slice values ->
         Slice (List.map (fun (e, name) -> (eval_expr e env, name)) values)
     | Value (fmt, e) -> Value (fmt, eval_expr e env)
-    | Stream name -> Stream name
-    | String (array, offset, size) ->
+    | Stream loc ->
+        Stream
+          (match eval_loc loc env with
+          | Var var -> var
+          | Restrict _ | Store _ -> assert false)
+    | String { array; offset; size } ->
         String
           {
             array;
@@ -261,33 +258,8 @@ module Output = struct
             size = Option.map (fun e -> eval_expr ~size:env.wordsize e env) size;
           }
 
-  let format_str = function
-    | Bin -> "bin"
-    | Dec -> "dec"
-    | Hex -> "hexa"
-    | Ascii -> "ascii"
-
-  let pp ppf = function
-    | Model -> Format.pp_print_string ppf "model"
-    | Formula -> Format.pp_print_string ppf "formula"
-    | Slice defs ->
-        Format.fprintf ppf "formula for %a"
-          (Format.pp_print_list
-             ~pp_sep:(fun ppf () -> Format.pp_print_string ppf ", ")
-             (fun ppf ((expr, _), name) ->
-               Format.fprintf ppf "%a as %s" Expr.pp expr name))
-          defs
-    | Value (fmt, (e, _)) ->
-        Format.fprintf ppf "%s %a" (format_str fmt) Expr.pp e
-    | Stream name -> Format.fprintf ppf "ascii stream %s" name
-    | String (array, (offset, _), size) ->
-        Format.fprintf ppf "c string %s[%a, %a]"
-          (Option.value ~default:"@" array)
-          Expr.pp offset
-          (fun ppf -> function
-            | None -> Format.pp_print_char ppf '*'
-            | Some (size, _) -> Expr.pp ppf size)
-          size
+  let pp : Format.formatter -> t -> unit =
+    Output.pp (fun ppf (l, _) -> Loc.pp ppf l) (fun ppf (l, _) -> Expr.pp ppf l)
 end
 
 type Ast.Obj.t +=
@@ -451,26 +423,159 @@ let pp ppf decl =
   | Explore_all -> Format.pp_print_string ppf "explore all"
   | _ -> resolve_pp ppf decl !decl_printers
 
-let _pp_global ppf global_data =
-  Format.fprintf ppf "@[<v>%a@]"
-    (fun ppf map ->
-      S.Map.iter
-        (fun name values ->
-          Format.fprintf ppf "@[<h>%s: %a@]@ " name
-            (fun ppf set ->
-              S.Set.iter (fun value -> Format.fprintf ppf "%s@ " value) set)
-            values)
-        map)
-    global_data
+let eval_block :
+    Ast.Instr.t list ->
+    env ->
+    (module Isa_helper.ARCH) ->
+    (Ast.Instr.t -> env -> Ir.fallthrough list) ->
+    Ir.stmt list =
+  let n = ref 0 in
+  let entropy = Printf.sprintf "%%entropy%%%d"
+  and label () =
+    incr n;
+    Printf.sprintf "%%label%%%d" !n
+  in
+  let[@tail_mod_cons] rec map :
+      Ast.Instr.t list ->
+      env ->
+      (module Isa_helper.ARCH) ->
+      (Ast.Instr.t -> env -> Ir.fallthrough list) ->
+      Ir.stmt list =
+   fun stmts env isa_info resolve_instruction ->
+    match stmts with
+    | [] -> []
+    | stmt :: stmts ->
+        (map_common [@tailcall]) stmts env isa_info resolve_instruction stmt
+  and[@tail_mod_cons] map_common :
+      Ast.Instr.t list ->
+      env ->
+      (module Isa_helper.ARCH) ->
+      (Ast.Instr.t -> env -> Ir.fallthrough list) ->
+      Ast.Instr.t ->
+      Ir.stmt list =
+   fun stmts env isa_info resolve_instruction stmt ->
+    match stmt with
+    | Ast.Instr.Nop ->
+        Nop :: (map [@tailcall]) stmts env isa_info resolve_instruction
+    | Ast.Instr.Label name ->
+        Label name :: (map [@tailcall]) stmts env isa_info resolve_instruction
+    | Ast.Instr.Assign (lval, rval) -> (
+        let lval = eval_loc lval env in
+        let rval = eval_expr ~size:(Dba.LValue.size_of lval) rval env in
+        match lval with
+        | Var var ->
+            Opcode (Assign { var; rval })
+            :: (map [@tailcall]) stmts env isa_info resolve_instruction
+        | Restrict (var, { hi; lo }) ->
+            Opcode
+              (Assign { var; rval = Dba_types.Expr.complement rval ~hi ~lo var })
+            :: (map [@tailcall]) stmts env isa_info resolve_instruction
+        | Store (_, dir, addr, base) ->
+            Opcode (Store { base; dir; addr; rval })
+            :: (map [@tailcall]) stmts env isa_info resolve_instruction)
+    | Ast.Instr.Nondet lval -> (
+        match eval_loc lval env with
+        | Var var ->
+            Opcode (Symbolize var)
+            :: (map [@tailcall]) stmts env isa_info resolve_instruction
+        | Restrict (var, { hi; lo }) ->
+            let size' = hi - lo + 1 in
+            let name' = entropy size' in
+            let var' = Dba.Var.temporary name' (Size.Bit.create size') in
+            let rval =
+              Dba_types.Expr.complement (Dba.Expr.v var') ~lo ~hi var
+            in
+            Opcode (Symbolize var')
+            :: Opcode (Assign { var; rval })
+            :: (map [@tailcall]) stmts env isa_info resolve_instruction
+        | Store (bytes, dir, addr, base) ->
+            let size' = 8 * bytes in
+            let name' = entropy size' in
+            let var' = Dba.Var.temporary name' (Size.Bit.create size') in
+            let rval = Dba.Expr.v var' in
+            Opcode (Symbolize var')
+            :: Opcode (Store { base; dir; addr; rval })
+            :: (map [@tailcall]) stmts env isa_info resolve_instruction)
+    | Ast.Instr.Undef ((_, p) as lval) -> (
+        match eval_loc lval env with
+        | Var var ->
+            Opcode (Clobber var)
+            :: (map [@tailcall]) stmts env isa_info resolve_instruction
+        | _ -> raise (Invalid_operation (Ast.Expr.loc lval, p)))
+    | Ast.Instr.Assume test ->
+        Opcode (Assume (eval_expr ~size:1 test env))
+        :: (map [@tailcall]) stmts env isa_info resolve_instruction
+    | Ast.Instr.Assert test ->
+        Opcode (Assert (eval_expr ~size:1 test env))
+        :: (map [@tailcall]) stmts env isa_info resolve_instruction
+    | Ast.Instr.If (test, target) ->
+        If (eval_expr ~size:1 test env, target)
+        :: (map [@tailcall]) stmts env isa_info resolve_instruction
+    | Ast.Instr.Goto target ->
+        Goto target :: (map [@tailcall]) stmts env isa_info resolve_instruction
+    | Ast.Instr.Jump target ->
+        End
+          (Jump
+             { target = eval_expr ~size:env.wordsize target env; tag = Default })
+        :: (map [@tailcall]) stmts env isa_info resolve_instruction
+    | Ast.Instr.Halt ->
+        End Halt :: (map [@tailcall]) stmts env isa_info resolve_instruction
+    | Cut None ->
+        End Cut :: (map [@tailcall]) stmts env isa_info resolve_instruction
+    | Cut (Some test) ->
+        let target = label () in
+        If (Dba.Expr.lognot (eval_expr ~size:1 test env), target)
+        :: End Cut :: Label target
+        :: (map [@tailcall]) stmts env isa_info resolve_instruction
+    | Argument (lval, n) -> (
+        let rval =
+          let module Isa = (val isa_info) in
+          Isa.get_arg n
+        in
+        match eval_loc ~size:(Dba.Expr.size_of rval) lval env with
+        | Var var ->
+            Opcode (Assign { var; rval })
+            :: (map [@tailcall]) stmts env isa_info resolve_instruction
+        | Restrict (var, { hi; lo }) ->
+            Opcode
+              (Assign { var; rval = Dba_types.Expr.complement rval ~hi ~lo var })
+            :: (map [@tailcall]) stmts env isa_info resolve_instruction
+        | Store (_, dir, addr, base) ->
+            Opcode (Store { base; dir; addr; rval })
+            :: (map [@tailcall]) stmts env isa_info resolve_instruction)
+    | Return value ->
+        let value =
+          Option.map (fun value -> eval_expr ~size:env.wordsize value env) value
+        in
+        let hunk =
+          let module Isa = (val isa_info) in
+          Isa.make_return ?value ()
+        in
+        End (Builtin (Ir.Inline hunk))
+        :: (map [@tailcall]) stmts env isa_info resolve_instruction
+    | Error msg ->
+        End (Die msg)
+        :: (map [@tailcall]) stmts env isa_info resolve_instruction
+    | inst ->
+        (map_flatten [@tailcall]) stmts env isa_info resolve_instruction
+          (resolve_instruction inst env)
+  and[@tail_mod_cons] map_flatten :
+      Ast.Instr.t list ->
+      env ->
+      (module Isa_helper.ARCH) ->
+      (Ast.Instr.t -> env -> Ir.fallthrough list) ->
+      Ir.fallthrough list ->
+      Ir.stmt list =
+   fun stmts env isa_info resolve_instruction ops ->
+    match ops with
+    | [] -> (map [@tailcall]) stmts env isa_info resolve_instruction
+    | op :: ops ->
+        Opcode op
+        :: (map_flatten [@tailcall]) stmts env isa_info resolve_instruction ops
+  in
+  map
 
-let grammar :
-    ( unit,
-      Libparser.obj,
-      unit,
-      unit,
-      Libparser.obj Dyp.dyplexbuf )
-    Dyp.dyp_action
-    list =
+let grammar : (unit, obj, unit, unit, obj Dyp.dyplexbuf) Dyp.dyp_action list =
   [
     Dyp.Bind_to_cons
       [
@@ -657,7 +762,7 @@ let grammar :
             [ Dyp.Regexp (RE_String "print"); Dyp.Regexp (RE_String "formula") ],
             "default_priority",
             [] ),
-          fun _ -> function _ -> (Syntax.Obj (Output Output.Formula), []) );
+          fun _ -> function _ -> (Syntax.Obj (Output Formula), []) );
         ( ( "output",
             [
               Dyp.Regexp (RE_String "print");
@@ -669,13 +774,13 @@ let grammar :
             [] ),
           fun _ -> function
             | [ _; _; _; Syntax.Obj (Named_list terms) ] ->
-                (Syntax.Obj (Output (Output.Slice (List.rev terms))), [])
+                (Syntax.Obj (Output (Slice (List.rev terms))), [])
             | _ -> assert false );
         ( ( "output",
             [ Dyp.Regexp (RE_String "print"); Dyp.Regexp (RE_String "model") ],
             "default_priority",
             [] ),
-          fun _ _ -> (Syntax.Obj (Output Output.Model), []) );
+          fun _ _ -> (Syntax.Obj (Output Model), []) );
         ( ( "output",
             [
               Dyp.Regexp (RE_String "print");
@@ -686,20 +791,20 @@ let grammar :
             [] ),
           fun _ -> function
             | [ _; Syntax.Obj (Format format); Syntax.Expr term ] ->
-                (Syntax.Obj (Output (Output.Value (format, term))), [])
+                (Syntax.Obj (Output (Value (format, term))), [])
             | _ -> assert false );
         ( ( "output",
             [
               Dyp.Regexp (RE_String "print");
               Dyp.Regexp (RE_String "ascii");
               Dyp.Regexp (RE_String "stream");
-              Dyp.Non_ter ("ident", No_priority);
+              Dyp.Non_ter ("var", No_priority);
             ],
             "default_priority",
             [] ),
           fun _ -> function
-            | [ _; _; _; Syntax.String name ] ->
-                (Syntax.Obj (Output (Output.Stream name)), [])
+            | [ _; _; _; Syntax.Loc var ] ->
+                (Syntax.Obj (Output (Stream var)), [])
             | _ -> assert false );
         ( ("string_slice", [], "default_priority", []),
           fun _ -> function
@@ -765,7 +870,7 @@ let grammar :
                 Syntax.Obj_array array;
                 Syntax.Obj (String_slice (offset, size));
               ] ->
-                (Syntax.Obj (Output (Output.String (array, offset, size))), [])
+                (Syntax.Obj (Output (String { array; offset; size })), [])
             | _ -> assert false );
         ( ( "and_separated_output_rev_list",
             [ Dyp.Non_ter ("output", No_priority) ],
@@ -1176,7 +1281,7 @@ let grammar :
             "default_priority",
             [] ),
           fun _ _ ->
-            Options.Logger.warning
+            Logger.warning
               "\"concretize stack\" is deprecated, use \"with concrete stack \
                pointer\" instead";
             (Syntax.Decl Concretize_stack_pointer, []) );
@@ -1296,7 +1401,7 @@ let grammar :
             "default_priority",
             [] ),
           fun _ _ ->
-            Options.Logger.warning
+            Logger.warning
               "\"reach all\" is deprecated, use \"explore all\" instead";
             (Syntax.Decl Explore_all, []) );
         ( ( "decl",
@@ -1579,8 +1684,7 @@ let rec refill_buf lexbuf file_stream buf len =
   | Pending [] -> 0
   | Pending (filename :: files) -> (
       match open_in filename with
-      | exception Sys_error _ ->
-          Options.Logger.fatal "Cannot open file %s" filename
+      | exception Sys_error _ -> Logger.fatal "Cannot open file %s" filename
       | ic ->
           file_stream := Opened (ic, files);
           Dyp.set_fname (Option.get !lexbuf) filename;
@@ -1600,33 +1704,11 @@ let rec refill_buf lexbuf file_stream buf len =
 let read_files gramma_extensions files =
   let file_stream = ref (Pending files) and lexbuf = ref None in
   lexbuf :=
-    Some
-      (Dyp.from_function (Libparser.Syntax.pp ())
-         (refill_buf lexbuf file_stream));
+    Some (Dyp.from_function (Syntax.pp ()) (refill_buf lexbuf file_stream));
   Fun.protect
     ~finally:(fun () ->
       match !file_stream with Opened (ic, _) -> close_in ic | _ -> ())
     (fun () -> try_and_parse gramma_extensions (Option.get !lexbuf))
 
-(* include Cli.Make (struct *)
-(*   let shortname = "ast" *)
-
-(*   let name = "AST" *)
-(* end) *)
-
-(* module Parse = Builder.String_option (struct *)
-(*   let name = "parse" *)
-
-(*   let doc = "Parse AST node" *)
-(* end) *)
-
-(* let run () = *)
-(*   Option.iter *)
-(*     (fun node -> *)
-(*       let lexbuf = Dyp.from_string (Syntax.pp ()) node in *)
-(*       Logger.result "@[<v>%a@]" *)
-(*         (Format.pp_print_list ~pp_sep:Format.pp_print_space pp) *)
-(*         (try_and_parse lexbuf)) *)
-(*     (Parse.get_opt ()) *)
-
-(* let _ = Cli.Boot.enlist ~name:"AST" ~f:run *)
+let read_string gramma_extensions str =
+  try_and_parse gramma_extensions (Dyp.from_string (Syntax.pp ()) str)

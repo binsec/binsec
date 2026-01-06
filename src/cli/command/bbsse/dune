@@ -1,0 +1,26 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.cli.bbsse)
+ (name binsec_cli_bbsse)
+ (modules :standard)
+ (flags
+  (:standard
+   -open
+   Binsec
+   -open
+   Binsec_sse
+   -open
+   Binsec_cli_disasm
+   -open
+   Binsec_cli_ghidra))
+ (library_flags
+  (:standard -linkall))
+ (libraries binsec binsec.cli.disasm binsec.cli.ghidra binsec.sse))
+
+(menhir
+ (modules parser)
+ (flags --explain --strict))
+
+(ocamllex
+ (modules lexer))

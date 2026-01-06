@@ -1,3 +1,43 @@
+## 0.11.0 (2026-01-06)
+
+** Feature
+
+- Coredump support improvement:
+  - add ARM, RISCV and PPC architectures
+  - reworked the `make_coredump.sh` script to use QEMU for foreign architectures
+  - add the `archive_sysroot.sh` script to make a snapshot of the file system
+    used by a coredump, in pair with the `-sse-sysroot` option to set the system
+    root for the program being executed, like gdb `set sysroot`
+    (see `coreutils` [true](./examples/sse/coreutils/true/README.md) example)
+- SSE plugin API overhaul (**code-breaking changes**):
+  - add a new *continuation* mechanism for path management in builtins
+    (e.g fork and merge requests)
+  - add new callbacks to create hooks from plugins
+  - improve module interface documentation (`State`, `Path` and `Types`)
+
+** Documentation
+
+- Split and update plugin tutorial ([part 1](doc/sse/plugins_1.md), [part 2](doc/sse/plugins_2.md))
+- Add a [write-up](doc/sse/quick_merge.md) about how to use the new plugin API for path merging
+
+** Misc (**code-breaking changes**)
+
+- Merge `Lreader` and `Loader_buf` into `Reader` with a more type safe interface
+  (**BINSEC** can now be used safely on 32-bit architectures)
+
+- Refactor source code in main sub-libraries:
+  - `Binsec_base` -- base types and structures (without dependencies)
+  - `Binsec_kernel` -- DBA intermediate language, loaders and architectures
+  - `Binsec_smtlib` -- SMTlib intermediate language and solvers
+  - `Binsec_symbolic` -- symbolic state and path predicate
+  - `Binsec_sse` -- core static symbolic execution engine
+
+- Reorganize command line tool:
+  - `Binsec` -- core command line library
+  - `Binsec_disasm` -- legacy disassembly utilities
+  - `Binsec_bbsse` -- legacy backward bounded symbolic execution
+  - `Binsec_sse` -- static symbolic execution
+
 ## 0.10.1 (2025-06-30)
 
 ** Misc

@@ -1,0 +1,12 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.isa.x86_32)
+ (name binsec_isa_x86_32)
+ (modules (:standard))
+ (modules_without_implementation x86Types)
+ (library_flags
+  (:standard -linkall))
+ (flags
+  (:standard -w -3 -open Binsec_kernel))
+ (libraries binsec.kernel))

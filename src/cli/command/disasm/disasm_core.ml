@@ -1,0 +1,191 @@
+(**************************************************************************)
+(*  This file is part of BINSEC.                                          *)
+(*                                                                        *)
+(*  Copyright (C) 2016-2026                                               *)
+(*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
+(*         alternatives)                                                  *)
+(*                                                                        *)
+(*  you can redistribute it and/or modify it under the terms of the GNU   *)
+(*  Lesser General Public License as published by the Free Software       *)
+(*  Foundation, version 2.1.                                              *)
+(*                                                                        *)
+(*  It is distributed in the hope that it will be useful,                 *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of        *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *)
+(*  GNU Lesser General Public License for more details.                   *)
+(*                                                                        *)
+(*  See the GNU Lesser General Public License version 2.1                 *)
+(*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
+(*                                                                        *)
+(**************************************************************************)
+
+open Basic_types.Integers
+open Format
+open Disasm_options
+
+(* Disasembly worklists works on Caddresses *)
+module W = struct
+  include Worklist.Make (Virtual_address)
+
+  let add_list wl l = List.fold_left (fun wl a -> add a wl) wl l
+  let of_list = add_list empty
+  let add_set wl s = Virtual_address.Set.fold add s wl
+
+  let add_filtered_set p wl s =
+    Virtual_address.Set.fold (fun v wl -> if p v then add v wl else wl) s wl
+
+  let of_set s = add_set empty s
+  let of_filtered_set p s = add_filtered_set p empty s
+  let singleton v = add v empty
+
+  let pp ppf wl =
+    fprintf ppf "@[<hov 0>{%a}@]"
+      (fun ppf wl -> iter (fun a -> fprintf ppf "%a; " Virtual_address.pp a) wl)
+      wl
+end
+
+let compute_next_address current_instruction =
+  let size = Instruction.size current_instruction in
+  if Size.Byte.is_zero size then None
+  else
+    Some
+      (Virtual_address.add_int
+         (size :> int)
+         (Instruction.address current_instruction))
+
+let decode_at_address decode reader address =
+  let instr = decode reader address in
+  if Instruction.is_decoded instr then (instr, compute_next_address instr)
+  else
+    let dba_block = Dba.Instr.stop (Some Dba.KO) |> Dhunk.singleton in
+    (Instruction.set_dba_block instr dba_block, None)
+
+module M = Hashtbl.Make (struct
+  type t = Machine.t
+
+  let equal = ( = )
+  let hash = Hashtbl.hash
+end)
+
+let decoder_of_machine () =
+  let isa = Kernel_options.Machine.get () in
+  try Decoder.get isa
+  with Not_found -> (
+    match isa with
+    | Unknown ->
+        failwith
+          "Machine ISA set to unknown. Aborting. Did you forget to set an -isa \
+           switch on the command line ?"
+    | _ ->
+        let msg = Format.asprintf "missing ISA %a" Machine.pp isa in
+        Errors.not_yet_implemented msg)
+
+let decode_from reader (at : Virtual_address.t) =
+  let decoder = decoder_of_machine () in
+  decode_at_address decoder reader at
+
+let decode ?(img = Kernel_functions.get_img ()) (vaddress : Virtual_address.t) =
+  decode_from
+    (Reader.create ~offset:( + )
+       ~get:(fun img pos ->
+         Uint8.to_char
+           (Loader.read_address img (Virtual_address.add_int pos vaddress)))
+       ~endianness:(Machine.ISA.endianness (Loader.Img.arch img))
+       ~start:0 ~stop:max_int img)
+    vaddress
+
+let decode_binstream ?(base = Virtual_address.zero) bs =
+  try
+    let decoder = decoder_of_machine () in
+    let reader =
+      Reader.of_binstream ~endianness:(Kernel_options.Machine.endianness ()) bs
+    in
+    decode_at_address decoder reader base
+  with Not_found ->
+    Logger.error
+      "@[<v 0>Could not decode opcode %a.@,\
+       The provided hexadecimal stream does not contain a recognized opcode.@,\
+       Check that you selected the correct ISA.@,\
+       Or maybe your input is too short or does not use the correct \
+       endianness.@]"
+      Binstream.pp bs;
+    exit 2
+
+module Successors = struct
+  open Instruction
+
+  let recursive instr =
+    Logger.debug ~level:5
+      "@[<v 0>Computing recursive successors for block@ %a@]" Dhunk.pp
+      instr.dba_block;
+    Dhunk.outer_jumps instr.dba_block
+
+  let linear instr =
+    assert (not (Size.Byte.is_zero instr.size));
+    let hwa = Virtual_address.add_int (instr.size :> int) instr.address in
+    Virtual_address.Set.singleton hwa
+
+  let extended_linear instr =
+    let succs1 = recursive instr in
+    let succs2 = linear instr in
+    Virtual_address.Set.union succs1 succs2
+
+  let linear_bytewise instr =
+    let next_byte_hwa = Virtual_address.succ instr.address in
+    Virtual_address.Set.add next_byte_hwa (linear instr)
+end
+
+module type Iterable = sig
+  val successors : Instruction.t -> Virtual_address.Set.t
+end
+
+module Make (I : Iterable) = struct
+  let fold step_fun program worklist =
+    let rec loop program worklist =
+      if W.is_empty worklist then program
+      else
+        let address, addresses = W.pop worklist in
+        let p, wl =
+          try
+            let instr, _ = decode address in
+            (* FIXME *)
+            let succs = I.successors instr in
+            step_fun program addresses instr succs
+          with Invalid_argument msg ->
+            Disasm_options.Logger.warning "%s" msg;
+            (program, addresses)
+        in
+        loop p wl
+    in
+    loop program worklist
+
+  let iter step_fun worklist =
+    let step_fun' () wl instr succs = ((), step_fun wl instr succs) in
+    fold step_fun' () worklist
+end
+
+(* Iterators *)
+let fold step_fun program worklist =
+  let rec loop program worklist =
+    if W.is_empty worklist then program
+    else
+      let address, addresses = W.pop worklist in
+      let instr, _ = decode address in
+      (* FIXME *)
+      let fsuccs =
+        match Disassembly_mode.get () with
+        | Linear -> Successors.linear
+        | Linear_byte_wise -> Successors.linear_bytewise
+        | Recursive -> Successors.recursive
+        | Extended_linear -> Successors.extended_linear
+      in
+      let p, wl = step_fun program addresses instr (fsuccs instr) in
+      loop p wl
+  in
+  loop program worklist
+
+let iter step_fun worklist =
+  let step_fun' () wl instr succs = ((), step_fun wl instr succs) in
+  fold step_fun' () worklist
+
+(* End iterators *)

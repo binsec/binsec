@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,6 +27,7 @@ let mismatched_operands = Invalid_argument "mismatched operands size"
 let invalid_assignment = Invalid_argument "mismatched assign"
 
 type size = int
+type endianness = Basic_types.endianness = LittleEndian | BigEndian
 
 type id = int
 (** An [id] is a local identifier which characterizes an atomic instruction
@@ -70,8 +71,8 @@ module Binary_op = struct
     | Mult
     | DivU
     | DivS
-    | ModU
-    | ModS
+    | RemU
+    | RemS
     | Or
     | And
     | Xor
@@ -114,7 +115,14 @@ module Var : sig
   module Tag : sig
     type attribute = Value | Size | Last | Plt
 
-    val pp_attribute : Format.formatter -> attribute -> unit
+    module Attribute : sig
+      type t = attribute
+
+      val compare : t -> t -> int
+      val pp : Format.formatter -> t -> unit
+
+      module Map : Map.S with type key = t
+    end
 
     type t =
       | Flag
@@ -154,11 +162,29 @@ end = struct
   module Tag = struct
     type attribute = Value | Size | Last | Plt
 
-    let pp_attribute ppf = function
-      | Value -> ()
-      | Size -> Format.pp_print_string ppf ":size"
-      | Last -> Format.pp_print_string ppf ":last"
-      | Plt -> Format.pp_print_string ppf "@plt"
+    module Attribute = struct
+      type t = attribute
+
+      let to_int : t -> int = function
+        | Value -> 0
+        | Size -> 1
+        | Last -> 2
+        | Plt -> 3
+
+      let compare : t -> t -> int = fun x y -> to_int x - to_int y
+
+      let pp ppf = function
+        | Value -> ()
+        | Size -> Format.pp_print_string ppf ":size"
+        | Last -> Format.pp_print_string ppf ":last"
+        | Plt -> Format.pp_print_string ppf "@plt"
+
+      module Map = Map.Make (struct
+        type nonrec t = t
+
+        let compare = compare
+      end)
+    end
 
     type t =
       | Flag
@@ -278,7 +304,7 @@ end
 module Expr : sig
   type t = private
     | Var of Var.t
-    | Load of size (* size: bytes *) * Machine.endianness * t * string option
+    | Load of size (* size: bytes *) * endianness * t * string option
     | Cst of Bitvector.t
     | Unary of Unary_op.t * t
     | Binary of Binary_op.t * t * t
@@ -306,10 +332,14 @@ module Expr : sig
   val _false : t
   val binary : Binary_op.t -> t -> t -> t
   val add : t -> t -> t
+  val addi : t -> int -> t
+  val addz : t -> Z.t -> t
   val sub : t -> t -> t
+  val subi : t -> int -> t
+  val subz : t -> Z.t -> t
   val mul : t -> t -> t
-  val smod : t -> t -> t
-  val umod : t -> t -> t
+  val srem : t -> t -> t
+  val urem : t -> t -> t
   val udiv : t -> t -> t
   val sdiv : t -> t -> t
   val append : t -> t -> t
@@ -332,14 +362,14 @@ module Expr : sig
   val ite : t -> t -> t -> t
   val restrict : int -> int -> t -> t
   val bit_restrict : int -> t -> t
-  val load : ?array:string -> Size.Byte.t -> Machine.endianness -> t -> t
+  val load : ?array:string -> Size.Byte.t -> endianness -> t -> t
   val is_max : t -> bool
 end = struct
   open Binary_op
 
   type t =
     | Var of Var.t
-    | Load of size (* size: bytes *) * Machine.endianness * t * string option
+    | Load of size (* size: bytes *) * endianness * t * string option
     | Cst of Bitvector.t
     | Unary of Unary_op.t * t
     | Binary of Binary_op.t * t * t
@@ -359,7 +389,7 @@ end = struct
         match bop with
         | Concat -> size_of e1 + size_of e2
         | Eq | Diff | LeqU | LtU | GeqU | GtU | LeqS | LtS | GeqS | GtS -> 1
-        | Plus | Minus | Mult | DivU | DivS | ModU | ModS | Or | And | Xor
+        | Plus | Minus | Mult | DivU | DivS | RemU | RemS | Or | And | Xor
         | LShift | RShiftU | RShiftS | LeftRotate | RightRotate ->
             size_of e1)
 
@@ -444,8 +474,8 @@ end = struct
     let add = symmetric_binary Plus
     let sub = symmetric_binary Minus
     let mul = symmetric_binary Mult
-    let smod = symmetric_binary ModS
-    let umod = symmetric_binary ModU
+    let srem = symmetric_binary RemS
+    let urem = symmetric_binary RemU
     let udiv = symmetric_binary DivU
     let sdiv = symmetric_binary DivS
     let logor = symmetric_binary Or
@@ -499,7 +529,7 @@ end = struct
 
   and restrict lo hi = function
     | e when lo = 0 && hi = size_of e - 1 -> e
-    | Cst bv -> constant (Bitvector.extract bv Interval.{ lo; hi })
+    | Cst bv -> constant (Bitvector.extract ~hi ~lo bv)
     | Load (sz, LittleEndian, addr, array) when (8 * sz) - hi > 8 ->
         let sz' = Size.Byte.create (sz - (((8 * sz) - hi - 1) / 8)) in
         restrict lo hi (load sz' LittleEndian addr ?array)
@@ -633,10 +663,10 @@ end = struct
     | _, Cst b2 when Bitvector.is_ones b2 -> e1
     | _, _ -> Straight.udiv e1 e2
 
-  and umod e1 e2 =
+  and urem e1 e2 =
     match (e1, e2) with
-    | Cst b1, Cst b2 -> constant (Bitvector.umod b1 b2)
-    | _, _ -> Straight.umod e1 e2
+    | Cst b1, Cst b2 -> constant (Bitvector.urem b1 b2)
+    | _, _ -> Straight.urem e1 e2
 
   and sdiv e1 e2 =
     match (e1, e2) with
@@ -645,10 +675,10 @@ end = struct
     | _, Cst b2 when Bitvector.is_ones b2 -> e1
     | _, _ -> Straight.sdiv e1 e2
 
-  and smod e1 e2 =
+  and srem e1 e2 =
     match (e1, e2) with
-    | Cst b1, Cst b2 -> constant (Bitvector.smod b1 b2)
-    | _, _ -> Straight.smod e1 e2
+    | Cst b1, Cst b2 -> constant (Bitvector.srem b1 b2)
+    | _, _ -> Straight.srem e1 e2
 
   and logxor e1 e2 =
     match (e1, e2) with
@@ -657,12 +687,8 @@ end = struct
     | Cst b1, _ when Bitvector.is_fill b1 -> lognot e2
     | Cst b1, Binary (Binary_op.Concat, e3, e4) ->
         let s2 = size_of e2 and s4 = size_of e4 in
-        let b3 =
-          Bitvector.extract b1 { Interval.lo = s4; Interval.hi = s2 - 1 }
-        in
-        let b4 =
-          Bitvector.extract b1 { Interval.lo = 0; Interval.hi = s4 - 1 }
-        in
+        let b3 = Bitvector.extract ~hi:(s2 - 1) ~lo:s4 b1 in
+        let b4 = Bitvector.extract ~hi:(s4 - 1) ~lo:0 b1 in
         let x3 = logxor (constant b3) e3 in
         let x4 = logxor (constant b4) e4 in
         append x3 x4
@@ -677,12 +703,8 @@ end = struct
     | Cst b1, _ when Bitvector.is_fill b1 -> e1
     | Cst b1, Binary (Binary_op.Concat, e3, e4) ->
         let s2 = size_of e2 and s4 = size_of e4 in
-        let b3 =
-          Bitvector.extract b1 { Interval.lo = s4; Interval.hi = s2 - 1 }
-        in
-        let b4 =
-          Bitvector.extract b1 { Interval.lo = 0; Interval.hi = s4 - 1 }
-        in
+        let b3 = Bitvector.extract ~hi:(s2 - 1) ~lo:s4 b1 in
+        let b4 = Bitvector.extract ~hi:(s4 - 1) ~lo:0 b1 in
         let x3 = logor (constant b3) e3 in
         let x4 = logor (constant b4) e4 in
         append x3 x4
@@ -708,10 +730,10 @@ end = struct
         let rec try_refine ~f ~k b e1 e2 =
           let hi = Bitvector.size_of b - 1 in
           let lo = hi - size_of e1 + 1 in
-          let b1 = Bitvector.extract b { Interval.lo; hi } in
+          let b1 = Bitvector.extract ~hi ~lo b in
           if Bitvector.is_fill b1 || Bitvector.is_zeros b1 then
             let e1 = if Bitvector.is_fill b1 then e1 else constant b1 in
-            let b2 = Bitvector.extract b { Interval.lo = 0; hi = lo - 1 } in
+            let b2 = Bitvector.extract ~hi:(lo - 1) ~lo:0 b in
             match e2 with
             | Binary (Binary_op.Concat, e3, e4) ->
                 try_refine ~f ~k:(fun r -> k (append e1 r)) b2 e3 e4
@@ -887,8 +909,8 @@ end = struct
     | Mult -> mul
     | DivU -> udiv
     | DivS -> sdiv
-    | ModU -> umod
-    | ModS -> smod
+    | RemU -> urem
+    | RemS -> srem
     | And -> logand
     | Or -> logor
     | Xor -> logxor
@@ -908,6 +930,11 @@ end = struct
     | GtU -> ugt
     | GeqS -> sge
     | GtS -> sgt
+
+  let addi e i = add e (constant (Bitvector.of_int i ~size:(size_of e)))
+  let addz e z = add e (constant (Bitvector.create z (size_of e)))
+  let subi e i = sub e (constant (Bitvector.of_int i ~size:(size_of e)))
+  let subz e z = sub e (constant (Bitvector.create z (size_of e)))
 end
 
 type exprs = Expr.t list
@@ -939,8 +966,7 @@ module LValue = struct
   type t =
     | Var of Var.t
     | Restrict of Var.t * int Interval.t
-    | Store of
-        size (* size in bytes *) * Machine.endianness * Expr.t * string option
+    | Store of size (* size in bytes *) * endianness * Expr.t * string option
 
   let equal lv1 lv2 =
     match (lv1, lv2) with

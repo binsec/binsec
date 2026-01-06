@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,6 +22,7 @@
 (** Definition of DBA type *)
 
 type size = int
+type endianness = Basic_types.endianness = LittleEndian | BigEndian
 
 type id = int
 (** An [id] is a local identifier which characterizes an atomic instruction
@@ -65,8 +66,8 @@ module Binary_op : sig
     | Mult
     | DivU (* Corresponds to *)
     | DivS (* the truncated division *)
-    | ModU (* of C99 and most *)
-    | ModS (* processors *)
+    | RemU (* of C99 and most *)
+    | RemS (* processors *)
     | Or
     | And
     | Xor
@@ -99,7 +100,14 @@ module Var : sig
   module Tag : sig
     type attribute = Value | Size | Last | Plt
 
-    val pp_attribute : Format.formatter -> attribute -> unit
+    module Attribute : sig
+      type t = attribute
+
+      val compare : t -> t -> int
+      val pp : Format.formatter -> t -> unit
+
+      module Map : Map.S with type key = t
+    end
 
     type t =
       | Flag
@@ -140,7 +148,7 @@ end
 module Expr : sig
   type t = private
     | Var of Var.t
-    | Load of size * Machine.endianness * t * string option (* size: bytes *)
+    | Load of size * endianness * t * string option (* size: bytes *)
     | Cst of Bitvector.t
     | Unary of Unary_op.t * t
     | Binary of Binary_op.t * t * t
@@ -180,10 +188,24 @@ module Expr : sig
   (** {3 Binary expressions} *)
 
   val add : t -> t -> t
+
+  val addi : t -> int -> t
+  (** Same as [add e (constant (Bitvector.of_int i ~size:(size_of e)))] *)
+
+  val addz : t -> Z.t -> t
+  (** Same as [add e (constant (Bitvector.create z (size_of e)))] *)
+
   val sub : t -> t -> t
+
+  val subi : t -> int -> t
+  (** Same as [sub e (constant (Bitvector.of_int i ~size:(size_of e)))] *)
+
+  val subz : t -> Z.t -> t
+  (** Same as [sub e (constant (Bitvector.create z (size_of e)))] *)
+
   val mul : t -> t -> t
-  val smod : t -> t -> t
-  val umod : t -> t -> t
+  val srem : t -> t -> t
+  val urem : t -> t -> t
   val udiv : t -> t -> t
   val sdiv : t -> t -> t
   val append : t -> t -> t
@@ -224,7 +246,7 @@ module Expr : sig
   val bit_restrict : int -> t -> t
   (** [bit_restrict o e] is [restrict o o e] *)
 
-  val load : ?array:string -> Size.Byte.t -> Machine.endianness -> t -> t
+  val load : ?array:string -> Size.Byte.t -> endianness -> t -> t
   (** [load nbytes endianness t] *)
 
   val is_max : t -> bool
@@ -240,10 +262,9 @@ module LValue : sig
   type t = private
     | Var of Var.t
     | Restrict of Var.t * int Interval.t
-    | Store of
-        size (* size in bytes *) * Machine.endianness * Expr.t * string option
+    | Store of size (* size in bytes *) * endianness * Expr.t * string option
 
-  include Sigs.Eq with type t := t
+  include Sigs.EQ with type t := t
 
   val size_of : t -> int
   (** [size_of lv] yields the size of [lv] in bits **)
@@ -268,7 +289,7 @@ module LValue : sig
 
   val restrict : Var.t -> int -> int -> t
   val bit_restrict : Var.t -> int -> t
-  val store : ?array:string -> Size.Byte.t -> Machine.endianness -> Expr.t -> t
+  val store : ?array:string -> Size.Byte.t -> endianness -> Expr.t -> t
 
   val temp : Size.Bit.t -> t
   (** [temp n] creates a lvalue representing a temporary of size [n] with name
@@ -302,7 +323,7 @@ end
 module Tag : sig
   type t = tag
 
-  include Sigs.Eq with type t := t
+  include Sigs.EQ with type t := t
 end
 
 module Jump_target : sig
@@ -328,7 +349,7 @@ module Instr : sig
         (** value of lval is undefined
                               ** e.g. AF flag for And instruction in x86 **)
 
-  (** {7 Constructors} *)
+  (** {2 Constructors} *)
 
   val assign : LValue.t -> Expr.t -> int -> t
   (** [assign lv e successor_id] creates the assignment of expression [e] to

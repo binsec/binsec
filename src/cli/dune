@@ -1,0 +1,17 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.cli)
+ (name binsec_cli)
+ (modules :standard)
+ (flags :standard -open Binsec_base)
+ (libraries dune-site dune-site.plugins binsec.base))
+
+(generate_sites_module
+ (module runtime)
+ (sites binsec))
+
+(generate_sites_module
+ (module plugins)
+ (plugins
+  (binsec plugins)))

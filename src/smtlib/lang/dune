@@ -1,0 +1,6 @@
+(menhir
+ (modules smtlib_parser)
+ (flags --explain --strict --fixed-exception))
+
+(ocamllex
+ (modules smtlib_lexer))

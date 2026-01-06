@@ -1,38 +1,15 @@
 (include_subdirs no)
 
 (library
- (public_name binsec.sse_register)
- (name sse)
- (modules sse)
- (flags
-  (:standard
-   -open
-   Binsec
-   -open
-   Smt
-   -open
-   Libsse
-   -open
-   Libterm
-   -open
-   Libformula))
- (library_flags
-  (:standard -linkall))
- (libraries smt libsse libterm libformula))
-
-(library
  (public_name binsec.sse)
- (name libsse)
- (modules :standard \ sse)
+ (name binsec_sse)
+ (modules :standard)
+ (modules_without_implementation types)
  (flags
-  (:standard -open Binsec -w "-58"))
+  (:standard -open Binsec_kernel))
  (libraries
-  threads
   toml
-  binsec
-  libparser
-  (select
-   screen.ml
-   from
-   (curses -> screen.enabled.ml)
-   (!curses -> screen.stubs.ml))))
+  binsec.kernel
+  binsec.symbolic
+  binsec.sse.loader
+  binsec.script))

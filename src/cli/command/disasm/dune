@@ -1,0 +1,9 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.cli.disasm)
+ (name binsec_cli_disasm)
+ (modules :standard)
+ (flags
+  (:standard -open Binsec_cli -open Binsec -w "-58"))
+ (libraries binsec))

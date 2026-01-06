@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,11 +23,11 @@ open Loader_types
 
 type file_header = private {
   machine : u16;
-  number_of_sections : u16;
+  number_of_sections : int;
   time_date_stamp : u32;
-  pointer_to_symbol_table : u32;
-  number_of_symbols : u32;
-  size_of_optional_header : u16;
+  pointer_to_symbol_table : int;
+  number_of_symbols : int;
+  size_of_optional_header : int;
   characteristics : u16;
 }
 
@@ -36,13 +36,13 @@ type standard_fields = private {
   size_of_code : u32;
   size_of_initialized_data : u32;
   size_of_uninitialized_data : u32;
-  address_of_entry_point : u32;
+  address_of_entry_point : Virtual_address.t;
   base_of_code : u32;
   base_of_data : u32 option;
 }
 
 type windows_fields = private {
-  image_base : u64;
+  image_base : Virtual_address.t;
   section_alignement : u32;
   file_alignement : u32;
   size_of_image : u32;
@@ -85,15 +85,15 @@ type optional_header = private {
 type section = private {
   section_name : string;
   virtual_size : u32;
-  virtual_address : u32;
-  size_of_raw_data : u32;
-  pointer_to_raw_data : u32;
+  virtual_address : Virtual_address.t;
+  size_of_raw_data : int;
+  pointer_to_raw_data : int;
   characteristics : u32;
 }
 
 type symbol = private {
   symbol_name : string;
-  value : u32;
+  value : Virtual_address.t;
   section_number : u16;
   storage_class : u8;
   number_of_aux_symbols : u8;

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,66 +20,21 @@
 (**************************************************************************)
 
 type bitwidth = [ `x16 | `x32 | `x64 | `x128 ]
-type endianness = LittleEndian | BigEndian
+type endianness = Basic_types.endianness = LittleEndian | BigEndian
+type thumb_mode = Basic_types.Ternary.t = False | True | Unknown
 
 type isa =
   | Unknown
-  | ARM of { rev : [ `v7 | `v8 ]; endianness : endianness }
+  | ARM of { rev : [ `v7 of thumb_mode | `v8 ]; endianness : endianness }
   | PPC of { bits : [ `x32 | `x64 ]; endianness : endianness }
   | RISCV of { bits : [ `x32 | `x64 | `x128 ] }
   | SPARC of { rev : [ `v8 ] }
-  | X86 of { bits : [ `x16 | `x32 | `x64 ] }
+  | X86 of { bits : [ `x32 | `x64 ] }
   | Z80
 
 let unknown_msg =
   "Machine ISA set to unknown. Aborting. Did you forget to set an -isa switch \
    on the command line ?"
-
-module ISA = struct
-  type t = isa
-
-  let endianness = function
-    | Unknown -> failwith unknown_msg
-    | ARM { endianness; _ } -> endianness
-    | PPC { endianness; _ } -> endianness
-    | RISCV _ -> LittleEndian
-    | SPARC { rev = `v8 } -> BigEndian
-    | X86 _ -> LittleEndian
-    | Z80 -> LittleEndian
-
-  let bits = function
-    | Unknown -> failwith unknown_msg
-    | ARM { rev = `v7; _ } -> `x32
-    | ARM { rev = `v8; _ } -> `x64
-    | PPC { bits; _ } -> (bits :> bitwidth)
-    | RISCV { bits; _ } -> (bits :> bitwidth)
-    | SPARC { rev = `v8 } -> `x32
-    | X86 { bits; _ } -> (bits :> bitwidth)
-    | Z80 -> `x16
-
-  let stack_register = function
-    | Unknown -> failwith unknown_msg
-    | ARM _ -> "sp"
-    | PPC _ -> "r1"
-    | RISCV _ -> "x2"
-    | SPARC { rev = `v8 } -> "o6"
-    | X86 { bits = `x16 } -> "sp"
-    | X86 { bits = `x32 } -> "esp"
-    | X86 { bits = `x64 } -> "rsp"
-    | Z80 -> "sp"
-
-  let to_string = function
-    | Unknown -> "unknown"
-    | ARM { rev = `v7; _ } -> "armv7"
-    | ARM { rev = `v8; _ } -> "armv8"
-    | PPC _ -> "powerpc"
-    | RISCV _ -> "risk-v"
-    | SPARC { rev = `v8 } -> "sparcv8"
-    | X86 _ -> "x86"
-    | Z80 -> "Z80"
-
-  let pp ppf t = Format.pp_print_string ppf (to_string t)
-end
 
 (** Word size of the machine in bits *)
 module Bitwidth = struct
@@ -102,6 +57,54 @@ module Bitwidth = struct
     | `x128 -> Format.fprintf ppf "%032x" x
 end
 
+module ISA = struct
+  type t = isa
+
+  let endianness = function
+    | Unknown -> failwith unknown_msg
+    | ARM { endianness; _ } -> endianness
+    | PPC { endianness; _ } -> endianness
+    | RISCV _ -> LittleEndian
+    | SPARC { rev = `v8 } -> BigEndian
+    | X86 _ -> LittleEndian
+    | Z80 -> LittleEndian
+
+  let bits = function
+    | Unknown -> failwith unknown_msg
+    | ARM { rev = `v7 _; _ } -> `x32
+    | ARM { rev = `v8; _ } -> `x64
+    | PPC { bits; _ } -> (bits :> bitwidth)
+    | RISCV { bits; _ } -> (bits :> bitwidth)
+    | SPARC { rev = `v8 } -> `x32
+    | X86 { bits; _ } -> (bits :> bitwidth)
+    | Z80 -> `x16
+
+  let word_size t = Size.Bit.to_int (Bitwidth.bitsize (bits t))
+
+  let stack_register = function
+    | Unknown -> failwith unknown_msg
+    | ARM _ -> "sp"
+    | PPC _ -> "r1"
+    | RISCV _ -> "x2"
+    | SPARC { rev = `v8 } -> "o6"
+    | X86 { bits = `x32 } -> "esp"
+    | X86 { bits = `x64 } -> "rsp"
+    | Z80 -> "sp"
+
+  let to_string = function
+    | Unknown -> "unknown"
+    | ARM { rev = `v7 _; _ } -> "armv7"
+    | ARM { rev = `v8; _ } -> "armv8"
+    | PPC _ -> "powerpc"
+    | RISCV _ -> "risk-v"
+    | SPARC { rev = `v8 } -> "sparcv8"
+    | X86 { bits = `x32 } -> "x86-32"
+    | X86 { bits = `x64 } -> "x86-64"
+    | Z80 -> "Z80"
+
+  let pp ppf t = Format.pp_print_string ppf (to_string t)
+end
+
 module Endianness = struct
   type t = endianness
 
@@ -113,7 +116,10 @@ end
 type t = isa
 
 let amd64 = X86 { bits = `x64 }
-let armv7 endianness = ARM { rev = `v7; endianness }
+
+let armv7 : ?thumb:thumb_mode -> endianness -> t =
+ fun ?(thumb = False) endianness -> ARM { rev = `v7 thumb; endianness }
+
 let armv8 endianness = ARM { rev = `v8; endianness }
 let ppc64 endianness = PPC { bits = `x64; endianness }
 let riscv bits = RISCV { bits }

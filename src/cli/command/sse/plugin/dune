@@ -1,0 +1,49 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.cli.sse.checkct)
+ (name checkct)
+ (modules checkct)
+ (flags
+  (:standard -open Binsec_sse_checkct -open Binsec_cli -open Binsec_cli_sse))
+ (libraries binsec.sse.checkct binsec.cli.sse))
+
+(plugin
+ (name checkct)
+ (libraries binsec.cli.sse.checkct)
+ (site
+  (binsec plugins)))
+
+(library
+ (public_name binsec.cli.sse.shadow_stack)
+ (name shadow_stack)
+ (modules shadow_stack)
+ (flags
+  (:standard
+   -open
+   Binsec_sse_shadow_stack
+   -open
+   Binsec_cli
+   -open
+   Binsec_cli_sse))
+ (libraries binsec.sse.shadow_stack binsec.cli.sse))
+
+(plugin
+ (name shadow_stack)
+ (libraries binsec.sse.shadow_stack)
+ (site
+  (binsec plugins)))
+
+(library
+ (public_name binsec.cli.sse.stake)
+ (name stake)
+ (modules stake)
+ (flags
+  (:standard -open Binsec_sse_stake -open Binsec_cli -open Binsec_cli_sse))
+ (libraries binsec.sse.stake binsec.cli.sse))
+
+(plugin
+ (name stake)
+ (libraries binsec.cli.sse.stake)
+ (site
+  (binsec plugins)))

@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  This file is part of BINSEC.                                          */
 /*                                                                        */
-/*  Copyright (C) 2016-2025                                               */
+/*  Copyright (C) 2016-2026                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -20,18 +20,11 @@
 /**************************************************************************/
 
 %{
-  open Dba
   open Parse_helpers
 
   let unknown_successor = -1
 
-  let default_endianness = Utils.get_opt_or_default Machine.LittleEndian
-
-  let mk_declaration (tag:Var.Tag.t) name size =
-     Declarations.add name size tag;
-     let bitsize = Size.Bit.create size in
-     Dba.LValue.var name ~bitsize ~tag
-
+  let default_endianness = Option.value ~default:Machine.LittleEndian
 
   let _dummy_addr = Virtual_address.create 0
 
@@ -40,7 +33,6 @@
 %token PLUS MINUS STAR STAR_U STAR_S SLASH_U SLASH_S
 %token MODU MODS UNDEF SOK SKO ASSERT FROMFILE FROM FILE
 %token ASSUME NONDET AT
-%token ENTRYPOINT /* ENDIANNESS BIG LITTLE */
 %token AND OR XOR NOT
 %token CONCAT COLON SEMICOLON COMMA DOT DOTDOT
 %token LSHIFT RSHIFTU RSHIFTS LROTATE RROTATE
@@ -53,8 +45,7 @@
 %token ASSIGN TRUE FALSE IF THEN ELSE GOTO
 %token ANNOT CALLFLAG AS
 %token RETURNFLAG
-%token FLAG TEMPORARY REGISTER VAR TEMPTAG FLAGTAG
-%token ENUMERATE REACH CUT CONSEQUENT ALTERNATIVE ALTERNATE UNCONTROLLED
+%token UNCONTROLLED
 %token READ WRITE BRANCH
 %token UNIMPLEMENTED UNSUPPORTED UNDEFINED EOF
 
@@ -82,9 +73,6 @@
 %start expr_eof
 %type <Dba.Expr.t> expr_eof
 
-%start dba_eof
-%type <Dba_types.program> dba_eof
-
 %start dhunk_eof
 %type <Dhunk.t> dhunk_eof
 
@@ -106,9 +94,6 @@
 %start initialization
 %type <Parse_helpers.Initialization.t list> initialization
 
-%start directives
-%type <Directive.t list> directives
-
 %%
 
 bag_of(LDELIM, RDELIM, SEP, ELT):
@@ -117,18 +102,6 @@ bag_of(LDELIM, RDELIM, SEP, ELT):
 
 set_of(X):
 | v=bag_of(LBRACE, RBRACE, COMMA, X); { v }
-;
-
-dba:
- | config=config;
-   decls=list(terminated(declaration, SEMICOLON));
-   initialization=list(terminated(assignment, SEMICOLON));
-   instructions=body;
-   { Mk.program initialization config decls instructions }
-;
-
-dba_eof:
-| dba=dba; EOF { dba }
 ;
 
 value:
@@ -191,50 +164,13 @@ decoder_msg_list_eof:
 | l=list(delimited(LPAR, decoder_msg, RPAR)); EOF { l }
 ;
 
-config:
-| entry=entry; /* addrsize endianness */  { entry }
-;
-
-entry:
- | ENTRYPOINT COLON addr=address; { addr }
-;
-
-/* addrsize: */
-/*  | WORDSIZE COLON value=INT;    { Machine.Word_size.set (int_of_string value) } */
-/* ; */
-
-/* endianness: */
-/*  | ENDIANNESS COLON BIG    { Dba_types.set_endianness Machine.BigEndian } */
-/*  | ENDIANNESS COLON LITTLE { Dba_types.set_endianness Machine.LittleEndian } */
-/* ; */
-
-
-
-%inline specific_declaration_kwd:
-| TEMPORARY { mk_declaration Var.Tag.Temp }
-| FLAG      { mk_declaration Var.Tag.Flag }
-| REGISTER  { mk_declaration Var.Tag.Empty }
-;
-
-declaration:
-| VAR id=IDENT; COLON size=INT; tags=option(tags);
-  { mk_declaration (match tags with None -> Var.Tag.Empty | Some t -> t)  id (int_of_string size) }
-| apply=specific_declaration_kwd; id=IDENT; COLON; size=INT;
-  { apply id (int_of_string size) }
-;
-
-%inline tags:
- | TEMPTAG { Var.Tag.Temp }
- | FLAGTAG { Var.Tag.Flag }
-;
-
 size_annot:
 | INFER size=INT; SUPER { int_of_string size }
 ;
 
 localized_instruction:
 | addr=address; instr=instruction;
-  { Mk.checked_localized_instruction addr instr }
+  { addr, instr }
 ;
 
 %inline addr_annot:
@@ -391,16 +327,16 @@ address_lvalue:
 
 lvalue:
 | id=IDENT; sz_opt=option(size_annot);
-  { let bitsize = Utils.get_opt_or_default 1 sz_opt |> Size.Bit.create in
+  { let bitsize = Option.value ~default:1 sz_opt |> Size.Bit.create in
     Dba.LValue.var id ~bitsize }
 | id=IDENT; sz_opt=option(size_annot); offs=offsets;
-  { let bitsize = Utils.get_opt_or_default 1 sz_opt |> Size.Bit.create in
+  { let bitsize = Option.value ~default:1 sz_opt |> Size.Bit.create in
     let lo, hi = offs in Dba.LValue._restrict id bitsize lo hi }
 | id=TMP; sz_opt=option(size_annot);
-  { let bitsize = Utils.get_opt_or_default 1 sz_opt |> Size.Bit.create in
+  { let bitsize = Option.value ~default:1 sz_opt |> Size.Bit.create in
     Dba.LValue.temporary id bitsize }
 | id=TMP; sz_opt=option(size_annot); offs=offsets;
-    { let bitsize = Utils.get_opt_or_default 1 sz_opt |> Size.Bit.create in
+    { let bitsize = Option.value ~default:1 sz_opt |> Size.Bit.create in
       let var = Dba.Var.temporary id bitsize in
     let lo, hi = offs in Dba.LValue.restrict var lo hi }
 | v=address_lvalue { v };
@@ -431,11 +367,11 @@ expr:
 | LPAR e=expr; RPAR { e }
 
 | id=IDENT; sz_opt=ioption(size_annot);
-  { let sz = Utils.get_opt_or_default 1 sz_opt in
+  { let sz = Option.value ~default:1 sz_opt in
     Dba.Expr.var id sz }
 
 | id=TMP; sz_opt=ioption(size_annot);
-  { let sz = Utils.get_opt_or_default 1 sz_opt in
+  { let sz = Option.value ~default:1 sz_opt in
     Dba.Expr.temporary id ~size:sz }
 
 | cst=constant;
@@ -471,12 +407,12 @@ expr:
  | MAX LPAR e1=expr; COMMA e2=expr; RPAR
     { Dba.Expr.ite (Dba.Expr.ult e1 e2) e2 e1 }
   | BSWAP e=expr;
-    { Dba_utils.Expr.bswap e }
+    { Dba_types.Expr.bswap e }
 ;
 
 %inline bin_op:
- | MODU    { Dba.Binary_op.ModU }
- | MODS    { Dba.Binary_op.ModS }
+ | MODU    { Dba.Binary_op.RemU }
+ | MODS    { Dba.Binary_op.RemS }
  | OR      { Dba.Binary_op.Or }
  | AND     { Dba.Binary_op.And }
  | XOR     { Dba.Binary_op.Xor }
@@ -549,49 +485,4 @@ patch:
 
 patchmap:
  | patches=list(patch); EOF { mk_patches patches }
-;
-
-
-%inline integer_argument:
- | times=ioption(delimited(LPAR,integer,RPAR)); { times }
-;
-
-%inline consequent:
- | PLUS
- | CONSEQUENT
- | THEN {}
-;
-%inline alternative:
- | MINUS
- | ALTERNATIVE
- | ELSE {}
-;
-
-/* Directives for analyses: SE, interpretation  */
-directive:
- | REACH times=integer_argument; guard=option(preceded(IF,expr));
-    { let n = Utils.get_opt_or_default 1 times in
-      Directive.reach ~n ?guard ~actions:[Directive.Action.Print_model]}
- | REACH STAR
-    { Directive.reach_all ~guard:Dba.Expr.one
-			  ~actions:[Directive.Action.Print_model] }
- | ENUMERATE   e=expr; times=integer_argument;
-   { let n = Utils.get_opt_or_default 1 times in Directive.enumerate ~n e }
- | ASSUME e=expr;
-   { Directive.assume e }
- | CUT guard=option(preceded(IF,expr));
-   { Directive.cut ?guard }
- | consequent alternate=boption(ALTERNATE);
-   { Directive.choose_consequent ~alternate }
- | alternative alternate=boption(ALTERNATE);
-   { Directive.choose_alternative ~alternate }
-;
-
-located_directive:
- | loc=expr; g=directive;
-   { g ~loc () }
-;
-
-directives:
- | l=separated_nonempty_list(SEMICOLON, located_directive); EOF { l }
 ;

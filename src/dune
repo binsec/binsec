@@ -1,49 +1,20 @@
 (include_subdirs unqualified)
 
-(executable
- (public_name binsec)
- (package binsec)
- (name main)
- (modules main)
- (flags
-  (:standard -open Binsec))
- (libraries
-  binsec
-  libparser
-  smt
-  sse
-  bbsse
-  dtrace
-  armv7decoder
-  amd64decoder
-  armv8decoder
-  ppc64decoder
-  sparcv8decoder))
-
 (library
- (public_name binsec)
- (modules
-  (:standard \ main))
- (modules_without_implementation
-  loader_sigs
-  loader_types
-  sigs
-  smtlib
-  x86Types)
+ (public_name binsec.kernel)
+ (name binsec_kernel)
+ (modules binsec_kernel)
  (library_flags
   (:standard -linkall))
  (flags
-  (:standard -w -3))
- (libraries unix str bigarray ocamlgraph zarith dune-site dune-site.plugins)
- (foreign_stubs
-  (language c)
-  (names :standard)))
-
-(generate_sites_module
- (module runtime)
- (sites binsec))
-
-(generate_sites_module
- (module plugins)
- (plugins
-  (binsec plugins)))
+  (:standard -w -3-69))
+ (libraries
+  unix
+  ocamlgraph
+  binsec.base
+  binsec.kernel.dba
+  binsec.kernel.parser
+  binsec.kernel.loader
+  binsec.kernel.isa
+  binsec.domains
+  binsec.dwarf))

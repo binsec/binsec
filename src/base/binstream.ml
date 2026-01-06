@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -18,8 +18,6 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
 (*                                                                        *)
 (**************************************************************************)
-
-module Logger = Base_logger
 
 type t = int Sequence.t
 (* The list is stored in reversed order *)
@@ -84,7 +82,6 @@ let append_char c = append_int (Char.code c)
 let of_list l = List.fold_left (fun seq e -> prepend_int e seq) empty l
 
 let of_bytes s =
-  Logger.debug ~level:5 "Binstream.oXf_bytes %s" s;
   let len = String.length s in
   let rec loop acc idx =
     if idx >= len then acc
@@ -107,7 +104,6 @@ let clean_string s =
   Buffer.contents b
 
 let of_nibbles s =
-  Logger.debug ~level:5 "Binstream.of_string %s" s;
   let s = clean_string s in
   let s = add_zeros s in
   let len = String.length s in
@@ -130,7 +126,12 @@ let rev sq = fold Sequence.push_back sq empty
 let pp ppf t =
   let open Format in
   pp_open_hbox ppf ();
-  iter (fun by -> Format.fprintf ppf "%02x@ " by) t;
+  let pp_space = ref (fun _ () -> ()) in
+  iter
+    (fun by ->
+      Format.fprintf ppf "%a%02x" !pp_space () by;
+      pp_space := pp_print_space)
+    t;
   pp_close_box ppf ()
 
 let to_string t = Format.asprintf "%a" pp t

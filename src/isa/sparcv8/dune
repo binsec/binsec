@@ -1,0 +1,17 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.isa.sparcv8)
+ (name binsec_isa_sparcv8)
+ (modules (:standard))
+ (library_flags
+  (:standard -linkall))
+ (flags
+  (:standard -w -3 -open Binsec_kernel))
+ (libraries
+  binsec.kernel
+  (select
+   sparcV8ToDba.ml
+   from
+   (unisim_archisec.sparcdba -> sparcV8ToDba.enabled.ml)
+   (-> sparcV8ToDba.disabled.ml))))

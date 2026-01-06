@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -26,8 +26,6 @@ module Logger = Logger.Make (struct
 end)
 
 type instruction_sequence = (Dba.address * Dba.Instr.t) list
-
-let malloc_id = ref 0
 
 module Caddress = struct
   module X = struct
@@ -94,27 +92,10 @@ module Call_stack = struct
           callee
 end
 
-module Expr : sig
-  include Sigs.PRINTABLE with type t := Dba.Expr.t
+module Var : Collection.S with type t = Dba.Var.t =
+  Basic_types.Collection_make.Default (Dba.Var)
 
-  type t = Dba.Expr.t
-
-  val var : string -> Size.Bit.t -> Dba.Var.Tag.t -> t
-  val flag : ?bits:Size.Bit.t -> string -> t
-  val temporary : string -> Size.Bit.t -> t
-  val sext : t -> Size.Bit.t -> t
-  val uext : t -> Size.Bit.t -> t
-  val bool_false : t
-  val bool_true : t
-  val temp : Size.Bit.t -> t
-  val is_symbolic : t -> bool
-  val of_lvalue : Dba.LValue.t -> t
-  val is_zero : t -> bool
-  val is_one : t -> bool
-  val is_max : t -> bool
-  val variables : t -> Basic_types.String.Set.t
-  val temporaries : t -> Basic_types.String.Set.t
-end = struct
+module Expr = struct
   type t = Dba.Expr.t
 
   let var name nbits tag =
@@ -139,8 +120,6 @@ end = struct
   let bool_true = Dba.Expr.one
   let bool_false = Dba.Expr.zero
 
-  open! Dba
-
   let rec is_symbolic = function
     | Expr.Var _ | Expr.Load _ -> true
     | Expr.Unary (_, e) -> is_symbolic e
@@ -163,6 +142,16 @@ end = struct
     | Dba.Expr.Cst bv -> Bitvector.is_max_ubv bv
     | _ -> false
 
+  let rec collect_variables : Dba.Expr.t -> Var.Set.t -> Var.Set.t =
+   fun e d ->
+    match e with
+    | Cst _ -> d
+    | Var v -> Var.Set.add v d
+    | Load (_, _, e, _) | Unary (_, e) -> collect_variables e d
+    | Binary (_, e, e') -> collect_variables e (collect_variables e' d)
+    | Ite (e, e', e'') ->
+        collect_variables e (collect_variables e' (collect_variables e'' d))
+
   let rec variables = function
     | Dba.Expr.Cst _ -> Basic_types.String.Set.empty
     | Dba.Expr.Unary (_, e) | Dba.Expr.Load (_, _, e, _) -> variables e
@@ -178,6 +167,49 @@ end = struct
     | Dba.Expr.Var _ -> Basic_types.String.Set.empty
     | Dba.Expr.Binary (_, e1, e2) | Dba.Expr.Ite (_, e1, e2) ->
         Basic_types.String.Set.union (temporaries e1) (temporaries e2)
+
+  let complement e ~lo ~hi (var : Dba.Var.t) =
+    let size = var.size and evar = Dba.Expr.v var in
+    if lo = 0 then
+      Dba.Expr.append (Dba.Expr.restrict (hi + 1) (size - 1) evar) e
+    else if hi = size - 1 then
+      Dba.Expr.append e (Dba.Expr.restrict 0 (lo - 1) evar)
+    else
+      Dba.Expr.append
+        (Dba.Expr.append (Dba.Expr.restrict (hi + 1) (size - 1) evar) e)
+        (Dba.Expr.restrict 0 (lo - 1) evar)
+
+  let bswap =
+    let rec iter e i r =
+      if i = 0 then r
+      else
+        iter e (i - 8) (Dba.Expr.append (Dba.Expr.restrict (i - 8) (i - 1) e) r)
+    in
+    fun e ->
+      let size = Dba.Expr.size_of e in
+      assert (size mod 8 = 0);
+      iter e (size - 8) (Dba.Expr.restrict (size - 8) (size - 1) e)
+
+  let rec substitute : t Var.Map.t -> t -> t =
+   fun sigma e ->
+    match e with
+    | Cst _ -> e
+    | Var v -> ( try Var.Map.find v sigma with Not_found -> e)
+    | Load (len, dir, addr, array) ->
+        let addr' = substitute sigma addr in
+        if addr' == addr then e
+        else Expr.load (Size.Byte.create len) dir addr' ?array
+    | Unary (op, x) ->
+        let x' = substitute sigma x in
+        if x' == x then e else Expr.unary op x'
+    | Binary (op, x, y) ->
+        let x' = substitute sigma x and y' = substitute sigma y in
+        if x' == x && y' == y then e else Expr.binary op x' y'
+    | Ite (x, y, z) ->
+        let x' = substitute sigma x
+        and y' = substitute sigma y
+        and z' = substitute sigma z in
+        if x' == x && y' == y && z' == z then e else Expr.ite x' y' z'
 end
 
 module LValue = struct
@@ -206,11 +238,11 @@ module LValue = struct
     | LValue.Store _ -> None
 
   let is_temporary = function
-    | LValue.Var { info = Var.Tag.Temp; _ } -> true
+    | LValue.Var { info = Temp; _ } -> true
     | LValue.Var _ | LValue.Restrict _ | LValue.Store _ -> false
 
   let is_flag = function
-    | LValue.Var { info = Var.Tag.Flag; _ } -> true
+    | LValue.Var { info = Flag; _ } -> true
     | LValue.Var _ | LValue.Restrict _ | LValue.Store _ -> false
 
   let variables = function
@@ -219,7 +251,7 @@ module LValue = struct
     | LValue.Store (_, _, e, _) -> Expr.variables e
 
   let temporaries = function
-    | LValue.Var { name; info = Var.Tag.Temp; _ } ->
+    | LValue.Var { name; info = Temp; _ } ->
         Basic_types.String.Set.singleton name
     | LValue.Var _ | LValue.Restrict _ -> Basic_types.String.Set.empty
     (* Restrict cannot be applied to temporaries : check that! *)
@@ -244,8 +276,6 @@ module AddressStack = struct
     Format.fprintf fmt "@[<hov 2>%a@,<%a>@,(%d)@]"
       Dba_printer.Ascii.pp_code_address caddr Call_stack.pp call_stack n
 end
-
-type dbainstrmap = Dba.Instr.t Caddress.Map.t
 
 module Declarations = struct
   type t = (Dba.size * Dba.Var.Tag.t) Basic_types.String.Map.t
@@ -405,18 +435,3 @@ module Statement = struct
     Format.fprintf ppf "%a: %a" Dba_printer.Ascii.pp_code_address li.location
       Dba_printer.Ascii.pp_instruction li.instruction
 end
-
-type read_perm = Read of bool
-type write_perm = Write of bool
-type exec_perm = Exec of bool
-type permissions = Dba.Expr.t * (read_perm * write_perm * exec_perm)
-
-type program = {
-  start_address : Dba.address;
-  declarations : Declarations.t;
-  initializations : Dba.Instr.t list;
-  instructions : dbainstrmap;
-}
-
-module Var : Sigs.Collection with type t = Dba.Var.t =
-  Basic_types.Collection_make.Default (Dba.Var)

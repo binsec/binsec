@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -86,26 +86,6 @@ module Declarations : sig
 end
 
 module Mk : sig
-  val filemode :
-    'a ->
-    bool ->
-    bool ->
-    bool ->
-    ('a * (Dba_types.read_perm * Dba_types.write_perm * Dba_types.exec_perm))
-    * (Dba.Expr.t * Dba.Expr.t * Dba.Expr.t)
-
-  val checked_localized_instruction :
-    Dba_types.Caddress.t -> Dba.Instr.t -> Dba_types.Caddress.t * Dba.Instr.t
-
-  val checked_cond_expr : Dba.Expr.t -> Dba.Expr.t
-
-  val program :
-    Dba.Instr.t list ->
-    Dba.address ->
-    Dba.LValue.t list ->
-    (Dba_types.Caddress.Map.key * Dba.Instr.t) list ->
-    Dba_types.program
-
   module Predicates : sig
     val of_list :
       ('a * (Dba.Expr.t * Dba.Expr.t * Dba.Expr.t)) list ->

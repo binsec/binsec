@@ -1,0 +1,11 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.isa.riscv)
+ (name binsec_isa_riscv)
+ (modules (:standard))
+ (library_flags
+  (:standard -linkall))
+ (flags
+  (:standard -w -3-69 -open Binsec_kernel))
+ (libraries binsec.kernel))

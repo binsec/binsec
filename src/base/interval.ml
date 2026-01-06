@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,6 +20,68 @@
 (**************************************************************************)
 
 type 'a t = 'a Basic_types.interval = { lo : 'a; hi : 'a }
+
+type 'a overlap =
+  | Ll_Rl_Rh_Lh of 'a * 'a * 'a * 'a
+      (** Left starts before and ends after right.
+             \[     left      \]
+                \[  right  \]
+         *)
+  | Rl_Ll_Lh_Rh of 'a * 'a * 'a * 'a
+      (** Right starts before and ends after left.
+                \[  left    \]
+             \[     right     \]
+         *)
+  | Ll_Rl_Lh_Rh of 'a * 'a * 'a * 'a
+      (** Right starts and ends after left.
+             \[  left  \]
+                \[  right  \]
+         *)
+  | Rl_Ll_Rh_Lh of 'a * 'a * 'a * 'a
+      (** Left starts and ends after right.
+                 \[  left  \]
+             \[  right  \]
+         *)
+  | LRl_Rh_Lh of 'a * 'a * 'a
+      (** Left ends after right.
+             \[  left        \]
+             \[  right    \]
+         *)
+  | LRl_Lh_Rh of 'a * 'a * 'a
+      (** Right ends after left.
+             \[  left     \]
+             \[  right      \]
+         *)
+  | Ll_Rl_LRh of 'a * 'a * 'a
+      (** Left starts before right.
+             \[  left        \]
+                \[  right    \]
+         *)
+  | Rl_Ll_LRh of 'a * 'a * 'a
+      (** Right starts before left.
+                  \[  left  \]
+             \[  right      \]
+         *)
+  | LRl_LRh of 'a * 'a
+      (** Left and right are equal.
+             \[  left  \]
+             \[  right \]
+         *)
+
+let overlap : Z.t t -> Z.t t -> Z.t overlap =
+ fun { lo = lo0; hi = hi0 } { lo = lo1; hi = hi1 } ->
+  if Z.leq lo0 lo1 then
+    if Z.equal lo0 lo1 then
+      if Z.equal hi0 hi1 then LRl_LRh (lo0, hi0)
+      else if Z.lt hi0 hi1 then LRl_Lh_Rh (lo0, Z.succ hi0, hi1)
+      else LRl_Rh_Lh (lo0, Z.succ hi1, hi0)
+    else if Z.equal hi0 hi1 then Ll_Rl_LRh (lo0, lo1, hi0)
+    else if Z.lt hi0 hi1 then Ll_Rl_Lh_Rh (lo0, lo1, Z.succ hi0, hi1)
+    else Ll_Rl_Rh_Lh (lo0, lo1, Z.succ hi1, hi0)
+  else if Z.leq hi0 hi1 then
+    if Z.equal hi0 hi1 then Rl_Ll_LRh (lo1, lo0, hi0)
+    else Rl_Ll_Lh_Rh (lo1, lo0, Z.succ hi0, hi1)
+  else Rl_Ll_Rh_Lh (lo1, lo0, Z.succ hi1, hi0)
 
 let belongs cmp x t = cmp x t.lo >= 0 && cmp x t.hi <= 0
 let intersects cmp t s = not (cmp t.hi s.lo < 0 || cmp t.lo s.hi > 0)
@@ -499,23 +561,27 @@ struct
             })
           t
 
-  let extract i t =
-    let sz = i.hi - i.lo + 1 in
+  let extract { hi; lo } t =
+    let sz = hi - lo + 1 in
     fold
       (fun t acc ->
-        let shr_lo = Bitvector.shift_right t.lo i.lo in
-        let shr_hi = Bitvector.shift_right t.hi i.lo in
+        let shr_lo = Bitvector.shift_right t.lo lo in
+        let shr_hi = Bitvector.shift_right t.hi lo in
         let length = Bitvector.fill ~hi:(sz - 1) (Bitvector.size_of t.lo) in
         if Bitvector.ugt (Bitvector.sub shr_hi shr_lo) length then
           add { lo = Bitvector.zeros sz; hi = Bitvector.fill sz } acc
         else if Bitvector.ule shr_hi (Bitvector.logor shr_lo length) then
           add
-            { lo = Bitvector.extract t.lo i; hi = Bitvector.extract t.hi i }
+            {
+              lo = Bitvector.extract ~hi ~lo t.lo;
+              hi = Bitvector.extract ~hi ~lo t.hi;
+            }
             acc
         else
           acc
-          |> add { lo = Bitvector.extract t.lo i; hi = Bitvector.fill sz }
-          |> add { lo = Bitvector.zeros sz; hi = Bitvector.extract t.hi i })
+          |> add { lo = Bitvector.extract ~hi ~lo t.lo; hi = Bitvector.fill sz }
+          |> add
+               { lo = Bitvector.zeros sz; hi = Bitvector.extract ~hi ~lo t.hi })
       t empty
 
   let concat t1 t2 =

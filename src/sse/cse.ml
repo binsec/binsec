@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,8 +19,30 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module rec Expr : (Term.S with type a := Dba.Var.t and type b := Layer.t) =
-  Term.Make (Dba.Var) (Layer)
+module Source : sig
+  type kind = Input | Clobber | Symbolic
+  type t = Dba.Var.t * int * kind
+
+  include Sigs.HASHABLE with type t := t
+  module Set : Set.S with type elt = t
+  module Map : Map.S with type key = t
+end = struct
+  module T = struct
+    type kind = Input | Clobber | Symbolic
+    type t = Dba.Var.t * int * kind
+
+    let hash : t -> int = fun (_, id, _) -> id
+    let equal x y = hash x = hash y
+    let compare x y = hash x - hash y
+  end
+
+  include T
+  module Set = Set.Make (T)
+  module Map = Map.Make (T)
+end
+
+module rec Expr : (Term.S with type a := Source.t and type b := Layer.t) =
+  Term.Make (Source) (Layer)
 
 and Store : sig
   type t
@@ -166,13 +188,11 @@ end = struct
         | _ -> (Expr.load bytes dir addr t, true))
 end
 
+type var = ([ `Var ], Source.t, Layer.t) Expr.term
+
 module StrMap = Basic_types.String.Map
-
-module VarMap = Map.Make (struct
-  type t = Dba.Var.t
-
-  let compare (x : t) (y : t) = x.id - y.id
-end)
+module VarMap = Dba_types.Var.Map
+module VarSet = Dba_types.Var.Set
 
 let uop (e : Dba.Expr.t) (op : Dba.Unary_op.t) : Term.unary Term.operator =
   match op with
@@ -189,8 +209,8 @@ let bop (op : Dba.Binary_op.t) : Term.binary Term.operator =
   | Mult -> Mul
   | DivU -> Udiv
   | DivS -> Sdiv
-  | ModU -> Umod
-  | ModS -> Smod
+  | RemU -> Urem
+  | RemS -> Srem
   | Eq -> Eq
   | Diff -> Diff
   | LeqU -> Ule
@@ -213,16 +233,28 @@ let bop (op : Dba.Binary_op.t) : Term.binary Term.operator =
 
 module Env = struct
   type t = {
+    id : int;
     vars : Expr.t VarMap.t;
     layers : (Layer.t * bool) StrMap.t;
     rev_reads : Expr.t list;
-    input_vars : Expr.t VarMap.t;
+    sources : var list VarMap.t;
   }
+
+  let havoc var t kind =
+    let history = try VarMap.find var t.sources with Not_found -> [] in
+    let value = Expr.var var.name var.size (var, t.id, kind) in
+    ( value,
+      {
+        t with
+        id = t.id + 1;
+        vars = VarMap.add var value t.vars;
+        sources = VarMap.add var (Term.to_var_exn value :: history) t.sources;
+      } )
 
   let is_empty { vars; layers; rev_reads; _ } =
     VarMap.is_empty vars && StrMap.is_empty layers && rev_reads = []
 
-  let rec eval (e : Types.Expr.t) t =
+  let rec eval (e : Dba.Expr.t) t =
     match e with
     | Cst bv | Var { info = Symbol (_, (lazy bv)); _ } -> (Expr.constant bv, t)
     | Var var -> lookup var t
@@ -241,15 +273,7 @@ module Env = struct
         (Expr.ite c' r' e', t')
 
   and lookup var t =
-    try (VarMap.find var t.vars, t)
-    with Not_found ->
-      let input = Expr.var "" var.size var in
-      ( input,
-        {
-          t with
-          vars = VarMap.add var input t.vars;
-          input_vars = VarMap.add var input t.input_vars;
-        } )
+    try (VarMap.find var t.vars, t) with Not_found -> havoc var t Input
 
   and load len dir addr base t =
     let name = Option.value ~default:"" base in
@@ -267,27 +291,23 @@ module Env = struct
 
   let empty =
     {
+      id = 0;
       vars = VarMap.empty;
       layers = StrMap.empty;
       rev_reads = [];
-      input_vars = VarMap.empty;
+      sources = VarMap.empty;
     }
 
   let assign var value t =
     let value', t' = eval value t in
     { t' with vars = VarMap.add var value' t'.vars }
 
-  let clobber var t =
-    assign var (Dba.Expr.constant (Bitvector.zeros var.size)) t
-
+  let clobber var t = snd (havoc var t Clobber)
+  let symbolize var t = snd (havoc var t Symbolic)
   let forget var t = { t with vars = VarMap.remove var t.vars }
 
   let load (var : Dba.Var.t) base dir addr t =
-    let bytes, t' =
-      eval
-        (Dba.Expr.load ?array:base (Size.Byte.create (var.size lsr 3)) dir addr)
-        t
-    in
+    let bytes, t' = load (var.size / 8) dir addr base t in
     { t' with vars = VarMap.add var bytes t'.vars }
 
   let store base dir ~addr value t =
@@ -301,10 +321,66 @@ module Env = struct
     { t' with layers = StrMap.add name (layer', false) t'.layers }
 end
 
-type value = Bv of Expr.t | Ax of string option * Expr.t * Expr.t
+type 'a operator = 'a Term.operator
+and unary = Term.unary
+and binary = Term.binary
+
+type 'a node =
+  | Constant : Bitvector.t -> [< `Value | `Opcode ] node
+  | Value : int -> [< `Value | `Opcode ] node
+  | Variable : Dba.Var.t -> [< `Value | `Opcode ] node
+  | Unary : unary operator * [ `Value ] node -> [< `Value | `Opcode ] node
+  | Binary :
+      binary operator * [ `Value ] node * [ `Value ] node
+      -> [< `Value | `Opcode ] node
+  | Ite :
+      [ `Value ] node * [ `Value ] node * [ `Value ] node
+      -> [< `Value | `Opcode ] node
+  | Load :
+      string option * [ `Value ] node * Machine.endianness * int
+      -> [ `Opcode ] node
+  | Store :
+      string option * [ `Value ] node * Machine.endianness * [ `Value ] node
+      -> [ `Opcode ] node
+  | Assign : Dba.Var.t * [ `Value ] node -> [ `Opcode ] node
+  | Clobber : Dba.Var.t -> [ `Opcode ] node
+  | Symbolize : Dba.Var.t -> [ `Opcode ] node
+
+and value = [ `Value ] node
+and opcode = [ `Opcode ] node
+
+let rec pp_opcode : type a. Format.formatter -> a node -> unit =
+ fun ppf opcode ->
+  match opcode with
+  | Constant bv -> Bitvector.pp_hex_or_bin ppf bv
+  | Value i -> Format.fprintf ppf "Value[%d]" i
+  | Variable { name; _ } -> Format.pp_print_string ppf name
+  | Unary (op, x) -> Format.fprintf ppf "(%a %a)" Term.Op.pp op pp_opcode x
+  | Binary (op, x, y) ->
+      Format.fprintf ppf "(%a %a %a)" Term.Op.pp op pp_opcode x pp_opcode y
+  | Ite (c, t, e) ->
+      Format.fprintf ppf "(%a ? %a : %a)" pp_opcode c pp_opcode t pp_opcode e
+  | Load (base, addr, dir, len) ->
+      Format.fprintf ppf "%a[%a, %d]%c"
+        (Format.pp_print_option
+           ~none:(fun ppf () -> Format.pp_print_string ppf "@")
+           Format.pp_print_string)
+        base pp_opcode addr len
+        (match dir with LittleEndian -> 'l' | BigEndian -> 'b')
+  | Store (base, addr, dir, value) ->
+      Format.fprintf ppf "%a[%a]%c := %a"
+        (Format.pp_print_option
+           ~none:(fun ppf () -> Format.pp_print_string ppf "@")
+           Format.pp_print_string)
+        base pp_opcode addr
+        (match dir with LittleEndian -> 'l' | BigEndian -> 'b')
+        pp_opcode value
+  | Assign ({ name; _ }, value) ->
+      Format.fprintf ppf "%s := %a" name pp_opcode value
+  | Clobber { name; _ } -> Format.fprintf ppf "%s := undef" name
+  | Symbolize { name; _ } -> Format.fprintf ppf "%s := nondet" name
 
 module VarTbl = Dba_types.Var.Htbl
-module VarSet = Dba_types.Var.Set
 
 module BvTbl = Hashtbl.Make (struct
   type t = Expr.t
@@ -315,218 +391,190 @@ end)
 
 module AxTbl = Hashtbl.Make (Layer)
 
+type point = Bv of Expr.t | Ax of string option * Expr.t * Expr.t
+
 type t = {
   mutable id : int;
-  mutable rev : value list;
-  locals : Dba.Var.t BvTbl.t;
+  queue : point Queue.t;
+  mutable sources : Expr.t Source.Map.t;
+  locals : int BvTbl.t;
   layers : unit AxTbl.t;
 }
 
 let init () =
-  { id = 0; rev = []; locals = BvTbl.create 32; layers = AxTbl.create 4 }
+  {
+    id = 0;
+    queue = Queue.create ();
+    sources = Source.Map.empty;
+    locals = BvTbl.create 32;
+    layers = AxTbl.create 4;
+  }
 
-let bv_once = Dba.Var.create ~tag:Dba.Var.Tag.Empty "" ~bitsize:Size.Bit.bits1
+let rec visit_bv env bv =
+  match BvTbl.find env.locals bv with
+  | -1 ->
+      BvTbl.replace env.locals bv 0;
+      env.id <- env.id + 1
+  | _ -> ()
+  | exception Not_found -> (
+      match bv with
+      | Var { label; _ } ->
+          BvTbl.replace env.locals bv 0;
+          env.id <- env.id + 1;
+          env.sources <- Source.Map.add label bv env.sources
+      | Load { addr; label; _ } ->
+          visit_ax env label;
+          visit_bv env addr;
+          BvTbl.add env.locals bv 0;
+          env.id <- env.id + 1;
+          Queue.add (Bv bv) env.queue
+      | Cst _ ->
+          BvTbl.add env.locals bv (-1);
+          Queue.add (Bv bv) env.queue
+      | Unary { x; _ } ->
+          visit_bv env x;
+          BvTbl.add env.locals bv (-1);
+          Queue.add (Bv bv) env.queue
+      | Binary { x; y; _ } ->
+          visit_bv env x;
+          visit_bv env y;
+          BvTbl.add env.locals bv (-1);
+          Queue.add (Bv bv) env.queue
+      | Ite { c; t = r; e; _ } ->
+          visit_bv env c;
+          visit_bv env r;
+          visit_bv env e;
+          BvTbl.add env.locals bv (-1);
+          Queue.add (Bv bv) env.queue)
 
-let rec visit_bv t bv =
-  try
-    if BvTbl.find t.locals bv == bv_once then (
-      let name = Format.sprintf "$$$%d" t.id in
-      t.id <- t.id + 1;
-      BvTbl.replace t.locals bv
-        (Dba.Var.create ~tag:Dba.Var.Tag.Temp name
-           ~bitsize:(Size.Bit.create (Expr.sizeof bv))))
-  with Not_found -> (
-    match bv with
-    | Var _ -> ()
-    | Load { addr; label; _ } ->
-        let name = Format.sprintf "$$$%d" t.id in
-        t.id <- t.id + 1;
-        BvTbl.add t.locals bv
-          (Dba.Var.create ~tag:Dba.Var.Tag.Temp name
-             ~bitsize:(Size.Bit.create (Expr.sizeof bv)));
-        visit_ax t label;
-        visit_bv t addr;
-        t.rev <- Bv bv :: t.rev
-    | Cst _ -> ()
-    | Unary { x; _ } ->
-        BvTbl.add t.locals bv bv_once;
-        visit_bv t x;
-        t.rev <- Bv bv :: t.rev
-    | Binary { x; y; _ } ->
-        BvTbl.add t.locals bv bv_once;
-        visit_bv t x;
-        visit_bv t y;
-        t.rev <- Bv bv :: t.rev
-    | Ite { c; t = r; e; _ } ->
-        BvTbl.add t.locals bv bv_once;
-        visit_bv t c;
-        visit_bv t r;
-        visit_bv t e;
-        t.rev <- Bv bv :: t.rev)
-
-and visit_ax t ax =
-  if not (AxTbl.mem t.layers ax) then (
-    AxTbl.add t.layers ax ();
+and visit_ax env ax =
+  if not (AxTbl.mem env.layers ax) then (
+    AxTbl.add env.layers ax ();
     match ax with
     | Base _ -> ()
     | Layer { base; addr; store; over; _ } ->
-        visit_ax t over;
-        Store.rev_iter
+        visit_ax env over;
+        Store.iter
           (fun offset value ->
             let addr = Expr.addz addr offset in
-            visit_bv t addr;
-            visit_bv t value;
-            t.rev <- Ax (base, addr, value) :: t.rev)
+            visit_bv env addr;
+            visit_bv env value;
+            env.id <- env.id + 1;
+            Queue.add (Ax (base, addr, value)) env.queue)
           store)
 
-let mk_unop (op : Term.unary Term.operator) x : Dba.Unary_op.t =
-  match op with
-  | Not -> Not
-  | Minus -> UMinus
-  | Uext n -> Uext (Expr.sizeof x + n)
-  | Sext n -> Sext (Expr.sizeof x + n)
-  | Restrict i -> Restrict i
+let rec mk_bv : t -> Expr.t -> value =
+ fun env bv ->
+  match BvTbl.find env.locals bv with
+  | -1 | (exception Not_found) -> mk_bv_no_cons env bv
+  | id -> Value id
 
-let mk_binop (op : Term.binary Term.operator) : Dba.Binary_op.t =
-  match op with
-  | Plus -> Plus
-  | Minus -> Minus
-  | Mul -> Mult
-  | Udiv -> DivU
-  | Sdiv -> DivS
-  | Umod -> ModU
-  | Smod -> ModS
-  | Eq -> Eq
-  | Diff -> Diff
-  | Ule -> LeqU
-  | Ult -> LtU
-  | Uge -> GeqU
-  | Ugt -> GtU
-  | Sle -> LeqS
-  | Slt -> LtS
-  | Sge -> GeqS
-  | Sgt -> GtS
-  | Xor -> Xor
-  | And -> And
-  | Or -> Or
-  | Concat -> Concat
-  | Lsl -> LShift
-  | Lsr -> RShiftU
-  | Asr -> RShiftS
-  | Rol -> LeftRotate
-  | Ror -> RightRotate
+and mk_bv_no_cons : t -> Expr.t -> value =
+ fun env bv ->
+  match mk_opcode env bv with
+  | (Constant _ | Value _ | Variable _ | Unary _ | Binary _ | Ite _) as value ->
+      value
+  | Clobber _ | Symbolize _ | Load _ | Store _ | Assign _ -> assert false
 
-let rec mk_bv t bv =
-  match BvTbl.find t.locals bv with
-  | var -> if var == bv_once then mk_bv_no_cons t bv else Dba.Expr.v var
-  | exception Not_found -> mk_bv_no_cons t bv
-
-and mk_bv_no_cons t bv =
+and mk_opcode : t -> Expr.t -> opcode =
+ fun env bv ->
   match bv with
-  | Var { label = var; _ } -> Dba.Expr.v var
-  | Load _ -> assert false
-  | Cst bv -> Dba.Expr.constant bv
-  | Unary { f; x; _ } -> Dba.Expr.unary (mk_unop f x) (mk_bv t x)
-  | Binary { f; x; y; _ } ->
-      Dba.Expr.binary (mk_binop f) (mk_bv t x) (mk_bv t y)
-  | Ite { c; t = r; e; _ } -> Dba.Expr.ite (mk_bv t c) (mk_bv t r) (mk_bv t e)
+  | Cst bv -> Constant bv
+  | Var { label = var, _, Input; _ } -> Variable var
+  | Var { label = var, _, Clobber; _ } -> Clobber var
+  | Var { label = var, _, Symbolic; _ } -> Symbolize var
+  | Load { addr; dir; len; label = Base base | Layer { base; _ }; _ } ->
+      Load (base, mk_bv env addr, dir, len)
+  | Unary { f; x; _ } -> Unary (f, mk_bv env x)
+  | Binary { f; x; y; _ } -> Binary (f, mk_bv env x, mk_bv env y)
+  | Ite { c; t; e; _ } -> Ite (mk_bv env c, mk_bv env t, mk_bv env e)
 
-exception Skip
-
-let rec visit_bv' bindings rev_bindings t (bv : Expr.t) =
-  match bv with
-  | Var { label = var; _ } -> (
-      try
-        let bv = VarTbl.find bindings var in
-        BvTbl.remove rev_bindings bv;
-        if BvTbl.length rev_bindings = 0 then raise_notrace Skip
-      with Not_found -> ())
-  | Unary { x; _ } when BvTbl.find t.locals bv == bv_once ->
-      visit_bv' bindings rev_bindings t x
-  | Binary { x; y; _ } when BvTbl.find t.locals bv == bv_once ->
-      visit_bv' bindings rev_bindings t x;
-      visit_bv' bindings rev_bindings t y
-  | Ite { c; t = r; e; _ } when BvTbl.find t.locals bv == bv_once ->
-      visit_bv' bindings rev_bindings t c;
-      visit_bv' bindings rev_bindings t r;
-      visit_bv' bindings rev_bindings t e
-  | Cst _ | Load _ | Unary _ | Binary _ | Ite _ -> ()
-
-let commit (body : Env.t) =
-  if Env.is_empty body then []
+let commit : Env.t -> opcode array =
+ fun body ->
+  if Env.is_empty body then [||]
   else
-    let t = init () in
-    List.iter (visit_bv t) (List.rev body.rev_reads);
-    StrMap.iter (fun _ (ax, _) -> visit_ax t ax) body.layers;
-    let bindings = VarTbl.create 32
-    and inputs = VarTbl.create 32
-    and rev_bindings = BvTbl.create 32 in
+    let env = init () in
+    List.iter (visit_bv env) (List.rev body.rev_reads);
+    StrMap.iter (fun _ (ax, _) -> visit_ax env ax) body.layers;
     VarMap.iter
       (fun var bv ->
         match (bv : Expr.t) with
-        | Var { label = var'; _ } when Dba.Var.equal var var' -> ()
+        | Var { label = var', _, Input; _ } when Dba.Var.equal var var' -> ()
         | _ ->
-            VarTbl.add bindings var bv;
-            if VarMap.mem var body.input_vars then (
-              let bv = Expr.var "" var.size var in
-              let name = Format.sprintf "$$$%d" t.id in
-              t.id <- t.id + 1;
-              let tmp =
-                Dba.Var.create ~tag:Dba.Var.Tag.Temp name
-                  ~bitsize:(Size.Bit.create var.size)
-              in
-              BvTbl.add t.locals bv tmp;
-              VarTbl.add inputs var tmp);
-            if not (BvTbl.mem rev_bindings bv) then
-              BvTbl.add rev_bindings bv var;
-            visit_bv t bv)
+            env.id <- env.id + 1;
+            visit_bv env bv)
       body.vars;
-    (try
-       List.iter
-         (function
-           | Bv bv -> (
-               try
-                 let var = BvTbl.find rev_bindings bv in
-                 BvTbl.replace t.locals bv var;
-                 VarTbl.remove bindings var;
-                 BvTbl.remove rev_bindings bv;
-                 if BvTbl.length rev_bindings = 0 then raise_notrace Skip
-               with Not_found -> visit_bv' bindings rev_bindings t bv)
-           | Ax (_, addr, value) ->
-               visit_bv' bindings rev_bindings t addr;
-               visit_bv' bindings rev_bindings t value)
-         t.rev
-     with Skip -> ());
-    VarTbl.fold
-      (fun var tmp assigns ->
-        Ir.Assign { var = tmp; rval = Dba.Expr.v var } :: assigns)
-      inputs
-      (List.fold_left
-         (fun assigns -> function
-           | Bv (Load { dir; addr; label; _ } as bv) ->
-               Ir.Load
-                 {
-                   var = BvTbl.find t.locals bv;
-                   base = Layer.base label;
-                   dir;
-                   addr = mk_bv t addr;
-                 }
-               :: assigns
-           | Bv bv ->
-               let var = BvTbl.find t.locals bv in
-               if var == bv_once then assigns
-               else Ir.Assign { var; rval = mk_bv_no_cons t bv } :: assigns
-           | Ax (base, addr, value) ->
-               Ir.Store
-                 {
-                   base;
-                   dir = LittleEndian;
-                   addr = mk_bv t addr;
-                   rval = mk_bv t value;
-                 }
-               :: assigns)
-         (VarTbl.fold
-            (fun var bv assigns ->
-              Ir.Assign { var; rval = mk_bv t bv } :: assigns)
-            bindings [])
-         t.rev)
+    let opcodes = Array.make env.id (Constant Bitvector.zero) in
+    let idx = ref 0 in
+    Source.Map.iter
+      (fun _ bv ->
+        BvTbl.replace env.locals bv !idx;
+        Array.set opcodes !idx (mk_opcode env bv);
+        incr idx)
+      env.sources;
+    Queue.iter
+      (function
+        | Bv bv ->
+            if BvTbl.find env.locals bv <> -1 then (
+              BvTbl.replace env.locals bv !idx;
+              Array.set opcodes !idx (mk_opcode env bv);
+              incr idx)
+        | Ax (base, addr, rval) ->
+            Array.set opcodes !idx
+              (Store (base, mk_bv env addr, LittleEndian, mk_bv env rval));
+            incr idx)
+      env.queue;
+    VarMap.iter
+      (fun var bv ->
+        match (bv : Expr.t) with
+        | Var { label = var', _, Input; _ } when Dba.Var.equal var var' -> ()
+        | _ ->
+            Array.set opcodes !idx (Assign (var, mk_bv env bv));
+            incr idx)
+      body.vars;
+    opcodes
+
+let rec closure : bool BvTbl.t -> Expr.t VarMap.t -> VarSet.t -> VarSet.t =
+  let rec analyze : bool BvTbl.t -> Expr.t -> VarSet.t -> bool =
+   fun tainted value slice ->
+    try BvTbl.find tainted value
+    with Not_found ->
+      let taint =
+        match value with
+        | Cst _ -> false
+        | Var { label = var, _, _; _ } -> VarSet.mem var slice
+        | Load _ -> true
+        | Unary { x; _ } -> analyze tainted x slice
+        | Binary { x; y; _ } ->
+            analyze tainted x slice || analyze tainted y slice
+        | Ite { c; t; e; _ } ->
+            analyze tainted c slice || analyze tainted t slice
+            || analyze tainted e slice
+      in
+      BvTbl.add tainted value taint;
+      taint
+  in
+  fun tainted vars slice ->
+    let slice' =
+      VarMap.fold
+        (fun var value slice ->
+          if analyze tainted value slice then VarSet.add var slice else slice)
+        vars slice
+    in
+    if VarSet.equal slice slice' then slice
+    else (
+      BvTbl.filter_map_inplace
+        (fun _ b -> if b then Some true else None)
+        tainted;
+      closure tainted vars slice')
+
+let partial_commit : Env.t -> VarSet.t -> Env.t * opcode array =
+ fun body slice ->
+  if Env.is_empty body then (body, [||])
+  else
+    let slice = closure (BvTbl.create 64) body.vars slice in
+    let vars, vars' =
+      VarMap.partition (fun var _ -> VarSet.mem var slice) body.vars
+    in
+    ( { body with vars = vars'; layers = StrMap.empty; rev_reads = [] },
+      commit { body with vars } )

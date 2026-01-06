@@ -1,0 +1,11 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.base)
+ (name binsec_base)
+ (modules_without_implementation sigs)
+ (modules :standard)
+ (foreign_stubs
+  (language c)
+  (names :standard))
+ (libraries binsec.domains zarith))

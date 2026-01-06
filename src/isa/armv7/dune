@@ -1,0 +1,17 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.isa.armv7)
+ (name binsec_isa_armv7)
+ (modules (:standard))
+ (library_flags
+  (:standard -linkall))
+ (flags
+  (:standard -w -3 -open Binsec_kernel))
+ (libraries
+  binsec.kernel
+  (select
+   armToDba.ml
+   from
+   (unisim_archisec.arm32dba -> armToDba.enabled.ml)
+   (-> armToDba.disabled.ml))))

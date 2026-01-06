@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,7 +22,7 @@
 type t = private string
 (** This module is intended to generate valid SMTLib2 short identifiers
     Are valid any non-empty sequence of letters, digits
-                  and the characters ~ ! @ $ % ^ & * _ - + < > . ? /
+                  and the characters ~ ! \@ $ % ^ & * _ - + < > . ? /
                   that does not start with a digit
     To never clash with reserved keywords, generated identifiers
     always start with one of the special characters *)

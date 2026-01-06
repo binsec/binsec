@@ -1,0 +1,23 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.dwarf)
+ (name binsec_dwarf)
+ (modules :standard)
+ (flags
+  :standard
+  -open
+  Binsec_base
+  -open
+  Binsec_kernel_dba
+  -open
+  Binsec_kernel_loader
+  -open
+  Binsec_kernel_isa
+  -w
+  -69)
+ (libraries
+  binsec.base
+  binsec.kernel.dba
+  binsec.kernel.loader
+  binsec.kernel.isa))

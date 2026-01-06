@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -63,14 +63,13 @@ end
 
 module Byte = struct
   include CommonSize
-  module Cst = Basic_types.Constants
 
-  let b = Cst.bytesize
-  let to_bitsize n = mul n b
+  let bytesize = Natural.create 8
+  let to_bitsize n = mul n bytesize
 
   let of_bitsize n =
-    assert (to_int n mod (b :> int) = 0);
-    div n b
+    assert (to_int n mod (bytesize :> int) = 0);
+    div n bytesize
 
   let unsafe_of_bits n = of_bitsize (create n)
   let one = create 1

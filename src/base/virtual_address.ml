@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,54 +19,39 @@
 (*                                                                        *)
 (**************************************************************************)
 
-exception Non_canonical_form
+open Basic_types.Integers
+include Collection.Hashed (Z)
 
-module V_comparable = struct
-  type t = int
-
-  let compare = compare
-  let equal x y = compare x y = 0
-  let hash x = x
-end
-
-include Basic_types.Collection_make.Hashed (V_comparable)
-
-let zero = 0
-let create n = n
-let to_int n = n
-let to_int64 x = Int64.(shift_right (shift_left (of_int x) 1) 1)
-
-let of_int64 n64 =
-  if Int64.(shift_right (shift_left n64 1) 1) <> n64 then
-    raise Non_canonical_form
-  else Int64.to_int n64
-
-let of_bigint b =
-  if Z.fits_int b then Z.to_int b
-  else if Z.numbits b = 64 && Z.testbit b 62 then
-    Z.to_int (Z.signed_extract b 0 63)
-  else raise Non_canonical_form
-
-let of_string s = of_bigint @@ Z.of_string s
-let to_bigint v = Z.extract (Z.signed_extract (Z.of_int v) 0 63) 0 64
-let of_bitvector bv = Bitvector.value_of bv |> of_bigint
+let zero = Z.zero
+let create = Z.of_int
+let to_int = Z.to_int
+let to_int32 = Z.to_int32_unsigned
+let to_int64 = Z.to_int64_unsigned
+let of_int32 = Z.of_int32_unsigned
+let of_uint32 = Uint32.to_bigint
+let of_int64 = Z.of_int64_unsigned
+let of_uint64 = Uint64.to_bigint
+let of_bigint = Fun.id
+let of_string s = Z.of_string s
+let to_bigint = Fun.id
+let of_bitvector = Bitvector.value_of
 
 (* FIXME: we may want to check for overflow? *)
-let add_int n t = create (t + n)
-let succ = add_int 1
-let pred t = add_int (-1) t
+let add = Z.add
+let add_int n t = Z.add t (create n)
+let add_bigint = Z.add
+let succ = Z.succ
+let pred = Z.pred
 
 (* FIXME: hope that t and t' are close enough *)
-let diff t t' = t - t'
-
-let pp ppf v =
-  if v < 0 then
-    Format.fprintf ppf "0x%x%014x"
-      ((v asr 56) land 0xff)
-      (v land 0xffffffffffffff)
-  else Format.fprintf ppf "0x%08x" v
-
-let to_string v = Format.asprintf "%a" pp v
+let diff t t' = Z.to_int (Z.sub t t')
+let modi t i = Z.to_int Z.(t mod create i)
+let to_string v = Z.format "%#08x" v
+let pp ppf v = Format.pp_print_string ppf (to_string v)
+let pp16 ppf v = Format.pp_print_string ppf (Z.format "%04x" v)
+let pp32 = pp
+let pp64 ppf v = Format.pp_print_string ppf (Z.format "%016x" v)
+let pp_print f = match f with `x16 -> pp16 | `x32 -> pp32 | `x64 -> pp64
 
 let pp_set ppf vs =
   let open Format in

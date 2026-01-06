@@ -1,0 +1,8 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.kernel.dba)
+ (name binsec_kernel_dba)
+ (modules :standard)
+ (flags :standard -open Binsec_base)
+ (libraries ocamlgraph binsec.base))

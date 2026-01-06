@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,6 +21,54 @@
 
 type 'a t = 'a Basic_types.interval = { lo : 'a; hi : 'a }
 
+type 'a overlap =
+  | Ll_Rl_Rh_Lh of 'a * 'a * 'a * 'a
+      (** Left starts before and ends after right.
+             \[     left      \]
+                \[  right  \]
+         *)
+  | Rl_Ll_Lh_Rh of 'a * 'a * 'a * 'a
+      (** Right starts before and ends after left.
+                \[  left    \]
+             \[     right     \]
+         *)
+  | Ll_Rl_Lh_Rh of 'a * 'a * 'a * 'a
+      (** Right starts and ends after left.
+             \[  left  \]
+                \[  right  \]
+         *)
+  | Rl_Ll_Rh_Lh of 'a * 'a * 'a * 'a
+      (** Left starts and ends after right.
+                 \[  left  \]
+             \[  right  \]
+         *)
+  | LRl_Rh_Lh of 'a * 'a * 'a
+      (** Left ends after right.
+             \[  left        \]
+             \[  right    \]
+         *)
+  | LRl_Lh_Rh of 'a * 'a * 'a
+      (** Right ends after left.
+             \[  left     \]
+             \[  right      \]
+         *)
+  | Ll_Rl_LRh of 'a * 'a * 'a
+      (** Left starts before right.
+             \[  left        \]
+                \[  right    \]
+         *)
+  | Rl_Ll_LRh of 'a * 'a * 'a
+      (** Right starts before left.
+                  \[  left  \]
+             \[  right      \]
+         *)
+  | LRl_LRh of 'a * 'a
+      (** Left and right are equal.
+             \[  left  \]
+             \[  right \]
+         *)
+
+val overlap : Z.t t -> Z.t t -> Z.t overlap
 val belongs : ('a -> 'a -> int) -> 'a -> 'a t -> bool
 val intersects : ('a -> 'a -> int) -> 'a t -> 'a t -> bool
 

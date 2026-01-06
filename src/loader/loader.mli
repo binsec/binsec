@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -59,28 +59,3 @@ include
         Loader_raw.Img.header,
         Loader_ti83.Img.header )
       t_pack
-
-module View : sig
-  type t
-
-  val create : Virtual_address.t -> Img.t -> Section.t -> t
-  (** [create addr img section]
-        create a virtual buffer with the content of [section]
-        as if [img] was loaded at [add].
-    *)
-
-  val get : t -> Virtual_address.t -> Loader_types.u8
-  (** [get t addr]
-        read a byte at address [addr] in the view [t].
-
-        @raise Not_found if [addr] is outside of [t].
-    *)
-
-  val unsafe_get : t -> Virtual_address.t -> Loader_types.u8
-  (** [unsafe_get t addr]
-        read a byte at address [addr] in the view [t].
-
-        For avanced user only,
-        it does not check that [addr] belongs to [t].
-    *)
-end

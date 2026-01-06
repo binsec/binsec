@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,9 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-exception WrongInitializationSize of Dba.address * Dba.Instr.t
-
-module Logger = Kernel_options.Logger
+module Logger = Dba_logger
 
 let cur_address = ref 0
 let incr_address addr = cur_address := addr.Dba.id + 1
@@ -37,18 +35,6 @@ end
 module Mk = struct
   open Dba
 
-  let checked_cond_expr e =
-    ignore (Dba_utils.checksize_dbacond e);
-    e
-
-  let filemode addr read_perm write_perm exec_perm =
-    let access_to_dbabool = function true -> Expr.one | false -> Expr.zero in
-    let open Dba_types in
-    ( (addr, (Read read_perm, Write write_perm, Exec exec_perm)),
-      ( access_to_dbabool read_perm,
-        access_to_dbabool write_perm,
-        access_to_dbabool exec_perm ) )
-
   module Predicates = struct
     let rec of_list l =
       match l with
@@ -59,84 +45,6 @@ module Mk = struct
           ( elmt :: elmts,
             (Expr.logand p1 q1, Expr.logand p2 q2, Expr.logand p3 q3) )
   end
-
-  module Initializations = struct
-    let check addr instruction =
-      let is_ok =
-        try Dba_utils.checksize_instruction instruction with _ -> false
-      in
-      if not is_ok then
-        Logger.fatal
-          ~e:(WrongInitializationSize (addr, instruction))
-          "@[<hov 0>%@ %a:@ bad initialization size for %a@]"
-          Dba_printer.Ascii.pp_code_address addr
-          Dba_printer.Ascii.pp_instruction instruction
-
-    let checked_of_list instructions =
-      (* init_address seems to be set once and for all *)
-      List.iter (check !Dba_types.Caddress.default_init) instructions;
-      instructions
-  end
-
-  let instruction_size_error instruction =
-    Logger.fatal ~e:(Errors.Mismatched_instruction_size instruction)
-      "Bad instruction size: %a" Dba_printer.Ascii.pp_instruction instruction
-
-  let address_size_error address =
-    Logger.fatal ~e:(Errors.Mismatched_address_size address)
-      "Bad address size: %a" Dba_types.Caddress.pp_base address
-
-  let checked_localized_instruction address instruction =
-    if Dba_utils.checksize_address address then
-      if Dba_utils.checksize_instruction instruction then (address, instruction)
-      else instruction_size_error instruction
-    else address_size_error address
-
-  let extract_declaration_data = function
-    | Dba.LValue.Var { name; size; info; _ } -> (name, size, info)
-    | Dba.LValue.Restrict _ | Dba.LValue.Store _ -> assert false
-
-  let fill_sizes declarations initializations =
-    let patch_instruction_size = function
-      | Dba.Instr.Assign (lv, rv, id) ->
-          let lvname =
-            match Dba_types.LValue.name_of lv with
-            | Some name -> name
-            | None -> assert false
-            (* initializations should not manipulate tables *)
-          in
-          let declared_size =
-            match Basic_types.String.Map.find lvname declarations with
-            | size, _ -> Size.Bit.create size
-            | exception Not_found ->
-                Logger.fatal "Variable %s was not declared" lvname
-          in
-          Dba.Instr.assign (Dba.LValue.resize declared_size lv) rv id
-      | _ -> assert false
-      (* initializations should only be assignments *)
-    in
-    List.map patch_instruction_size initializations
-
-  let set_nexts =
-    List.mapi (fun i instruction ->
-        Dba_types.Instruction.set_successor instruction (i + 1))
-
-  let program initializations start_address declarations instructions =
-    let declarations =
-      List.map extract_declaration_data declarations
-      |> Dba_types.Declarations.of_list
-    in
-    let instructions =
-      List.fold_left
-        (fun map (address, instruction) ->
-          Dba_types.Caddress.Map.add address instruction map)
-        Dba_types.Caddress.Map.empty instructions
-    in
-    let initializations =
-      fill_sizes declarations initializations
-      |> Initializations.checked_of_list |> set_nexts
-    in
-    { Dba_types.start_address; declarations; initializations; instructions }
 end
 
 let expr_of_name name =
@@ -270,7 +178,7 @@ module Initialization = struct
     Logger.debug "Init from store %a" Dba_printer.Ascii.pp_lhs lv;
     match lv with
     | LValue.Store (size, _, addr, None) ->
-        assert (Dba.Expr.size_of addr = Kernel_options.Machine.word_size ());
+        (* assert (Dba.Expr.size_of addr = Kernel_options.Machine.word_size ()); *)
         let operation = Mem_load (addr, size) in
         create ~controlled ~operation
     | _ -> failwith "initialization from file with non store"

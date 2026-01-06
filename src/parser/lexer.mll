@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -49,17 +49,9 @@ let keywords = [
   "assert"        , ASSERT ;
   "assume"        , ASSUME ;
   "nondet"        , NONDET ;
-  "var"           , VAR;
   "from"          , FROM;
   "file"          , FILE;
   "from_file"     , FROMFILE;
-  (* "big"           , BIG ; *)
-  (* "little"        , LITTLE; *)
-  "flag"          , FLAG;
-  "temporary"     , TEMPORARY;
-  "register"      , REGISTER;
-  "entry_point"   , ENTRYPOINT;
-  (* "endianness"    , ENDIANNESS; *)
   "read"          , READ;
   "write"         , WRITE;
   "branch"        , BRANCH;
@@ -67,13 +59,6 @@ let keywords = [
   "unimplemented" , UNIMPLEMENTED;
   "undefined"     , UNDEFINED;
   "illegal"       , UNDEFINED;
-  "cut"           , CUT;
-  "enum"          , ENUMERATE;
-  "enumerate"     , ENUMERATE;
-  "reach"         , REACH;
-  "alternative"   , ALTERNATIVE;
-  "consequent"    , CONSEQUENT;
-  "alternate"     , ALTERNATE;
   "uncontrolled"  , UNCONTROLLED;
   "min"           , MIN;
   "max"           , MAX;
@@ -154,10 +139,6 @@ rule token = parse
   | "^"             { XOR }
   | "::"             { CONCAT }
   | "!"             { NOT }
-  | "<TEMP>"        { TEMPTAG }
-  | "<FLAG>"        { FLAGTAG }
-  | "\\entry_point" { ENTRYPOINT }
-  (* | "\\endianness"  { ENDIANNESS } *)
   | "OK"            { SOK }
   | "KO"            { SKO }
   | "\\undef"       { UNDEF }

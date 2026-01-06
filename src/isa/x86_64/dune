@@ -1,0 +1,17 @@
+(include_subdirs no)
+
+(library
+ (public_name binsec.isa.x86_64)
+ (name binsec_isa_x86_64)
+ (modules (:standard))
+ (library_flags
+  (:standard -linkall))
+ (flags
+  (:standard -w -3 -open Binsec_kernel))
+ (libraries
+  binsec.kernel
+  (select
+   amd64ToDba.ml
+   from
+   (unisim_archisec.amd64dba -> amd64ToDba.enabled.ml)
+   (-> amd64ToDba.disabled.ml))))

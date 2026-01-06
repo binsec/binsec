@@ -5,7 +5,8 @@
 ```
       <e> ::= <cst> | <lval> | <unop> <e> | <e> <binop> <e> | <e> "?" <e> ":" <e> | "(" <e> ")"
    <lval> ::= <var> | <mem>
-    <mem> ::= "@[" <e> [["," ("<-" | "->")] "," <n>] "]"
+  <array> ::= "@" | <name>
+    <mem> ::= <array> "[" <e> [["," ("<-" | "->")] "," <n>] "]"
    <unop> ::= "~" | "-" | "uext"<n> <e> | "sext"<n> <e> | <e> "{" <n> ".." <n> "}"
   <binop> ::= <boolean> | <cmp> | <arith> | <bitwize> | "::"
 <boolean> ::= "!" | "&&" | "||"
@@ -24,6 +25,9 @@
   - decimal format (e.g. `42`)
   
 - ASCII string (e.g. `"ASCII string"` is equivalent to `0x676e69727473204949435341`)
+  - Strings are not zero-terminated by default
+  - The explicit suffix `z` adds a `'\0'` at the end of the string
+    (e.g. `"ASCII string"z` is equivalent to `"ASCII string\0"`)
 
 - Symbol value (e.g. `<.text>`)
 
@@ -32,8 +36,9 @@
 
 Names in script file are not case-sensitive. So writing `eax` or `EAX` behaves the same.
 
-#### Memory access `@[`*address[[*`,`*endianness]*`,`*byte-size]*`]`
+#### Memory access *array*`[`*address[[*`,`*endianness]*`,`*byte-size]*`]`
 
+- arbitrary *array* name (e.g. `stdin`, `data`, etc.) or main memory `@`
 - arbitrary *address* expression (e.g `0x4000`, `esp - 4`, etc.)
 - little endian multi-byte access `<-`  
   (e.g. `@[0x4000,<-,4]` is equivalent to `@[0x4003] :: @[0x4002] :: @[0x4001] :: @[0x4000]`)
@@ -225,10 +230,10 @@ Note that even the last instruction of a chunk, before the "end" keyword, must b
 <script> ::= (<assign> | <pragma> | <goal>) ..
 <pragma> ::= "starting" "from" <e> ["with" <chunk> "end"]
            | "starting" "from" "core" ["with" <chunk> "end"]
-           | "import" "<" <name> ">" ["," "<" <name> ">"] "from" <file> 
-           | "assume" <e> 
-           | "load" <mem> "from" "file" 
-           | "load" "section" <section> "from" "file" 
+           | "import" "<" <name> ">" ["," "<" <name> ">"] "from" <file>
+           | "assume" <e>
+           | <mem> "from" "file"
+           | "load" "section" <section> "from" "file"
            | "load" "sections" <section> ["," <section> ..] "from" "file"
            | "hook" <e> ["(" <ident> ["," <ident> ..] ")"] "with" <chunk> "end"
            | "hook" "<" <name> ">" "return" "with" <chunk> "end"
@@ -259,8 +264,8 @@ Note that even the last instruction of a chunk, before the "end" keyword, must b
 #### Initialize memory from multiple sections `load` `sections` *section*`,` *section*.. `from` `file`
   (e.g. `load sections .data , .text from file`)
   
-#### Initialize specific memory from file `load` *memory-access* `from` `file`
-  (e.g. `load @[0x4000, 256] from file`)
+#### Initialize specific memory from file *memory-access* `from` `file`
+  (e.g. `@[0x4000, 256] from file`)
   
 #### Make the stack pointer concrete with an architecture-appropriate value `with` `concrete` `stack` `pointer`
   (e.g. `with concrete stack pointer`)

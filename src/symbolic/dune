@@ -1,0 +1,13 @@
+(include_subdirs qualified)
+
+(library
+ (public_name binsec.symbolic)
+ (name binsec_symbolic)
+ (modules :standard)
+ (flags
+  (:standard -open Binsec_kernel))
+ (libraries toml binsec.kernel binsec.smtlib))
+
+(rule
+ (action
+  (copy state.mli state.ml)))

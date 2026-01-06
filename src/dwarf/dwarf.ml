@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,34 +19,45 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Logger = Logger
+module Expr = Expr
+module Cunit = Cunit
+module Frame = Frame
+module Lines = Lines
+module Loclist = Loclist
+module Int = Basic_types.Integers.Int
+
 type t = {
-  units : Dwarf_cunit.t list;
-  frame : Dwarf_frame.t;
-  lines : Dwarf_lines.t;
+  isa : Machine.isa;
+  units : Cunit.t list;
+  frame : Frame.t;
+  lines : Lines.t;
+  loc : Loclist.t Int.Map.t;
 }
 
 let load img : t =
-  let units = Dwarf_cunit.load img in
-  let frame = Dwarf_frame.load img in
-  let lines = Dwarf_lines.load img in
-  { units; frame; lines }
+  let isa = Loader.Img.arch img in
+  let units = Cunit.load img in
+  let frame = Frame.load img in
+  let lines = Lines.load img in
+  let loc = Loclist.load img in
+  { isa; units; frame; lines; loc }
 
 let pp ppf debug : unit =
   Format.fprintf ppf "@[<v 2>Contents of the .debug_info section:@ ";
   List.iter
     (fun unit ->
       Format.pp_print_space ppf ();
-      Dwarf_cunit.pp ppf unit)
+      Cunit.pp ppf unit)
     debug.units;
   Format.fprintf ppf "@]@ @[<v>Contents of the frame section:@ @ ";
-  Dwarf_frame.pp ppf debug.frame;
+  Frame.pp ppf debug.frame;
   Format.fprintf ppf
     "@]@ @[<v>Decoded dump of debug contents of section .debug_line:@ @ ";
-  Dwarf_lines.pp ppf debug.lines;
+  Lines.pp ppf debug.lines;
+  (match Int.Map.find 0 debug.loc with
+  | exception Not_found -> ()
+  | loclist ->
+      Format.fprintf ppf "@]@ @[<v>Contents of the .debug_loc section:@ @ ";
+      Loclist.pp ppf (debug.isa, loclist));
   Format.pp_close_box ppf ()
-
-let run () =
-  if Kernel_options.ExecFile.is_set () && Dwarf_options.is_enabled () then
-    Dwarf_options.Logger.result "@\n%a" pp (load (Kernel_functions.get_img ()))
-
-let _ = Cli.Boot.enlist ~name:"g" ~f:run

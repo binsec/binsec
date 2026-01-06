@@ -2,7 +2,7 @@
 
 (library
  (public_name binsec.domains)
- (name domains)
+ (name binsec_domains)
  (modules :standard)
  (private_modules common interval)
  (libraries zarith))

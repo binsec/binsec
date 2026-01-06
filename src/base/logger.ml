@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -206,18 +206,22 @@ module type S = sig
   val is_debug_enabled : unit -> bool
   val set_tagged_entry : bool -> unit
   val set_log_level : string -> unit
-  val cli_handler : Arg.spec
   val quiet : unit -> unit
   val channel_set_color : bool -> channel -> unit
   val channel_get_color : channel -> bool
   val set_color : bool -> unit
   val get_color : unit -> bool
-  val set_zmq_logging_only : send:(string -> unit) -> bool -> unit
+  val set_logging : (string -> unit) option -> channel -> unit
 end
 
 module type ChannelGroup = sig
   val name : string
 end
+
+type channel = {
+  kind : ChannelKind.t;
+  mutable ppfs : Format.formatter list; (* These are similar to listeners *)
+}
 
 module Make (G : ChannelGroup) = struct
   let set_log_level, log_level_of_chkind, get_log_level, quiet =
@@ -231,12 +235,7 @@ module Make (G : ChannelGroup) = struct
       (fun () -> !loglevel),
       fun () -> loglevel := max_int )
 
-  let cli_handler = Arg.Symbol (ChannelKind.values, set_log_level)
-
-  type channel = {
-    kind : ChannelKind.t;
-    mutable ppfs : Format.formatter list; (* These are similar to listeners *)
-  }
+  type nonrec channel = channel
 
   let default_out kind = { kind; ppfs = [ Format.std_formatter ] }
   let err_out kind = { kind; ppfs = [ Format.err_formatter ] }
@@ -248,18 +247,6 @@ module Make (G : ChannelGroup) = struct
   and error_channel = err_out ChannelKind.ChError
   and fatal_channel = err_out ChannelKind.ChFatal
 
-  let set_formatters ppfs channel = channel.ppfs <- ppfs
-
-  let reset_channels () =
-    let stdfmt () = [ Format.std_formatter ]
-    and errfmt () = [ Format.err_formatter ] in
-    set_formatters (stdfmt ()) debug_channel;
-    set_formatters (stdfmt ()) info_channel;
-    set_formatters (stdfmt ()) result_channel;
-    set_formatters (errfmt ()) warning_channel;
-    set_formatters (errfmt ()) error_channel;
-    set_formatters (errfmt ()) fatal_channel
-
   let channels =
     [
       debug_channel;
@@ -269,6 +256,16 @@ module Make (G : ChannelGroup) = struct
       error_channel;
       fatal_channel;
     ]
+
+  let set_formatters ppfs channel = channel.ppfs <- ppfs
+
+  let reset_channel : channel -> unit =
+   fun channel ->
+    match channel.kind with
+    | ChInfo | ChResult | ChDebug ->
+        set_formatters [ Format.std_formatter ] channel
+    | ChWarning | ChError | ChFatal ->
+        set_formatters [ Format.err_formatter ] channel
 
   let set_tagged_entry, get_tagged_entry =
     let tag = ref true in
@@ -445,21 +442,95 @@ module Make (G : ChannelGroup) = struct
         List.iter (channel_set_color b) channels),
       fun () -> !v )
 
-  let set_zmq_logging_only ~send = function
-    | false -> reset_channels ()
-    | true ->
-        let zmq_buffer = Buffer.create 2048 in
+  let set_logging send channel =
+    match send with
+    | None -> reset_channel channel
+    | Some f ->
+        let buffer = Buffer.create 2048 in
         let out_string str start len =
-          let s = String.sub str start len in
-          Buffer.add_string zmq_buffer s
+          Buffer.add_substring buffer str start len
         in
         let flush () =
-          let msg = Buffer.contents zmq_buffer in
-          send msg;
-          Buffer.reset zmq_buffer
+          let msg = Buffer.contents buffer in
+          Buffer.reset buffer;
+          f msg
         in
-        let zeromq_fmt = Format.make_formatter out_string flush in
-        List.iter (set_formatters [ zeromq_fmt ]) channels
+        set_formatters [ Format.make_formatter out_string flush ] channel
+end
+
+module type GROUP = sig
+  include S
+  module Sub (_ : ChannelGroup) : S with type channel = channel
+end
+
+module Group (G : ChannelGroup) : GROUP = struct
+  let loggers : (module S with type channel = channel) Queue.t = Queue.create ()
+
+  let iter : ((module S with type channel = channel) -> unit) -> unit =
+   fun f -> Queue.iter f loggers
+
+  include Make (G)
+
+  let set_warning_level n =
+    set_warning_level n;
+    iter (fun logger ->
+        let module L = (val logger) in
+        L.set_warning_level n)
+
+  let set_info_level n =
+    set_info_level n;
+    iter (fun logger ->
+        let module L = (val logger) in
+        L.set_info_level n)
+
+  let set_debug_level n =
+    set_debug_level n;
+    iter (fun logger ->
+        let module L = (val logger) in
+        L.set_debug_level n)
+
+  let set_tagged_entry v =
+    set_tagged_entry v;
+    iter (fun logger ->
+        let module L = (val logger) in
+        L.set_tagged_entry v)
+
+  let set_log_level t =
+    set_log_level t;
+    iter (fun logger ->
+        let module L = (val logger) in
+        L.set_log_level t)
+
+  let quiet () =
+    quiet ();
+    iter (fun logger ->
+        let module L = (val logger) in
+        L.quiet ())
+
+  let channel_set_color v c =
+    channel_set_color v c;
+    iter (fun logger ->
+        let module L = (val logger) in
+        L.channel_set_color v c)
+
+  let set_color v =
+    set_color v;
+    iter (fun logger ->
+        let module L = (val logger) in
+        L.set_color v)
+
+  let set_logging f c =
+    set_logging f c;
+    iter (fun logger ->
+        let module L = (val logger) in
+        L.set_logging f c)
+
+  module Sub (G : ChannelGroup) : S with type channel = channel = struct
+    module L = Make (G)
+    include L
+
+    let () = Queue.add (module L : S with type channel = channel) loggers
+  end
 end
 
 (* default printers *)

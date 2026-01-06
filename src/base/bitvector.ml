@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -225,14 +225,15 @@ let pow bv1 bv2 =
 let umax bv1 bv2 = if uge bv1 bv2 then bv1 else bv2
 let umin bv1 bv2 = if ule bv1 bv2 then bv1 else bv2
 let sdiv bv1 bv2 = signed_apply Z.div bv1 bv2 "sdiv"
-let smod bv1 bv2 = signed_apply Z.rem bv1 bv2 "smod"
 
-let srem bv1 bv2 =
+let smod bv1 bv2 =
   signed_apply
-    (fun b1 b2 ->
-      if Z.lt b1 Z.zero then Z.sub (Z.rem b1 b2) b2 else Z.rem b1 b2)
-    bv1 bv2 "srem"
+    (fun a b ->
+      let r = Z.rem a b in
+      if Z.equal r Z.zero || Z.lt a Z.zero = Z.lt b Z.zero then r else Z.add b r)
+    bv1 bv2 "smod"
 
+let srem bv1 bv2 = signed_apply Z.rem bv1 bv2 "srem"
 let neg bv = update bv (Z.neg (signed_of bv))
 let smax bv1 bv2 = if sge bv1 bv2 then bv1 else bv2
 let smin bv1 bv2 = if sle bv1 bv2 then bv1 else bv2
@@ -289,7 +290,7 @@ let concat = function
   | [] -> failwith "concat"
   | bv :: lst -> List.fold_left append bv lst
 
-let extract bv { Basic_types.lo; Basic_types.hi } =
+let extract ~hi ~lo bv =
   if lo < 0 || hi >= size_of bv || hi < lo then
     let msg = Printf.sprintf "restrict %s [%i..%i]" (print bv) lo hi in
     raise (Bad_bound msg)
@@ -400,11 +401,6 @@ module type Common = sig
 
   val create : Z.t -> int -> t
   val create_from_tuple : Z.t * int -> t
-
-  (*
-  val resize: t -> int -> t
-  val update: t -> Bigint.t -> t
-*)
   val value_of : t -> Z.t
   val signed_of : t -> Z.t
   val size_of : t -> int
@@ -466,11 +462,17 @@ module type Common = sig
   val flip_bit : t -> int -> t
   val append : t -> t -> t
   val concat : t list -> t
-  val extract : t -> int Basic_types.interval -> t
+  val extract : hi:int -> lo:int -> t -> t
 end
 
-module Collection = Basic_types.Collection_make.Default (struct
+module Collection = Collection.Hashed (struct
   type nonrec t = t
 
+  let equal = equal
+  let hash = hash
   let compare = compare
 end)
+
+module Map = Collection.Map
+module Set = Collection.Set
+module Htbl = Collection.Htbl

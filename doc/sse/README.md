@@ -6,13 +6,15 @@
 - [Tutorial #2: Solving simple CTF with BINSEC SSE (intermediates#1)](intermediates_1.md)
 - [Tutorial #3: Solving modern CTF with BINSEC SSE and GDB (intermediates#2)](intermediates_2.md)
 - [Tutorial #4: Checking *constant-time* security property (beginners)](relse.md)
-- [Tutorial #5: Monitoring SSE execution with a custom plugin (developers)](plugins.md)
+- [Tutorial #5: Monitoring SSE execution with a custom plugin (part 1)](plugins_1.md)
+- [Tutorial #6: Monitoring SSE execution with a custom plugin (part 2)](plugins_2.md)
 
 ## How to
 
 - [How to #1: Solving self-modifying CTF with BINSEC SSE (advanced)](advanced_users.md)
 - [How to #2: Read the SSE exploration board](exploration_board.md)
 - [How to #3: Reproduce the TOPS 2023 secret erasure experiments](secret-erasure.md)
+- [How to #4: Merge sibling paths with a plugin](quick_merge.md)
 
 # Write up
 

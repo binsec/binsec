@@ -5,4 +5,4 @@
  (inline_tests)
  (preprocess
   (pps ppx_inline_test))
- (libraries binsec domains))
+ (libraries binsec))

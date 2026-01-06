@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -32,7 +32,7 @@ val empty : t
 val of_nibbles : string -> t
 (** [of_nibbles s] converts a string [s] of hexadecimal characters.
 
-    @assumes each character is in the range [0-9a-f].
+    Assumes each character is in the range [0-9a-f].
 *)
 
 val of_bytes : string -> t
@@ -43,7 +43,7 @@ val of_bytes : string -> t
 val of_list : int list -> t
 (** [of_list l] converts a list of integers.
 
-    @assumes: each integer n is in the range 0 <= n <= 255.
+    Assumes: each integer n is in the range 0 <= n <= 255.
 *)
 
 (** {3 Operations} *)

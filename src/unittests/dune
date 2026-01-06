@@ -10,3 +10,21 @@
  (modes native)
  (action
   (run %{test})))
+
+(test
+ (name t_hmap)
+ (modules t_hmap)
+ (libraries binsec qcheck-core qcheck-core.runner)
+ (flags
+  (:standard -open Binsec_base))
+ ; bytecode tests fail to link in nix-shell
+ (modes native))
+
+(test
+ (name t_zmap)
+ (modules t_zmap)
+ (libraries binsec unionFind qcheck-core qcheck-core.runner)
+ (flags
+  (:standard -open Binsec_base))
+ ; bytecode tests fail to link in nix-shell
+ (modes native))

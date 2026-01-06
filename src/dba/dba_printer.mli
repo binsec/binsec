@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -40,12 +40,12 @@ end
 module type Renderer = sig
   val binary_ops : (Dba.Binary_op.t * string) list
   val unary_ops : (Dba.Unary_op.t * string) list
-  val endiannesses : (Machine.endianness * string) list
+  val endiannesses : (Dba.endianness * string) list
   val string_of_digit_char : char -> string
   val left_right_parentheses : string * string
 end
 
-module Make : functor (R : Renderer) -> DbaPrinter
+module Make : functor (_ : Renderer) -> DbaPrinter
 
 (* EIC-prefixed modules consider that the code is endianness-independent.
    Therefore, they do not print any information regarding endianness.

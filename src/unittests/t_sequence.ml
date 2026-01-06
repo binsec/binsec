@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,7 +20,7 @@
 (**************************************************************************)
 
 open OUnit2
-open Sequence
+open Binsec_base.Sequence
 
 let sequence_of_list l =
   List.fold_left (fun acc elt -> push_front elt acc) empty l
@@ -46,7 +46,7 @@ let eq_sequence expected actual ctxt =
 (** compare the effect of supposedly equivalent functions on sequences and lists *)
 let via_sequence name on_sequence on_list =
   QCheck.Test.make ~count:1000 ~name
-    QCheck.(list small_nat)
+    QCheck.(list nat_small)
     (fun l ->
       let via = l |> sequence_of_list |> on_sequence |> list_of_sequence in
       let direct = l |> on_list in
@@ -55,7 +55,7 @@ let via_sequence name on_sequence on_list =
 (** checks that f @@ sequence_of_list is the identity *)
 let check_id name f =
   QCheck.Test.make ~count:1000 ~name
-    QCheck.(list small_nat)
+    QCheck.(list nat_small)
     (fun l ->
       let via = l |> sequence_of_list |> f in
       l = via)
@@ -79,15 +79,13 @@ let tests =
 let qtests = via_sequence "identity" (fun x -> x) (fun x -> x) :: qtests
 
 let qtests =
-  via_sequence "map"
-    (Sequence.map_forward (fun x -> x + 1))
-    (List.map (fun x -> x + 1))
+  via_sequence "map" (map_forward (fun x -> x + 1)) (List.map (fun x -> x + 1))
   :: qtests
 
 let check_append =
   let name = "check_append" in
   QCheck.Test.make ~count:1000 ~name
-    QCheck.(pair (list small_nat) (list small_nat))
+    QCheck.(pair (list nat_small) (list nat_small))
     (fun (l1, l2) ->
       let s1 = sequence_of_list l1 in
       let s2 = sequence_of_list l2 in

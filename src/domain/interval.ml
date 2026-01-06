@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,6 +25,8 @@ type t = { min : Z.t; max : Z.t; stride : int }
 (** Represents the unsigned fixed-width integer interval
     between [min] and [max], with [stride] fixed bits. *)
 
+type 'a id += T : t id
+
 let pp ppf { min; max; stride } =
   Format.fprintf ppf "{ min = %a; max = %a; stride = %d; rem = %a }" Z.pp_print
     min Z.pp_print max stride Z.pp_print
@@ -39,11 +41,19 @@ let included ~size:_ t t' =
   || Z.geq t.min t'.min && Z.leq t.max t'.max && t.stride >= t'.stride
      && Z.trailing_zeros (Z.logxor t.min t'.min) >= t'.stride
 
+let is_point ~size { stride; _ } = size <= stride
+
 let is_zero { stride; min; _ } =
   if stride > 0 then if Z.testbit min 0 then False else True else Unknown
 
+let cardinal ~size:_ { min; max; stride } =
+  if Z.equal min max then Z.one
+  else
+    let span = Z.succ (Z.sub max min) in
+    if stride = 0 then span else Z.div span (Z.shift_left Z.one stride)
+
 let project ~size t =
-  if size = t.stride then Point t.min
+  if size <= t.stride then Point t.min
   else if t.stride = 0 && Z.equal t.min Z.zero && Z.popcount t.max = size then
     Top
   else Seq { start = t.min; n = Z.succ (Z.sub t.max t.min) }
@@ -124,7 +134,7 @@ let mul ~size t t' =
       { min = rem; max; stride }
     else { min; max; stride }
 
-let smod ~size t t' =
+let srem ~size t t' =
   if t.stride = size && t'.stride = size && not (Z.equal t'.min Z.zero) then
     constant ~size
       (Z.extract
@@ -133,7 +143,7 @@ let smod ~size t t' =
   else top size
 (* smarter? *)
 
-let umod ~size t t' =
+let urem ~size t t' =
   if Z.equal t'.min Z.zero then top size
   else if t.stride = size && t'.stride = size then
     constant ~size (Z.rem t.min t'.min)
@@ -491,8 +501,8 @@ let sub_feedback ~size t t' r =
   (refine ~size t (add ~size r t'), refine ~size t' (sub ~size t r))
 
 let mul_feedback = binary_nofeedback
-let smod_feedback = binary_nofeedback
-let umod_feedback = binary_nofeedback
+let srem_feedback = binary_nofeedback
+let urem_feedback = binary_nofeedback
 let udiv_feedback = binary_nofeedback
 let sdiv_feedback = binary_nofeedback
 let append_feedback ~size1:_ t ~size2:_ t' _ = (t, t')

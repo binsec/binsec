@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,12 +19,22 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module rec Expr : (Term.S with type a := Dba.Var.t and type b := Layer.t)
+module Source : sig
+  type kind = Input | Clobber | Symbolic
+  type t = Dba.Var.t * int * kind
+
+  include Sigs.HASHABLE with type t := t
+  module Set : Set.S with type elt = t
+  module Map : Map.S with type key = t
+end
+
+module rec Expr : (Term.S with type a := Source.t and type b := Layer.t)
 
 and Store : sig
   type t
 
   val iter : (Z.t -> Expr.t -> unit) -> t -> unit
+  val rev_iter : (Z.t -> Expr.t -> unit) -> t -> unit
 end
 
 and Layer : sig
@@ -43,21 +53,22 @@ and Layer : sig
   include Sigs.HASHABLE with type t := t
 end
 
-module VarMap : Map.S with type key = Dba.Var.t
-module StrMap : Map.S with type key = string
+type var = ([ `Var ], Source.t, Layer.t) Expr.term
 
 module Env : sig
   type t = private {
-    vars : Expr.t VarMap.t;
-    layers : (Layer.t * bool) StrMap.t;
+    id : int;
+    vars : Expr.t Dba_types.Var.Map.t;
+    layers : (Layer.t * bool) Basic_types.String.Map.t;
     rev_reads : Expr.t list;
-    input_vars : Expr.t VarMap.t;
+    sources : var list Dba_types.Var.Map.t;
   }
 
   val empty : t
   val is_empty : t -> bool
   val assign : Dba.Var.t -> Dba.Expr.t -> t -> t
   val clobber : Dba.Var.t -> t -> t
+  val symbolize : Dba.Var.t -> t -> t
   val forget : Dba.Var.t -> t -> t
 
   val load :
@@ -74,4 +85,34 @@ module Env : sig
   val eval : Dba.Expr.t -> t -> Expr.t * t
 end
 
-val commit : Env.t -> Ir.fallthrough list
+type 'a operator = 'a Term.operator
+and unary = Term.unary
+and binary = Term.binary
+
+type 'a node =
+  | Constant : Bitvector.t -> [< `Value | `Opcode ] node
+  | Value : int -> [< `Value | `Opcode ] node
+  | Variable : Dba.Var.t -> [< `Value | `Opcode ] node
+  | Unary : unary operator * [ `Value ] node -> [< `Value | `Opcode ] node
+  | Binary :
+      binary operator * [ `Value ] node * [ `Value ] node
+      -> [< `Value | `Opcode ] node
+  | Ite :
+      [ `Value ] node * [ `Value ] node * [ `Value ] node
+      -> [< `Value | `Opcode ] node
+  | Load :
+      string option * [ `Value ] node * Machine.endianness * int
+      -> [ `Opcode ] node
+  | Store :
+      string option * [ `Value ] node * Machine.endianness * [ `Value ] node
+      -> [ `Opcode ] node
+  | Assign : Dba.Var.t * [ `Value ] node -> [ `Opcode ] node
+  | Clobber : Dba.Var.t -> [ `Opcode ] node
+  | Symbolize : Dba.Var.t -> [ `Opcode ] node
+
+and value = [ `Value ] node
+and opcode = [ `Opcode ] node
+
+val pp_opcode : Format.formatter -> 'a node -> unit
+val commit : Env.t -> opcode array
+val partial_commit : Env.t -> Dba_types.Var.Set.t -> Env.t * opcode array

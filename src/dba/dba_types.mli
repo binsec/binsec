@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,12 +21,12 @@
 
 (** Modules & types related to DBA types *)
 
-open Sigs
 module Logger : Logger.S
 
 type instruction_sequence = (Dba.address * Dba.Instr.t) list
 
-module Call_stack : COMPARABLE with type t = (Dba.address * Dba.address) list
+module Call_stack :
+  Sigs.COMPARABLE with type t = (Dba.address * Dba.address) list
 
 (** {2 Dba address / Code address } *)
 
@@ -37,7 +37,7 @@ module Call_stack : COMPARABLE with type t = (Dba.address * Dba.address) list
 module Caddress : sig
   type t = Dba.address
 
-  include Sigs.Collection with type t := t
+  include Collection.S with type t := t
 
   val default_init : t ref
   val create : Virtual_address.t -> int -> t
@@ -62,7 +62,7 @@ module Caddress : sig
   val of_virtual_address : Virtual_address.t -> t
   val to_virtual_address : t -> Virtual_address.t
 
-  include HASHABLE with type t := t
+  include Sigs.HASHABLE with type t := t
 end
 
 module AddressStack : sig
@@ -70,20 +70,20 @@ module AddressStack : sig
 
   val pp : Format.formatter -> t -> unit
 
-  include Collection with type t := t
+  include Collection.S with type t := t
 end
 
 (** {2 DBA AST modules} *)
 
-module Var : Sigs.Collection with type t = Dba.Var.t
+module Var : Collection.S with type t = Dba.Var.t
 
 module Expr : sig
   type t = Dba.Expr.t
 
-  include PRINTABLE with type t := t
+  include Sigs.PRINTABLE with type t := t
 
   val var : string -> Size.Bit.t -> Dba.Var.Tag.t -> t
-  (** {6 Constructors } *)
+  (** {4 Constructors } *)
 
   val flag : ?bits:Size.Bit.t -> string -> t
   (** [flag ~bits flagname] constructs a variable named [flagname] tagged as a
@@ -107,10 +107,10 @@ module Expr : sig
       [Format.sprintf "temp%d" n]. *)
 
   val of_lvalue : Dba.LValue.t -> t
-  (** {6 Operations } *)
+  (** {4 Operations } *)
 
   val is_symbolic : t -> bool
-  (** {6 Predicates } *)
+  (** {4 Predicates } *)
 
   val is_zero : t -> bool
   (** [is_zero e] is [true] if [e]'s value is equal to 0 whatever its length is *)
@@ -121,6 +121,19 @@ module Expr : sig
   val is_max : t -> bool
   (** [is_max e] is [true] if [e] is a constant representing the maximum value for
    ** its size *)
+
+  val complement : Dba.Expr.t -> lo:int -> hi:int -> Dba.Var.t -> Dba.Expr.t
+  (** [complement e lo hi v]
+     return the expression e' such as [v{hi .. lo} := e <=> v := e']
+  *)
+
+  val bswap : Dba.Expr.t -> Dba.Expr.t
+  (** [bswap e]
+      reverses the byte order of e
+  *)
+
+  val collect_variables : Dba.Expr.t -> Var.Set.t -> Var.Set.t
+  val substitute : t Var.Map.t -> t -> t
 end
 
 module LValue : sig
@@ -148,7 +161,7 @@ module Instruction : sig
   type t = Dba.Instr.t
 
   val set_successor : t -> int -> t
-  (** {7 Modificators} *)
+  (** {3 Modificators} *)
 
   val reset_successor : src_id:int -> dst_id:int -> t -> t
 
@@ -159,7 +172,7 @@ module Instruction : sig
     t
 
   val successors : t -> Dba.id Dba.jump_target list
-  (** {7 Properties and computations} *)
+  (** {3 Properties and computations} *)
 
   val variables :
     t -> (Basic_types.String.Set.t, Basic_types.String.Set.t) defuse
@@ -207,7 +220,7 @@ end
 module Statement : sig
   type t = private { location : Caddress.t; instruction : Dba.Instr.t }
 
-  include PRINTABLE with type t := t
+  include Sigs.PRINTABLE with type t := t
 
   val create : Caddress.t -> Dba.Instr.t -> t
   val location : t -> Caddress.t
@@ -215,18 +228,3 @@ module Statement : sig
   val set_instruction : t -> Dba.Instr.t -> t
   val set_location : t -> Caddress.t -> t
 end
-
-val malloc_id : int ref
-
-type dbainstrmap = Dba.Instr.t Caddress.Map.t
-type read_perm = Read of bool
-type write_perm = Write of bool
-type exec_perm = Exec of bool
-type permissions = Dba.Expr.t * (read_perm * write_perm * exec_perm)
-
-type program = {
-  start_address : Dba.address;
-  declarations : Declarations.t;
-  initializations : Dba.Instr.t list;
-  instructions : dbainstrmap;
-}

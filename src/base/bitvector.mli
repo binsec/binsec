@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -138,9 +138,9 @@ module type Common = sig
   val append : t -> t -> t
 
   val concat : t list -> t
-  (** concat [bv1, bv2, ..., bvn] is bv1 @ bv2 @ ... @ bvn *)
+  (** concat [bv1, bv2, ..., bvn] is bv1 \@ bv2 \@ ... \@ bvn *)
 
-  val extract : t -> int Basic_types.interval -> t
+  val extract : hi:int -> lo:int -> t -> t
 end
 
 type t
@@ -220,4 +220,4 @@ val print : t -> string
     [pp Format.str_formatter bv; Format.flush_str_formatter ()]
 *)
 
-module Collection : Sigs.Collection with type t := t
+include Collection.S with type t := t

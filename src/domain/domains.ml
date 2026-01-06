@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,17 +19,5 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Common
-
-exception Empty = Empty
-
-type nonrec trilean = trilean = True | False | Unknown
-
-type nonrec projection = projection =
-  | Top
-  | Point of Z.t
-  | Seq of { start : Z.t; n : Z.t }
-
-module type S = S
-
+include Common
 module Interval = Interval

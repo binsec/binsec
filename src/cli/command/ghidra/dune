@@ -1,0 +1,21 @@
+(include_subdirs unqualified)
+
+(library
+ (public_name binsec.cli.ghidra)
+ (name binsec_cli_ghidra)
+ (modules :standard)
+ (flags :standard -open Binsec)
+ (libraries binsec binsec.cli))
+
+(menhir
+ (modules parser_ghidra)
+ (flags --explain --strict --fixed-exception))
+
+(ocamllex
+ (modules lexer_ghidra))
+
+(install
+ (section
+  (site
+   (binsec utils)))
+ (files ghidra_export.java))

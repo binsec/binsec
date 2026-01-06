@@ -1,0 +1,88 @@
+(**************************************************************************)
+(*  This file is part of BINSEC.                                          *)
+(*                                                                        *)
+(*  Copyright (C) 2016-2026                                               *)
+(*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
+(*         alternatives)                                                  *)
+(*                                                                        *)
+(*  you can redistribute it and/or modify it under the terms of the GNU   *)
+(*  Lesser General Public License as published by the Free Software       *)
+(*  Foundation, version 2.1.                                              *)
+(*                                                                        *)
+(*  It is distributed in the hope that it will be useful,                 *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of        *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *)
+(*  GNU Lesser General Public License for more details.                   *)
+(*                                                                        *)
+(*  See the GNU Lesser General Public License version 2.1                 *)
+(*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
+(*                                                                        *)
+(**************************************************************************)
+
+module type S = sig
+  type 'a t
+
+  val push : 'a -> 'a t -> 'a t
+  val pop : 'a t -> 'a * 'a t
+  val singleton : 'a -> 'a t
+  val length : 'a t -> int
+  val is_empty : 'a t -> bool
+  val empty : 'a t
+end
+
+module Dfs : S = struct
+  type 'a t = 'a list
+
+  let empty = []
+  let is_empty = function [] -> true | _ -> false
+  let push e w = e :: w
+  let singleton e = [ e ]
+  let pop = function e :: w -> (e, w) | [] -> raise Not_found
+  let length = List.length
+end
+
+module Bfs : S = struct
+  type 'a t = 'a Sequence.t
+
+  let length = Sequence.length
+  let is_empty q = Sequence.length q = 0
+  let empty = Sequence.empty
+  let push p q = Sequence.push_back p q
+
+  let pop q =
+    match Sequence.peek_front q with
+    | None -> raise Not_found
+    | Some v -> (
+        match Sequence.pop_front q with
+        | None -> assert false
+        | Some seq -> (v, seq))
+
+  let singleton p = push p empty
+end
+
+module Nurs : S = struct
+  (* This is actually a fairly classical heap.
+     The priority added to the date is just generated at random.
+  *)
+  module I = Basic_types.Integers.Int.Map
+
+  type 'a t = 'a I.t
+
+  let rec gen_priority t =
+    let p = Random.bits () in
+    if I.mem p t then gen_priority t else p
+
+  let length = I.cardinal
+  let is_empty = I.is_empty
+  let empty = I.empty
+
+  let push e t =
+    let p = gen_priority t in
+    I.add p e t
+
+  let pop t =
+    let (_, e), t' = I.pop t in
+    (e, t')
+
+  let singleton p = push p empty
+end

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -122,8 +122,8 @@ let pp ppf t =
   in
   Format.pp_open_vbox ppf 0;
   for r = 0 to t.next - 2 do
-    pp_row @@ Utils.unsafe_get_opt t.rows.(r);
+    pp_row @@ Option.get t.rows.(r);
     Format.pp_force_newline ppf ()
   done;
-  pp_row @@ Utils.unsafe_get_opt t.rows.(t.next - 1);
+  pp_row @@ Option.get t.rows.(t.next - 1);
   Format.pp_close_box ppf ()

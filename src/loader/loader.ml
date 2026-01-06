@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*  This file is part of BINSEC.                                          *)
 (*                                                                        *)
-(*  Copyright (C) 2016-2025                                               *)
+(*  Copyright (C) 2016-2026                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -41,12 +41,6 @@ module Section = struct
     | PE pe -> Loader_pe.Section.name pe
     | Raw d -> Loader_raw.Section.name d
     | TI83 ti -> Loader_ti83.Section.name ti
-
-  let flag = function
-    | ELF elf -> Loader_elf.Section.flag elf
-    | PE pe -> Loader_pe.Section.flag pe
-    | Raw d -> Loader_raw.Section.flag d
-    | TI83 ti -> Loader_ti83.Section.flag ti
 
   let pos = function
     | ELF elf -> Loader_elf.Section.pos elf
@@ -166,6 +160,13 @@ module Img = struct
     | TI83 t, TI83 s -> Loader_ti83.Img.content t s
     | _ -> assert false
 
+  let buffer t =
+    match t with
+    | ELF t -> Loader_elf.Img.buffer t
+    | PE t -> Loader_pe.Img.buffer t
+    | Raw t -> Loader_raw.Img.buffer t
+    | TI83 t -> Loader_ti83.Img.buffer t
+
   let pp ppf = function
     | ELF elf -> Loader_elf.Img.pp ppf elf
     | PE pe -> Loader_pe.Img.pp ppf pe
@@ -182,7 +183,7 @@ let load buffer =
   else if Loader_pe.check_magic buffer then PE (Loader_pe.load buffer)
   else if Loader_ti83.check_magic buffer then TI83 (Loader_ti83.load buffer)
   else (
-    Kernel_options.Logger.warning "Unknown image format -- open as raw bytes";
+    Loader_logger.warning "Unknown image format -- open as raw bytes";
     Raw (Loader_raw.load buffer))
 
 let load_file_descr file_descr =
@@ -212,55 +213,3 @@ let read_address img addr =
   | PE pe -> Loader_pe.read_address pe addr
   | Raw d -> Loader_raw.read_address d addr
   | TI83 ti -> Loader_ti83.read_address ti addr
-
-module Offset = Loader_buf.Make (struct
-  type t = Img.t
-
-  let get t i = read_offset t i
-
-  let dim = function
-    | ELF elf -> Loader_elf.Offset.dim elf
-    | PE pe -> Loader_pe.Offset.dim pe
-    | Raw d -> Loader_raw.Offset.dim d
-    | TI83 ti -> Loader_ti83.Offset.dim ti
-end)
-
-module Address = Loader_buf.Make (struct
-  type t = Img.t
-
-  let get t i = read_address t i
-
-  let dim = function
-    | ELF elf -> Loader_elf.Address.dim elf
-    | PE pe -> Loader_pe.Address.dim pe
-    | Raw d -> Loader_raw.Offset.dim d
-    | TI83 ti -> Loader_ti83.Offset.dim ti
-end)
-
-module View = struct
-  type t = {
-    base : Virtual_address.t;
-    size : int;
-    buffer :
-      (int, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t;
-  }
-
-  let create vaddr img section =
-    let { Loader_types.virt; _ } = Section.pos section in
-    let base = Virtual_address.add_int virt vaddr in
-    let { Loader_types.virt = size; _ } = Section.size section in
-    let buffer = Img.content img section in
-    { base; size; buffer }
-
-  let zero_extend_get buffer offset =
-    if Bigarray.Array1.dim buffer < offset then 0
-    else Bigarray.Array1.get buffer offset
-
-  let unsafe_get { base; buffer; _ } addr =
-    zero_extend_get buffer (Virtual_address.diff addr base)
-
-  let get { base; size; buffer } addr =
-    let offset = Virtual_address.diff addr base in
-    if offset < 0 || size < offset then raise Not_found
-    else zero_extend_get buffer offset
-end
