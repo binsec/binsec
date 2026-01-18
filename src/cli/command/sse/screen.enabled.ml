@@ -398,6 +398,7 @@ module Make (E : Metrics.EXPLORATION) (Q : Metrics.QUERY) = struct
               if lockable then (
                 locked := false;
                 Mutex.unlock mutex));
+          out_width = restore_fof.out_width;
         }
     in
     let background_buffer = Buffer.create 4096 in
@@ -422,6 +423,7 @@ module Make (E : Metrics.EXPLORATION) (Q : Metrics.QUERY) = struct
           out_indent =
             Buffer.out_spaces mutex restore_fof.out_string restore_fof.out_flush
               background_buffer;
+          out_width = restore_fof.out_width;
         }
     in
     (restore_fof, logging_fof, drawing_fof, flush_buffer)
