@@ -21,7 +21,7 @@
 
 (** Functors for command-line parameters declarations *)
 
-(** {3 Module type declarations }*)
+(** {3 Module type declarations}*)
 module type GENERIC = sig
   type t
 
@@ -96,9 +96,8 @@ end
 module type ENABLEABLE = sig
   val is_enabled : unit -> bool
   (** [is_enabled] is a switch that is automatically set.
-  
-      Can be set programmatically with {!val-enable} and {!val-disable}.
-   *)
+
+      Can be set programmatically with {!val-enable} and {!val-disable}. *)
 
   val enable : unit -> unit
   val disable : unit -> unit
@@ -109,7 +108,7 @@ module type S = sig
   module Logger : Logger.S
 end
 
-(** {3 Functor signature }*)
+(** {3 Functor signature}*)
 
 module type Cli_sig = sig
   module Logger : Logger.S
@@ -119,8 +118,7 @@ module type Cli_sig = sig
 
   module Builder : sig
     (** A very generic functor that lets you handle cases that are not provided
-        otherwise. Use it only as last resort.
-     *)
+        otherwise. Use it only as last resort. *)
     module Any (P : DETAILED_CLI_DECL) : GENERIC with type t = P.t
 
     module Any_opt (P : sig
@@ -139,10 +137,8 @@ module type Cli_sig = sig
     (** An option that defaults to [false]. *)
     module False (_ : CLI_DECL) : BOOLEAN
 
-    (** An options that defaults to [true].
-       The provided command-line switch
-       automatically add a [no-] prefix to your option name.
-     *)
+    (** An options that defaults to [true]. The provided command-line switch
+        automatically add a [no-] prefix to your option name. *)
     module No (_ : CLI_DECL) : BOOLEAN
 
     (** {4 Integer functors}*)
@@ -198,12 +194,10 @@ module type Cli_sig = sig
       val default : t
     end) : GENERIC with type t = P.t
     (** Functor to map a string choice --- i.e., just one out of a set of
-        possible value --- into a variant type.
-     *)
+        possible value --- into a variant type. *)
 
     (** Like [Variant_choice] but with automatically generated [to_string] and
-        [of_string] function from [assoc_map].
-     *)
+        [of_string] function from [assoc_map]. *)
     module Variant_choice_assoc (P : sig
       include CLI_DECL
 
@@ -232,20 +226,15 @@ module Make (_ : DECL) : sig
 end
 
 (** Call [Cli.Options] instead if you just want to have dedicated options to a
- ** set of functionalities.
- **
- ** The difference with [Cli.Make] is the absence of a dedicated command line
- ** switch for this set of options.
- **
- ** For example [Cli.Make(struct let name = "foo" ... end)] will add a '-foo'
- ** global switch to the command line whereas [Cli.Options(struct let name =
- ** "foo" ... end)] will not.
- **
- ** Also, using [Cli.Options] entails that there should not be any associated
- ** functions to be automatically run at startup (i.e., no [Cli.Boot.enlist]
- ** call from inside the functionality kernel associated with this set of
- ** command-line switches).
- *)
+    ** set of functionalities. ** ** The difference with [Cli.Make] is the
+    absence of a dedicated command line ** switch for this set of options. ** **
+    For example [Cli.Make(struct let name = "foo" ... end)] will add a '-foo' **
+    global switch to the command line whereas
+    [Cli.Options(struct let name = ** "foo" ... end)] will not. ** ** Also,
+    using [Cli.Options] entails that there should not be any associated **
+    functions to be automatically run at startup (i.e., no [Cli.Boot.enlist] **
+    call from inside the functionality kernel associated with this set of **
+    command-line switches). *)
 module Options (_ : DECL) : Cli_sig
 
 module Make_from_logger (_ : Logger.S) (_ : DECL) : sig
@@ -256,27 +245,23 @@ end
 module Options_from_logger (_ : Logger.S) (_ : DECL) : Cli_sig
 
 (** {2 Boot}
-    This module collects the functions to be executed at startup time.
-*)
+    This module collects the functions to be executed at startup time. *)
 
 module Boot : sig
   val enlist : name:string -> f:(unit -> unit) -> unit
   (** [enlist ~name ~f] enlists the named unit [name] to be run at startup with
       function [f].
 
-      If [name] has already been reserved, it raises a [Failure].
-   *)
+      If [name] has already been reserved, it raises a [Failure]. *)
 
   val run : unit -> unit
   (** [run ()] executes all enlisted startup points.
 
-     The execution order is unspecified.
-  *)
+      The execution order is unspecified. *)
 
   val maybe_enable : string -> unit
   (** [maybe_enable switch] tries to find a switch to enable from the command
-     line.
-  *)
+      line. *)
 end
 
 val parse : unit -> string list

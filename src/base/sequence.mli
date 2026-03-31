@@ -77,9 +77,9 @@ val fold_backward : ('a -> 'b -> 'b) -> 'a t -> 'b -> 'b
 (** fold from front to back *)
 
 val to_seq_forward : 'a t -> 'a Seq.t
-(** creates a Seq.t which iterates from back to front
- * Not intended to be particularly performant *)
+(** creates a Seq.t which iterates from back to front * Not intended to be
+    particularly performant *)
 
 val to_seq_backward : 'a t -> 'a Seq.t
-(** creates a Seq.t which iterates from front to back
- * Not intended to be particularly performant *)
+(** creates a Seq.t which iterates from front to back * Not intended to be
+    particularly performant *)

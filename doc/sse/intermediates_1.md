@@ -346,9 +346,9 @@ cut at return_address
 ```
 Here, the command `print ascii stream` will concat the different values of the symbolic variable `bRead` and print it as a string.
 
-Let us now test our script. Adding the option `-fml-solver bitwuzla` will significantly speed up the exploration. 
+Let us now test our script. Adding the option `-smt-solver bitwuzla` will significantly speed up the exploration. 
 ```console
-$ binsec -sse -sse-script crackme.ini i_am_happy_you_are_to_playing_the_flareon_challenge.exe -fml-solver bitwuzla
+$ binsec -sse -sse-script crackme.ini i_am_happy_you_are_to_playing_the_flareon_challenge.exe -smt-solver bitwuzla
 ...
 [sse:result] Directive :: path 277 reached address 7b442ef0 (0 to go)
 [sse:result] Ascii stream bRead : "bunny_sl0pe@flare-on.com"

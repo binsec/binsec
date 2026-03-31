@@ -21,73 +21,58 @@
 
 module type ARCH = sig
   val get_defs : unit -> (string * Dba.LValue.t) list
-  (** [get_defs ()]
-      returns the list of known entities for the current architecture.
+  (** [get_defs ()] returns the list of known entities for the current
+      architecture.
 
-      Not complete yet.
-  *)
+      Not complete yet. *)
 
   val get_return_address : unit -> Dba.Expr.t
-  (** [get_return_address ()]
-      returns the way to compute the return address of a function
-      (only valid at the entry of the function).
-  *)
+  (** [get_return_address ()] returns the way to compute the return address of a
+      function (only valid at the entry of the function). *)
 
   val get_arg : ?syscall:bool -> int -> Dba.Expr.t
-  (** [get_arg n]
-      returns the standard location of the [n]th argument of a function.
+  (** [get_arg n] returns the standard location of the [n]th argument of a
+      function.
 
       If [syscall] is [true], it returns the syscall calling convention instead.
-      (Meaningfull for x86 only for now)
-  *)
+      (Meaningfull for x86 only for now) *)
 
   val get_ret : ?syscall:bool -> unit -> Dba.LValue.t
-  (** [get_ret ()]
-      returns the standard location of the function return value.
+  (** [get_ret ()] returns the standard location of the function return value.
 
-      If [syscall] is [true], it returns the location of the syscall return value.
-      (Meaningfull for x86 only for now)
-  *)
+      If [syscall] is [true], it returns the location of the syscall return
+      value. (Meaningfull for x86 only for now) *)
 
   val make_return : ?value:Dba.Expr.t -> unit -> Dhunk.t
-  (** [make_return ~value ()]
-      returns the standard instruction sequence of a function return.
+  (** [make_return ~value ()] returns the standard instruction sequence of a
+      function return.
 
-      If [value] is given, the return value is set accordingly.
-  *)
+      If [value] is given, the return value is set accordingly. *)
 
   val get_stack_pointer : unit -> Dba.Var.t * Bitvector.t
-  (** [get_a_stack_pointer ()]
-      returns the stack pointer and a possible initialization for it.
-  *)
+  (** [get_a_stack_pointer ()] returns the stack pointer and a possible
+      initialization for it. *)
 
   val get_shortlived_flags : unit -> Dba.Var.t list
-  (** [get_shortlived_flags ()]
-      returns the set of architecture flags which are recomputed on almost
-      every instruction.
+  (** [get_shortlived_flags ()] returns the set of architecture flags which are
+      recomputed on almost every instruction.
 
-      These flags are very likely to not be alive passed the return of
-      a function.
-  *)
+      These flags are very likely to not be alive passed the return of a
+      function. *)
 
   val get_dwarf_register : int -> Dba.Expr.t
-  (** [get_dwarf_register n]
-      returns the DWARF mapping of the [n]th register.
-  *)
+  (** [get_dwarf_register n] returns the DWARF mapping of the [n]th register. *)
 
   val core :
     Loader_elf.Img.t -> Virtual_address.t * (Dba.Var.t * Dba.Expr.t) list
-  (** [core img]
-      read and translate the content of [NT_PRSTATUS] note into
+  (** [core img] read and translate the content of [NT_PRSTATUS] note into
       entrypoint and initialisation values.
 
-      Meaningfull for x86 only for now.
-  *)
+      Meaningfull for x86 only for now. *)
 
   val max_instruction_len : Size.Byte.t
-  (** [max_instruction_len]
-      is the size of the longest valid instruction for the current architecture.
-  *)
+  (** [max_instruction_len] is the size of the longest valid instruction for the
+      current architecture. *)
 end
 
 val get : Machine.t -> (module ARCH)

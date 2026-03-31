@@ -36,8 +36,8 @@ module Plugin : PLUGIN = struct
       Field { id = Waiting; default = false; copy = None; merge = None };
     ]
 
-  let extensions :
-      type a. (module ENGINE with type Path.t = a) -> a extension list =
+  let extensions : type a.
+      (module ENGINE with type Path.t = a) -> a extension list =
    fun engine ->
     let module Engine = (val engine) in
     let module Path = Engine.Path in

@@ -165,10 +165,17 @@ end
 module Plugin_v1 : PLUGIN = struct
   include ID
 
-  let fields : (module PATH) -> field list = fun _ -> []
+  let fields :
+      (module PATH
+         with type value = 'value
+          and type model = 'model
+          and type state = 'state
+          and type t = 'path) ->
+      ('value, 'model, 'state, 'path) field list =
+   fun _ -> []
 
-  let extensions :
-      type a. (module ENGINE with type Path.t = a) -> a extension list =
+  let extensions : type a.
+      (module ENGINE with type Path.t = a) -> a extension list =
    fun engine ->
     let module Extensions = V1 ((val engine)) in
     Extensions.list
@@ -310,11 +317,17 @@ end
 module Plugin_v2 : PLUGIN = struct
   include ID
 
-  let fields : (module PATH) -> field list =
+  let fields :
+      (module PATH
+         with type value = 'value
+          and type model = 'model
+          and type state = 'state
+          and type t = 'path) ->
+      ('value, 'model, 'state, 'path) field list =
    fun _ -> [ Field { id = Stack; default = []; copy = None; merge = None } ]
 
-  let extensions :
-      type a. (module ENGINE with type Path.t = a) -> a extension list =
+  let extensions : type a.
+      (module ENGINE with type Path.t = a) -> a extension list =
    fun engine ->
     let module Extensions = V2 ((val engine)) in
     Extensions.list

@@ -30,11 +30,11 @@ type 'a primitive = 'a Types.primitive =
 type 'a knowledge =
   | May_read : Dba_types.Var.Set.t option knowledge
       (** The (overapproximed) set of all variables a builtin may access.
-          Variables that are not in this set may have an undefined value.
-          [None] means any variable may be read. *)
+          Variables that are not in this set may have an undefined value. [None]
+          means any variable may be read. *)
   | May_write : Dba_types.Var.Set.t option knowledge
-      (** The (overapproximed) set of all variables a builtin may modify.
-          Absent variables are deemed to keep the same value. *)
+      (** The (overapproximed) set of all variables a builtin may modify. Absent
+          variables are deemed to keep the same value. *)
 
 val invalid_successor : ([ `All ], 'a) Types.fiber
 

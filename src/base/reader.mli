@@ -95,7 +95,7 @@ val dim : int t -> int
 val at_end : 'a t -> bool
 val ensure : 'a t -> int -> bool
 
-(** {2 Read functions } *)
+(** {2 Read functions} *)
 
 module type ACCESS = sig
   val u8 : 'a t -> uint8
@@ -126,8 +126,8 @@ module type ACCESS = sig
       provided. *)
 
   val sub : 'a t -> int -> 'a t
-  (** [sub t len] returns a fresh cursor pointing to the beginning of a sub-buffer
-      of size [len] starting from [t], and advances [t] by [len]. *)
+  (** [sub t len] returns a fresh cursor pointing to the beginning of a
+      sub-buffer of size [len] starting from [t], and advances [t] by [len]. *)
 end
 
 module Peek : ACCESS

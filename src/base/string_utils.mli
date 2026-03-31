@@ -23,21 +23,18 @@
 
 val replace_chars : (char -> string) -> string -> string
 (** [replace_chars f s] creates a new string where all characters [c] from [s]
-    have been replaced by the result of [f c]
-*)
+    have been replaced by the result of [f c] *)
 
 val reverse : string -> string
 (** [reverse s] creates a new reversed version of [s] *)
 
 val filter : (char -> bool) -> string -> string
-(** [filter p s] creates a copy of [s] containing the characters of [s]
-    such that [p c = true],
-*)
+(** [filter p s] creates a copy of [s] containing the characters of [s] such
+    that [p c = true], *)
 
 val lfindi : string -> (char -> bool) -> int option
 (** [lfindi s p] retrieves the first index of a character verifying predicate
-    [p]. [None] otherwise
-*)
+    [p]. [None] otherwise *)
 
 val remove_char : char -> string -> string
 (** [remove_char c s] creates a copy of [s] without any occurrence of [c] *)
@@ -47,30 +44,24 @@ val remove_newline : string -> string
 *)
 
 val lchop : int -> string -> string
-(** [lchop n s] removes the first [n] characters of string [s].
-    Does nothing if the [s] is empty.
-    Returns the empty string if [n] >= [String.length s]
-    [n] must be positive.
-*)
+(** [lchop n s] removes the first [n] characters of string [s]. Does nothing if
+    the [s] is empty. Returns the empty string if [n] >= [String.length s] [n]
+    must be positive. *)
 
 val left : int -> string -> string
-(** [left n s] returns the [n] leftmost characters of [s].
-    [n] must be positive and smaller than the length of [s].
-*)
+(** [left n s] returns the [n] leftmost characters of [s]. [n] must be positive
+    and smaller than the length of [s]. *)
 
 val right : int -> string -> string
-(** [right n s] returns the [n] rightmost characters of [s].
-    [n] must be positive and smaller than the length of [s].
-*)
+(** [right n s] returns the [n] rightmost characters of [s]. [n] must be
+    positive and smaller than the length of [s]. *)
 
 val size_of_hexstring : string -> int
 (** [size_of_hexstring s] computes the size in bits of hexadecimal string [s].
-    Unsafe function: it does not fully check that [s] is a valid hexstring.
-*)
+    Unsafe function: it does not fully check that [s] is a valid hexstring. *)
 
 val contains : pattern:string -> string -> bool
-(** [contains ~pattern s] return [true] if [pattern] is a substring of [s]
-*)
+(** [contains ~pattern s] return [true] if [pattern] is a substring of [s] *)
 
 val char_codes : string -> int array
 
@@ -78,12 +69,11 @@ val char_codes : string -> int array
 
 val is_char_printable : char -> bool
 (** [is_char_printable c] returns [true] if [c] is a terminal-printable ASCII
-    character
-*)
+    character *)
 
 val is_hex_char : char -> bool
 (** [is_hex_char c] returns [true] if [c] is a character representing a hex
-    number, i.e., 'a'-'z', 'A'-'Z', '0'-'9'.  *)
+    number, i.e., 'a'-'z', 'A'-'Z', '0'-'9'. *)
 
 val to_hex : string -> string
 (** [to_hex s] return the hexadecimal representation of stored bytes *)

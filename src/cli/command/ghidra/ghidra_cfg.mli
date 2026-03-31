@@ -25,8 +25,8 @@ type kind =
   | Call  (** The instruction calls a function. *)
   | Return of Virtual_address.t  (** The instruction returns to the caller. *)
   | Presumed
-      (** The instruction calls a function that may not return properly.
-          Its immediate follower is taken as successor. *)
+      (** The instruction calls a function that may not return properly. Its
+          immediate follower is taken as successor. *)
 
 include
   Graph.Sig.I
@@ -34,13 +34,11 @@ include
      and type E.t = Virtual_address.t * kind * Virtual_address.t
 
 val parse_cache : path:string -> t * string Virtual_address.Htbl.t
-(** [parse_cache ~path]
-    build a new graph from the saved textual output of a previously
-    Ghidra run.
+(** [parse_cache ~path] build a new graph from the saved textual output of a
+    previously Ghidra run.
 
     @param path The path of the Ghidra log.
-    @return     A new imperative graph with its mnemonic mapping.
-*)
+    @return A new imperative graph with its mnemonic mapping. *)
 
 val run_ghidra :
   ?temp_dir:string ->
@@ -48,24 +46,21 @@ val run_ghidra :
   runner:string ->
   string ->
   t * string Virtual_address.Htbl.t
-(** [run_ghidra ?cache ~runner binary]
-    run Ghidra disassembly on the binary file and extract its control
-    flow graph.
+(** [run_ghidra ?cache ~runner binary] run Ghidra disassembly on the binary file
+    and extract its control flow graph.
 
-    @param temp_dir The path of the workspace in which Ghidra will be run
-                    (default is /dev/shm).
-    @param cache    If any, save in this file the textual output of Ghidra
-                    for later use.
-    @param runner   The path of the the analyzeHeadless Ghidra script.
-    @param binary   The path of the binary under study.
-    @return         A new imperative graph with its mnemonic mapping.
-*)
+    @param temp_dir
+      The path of the workspace in which Ghidra will be run (default is
+      /dev/shm).
+    @param cache
+      If any, save in this file the textual output of Ghidra for later use.
+    @param runner The path of the the analyzeHeadless Ghidra script.
+    @param binary The path of the binary under study.
+    @return A new imperative graph with its mnemonic mapping. *)
 
 val import : unit -> t * string Virtual_address.Htbl.t
-(** [import ()]
-    calls [run_ghidra] or [parse_cache] on the executatble file
+(** [import ()] calls [run_ghidra] or [parse_cache] on the executatble file
     ([Kernel_options.ExecFile]) according to the global options
     [Ghidra_options.Runner] and [Ghidra_options.Cache].
 
-    @return         A new imperative graph with its mnemonic mapping.
-*)
+    @return A new imperative graph with its mnemonic mapping. *)

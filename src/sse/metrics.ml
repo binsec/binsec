@@ -77,53 +77,91 @@ module type QUERY = sig
   val to_toml : unit -> Toml.Types.table
 end
 
-module Timer () : sig
+module type BUFFER = sig
+  type t
+  type elt
+
+  val create : int -> t
+  val fill : t -> int -> int -> elt -> unit
+  val get : t -> int -> elt
+  val set : t -> int -> elt -> unit
+end
+
+module type BACKEND = sig
+  module Int : BUFFER with type elt := int
+  module Float : BUFFER with type elt := float
+end
+
+module ArrayBackend : BACKEND = struct
+  module Int = struct
+    type t = int array
+
+    let create : int -> t = fun size -> Array.make size 0
+    let fill : t -> int -> int -> int -> unit = Array.fill
+    let get : t -> int -> int = Array.unsafe_get
+    let set : t -> int -> int -> unit = Array.unsafe_set
+  end
+
+  module Float = struct
+    type t = floatarray
+
+    let create : int -> t = fun size -> Float.Array.make size 0.
+    let fill : t -> int -> int -> float -> unit = Float.Array.fill
+    let get : t -> int -> float = Float.Array.unsafe_get
+    let set : t -> int -> float -> unit = Float.Array.unsafe_set
+  end
+end
+
+module Timer (B : BACKEND) : sig
   include TIMER with type t := unit
 
   val reset : unit -> unit
 end = struct
-  type t = {
-    mutable time : float;
-    mutable active : bool;
-    mutable since : float;
-  }
+  let is_active, set_active =
+    let cell = B.Int.create 1 in
+    ( (fun () -> B.Int.get cell 0 <> 0),
+      fun b -> B.Int.set cell 0 (Bool.to_int b) )
 
-  let timer = { time = 0.; active = false; since = 0. }
+  let get_time, set_time, get_since, set_since =
+    let cells = B.Float.create 2 in
+    ( (fun () -> B.Float.get cells 0),
+      (fun x -> B.Float.set cells 0 x),
+      (fun () -> B.Float.get cells 1),
+      fun x -> B.Float.set cells 1 x )
 
   let get () =
-    if timer.active then timer.time +. (Unix.gettimeofday () -. timer.since)
-    else timer.time
+    if is_active () then get_time () +. (Unix.gettimeofday () -. get_since ())
+    else get_time ()
 
   let start () =
-    timer.since <- Unix.gettimeofday ();
-    timer.active <- true
+    set_since (Unix.gettimeofday ());
+    set_active true
 
   let stop () =
-    timer.active <- false;
-    timer.time <- timer.time +. (Unix.gettimeofday () -. timer.since)
+    set_active false;
+    set_time (get_time () +. (Unix.gettimeofday () -. get_since ()))
 
   let reset () =
-    timer.time <- 0.;
-    timer.active <- false
+    set_time 0.;
+    set_active false
 end
 
-module Query () : QUERY = struct
+module Make_query (B : BACKEND) : QUERY = struct
   type status = Binsec_smtlib.Solver.status
 
   let to_int : status -> int = function Sat -> 0 | Unsat -> 1 | Unknown -> 2
 
   module Common () = struct
-    let counters = Array.make 3 0
-    let get s = Array.unsafe_get counters (to_int s)
+    let counters = B.Int.create 3
+    let get s = B.Int.get counters (to_int s)
 
     let incr s =
-      Array.unsafe_set counters (to_int s)
-        (Array.unsafe_get counters (to_int s) + 1)
+      B.Int.set counters (to_int s) (B.Int.get counters (to_int s) + 1)
 
-    module Timer = Timer ()
+    module Timer = Timer (B)
 
     let reset () =
-      Array.fill counters 0 3 0;
+      B.Int.fill counters 0 3 0;
       Timer.reset ()
   end
 
@@ -137,7 +175,8 @@ module Query () : QUERY = struct
          @[<h>total          %d@]@,\
          @[<h>sat            %d@]@,\
          @[<h>unsat          %d@]@,\
-         @[<h>time           %.2f@]@]" (sat + unsat) sat unsat (Timer.get ())
+         @[<h>time           %.2f@]@]"
+        (sat + unsat) sat unsat (Timer.get ())
 
     let to_toml () =
       Toml.Min.of_key_values
@@ -164,7 +203,8 @@ module Query () : QUERY = struct
          @[<h>unsat          %d@]@,\
          @[<h>unknown        %d@]@,\
          @[<h>time           %.2f@]@,\
-         @[<h>average        %.2f@]@]" total sat unsat unknown time
+         @[<h>average        %.2f@]@]"
+        total sat unsat unknown time
         (time /. float total)
 
     let to_toml () =
@@ -192,6 +232,8 @@ module Query () : QUERY = struct
         (Toml.Min.key "solver", Toml.Types.TTable (Solver.to_toml ()));
       ]
 end
+
+module Query () : QUERY = Make_query (ArrayBackend)
 
 module type EXPLORATION = sig
   module Paths : sig
@@ -233,7 +275,7 @@ module type EXPLORATION = sig
   val to_toml : unit -> Toml.Types.table
 end
 
-module Exploration () : EXPLORATION = struct
+module Make_exploration (B : BACKEND) : EXPLORATION = struct
   module Paths = struct
     type t = Total | Pending | Completed | Discontinued
 
@@ -269,31 +311,30 @@ module Exploration () : EXPLORATION = struct
       | Non_executable_code -> Discontinued
       | Error _ -> Discontinued
 
-    let counters = Array.make 15 0
+    let counters = B.Int.create 15
 
     let incr x =
-      Array.unsafe_set counters (to_int x)
-        (Array.unsafe_get counters (to_int x) + 1)
+      B.Int.set counters (to_int x) (B.Int.get counters (to_int x) + 1)
 
-    let get c = Array.unsafe_get counters (to_int c)
-    let status s = Array.unsafe_get counters (status_to_int s)
+    let get c = B.Int.get counters (to_int c)
+    let status s = B.Int.get counters (status_to_int s)
 
     let signal s =
-      Array.unsafe_set counters (status_to_int s)
-        (Array.unsafe_get counters (status_to_int s) + 1);
-      Array.unsafe_set counters (to_int Pending)
-        (Array.unsafe_get counters (to_int Pending) - 1);
+      B.Int.set counters (status_to_int s)
+        (B.Int.get counters (status_to_int s) + 1);
+      B.Int.set counters (to_int Pending)
+        (B.Int.get counters (to_int Pending) - 1);
       incr (status_to_t s)
 
     let resume () =
-      Array.unsafe_set counters (status_to_int Stashed)
-        (Array.unsafe_get counters (status_to_int Stashed) - 1)
+      B.Int.set counters (status_to_int Stashed)
+        (B.Int.get counters (status_to_int Stashed) - 1)
 
     let incr () =
       incr Total;
       incr Pending
 
-    let reset () = Array.fill counters 0 15 0
+    let reset () = B.Int.fill counters 0 15 0
 
     let to_toml () =
       let completed, discontinued =
@@ -335,14 +376,13 @@ module Exploration () : EXPLORATION = struct
     type t = Branch | Jump | Assert
 
     let to_int : t -> int = function Branch -> 0 | Jump -> 1 | Assert -> 2
-    let counters = Array.make 3 0
-    let get e = Array.unsafe_get counters (to_int e)
+    let counters = B.Int.create 3
+    let get e = B.Int.get counters (to_int e)
 
     let incr e =
-      Array.unsafe_set counters (to_int e)
-        (Array.unsafe_get counters (to_int e) + 1)
+      B.Int.set counters (to_int e) (B.Int.get counters (to_int e) + 1)
 
-    let reset () = Array.fill counters 0 3 0
+    let reset () = B.Int.fill counters 0 3 0
 
     let to_toml () =
       Toml.Min.of_key_values
@@ -354,34 +394,42 @@ module Exploration () : EXPLORATION = struct
   end
 
   module Max_depth = struct
-    let counter = ref 0
-    let get () = !counter
-    let update n = counter := max n !counter
-    let reset () = counter := 0
+    let counter = B.Int.create 1
+    let get () = B.Int.get counter 0
+    let update n = B.Int.set counter 0 (max n (B.Int.get counter 0))
+    let reset () = B.Int.set counter 0 0
   end
 
   module Addresses = struct
     let tbl = Virtual_address.Htbl.create 1024
-    let unique () = Virtual_address.Htbl.length tbl
-    let register addr = Virtual_address.Htbl.replace tbl addr ()
-    let reset () = Virtual_address.Htbl.reset tbl
+    let counter = B.Int.create 1
+    let unique () = B.Int.get counter 0
+
+    let register addr =
+      Virtual_address.Htbl.replace tbl addr ();
+      B.Int.set counter 0 (Virtual_address.Htbl.length tbl)
+
+    let reset () =
+      Virtual_address.Htbl.reset tbl;
+      B.Int.set counter 0 0
   end
 
   module Instructions = struct
-    let counter = ref 0
-    let get () = !counter
-    let incr n = counter := !counter + n
-    let reset () = counter := 0
+    let counter = B.Int.create 1
+    let get () = B.Int.get counter 0
+    let incr n = B.Int.set counter 0 (B.Int.get counter 0 + n)
+    let reset () = B.Int.set counter 0 0
   end
 
-  module Timer = Timer ()
+  module Timer = Timer (B)
 
   let reset () =
     Paths.reset ();
     Topology.reset ();
     Max_depth.reset ();
     Addresses.reset ();
-    Instructions.reset ()
+    Instructions.reset ();
+    Timer.reset ()
 
   let pp ppf () =
     Format.fprintf ppf
@@ -409,5 +457,8 @@ module Exploration () : EXPLORATION = struct
         (Toml.Min.key "max_depth", Toml.Types.TInt (Max_depth.get ()));
         (Toml.Min.key "instructions", Toml.Types.TInt (Instructions.get ()));
         (Toml.Min.key "unique_insts", Toml.Types.TInt (Addresses.unique ()));
+        (Toml.Min.key "time", Toml.Types.TFloat (Timer.get ()));
       ]
 end
+
+module Exploration () : EXPLORATION = Make_exploration (ArrayBackend)

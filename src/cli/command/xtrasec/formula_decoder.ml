@@ -19,7 +19,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** DBA -> Formula decoder interface.  *)
+(** DBA -> Formula decoder interface. *)
 
 module Instr_to_Formula = struct
   module F = Binsec_smtlib.Formula

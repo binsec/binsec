@@ -302,7 +302,7 @@ module Dynamic : sig
 end
 
 module Note : sig
-  type t = { name : string; kind : int; offset : int; size : int }
+  type t = { name : string; kind : int32; offset : int; size : int }
 
   val read : int Reader.t -> t
 end
@@ -320,7 +320,7 @@ val files : Img.t -> fmap array
 
 module Utils : sig
   val is_ifunc : Img.t -> Symbol.t -> bool
-  val synthetic_symtab : Img.t -> (Virtual_address.t * string) list
+  val synthetic_symtab : Img.t -> (Virtual_address.t * int * string) list
   val is_jump_slot : Machine.isa -> int -> bool
   val jmprel : Img.t -> Rel.t list
 end

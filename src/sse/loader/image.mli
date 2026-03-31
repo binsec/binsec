@@ -24,8 +24,8 @@ type buffer =
   | Data of { offset : int; len : int; value : Loader_types.buffer }
 
 val crop_buffer : lo:Z.t -> hi:Z.t -> buffer -> buffer
-(** [crop_buffer ~lo ~hi buf] creates a new buffer view containing
-    the [buf] bytes from [lo] to [hi]. *)
+(** [crop_buffer ~lo ~hi buf] creates a new buffer view containing the [buf]
+    bytes from [lo] to [hi]. *)
 
 val content_reader :
   Virtual_address.t ->
@@ -60,17 +60,17 @@ type t = private {
 }
 
 val load : fs:(string -> Loader_types.buffer) -> string -> Loader.Img.t -> t
-(** [load ~fs filename img] builds a process image for the file [filename]
-    with the content, permission and symbols from the loader image [img].
+(** [load ~fs filename img] builds a process image for the file [filename] with
+    the content, permission and symbols from the loader image [img].
 
-    It uses the virtual file system [fs] to access extra file contents
-    (e.g. for separated debug or coredump). *)
+    It uses the virtual file system [fs] to access extra file contents (e.g. for
+    separated debug or coredump). *)
 
 val layout_with_cache :
   t -> (Virtual_address.t -> section) * (Virtual_address.t -> symbol)
-(** [layout_with_cache image] returns two mapping functions.
-    The first one maps an address to a {!type-section} while
-    the second maps an address to the {!type-symbol} it belongs.
+(** [layout_with_cache image] returns two mapping functions. The first one maps
+    an address to a {!type-section} while the second maps an address to the
+    {!type-symbol} it belongs.
 
     Sequential accesses are optimized with a cache.
 

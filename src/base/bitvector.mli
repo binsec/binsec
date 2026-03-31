@@ -35,32 +35,28 @@ module type Common = sig
   val size_of : t -> int
 
   val compare : t -> t -> int
-  (** [compare t t']
-      returns the structural comparison of [t] and [t'].
+  (** [compare t t'] returns the structural comparison of [t] and [t'].
 
-      The result is not sorted according to the values of [t] and [t'],
-      thus, they can be of different sizes.
+      The result is not sorted according to the values of [t] and [t'], thus,
+      they can be of different sizes.
 
-      It is useful for key comparison for structures like `Set` or `Map`.
-  *)
+      It is useful for key comparison for structures like `Set` or `Map`. *)
 
   val ucompare : t -> t -> int
-  (** [ucompare t t']
-      returns the comparison of the unsigned values of [t] and [t'].
+  (** [ucompare t t'] returns the comparison of the unsigned values of [t] and
+      [t'].
 
       It is equivalent of [Z.compare (value_of t) (value_of t')].
 
-      The bitvector [t] and [t'] should be of the same size.
-  *)
+      The bitvector [t] and [t'] should be of the same size. *)
 
   val scompare : t -> t -> int
-  (** [scompare t t']
-      returns the comparison of the signed values of [t] and [t'].
+  (** [scompare t t'] returns the comparison of the signed values of [t] and
+      [t'].
 
       It is equivalent of [Z.compare (signed_of t) (signed_of t')].
 
-      The bitvector [t] and [t'] should be of the same size.
-  *)
+      The bitvector [t] and [t'] should be of the same size. *)
 
   val hash : t -> int
   val zero : t (* zero = { value = 0; size = 1 } *)
@@ -70,8 +66,9 @@ module type Common = sig
 
   val fill : ?lo:int -> ?hi:int -> int -> t
   (** [fill lo hi n] returns a bitvector of size [n] where bits from [lo] to
-      [hi] are set to one. By default, [lo] is equal to zero and [hi] is equal to
-      [n]. Raise [Invalid_argument] if [lo] or [hi] have incoherent values. *)
+      [hi] are set to one. By default, [lo] is equal to zero and [hi] is equal
+      to [n]. Raise [Invalid_argument] if [lo] or [hi] have incoherent values.
+  *)
 
   val is_zero : t -> bool
 
@@ -98,8 +95,8 @@ module type Common = sig
 
   val is_min_sbv : t -> bool
   (** [is_max_ubv t] (resp. [is_max_sbv t]) returns [true] if [t] is a bitvector
-      containing the biggest possible unsigned (resp. signed) value for its size,
-      or returns [false] otherwise *)
+      containing the biggest possible unsigned (resp. signed) value for its
+      size, or returns [false] otherwise *)
 
   (* Comparison *)
   include Sigs.COMPARISON with type t := t and type boolean = bool
@@ -149,7 +146,7 @@ include Common with type t := t and type boolean = bool
 
 (* Conversion *)
 
-(** {3 Creation functions } *)
+(** {3 Creation functions} *)
 
 val rand : int -> t
 (** [rand sz] creates a bitvector of size sz with random value *)
@@ -176,34 +173,30 @@ val of_bits : string -> t
 (** [of_bits s] cast an ascii string [s] to its bitvector representation. *)
 
 val of_string : string -> t
-(** [of_string s] converts a string [s] whose format respects
-    ([+-])?0[xb][0-9]+ i.e., hex and bin strings
+(** [of_string s] converts a string [s] whose format respects ([+-])?0[xb][0-9]+
+    i.e., hex and bin strings
 
-    Otherwise raises Invalid_argument
-*)
+    Otherwise raises Invalid_argument *)
 
 val to_string : t -> string
-(** [to_string s] converts a bitvector to hexadecimal notation (if size is a multiple of 4)
-    or to binary (otherwise). *)
+(** [to_string s] converts a bitvector to hexadecimal notation (if size is a
+    multiple of 4) or to binary (otherwise). *)
 
 val of_hexstring : string -> t
 (** [of_hexstring] is an alias for [of_string] *)
 
 val to_bitstring : t -> string
-(** [to_bitstring bv] returns the binary string representation of [bv],
-    i.e., the string ["0b"[01]+] with the same value and size as [bv].
-*)
+(** [to_bitstring bv] returns the binary string representation of [bv], i.e.,
+    the string ["0b"[01]+] with the same value and size as [bv]. *)
 
 val to_hexstring : t -> string
-(** [to_hexstring bv] returns the hex string representation of [bv],
-    i.e., the string ["0x"[0-9a-f]+] with the same value and size as [bv].
-*)
+(** [to_hexstring bv] returns the hex string representation of [bv], i.e., the
+    string ["0x"[0-9a-f]+] with the same value and size as [bv]. *)
 
 val to_asciistring : t -> string
-(** [to_asciistring bv] returns the ascii string representation of [bv].
-*)
+(** [to_asciistring bv] returns the ascii string representation of [bv]. *)
 
-(** {3 Printing functions }*)
+(** {3 Printing functions}*)
 
 val pp : Format.formatter -> t -> unit
 (** [pp ppf bv] prints the decimal value of [bv] into [ppf] *)
@@ -212,12 +205,11 @@ val pp_hex : Format.formatter -> t -> unit
 (** [pp_hex ppf bv] prints the hexadecimal value of [bv] into [ppf] *)
 
 val pp_hex_or_bin : Format.formatter -> t -> unit
-(** [pp_hex ppf bv] prints the hexadecimal value of [bv] into [ppf] if
-   possible, else prints the binary value of [bv]. *)
+(** [pp_hex ppf bv] prints the hexadecimal value of [bv] into [ppf] if possible,
+    else prints the binary value of [bv]. *)
 
 val print : t -> string
 (** [print bv] behaves like
-    [pp Format.str_formatter bv; Format.flush_str_formatter ()]
-*)
+    [pp Format.str_formatter bv; Format.flush_str_formatter ()] *)
 
 include Collection.S with type t := t

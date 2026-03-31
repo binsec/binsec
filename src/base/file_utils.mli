@@ -32,5 +32,5 @@ val readlines : string -> string list
     the file [filename] *)
 
 val has_suffix : suffixes:string list -> string -> bool
-(** [has_suffix ~suffixes filenam] returns [true] if [filename] ends with any
-    of the provied [suffixes] *)
+(** [has_suffix ~suffixes filenam] returns [true] if [filename] ends with any of
+    the provied [suffixes] *)

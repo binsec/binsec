@@ -30,8 +30,7 @@ type id = int
 
 type address = { base : Virtual_address.t; id : id }
 (** A DBA [address] is the association of a DBA block address represented by
-    [base] and a unique [id].
-    The first element of a block has [id] [0]. *)
+    [base] and a unique [id]. The first element of a block has [id] [0]. *)
 
 type addresses = address list
 
@@ -89,9 +88,8 @@ module Binary_op : sig
     | GtS
 
   val invert : t -> t
-  (** [invert t] inverts [t] if it has an inverse version.
-      Raise [Failure "BinaryOperator.invert "] otherwise
-  *)
+  (** [invert t] inverts [t] if it has an inverse version. Raise
+      [Failure "BinaryOperator.invert "] otherwise *)
 
   val has_inverse : t -> bool
 end
@@ -125,8 +123,7 @@ module Var : sig
 
   val flag : ?bitsize:Size.Bit.t -> string -> t
   (** [flag ~size fname] creates a flag variable.
-      - [size] defaults to 1
-  *)
+      - [size] defaults to 1 *)
 
   val temporary : string -> Size.Bit.t -> t
 
@@ -141,8 +138,7 @@ module Var : sig
   val from_id : int -> t
   (** [from_id id] returns the variable identified by [id].
 
-      @raise Not_found if [id] is not a valid identifier.
-  *)
+      @raise Not_found if [id] is not a valid identifier. *)
 end
 
 module Expr : sig
@@ -166,18 +162,16 @@ module Expr : sig
   val temporary : size:int -> string -> t
 
   val constant : Bitvector.t -> t
-  (** [constant bv] creates a constant expression from the bitvector [bv].
-  *)
+  (** [constant bv] creates a constant expression from the bitvector [bv]. *)
 
-  (** {3 Specific constants }*)
+  (** {3 Specific constants}*)
 
   val zeros : int -> t
   (** [zeros n] creates a constant expression of value 0 with length [n] *)
 
   val ones : int -> t
-  (** [ones n] creates a constant expression of value 1 with length [n].
-      I.e.; it has (n - 1) zeros in binary.
-   *)
+  (** [ones n] creates a constant expression of value 1 with length [n]. I.e.;
+      it has (n - 1) zeros in binary. *)
 
   val one : t
   val zero : t
@@ -240,8 +234,7 @@ module Expr : sig
 
   val restrict : int -> int -> t -> t
   (** [restrict lo hi e] creates [Dba.ExprUnary(Restrict(lo, hi), e)] if
-      [hi >= lo && lo >=0] .
-  *)
+      [hi >= lo && lo >=0] . *)
 
   val bit_restrict : int -> t -> t
   (** [bit_restrict o e] is [restrict o o e] *)
@@ -276,16 +269,14 @@ module LValue : sig
 
   val flag : ?bitsize:Size.Bit.t -> string -> t
   (** [flag ~size fname] creates a flag variable.
-      - [size] defaults to 1
-  *)
+      - [size] defaults to 1 *)
 
   val temporary : string -> Size.Bit.t -> t
   val _restrict : string -> Size.Bit.t -> int -> int -> t
 
   val _bit_restrict : string -> Size.Bit.t -> int -> t
-  (** [_restrict] and [_bit_restrict] are deprecated. Use the other forms
-   ** below.
-   *)
+  (** [_restrict] and [_bit_restrict] are deprecated. Use the other forms **
+      below. *)
 
   val restrict : Var.t -> int -> int -> t
   val bit_restrict : Var.t -> int -> t
@@ -304,20 +295,17 @@ module LValue : sig
 
       Use [is_expr_translatable e] to check the feasability of this translation.
 
-      @raise Failure "LValue.of_expr ..." if it is not possible.
-  *)
+      @raise Failure "LValue.of_expr ..." if it is not possible. *)
 
   val to_expr : t -> Expr.t
-  (** [to_expr e] translates an lvalue to its equivalent rvalue.  *)
+  (** [to_expr e] translates an lvalue to its equivalent rvalue. *)
 
   val bitsize : t -> Size.Bit.t
-  (** [bitsize lv] returns the size in bits of [lv].
-  *)
+  (** [bitsize lv] returns the size in bits of [lv]. *)
 
   val resize : Size.Bit.t -> t -> t
   (** [resize bitsize lv] patches the lvalue [lv] and gives it a size of
-      [bitsize].
-  *)
+      [bitsize]. *)
 end
 
 module Tag : sig
@@ -346,8 +334,8 @@ module Instr : sig
     | Assume of Expr.t * id
     | Nondet of LValue.t * id
     | Undef of LValue.t * id
-        (** value of lval is undefined
-                              ** e.g. AF flag for And instruction in x86 **)
+        (** value of lval is undefined ** e.g. AF flag for And instruction in
+            x86 **)
 
   (** {2 Constructors} *)
 

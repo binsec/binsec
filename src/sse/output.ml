@@ -52,6 +52,5 @@ let pp pp_var pp_expr ppf = function
         (Option.value ~default:"@" array)
         pp_expr offset
         (fun ppf -> function
-          | None -> Format.pp_print_char ppf '*'
-          | Some size -> pp_expr ppf size)
+          | None -> Format.pp_print_char ppf '*' | Some size -> pp_expr ppf size)
         size

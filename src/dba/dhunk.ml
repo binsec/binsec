@@ -415,9 +415,9 @@ let pp ppf t =
   fprintf ppf "@[<v 0>";
   flatten t
   |> List.iter (fun (addr, instr) ->
-         fprintf ppf "@[<h>%2d: %a@]@ " addr
-           (Dba_printer.Ascii.pp_instruction_maybe_goto ~current_id:addr)
-           instr);
+      fprintf ppf "@[<h>%2d: %a@]@ " addr
+        (Dba_printer.Ascii.pp_instruction_maybe_goto ~current_id:addr)
+        instr);
   fprintf ppf "@]"
 
 let to_stmts t (address : Virtual_address.t) =
@@ -1046,8 +1046,7 @@ module DC_elimination = struct
               collect b (n + 1) (M.add n i r) (M.add i n m) p
                 (List.fold_left
                    (fun w -> function
-                     | Dba.JOuter _ -> w
-                     | Dba.JInner id -> S.add id w)
+                     | Dba.JOuter _ -> w | Dba.JInner id -> S.add id w)
                    (S.remove i w)
                    (Dba_types.Instruction.successors inst)))
     in

@@ -43,14 +43,12 @@ val pp : Format.formatter -> Smtlib.script -> unit
 val pp_command : Format.formatter -> Smtlib.command -> unit
 
 val pp_commands : Format.formatter -> Smtlib.commands -> unit
-(** pp_commands pretty_prints an arbitrary command list onto a formatter.
-    Used by pp.
-*)
+(** pp_commands pretty_prints an arbitrary command list onto a formatter. Used
+    by pp. *)
 
 val pp_model : Format.formatter -> Smtlib.model -> unit
 
 val pp_tofile : string -> Smtlib.script -> unit
-(** [pp_tofile filename script] Prints a SMT-LIB script into the file named
- ** [filename]. The file is created if needed. Contents from any present file is
- ** not preserved.
-*)
+(** [pp_tofile filename script] Prints a SMT-LIB script into the file named **
+    [filename]. The file is created if needed. Contents from any present file is
+    ** not preserved. *)

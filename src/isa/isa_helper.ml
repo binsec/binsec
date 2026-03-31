@@ -171,7 +171,7 @@ module X86 : ARCH = struct
     Array.fold_left
       (fun (entrypoint, defs) note ->
         match note with
-        | { Loader_elf.Note.name = "CORE"; kind = 1; offset = at; _ } ->
+        | { Loader_elf.Note.name = "CORE"; kind = 1l; offset = at; _ } ->
             let cursor = Loader_elf.Img.cursor ~at img in
             Reader.advance cursor 0x48;
             let rebx = Dba.Expr.constant (Reader.Read.bv32 cursor) in
@@ -291,7 +291,7 @@ module X86 : ARCH = struct
                   (id, rid);
                 ]
                 defs )
-        | { Loader_elf.Note.name = "CORE"; kind = 2; offset = at; _ } ->
+        | { Loader_elf.Note.name = "CORE"; kind = 2l; offset = at; _ } ->
             let cursor = Loader_elf.Img.cursor ~at img in
             Reader.advance cursor 0xa0;
             ( entrypoint,
@@ -300,7 +300,7 @@ module X86 : ARCH = struct
                   (reg, Dba.Expr.constant (Reader.Read.read cursor 16)) :: defs)
                 defs
                 [ xmm0; xmm1; xmm2; xmm3; xmm4; xmm5; xmm6; xmm7 ] )
-        | { Loader_elf.Note.name = "PIN"; kind = 0; offset = at; _ } ->
+        | { Loader_elf.Note.name = "PIN"; kind = 0l; offset = at; _ } ->
             let cursor = Loader_elf.Img.cursor ~at img in
             let rgs_base = Dba.Expr.constant (Reader.Read.bv32 cursor) in
             (entrypoint, (gs_base, rgs_base) :: defs)
@@ -626,7 +626,7 @@ module AMD64 : ARCH = struct
     let entrypoint, defs, lymmx, hymmx =
       Array.fold_left
         (fun ((entrypoint, defs, lymmx, hymmx) as result) -> function
-          | { Loader_elf.Note.name = "CORE"; kind = 1; offset = at; _ } ->
+          | { Loader_elf.Note.name = "CORE"; kind = 1l; offset = at; _ } ->
               let cursor = Loader_elf.Img.cursor ~at img in
               Reader.advance cursor 0x70;
               let vr15 = Dba.Expr.constant (Reader.Read.bv64 cursor) in
@@ -766,7 +766,7 @@ module AMD64 : ARCH = struct
                   defs,
                 lymmx,
                 hymmx )
-          | { Loader_elf.Note.name = "CORE"; kind = 2; offset = at; _ } ->
+          | { Loader_elf.Note.name = "CORE"; kind = 2l; offset = at; _ } ->
               let cursor = Loader_elf.Img.cursor ~at img in
               Reader.advance cursor 0xa0;
               ( entrypoint,
@@ -775,7 +775,7 @@ module AMD64 : ARCH = struct
                   (fun _ -> Dba.Expr.constant (Reader.Read.read cursor 16))
                   ymmx,
                 hymmx )
-          | { Loader_elf.Note.name = "LINUX"; kind = 0x202; offset = at; _ } ->
+          | { Loader_elf.Note.name = "LINUX"; kind = 0x202l; offset = at; _ } ->
               let cursor = Loader_elf.Img.cursor ~at img in
               Reader.advance cursor 0x200;
               let component = Uint16.to_int (Reader.Peek.u16 cursor) in
@@ -986,7 +986,7 @@ module ARM : ARCH = struct
   let core img =
     Array.fold_left
       (fun ((entrypoint, defs) as result) -> function
-        | { Loader_elf.Note.name = "CORE"; kind = 1; offset = at; _ } ->
+        | { Loader_elf.Note.name = "CORE"; kind = 1l; offset = at; _ } ->
             let cursor = Loader_elf.Img.cursor ~at img in
             Reader.advance cursor 0x48;
             let vr0 = Dba.Expr.constant (Reader.Read.bv32 cursor) in
@@ -1044,7 +1044,7 @@ module ARM : ARCH = struct
                   (v, vv);
                 ]
                 defs )
-        | { Loader_elf.Note.name = "LINUX"; kind = 0x400; offset = at; _ } ->
+        | { Loader_elf.Note.name = "LINUX"; kind = 0x400l; offset = at; _ } ->
             let cursor = Loader_elf.Img.cursor ~at img in
             ( entrypoint,
               Array.fold_left
@@ -1471,7 +1471,7 @@ module AARCH64 : ARCH = struct
   let core img =
     Array.fold_left
       (fun ((entrypoint, defs) as result) -> function
-        | { Loader_elf.Note.name = "CORE"; kind = 1; offset = at; _ } ->
+        | { Loader_elf.Note.name = "CORE"; kind = 1l; offset = at; _ } ->
             let cursor = Loader_elf.Img.cursor ~at img in
             Reader.advance cursor 0x70;
             let vx0 = Dba.Expr.constant (Reader.Read.bv64 cursor) in
@@ -1563,7 +1563,7 @@ module AARCH64 : ARCH = struct
                   (v, vv);
                 ]
                 defs )
-        | { Loader_elf.Note.name = "CORE"; kind = 2; offset = at; _ } ->
+        | { Loader_elf.Note.name = "CORE"; kind = 2l; offset = at; _ } ->
             let cursor = Loader_elf.Img.cursor ~at img in
             ( entrypoint,
               Array.fold_left
@@ -1681,7 +1681,7 @@ module PPC64 : ARCH = struct
   let core img =
     Array.fold_left
       (fun ((_, defs) as result) -> function
-        | { Loader_elf.Note.name = "CORE"; kind = 1; offset = at; _ } ->
+        | { Loader_elf.Note.name = "CORE"; kind = 1l; offset = at; _ } ->
             let cursor = Loader_elf.Img.cursor ~at img in
             let push :
                 (Dba.Var.t * Dba.Expr.t) list ->
@@ -1819,7 +1819,7 @@ end) : ARCH = struct
   let core img =
     Array.fold_left
       (fun ((_, defs) as result) -> function
-        | { Loader_elf.Note.name = "CORE"; kind = 1; offset = at; size } ->
+        | { Loader_elf.Note.name = "CORE"; kind = 1l; offset = at; size } ->
             let cursor = Loader_elf.Img.cursor ~at img in
             let offset, read, entsz =
               if C.size = 32 then (0x48, Reader.Read.bv32, 4)

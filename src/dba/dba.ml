@@ -35,8 +35,7 @@ type id = int
 
 type address = { base : Virtual_address.t; id : id }
 (** A DBA [address] is the association of a DBA block address represented by
-    [base] and a unique [id].
-    The first element of a block has [id] [0]. *)
+    [base] and a unique [id]. The first element of a block has [id] [0]. *)
 
 type addresses = address list
 
@@ -140,8 +139,7 @@ module Var : sig
 
   val flag : ?bitsize:Size.Bit.t -> string -> t
   (** [flag ~size fname] creates a flag variable.
-      - [size] defaults to 1
-  *)
+      - [size] defaults to 1 *)
 
   val temporary : string -> Size.Bit.t -> t
 
@@ -156,8 +154,7 @@ module Var : sig
   val from_id : int -> t
   (** [from_id id] returns the variable identified by [id].
 
-      @raise Not_found if [id] is not a valid identifier.
-  *)
+      @raise Not_found if [id] is not a valid identifier. *)
 end = struct
   module Tag = struct
     type attribute = Value | Size | Last | Plt

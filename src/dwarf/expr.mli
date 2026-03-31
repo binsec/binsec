@@ -25,11 +25,12 @@ val map : Machine.isa -> int -> Dba.Expr.t
 type t
 
 val load : Machine.isa -> [ `x32 | `x64 ] -> int -> int Reader.t -> t
-(** [load isa blocksize cursor] read a DWARF expression at the current cursor position *)
+(** [load isa blocksize cursor] read a DWARF expression at the current cursor
+    position *)
 
 val loc : Machine.isa -> ?cfa:Dba.Expr.t -> t -> int -> Dba.Expr.t
-(** [loc isa ~cfa expr bitsize] interpret the expression expr
-    according to the Canonical Frame Address *)
+(** [loc isa ~cfa expr bitsize] interpret the expression expr according to the
+    Canonical Frame Address *)
 
 val cfa : Machine.isa -> t -> Dba.Expr.t
 (** [cfa isa expr] interpret the expression expr as a Canonical Frame Address *)

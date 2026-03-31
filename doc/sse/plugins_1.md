@@ -29,7 +29,7 @@ We recommend to use a local switch to create your plugins. To do so, run:
 $ cd <plugin-path>
 $ opam switch create . 4.14.2
 $ eval $(opam env)
-$ opam install binsec
+$ opam install binsec unisim_archisec
 ```
 
 ### Source tree
@@ -40,8 +40,8 @@ We will start from the following directory structure.
 <plugin-path>
 ├── dune-project
 ├── dune
-├── shadow_stack.ml
-└── registration.ml
+├── tuto_shadow_stack.ml
+└── tuto_registration.ml
 ```
 #### dune-project
 ```
@@ -57,14 +57,14 @@ We will start from the following directory structure.
 ```
 (library
  (public_name tuto.shadow_stack)
- (name shadow_stack)
- (modules shadow_stack)
+ (name tuto_shadow_stack)
+ (modules tuto_shadow_stack)
  (libraries binsec.sse))
 
 (library
  (public_name tuto.registration)
- (name registration)
- (modules registration)
+ (name tuto_registration)
+ (modules tuto_registration)
  (libraries binsec.cli.sse tuto.shadow_stack))
 
 (plugin
@@ -119,7 +119,7 @@ end)
 
 let () =
   Binsec_cli_sse.Plugins.register ~is_enabled:Namespace.is_enabled (fun () ->
-      (module Shadow_stack.Plugin_v1))
+      (module Tuto_shadow_stack.Plugin_v1))
 ```
 
 #### Compile

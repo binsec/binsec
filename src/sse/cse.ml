@@ -98,7 +98,7 @@ and Layer : sig
 
   val base : t -> string option
   val write : read:bool -> addr:Expr.t -> Expr.t -> Expr.endianness -> t -> t
-  val read : addr:Expr.t -> int -> Expr.endianness -> t -> Expr.t * bool
+  val read : addr:Expr.t -> int -> Expr.endianness -> t -> Expr.t
 
   include Sigs.HASHABLE with type t := t
 end = struct
@@ -124,17 +124,6 @@ end = struct
 
   let equal t t' = compare t t' = 0
 
-  let bswap =
-    let rec iter e i r =
-      if i = 0 then r
-      else
-        iter e (i - 8) (Expr.append (Expr.restrict ~hi:(i - 1) ~lo:(i - 8) e) r)
-    in
-    fun e ->
-      let size = Expr.sizeof e in
-      assert (size land 0x7 = 0);
-      iter e (size - 8) (Expr.restrict ~hi:(size - 1) ~lo:(size - 8) e)
-
   let rebase (addr : Expr.t) =
     match addr with
     | Cst bv -> (Expr.zeros (Bitvector.size_of bv), bv)
@@ -158,7 +147,7 @@ end = struct
 
   let write ~read ~addr value (dir : Expr.endianness) over =
     let value =
-      match dir with LittleEndian -> value | BigEndian -> bswap value
+      match dir with LittleEndian -> value | BigEndian -> Expr.byte_swap value
     in
     match over with
     | Base _ -> write addr value over
@@ -173,19 +162,21 @@ end = struct
 
   let rec read ~addr bytes (dir : Expr.endianness) t =
     match t with
-    | Base _ -> (Expr.load bytes dir addr t, true)
+    | Base _ -> Expr.load bytes dir addr t
     | Layer { addr = addr'; store; over; _ } -> (
         match Expr.sub addr addr' with
         | Expr.Cst bv ->
             let miss i s =
-              fst (read ~addr:(Expr.addz addr' i) s Expr.LittleEndian over)
+              read ~addr:(Expr.addz addr' i) s Expr.LittleEndian over
             in
             let bytes = Store.select miss bv bytes store in
             let bytes =
-              match dir with LittleEndian -> bytes | BigEndian -> bswap bytes
+              match dir with
+              | LittleEndian -> bytes
+              | BigEndian -> Expr.byte_swap bytes
             in
-            (bytes, false)
-        | _ -> (Expr.load bytes dir addr t, true))
+            bytes
+        | _ -> Expr.load bytes dir addr t)
 end
 
 type var = ([ `Var ], Source.t, Layer.t) Expr.term
@@ -231,12 +222,24 @@ let bop (op : Dba.Binary_op.t) : Term.binary Term.operator =
   | LeftRotate -> Rol
   | RightRotate -> Ror
 
+type read = ([ `Mem ], Source.t, Layer.t) Term.t
+
+module ReadSet = Set.Make (struct
+  type t = read
+
+  let compare : t -> t -> int =
+   fun (Load { label = lx; _ } as x) (Load { label = ly; _ } as y) ->
+    match Layer.compare lx ly with
+    | 0 -> Expr.compare (Term.to_exp x) (Term.to_exp y)
+    | d -> d
+end)
+
 module Env = struct
   type t = {
     id : int;
     vars : Expr.t VarMap.t;
     layers : (Layer.t * bool) StrMap.t;
-    rev_reads : Expr.t list;
+    reads : ReadSet.t;
     sources : var list VarMap.t;
   }
 
@@ -251,8 +254,8 @@ module Env = struct
         sources = VarMap.add var (Term.to_var_exn value :: history) t.sources;
       } )
 
-  let is_empty { vars; layers; rev_reads; _ } =
-    VarMap.is_empty vars && StrMap.is_empty layers && rev_reads = []
+  let is_empty { vars; layers; reads; _ } =
+    VarMap.is_empty vars && StrMap.is_empty layers && ReadSet.is_empty reads
 
   let rec eval (e : Dba.Expr.t) t =
     match e with
@@ -281,20 +284,41 @@ module Env = struct
       try StrMap.find name t.layers with Not_found -> (Layer.Base base, true)
     in
     let addr, t' = eval addr t in
-    let bytes, read' = Layer.read ~addr len dir layer in
-    ( bytes,
-      {
-        t' with
-        layers = StrMap.add name (layer, read || read') t'.layers;
-        rev_reads = (if read' then bytes :: t'.rev_reads else t'.rev_reads);
-      } )
+    let value = Layer.read ~addr len dir layer in
+    scan_read t' value name layer read t'.reads value
+
+  and scan_read t value name layer read reads = function
+    | Unary { f = Uext _; x = Load { label; _ } as e; _ }
+    | (Load { label; _ } as e) ->
+        scan_end t value name layer
+          (read || Layer.equal layer label)
+          (ReadSet.add (Term.to_mem_exn e) reads)
+    | Binary
+        {
+          f = Concat;
+          x;
+          y =
+            ( Unary { f = Uext _; x = Load { label; _ } as y; _ }
+            | (Load { label; _ } as y) );
+          _;
+        } ->
+        scan_read t value name layer
+          (read || Layer.equal layer label)
+          (ReadSet.add (Term.to_mem_exn y) reads)
+          x
+    | Binary { f = Concat; x; _ } -> scan_read t value name layer read reads x
+    | Cst _ | Var _ | Unary _ | Binary _ | Ite _ ->
+        scan_end t value name layer read reads
+
+  and scan_end t value name layer read reads =
+    (value, { t with layers = StrMap.add name (layer, read) t.layers; reads })
 
   let empty =
     {
       id = 0;
       vars = VarMap.empty;
       layers = StrMap.empty;
-      rev_reads = [];
+      reads = ReadSet.empty;
       sources = VarMap.empty;
     }
 
@@ -494,7 +518,7 @@ let commit : Env.t -> opcode array =
   if Env.is_empty body then [||]
   else
     let env = init () in
-    List.iter (visit_bv env) (List.rev body.rev_reads);
+    ReadSet.iter (fun r -> visit_bv env (Term.to_exp r)) body.reads;
     StrMap.iter (fun _ (ax, _) -> visit_ax env ax) body.layers;
     VarMap.iter
       (fun var bv ->
@@ -576,5 +600,5 @@ let partial_commit : Env.t -> VarSet.t -> Env.t * opcode array =
     let vars, vars' =
       VarMap.partition (fun var _ -> VarSet.mem var slice) body.vars
     in
-    ( { body with vars = vars'; layers = StrMap.empty; rev_reads = [] },
+    ( { body with vars = vars'; layers = StrMap.empty; reads = ReadSet.empty },
       commit { body with vars } )

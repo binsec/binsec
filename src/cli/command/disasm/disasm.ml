@@ -133,7 +133,8 @@ module Program = struct
     let tbl = count_program_instructions p in
     let ordered =
       Hashtbl.fold (fun mnemonic count l -> (mnemonic, count) :: l) tbl []
-      |> (* Sorting in decreasing order *)
+      |>
+      (* Sorting in decreasing order *)
       List.sort (fun (_, c1) (_, c2) -> compare c2 c1)
     in
     fprintf ppf "@[<v 0>Different instruction count:%d@ %a@]"
@@ -233,7 +234,7 @@ let extra_info dinstr =
     Dba_types.(
       Dhunk.to_stmts block addr
       |> List.map (fun locinstr ->
-             (Statement.location locinstr, Statement.instruction locinstr)))
+          (Statement.location locinstr, Statement.instruction locinstr)))
   in
   aux instlist
 

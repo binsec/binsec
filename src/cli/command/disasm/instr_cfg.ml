@@ -144,9 +144,8 @@ module Make (H : Hashtbl.HashedType) = struct
     in
     block.block
     |> List.map (fun vert ->
-           asprintf "<tr><td %s %s>%a</td><td %s %s %s>%a</td></tr>" border
-             color1 Virtual_address.pp (V.addr vert) border color2 align
-             pp_mnemonic vert)
+        asprintf "<tr><td %s %s>%a</td><td %s %s %s>%a</td></tr>" border color1
+          Virtual_address.pp (V.addr vert) border color2 align pp_mnemonic vert)
     |> String.concat "\n"
     |> sprintf "<table border=\"0\" cellspacing=\"0\">\n%s\n</table>"
 

@@ -963,13 +963,13 @@ module Symbol = struct
 end
 
 module Note = struct
-  type t = { name : string; kind : int; offset : int; size : int }
+  type t = { name : string; kind : int32; offset : int; size : int }
 
   let read t =
     let base = get_pos t in
     let namesz = Uint32.to_int (Read.u32 t) in
     let size = Uint32.to_int (Read.u32 t) in
-    let kind = Uint32.to_int (Read.u32 t) in
+    let kind = Uint32.to_int32 (Read.u32 t) in
     let name = Read.fixed_string t namesz in
     set_pos t (base + ((get_pos t - base + 3) land -4));
     let offset = get_pos t in
@@ -1573,20 +1573,20 @@ let fmap addresses offset name = { addresses; offset; name }
 let files (i : Img.t) =
   let read =
     match i.header.ident.kind with
-    | `x32 -> fun r -> Uint32.to_int (Read.u32 r)
-    | `x64 -> fun r -> Uint64.to_int (Read.u64 r)
+    | `x32 -> fun r -> Uint32.to_bigint (Read.u32 r)
+    | `x64 -> fun r -> Uint64.to_bigint (Read.u64 r)
   in
   Array.fold_left
     (fun result -> function
-      | { Note.name = "CORE"; kind = 0x46494c45; offset = at; _ } ->
+      | { Note.name = "CORE"; kind = 0x46494c45l; offset = at; _ } ->
           let cursor = Img.cursor ~at i in
-          let n = read cursor in
-          let ps = read cursor in
+          let n = Z.to_int (read cursor) in
+          let ps = Z.to_int (read cursor) in
           let files =
             Array.init n (fun _ ->
-                let lo = Virtual_address.create (read cursor) in
-                let hi = Virtual_address.create (read cursor) in
-                let offset = ps * read cursor in
+                let lo = Virtual_address.of_bigint (read cursor) in
+                let hi = Virtual_address.of_bigint (read cursor) in
+                let offset = ps * Z.to_int (read cursor) in
                 { addresses = { Interval.lo; hi }; offset; name = "" })
           in
           Array.iter
@@ -1607,12 +1607,14 @@ module Utils = struct
       plt:Shdr.t ->
       plt0_size:int ->
       pltn_size:int ->
-      (Virtual_address.t * string) list =
+      (Virtual_address.t * int * string) list =
    fun rel_plt ~plt:{ addr = base; _ } ~plt0_size ~pltn_size ->
     Array_utils.fold_righti
       (fun i symtab ({ symbol = { name; _ }; addend; _ } : Rel.t) ->
         if Option.fold ~none:true ~some:(Z.equal Z.zero) addend then
-          (Virtual_address.add_int (plt0_size + (pltn_size * i)) base, name)
+          ( Virtual_address.add_int (plt0_size + (pltn_size * i)) base,
+            pltn_size,
+            name )
           :: symtab
         else symtab)
       [] rel_plt
@@ -1655,7 +1657,7 @@ module Utils = struct
         generic_map_synthetic_symtab (Rel.read image rel_plt) ~plt ~plt0_size
           ~pltn_size
 
-  let synthetic_symtab : Img.t -> (Virtual_address.t * string) list =
+  let synthetic_symtab : Img.t -> (Virtual_address.t * int * string) list =
    fun img ->
     match Img.header img with
     | { Ehdr.kind = EXEC | DYN; machine; _ } -> (

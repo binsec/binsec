@@ -39,7 +39,7 @@ end)
 
 We change the way the plugin is instantiated as follows.
 
-#### shadow_stack.ml
+#### tuto_shadow_stack.ml
 ```ocaml
 (* Code from previous tutorial. *)
 (* [ ... ] *)
@@ -66,12 +66,12 @@ module Plugin_v2 : PLUGIN = struct
 end
 ```
 
-#### registration.ml
+#### tuto_registration.ml
 
 ```ocaml
 module Namespace =
   Binsec_cli.Cli.Make_from_logger
-    (Shadow_stack.Log)
+    (Tuto_shadow_stack.Log)
     (struct
       let name = "Shadow stack tutorial"
       let shortname = "tuto"
@@ -97,13 +97,13 @@ end)
 let () =
   Binsec_cli_sse.Plugins.register ~is_enabled:Namespace.is_enabled (fun () ->
       match Mode.get () with
-      | Inline -> (module Shadow_stack.Plugin_v1)
-      | Builtin -> (module Shadow_stack.Plugin_v2))
+      | Inline -> (module Tuto_shadow_stack.Plugin_v1)
+      | Builtin -> (module Tuto_shadow_stack.Plugin_v2))
 ```
 
 Now, all we have to do is to fill the second module `V2` and we will be able to control the mode with the command line option `-tuto-mode [inline|builtin]`.
 
-:information_source: In order to output results, we create a dedicated logger which will log the entries using the `[tuto]` tag instead of `[sse]`. Its verbosity level can be configured via the command line (e.g. `-tuto-debug-level`). Since our logger is derived (`Sub`) from the main `sse` logger, our logger will also automatically reflect the changes of the latter one.
+:information_source: In order to output results, we create a dedicated logger which will log the entries using the `[tuto]` tag instead of `[sse]`. We have to use the functor `Cli.Make_from_logger` to link it to the command line interface, so its verbosity level can be configured via the command line options (e.g. `-tuto-debug-level`). Since our logger is derived (`Sub`) from the main `sse` logger, our logger will also automatically reflect the changes of the latter one.
 
 ### Step 2: adding new builtin instructions
 

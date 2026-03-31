@@ -23,45 +23,27 @@ type t
 (** A subprocess *)
 
 val spawn : ?pdeathsig:int -> string array -> t
-(**
-   [spawn ~pdeathsig command]
-   spawns the specified command in a new process.
-   The command is searched in the path.
+(** [spawn ~pdeathsig command] spawns the specified command in a new process.
+    The command is searched in the path.
 
-   When given, the signal [pdeathsig] will be delivered to the
-   child process if the current thread dies (implemented only on Linux).
-   The process must be closed via {!val:close}.
-*)
+    When given, the signal [pdeathsig] will be delivered to the child process if
+    the current thread dies (implemented only on Linux). The process must be
+    closed via {!val:close}. *)
 
 val pid : t -> int
-(**
-   [pid t]
-   returns the process identifier.
-*)
+(** [pid t] returns the process identifier. *)
 
 val stdin : t -> out_channel
-(**
-   [stdin t]
-   returns the channel bound to the subprocess stdin.
-*)
+(** [stdin t] returns the channel bound to the subprocess stdin. *)
 
 val stdout : t -> in_channel
-(**
-   [stdout t]
-   returns the channel bound to the subprocess stdout.
-*)
+(** [stdout t] returns the channel bound to the subprocess stdout. *)
 
 val stderr : t -> in_channel
-(**
-   [stderr t]
-   returns the channel bound to the subprocess stderr.
-*)
+(** [stderr t] returns the channel bound to the subprocess stderr. *)
 
 val close : t -> Unix.process_status
-(**
-   [close t]
-   closes a process created with {!val:spawn}.
+(** [close t] closes a process created with {!val:spawn}.
 
-   Close {!val:stdin}, {!val:stdout} and {!val:stderr} channels, wait for the
-   associated command to terminate and return its termination status.
-*)
+    Close {!val:stdin}, {!val:stdout} and {!val:stderr} channels, wait for the
+    associated command to terminate and return its termination status. *)

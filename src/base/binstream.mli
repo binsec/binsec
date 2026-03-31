@@ -32,19 +32,16 @@ val empty : t
 val of_nibbles : string -> t
 (** [of_nibbles s] converts a string [s] of hexadecimal characters.
 
-    Assumes each character is in the range [0-9a-f].
-*)
+    Assumes each character is in the range [0-9a-f]. *)
 
 val of_bytes : string -> t
-(** [of_bytes s] converts a byte stream [s].
-    Each character stands for its own byte.
-*)
+(** [of_bytes s] converts a byte stream [s]. Each character stands for its own
+    byte. *)
 
 val of_list : int list -> t
 (** [of_list l] converts a list of integers.
 
-    Assumes: each integer n is in the range 0 <= n <= 255.
-*)
+    Assumes: each integer n is in the range 0 <= n <= 255. *)
 
 (** {3 Operations} *)
 
@@ -56,7 +53,7 @@ val append_char : char -> t -> t
 val prepend_char : char -> t -> t
 val rev : t -> t
 
-(** {3 Iterators }*)
+(** {3 Iterators}*)
 
 val iter : (int -> unit) -> t -> unit
 val map : (int -> int) -> t -> t

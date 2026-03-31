@@ -41,8 +41,9 @@ val bv_term_variables : bv_term -> VarSet.t
 val ax_term_variables : ax_term -> VarSet.t
 
 val is_symbolic_bl_term : bl_term -> bool
-(** @return [true] if the expression is syntactically symbolic
-    meaning there is at least one variable *)
+(** @return
+      [true] if the expression is syntactically symbolic meaning there is at
+      least one variable *)
 
 val is_symbolic_bv_term : bv_term -> bool
 val is_symbolic_ax_term : ax_term -> bool

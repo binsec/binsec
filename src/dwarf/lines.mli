@@ -28,15 +28,13 @@ type entry = {
   basic_block : bool;
   discriminator : int;
 }
-(** represent one or more rows of the addresse / line matrix
-    [addresses]     the range of virtual addresses of the entry
-    [path]          the path of the processed file
-    [line]          the line of the source (starting from 1)
-    [column]        the column (non reliable, old compilers do not produce it)
-    [is_stmt]       if the entry correspond to a statement in the source
-    [basic_block]   if the entry is the start of a basic block
-    [discriminator] an integer identifying the block to which the entry belong
-*)
+(** represent one or more rows of the addresse / line matrix [addresses] the
+    range of virtual addresses of the entry [path] the path of the processed
+    file [line] the line of the source (starting from 1) [column] the column
+    (non reliable, old compilers do not produce it) [is_stmt] if the entry
+    correspond to a statement in the source [basic_block] if the entry is the
+    start of a basic block [discriminator] an integer identifying the block to
+    which the entry belong *)
 
 type t
 

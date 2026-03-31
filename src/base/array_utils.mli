@@ -22,27 +22,23 @@
 (** Extra functions over arrays *)
 
 val find : ('a -> bool) -> 'a array -> 'a
-(** [find p a] returns the first element of the array [a] that satisfies the predicate [p].
-    @raise Not_found if there is no value that satisfies [p] in the array [a]
-*)
+(** [find p a] returns the first element of the array [a] that satisfies the
+    predicate [p].
+    @raise Not_found if there is no value that satisfies [p] in the array [a] *)
 
 val findi : ('a -> bool) -> 'a array -> int
 (** [find p a] returns the index of the first element of the array [a] that
-               satisfies the predicate [p].
-    @raise Not_found if there is no value that satisfies [p] in the array [a]
-*)
+    satisfies the predicate [p].
+    @raise Not_found if there is no value that satisfies [p] in the array [a] *)
 
 val find_opt : ('a -> bool) -> 'a array -> 'a option
-(** [find p a] returns the first element of the array [a] that satisfies
-    the predicate [p] or None.
-*)
+(** [find p a] returns the first element of the array [a] that satisfies the
+    predicate [p] or None. *)
 
 val fold_lefti : (int -> 'a -> 'b -> 'a) -> 'a -> 'b array -> 'a
-(** Same as Array.fold_left, but the function is applied with the index
-    of the element as first argument, and the element itself as third argument
-*)
+(** Same as Array.fold_left, but the function is applied with the index of the
+    element as first argument, and the element itself as third argument *)
 
 val fold_righti : (int -> 'a -> 'b -> 'a) -> 'a -> 'b array -> 'a
-(** Same as Array.fold_right, but the function is applied with the index
-    of the element as first argument, and the element itself as third argument
-*)
+(** Same as Array.fold_right, but the function is applied with the index of the
+    element as first argument, and the element itself as third argument *)

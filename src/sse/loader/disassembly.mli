@@ -39,8 +39,8 @@ type 'a hook =
 type 'a knowledge =
   | May_read : Dba_types.Var.Set.t option knowledge
       (** The (overapproximed) set of all variables a builtin may access.
-          Variables that are not in this set may have an undefined value.
-          [None] means any variable may be read. *)
+          Variables that are not in this set may have an undefined value. [None]
+          means any variable may be read. *)
   | Must_write : Dba_types.Var.Set.t knowledge
       (** The (underapproximed) set of all variables a builtin must overwrite.
           Previous values of these variables are deemed no longer reachable. *)

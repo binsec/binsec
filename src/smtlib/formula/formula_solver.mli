@@ -21,9 +21,8 @@
 
 (** Interface with SMT solvers *)
 
-(** This module provides basic functions to solve
-    SMT formulas, either by providing the file name
-    or directly by interacting with the SMT solver via
+(** This module provides basic functions to solve SMT formulas, either by
+    providing the file name or directly by interacting with the SMT solver via
     theirs incremental mode. *)
 
 type 'a command =

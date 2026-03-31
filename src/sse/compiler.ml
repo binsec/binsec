@@ -188,8 +188,8 @@ let register_builtin_callback :
  fun config callback ->
   config.builtin_callbacks <- callback :: config.builtin_callbacks
 
-let register_knowledge :
-    type b. 'a config -> b knowledge -> (Ir.builtin -> b option) -> unit =
+let register_knowledge : type b.
+    'a config -> b knowledge -> (Ir.builtin -> b option) -> unit =
  fun config info callback ->
   match info with
   | May_read ->
@@ -345,37 +345,47 @@ module Straight : ASSEMBLER = struct
         tail
 end
 
-module Default : sig
-  include ASSEMBLER
-
-  val fprint_graph : Format.formatter -> 'a t -> unit
-end = struct
-  module DGraph = Graph.Imperative.Digraph.Concrete (Basic_types.Integers.Int)
+module Default : ASSEMBLER = struct
   module IntTbl = Basic_types.Integers.Int.Htbl
   module IntSet = Basic_types.Integers.Int.Set
 
+  type liveness = Dead | Escaped | Alive
+
+  type 'a node = {
+    id : int;
+    mutable fiber : 'a fiber;
+    mutable liveness : liveness;
+    mutable uses : IntSet.t;
+    mutable alias : int option;
+    mutable decay : IntSet.t;
+  }
+
   type 'a t = {
-    mutable sync : IntSet.t;
-    ordering : DGraph.t;
-    nodes : 'a fiber IntTbl.t;
-    definitions : (int * bool) Var.Htbl.t;
-    uses : IntSet.t Var.Htbl.t;
+    nodes : 'a node IntTbl.t;
+    mutable definitions : int Var.Map.t;
+    mutable loose_uses : IntSet.t Var.Map.t;
   }
 
   let empty : type a. (module PATH with type t = a) -> a t =
    fun _ ->
     {
-      sync = IntSet.empty;
-      ordering = DGraph.create ~size:16 ();
       nodes = IntTbl.create 16;
-      definitions = Var.Htbl.create 16;
-      uses = Var.Htbl.create 16;
+      definitions = Var.Map.empty;
+      loose_uses = Var.Map.empty;
     }
 
-  let push : 'a fiber IntTbl.t -> 'a fiber -> int =
-   fun nodes node ->
+  let push : 'a node IntTbl.t -> 'a fiber -> int =
+   fun nodes fiber ->
     let n = IntTbl.length nodes in
-    IntTbl.add nodes n node;
+    IntTbl.add nodes n
+      {
+        id = n;
+        fiber;
+        liveness = Alive;
+        decay = IntSet.empty;
+        uses = IntSet.empty;
+        alias = None;
+      };
     n
 
   let get_dependencies : Dba.Expr.t -> Var.Set.t =
@@ -383,67 +393,96 @@ end = struct
 
   let add_use : 'a t -> int -> Var.t -> unit =
    fun state n var ->
-    Var.Htbl.replace state.uses var
-      (IntSet.add n
-         (try Var.Htbl.find state.uses var with Not_found -> IntSet.empty));
-    match Var.Htbl.find state.definitions var with
+    match Var.Map.find var state.definitions with
     | exception Not_found ->
-        if not (IntSet.is_empty state.sync) then
-          DGraph.add_edge state.ordering (IntSet.max_elt state.sync) n
-    | d, _ -> DGraph.add_edge state.ordering d n
+        state.loose_uses <-
+          Var.Map.update var
+            (function
+              | None -> Some (IntSet.singleton n)
+              | Some uses -> Some (IntSet.add n uses))
+            state.loose_uses
+    | i ->
+        let node = IntTbl.find state.nodes i in
+        node.uses <- IntSet.add n node.uses
 
-  and remove_use : 'a t -> int -> Var.t -> unit =
-   fun state i var ->
-    Var.Htbl.replace state.uses var
-      (IntSet.remove i
-         (try Var.Htbl.find state.uses var with Not_found -> IntSet.empty))
+  let forget : 'a node -> unit =
+   fun node ->
+    match node.liveness with
+    | Alive -> node.liveness <- Dead
+    | Escaped | Dead -> ()
+
+  let decay : 'a t -> last:int -> int -> unit =
+   fun state ~last i ->
+    let node = IntTbl.find state.nodes i in
+    node.decay <- IntSet.add last node.decay
 
   let havoc : 'a t -> int -> Var.t -> unit =
    fun state n var ->
-    (match Var.Htbl.find state.uses var with
-    | exception Not_found ->
-        if not (IntSet.is_empty state.sync) then
-          DGraph.add_edge state.ordering (IntSet.max_elt state.sync) n
-    | u ->
-        IntSet.iter (fun i -> DGraph.add_edge state.ordering i n) u;
-        Var.Htbl.remove state.uses var);
-    match Var.Htbl.find state.definitions var with
-    | exception Not_found -> ()
-    | i, _ -> (
-        match IntTbl.find state.nodes i with
-        | Assign { rval = exp; _ } | Load { addr = exp; _ } ->
-            Var.Set.iter
-              (fun var -> remove_use state i var)
-              (get_dependencies exp)
-        | _ -> ())
+    let uses =
+      match Var.Map.find var state.definitions with
+      | exception Not_found -> (
+          try Var.Map.find var state.loose_uses with Not_found -> IntSet.empty)
+      | n ->
+          let node = IntTbl.find state.nodes n in
+          forget node;
+          node.uses
+    in
+    IntSet.iter (decay state ~last:n) uses
 
   let use : 'a t -> int -> Var.Set.t -> unit =
    fun state n set -> Var.Set.iter (fun var -> add_use state n var) set
 
-  let assign : 'a t -> Dba.Var.t -> Dba.Expr.t -> unit =
+  let define : 'a t -> int -> Dba.Var.t -> unit =
+   fun state n var -> state.definitions <- Var.Map.add var n state.definitions
+
+  let assign : 'a t -> Dba.Var.t -> Dba.Expr.t -> int =
    fun state var rval ->
     let n = push state.nodes (Assign { var; rval; succ = invalid_successor }) in
     havoc state n var;
     use state n (get_dependencies rval);
-    Var.Htbl.replace state.definitions var (n, true)
+    define state n var;
+    n
+
+  let assign : 'a t -> Dba.Var.t -> Dba.Expr.t -> unit =
+   fun state var rval ->
+    match rval with
+    | Var var' -> (
+        if Var.equal var var' then ()
+        else
+          match Var.Map.find var' state.definitions with
+          | exception Not_found -> ignore (assign state var rval)
+          | i ->
+              let uses =
+                match Var.Map.find var state.definitions with
+                | exception Not_found -> (
+                    try Var.Map.find var state.loose_uses
+                    with Not_found -> IntSet.empty)
+                | j ->
+                    let node = IntTbl.find state.nodes j in
+                    node.uses
+              in
+              let n = assign state var rval in
+              if
+                match IntSet.max_elt_opt uses with
+                | None -> true
+                | Some n -> n <= i
+              then (
+                IntSet.iter (decay state ~last:i) uses;
+                let node = IntTbl.find state.nodes i in
+                node.alias <- Some n))
+    | _ -> ignore (assign state var rval)
 
   let clobber : 'a t -> Dba.Var.t -> unit =
    fun state var ->
     let n = push state.nodes (Clobber { var; succ = invalid_successor }) in
     havoc state n var;
-    Var.Htbl.replace state.definitions var (n, true)
+    define state n var
 
   let symbolize : 'a t -> Dba.Var.t -> unit =
    fun state var ->
     let n = push state.nodes (Symbolize { var; succ = invalid_successor }) in
     havoc state n var;
-    Var.Htbl.replace state.definitions var (n, true)
-
-  let forget : 'a t -> Dba.Var.t -> unit =
-   fun state var ->
-    match Var.Htbl.find state.definitions var with
-    | exception Not_found -> ()
-    | i, _ -> Var.Htbl.replace state.definitions var (i, false)
+    define state n var
 
   let load :
       'a t ->
@@ -458,7 +497,7 @@ end = struct
     in
     havoc state n var;
     use state n (get_dependencies addr);
-    Var.Htbl.replace state.definitions var (n, true)
+    define state n var
 
   let store :
       'a t ->
@@ -490,150 +529,213 @@ end = struct
       'a t -> ?input:Var.Set.t -> ?output:Var.Set.t -> ('a -> unit) -> unit =
    fun state ?input ?output f ->
     let n = push state.nodes (Apply { f; succ = invalid_successor }) in
-    state.sync <- IntSet.add n state.sync;
-    match (input, output) with
-    | None, _ | _, None ->
-        Var.Htbl.iter
-          (fun _ (i, alive) -> if alive then DGraph.add_edge state.ordering i n)
-          state.definitions;
-        Var.Htbl.clear state.definitions;
-        Var.Htbl.clear state.uses
-    | Some input, Some output ->
-        use state n input;
+    (match input with
+    | None ->
+        Var.Map.iter
+          (fun _ i ->
+            let node = IntTbl.find state.nodes i in
+            if node.liveness = Alive then (
+              node.liveness <- Escaped;
+              node.uses <- IntSet.add n node.uses))
+          state.definitions
+    | Some vars ->
         Var.Set.iter
           (fun var ->
-            havoc state n var;
-            Var.Htbl.replace state.definitions var (n, true))
-          output
+            match Var.Map.find var state.definitions with
+            | exception Not_found -> ()
+            | i ->
+                let node = IntTbl.find state.nodes i in
+                node.liveness <- Escaped;
+                node.uses <- IntSet.add n node.uses)
+          vars);
+    match output with
+    | None ->
+        Var.Map.iter
+          (fun _ i ->
+            let node = IntTbl.find state.nodes i in
+            IntSet.iter (decay state ~last:n) node.uses)
+          state.definitions;
+        state.definitions <- Var.Map.empty;
+        Var.Map.iter
+          (fun _ uses -> IntSet.iter (decay state ~last:n) uses)
+          state.loose_uses;
+        state.loose_uses <- Var.Map.empty
+    | Some vars ->
+        Var.Set.iter
+          (fun var ->
+            state.definitions <-
+              Var.Map.update var
+                (function
+                  | None -> None
+                  | Some i ->
+                      let node = IntTbl.find state.nodes i in
+                      IntSet.iter (decay state ~last:n) node.uses;
+                      None)
+                state.definitions;
+            state.loose_uses <-
+              Var.Map.update var
+                (function
+                  | None -> None
+                  | Some uses ->
+                      IntSet.iter (decay state ~last:n) uses;
+                      None)
+                state.loose_uses)
+          vars
 
-  let rec flush : 'a fiber IntTbl.t -> n:int -> int -> pred:'a fiber -> 'a fiber
+  let forget : 'a t -> Dba.Var.t -> unit =
+   fun state var ->
+    match Var.Map.find var state.definitions with
+    | exception Not_found -> ()
+    | n -> forget (IntTbl.find state.nodes n)
+
+  let rec flush : 'a node IntTbl.t -> n:int -> int -> pred:'a fiber -> 'a fiber
       =
    fun nodes ~n i ~pred ->
     if i = n then pred
     else
       match IntTbl.find nodes i with
       | exception Not_found -> flush nodes ~n (i + 1) ~pred
-      | node ->
-          Logger.debug ~level:4 "+ %a" pp_fiber node;
-          relink ~pred node;
-          flush nodes ~n (i + 1) ~pred:node
+      | { fiber; _ } ->
+          Logger.debug ~level:4 "+ %a" pp_fiber fiber;
+          relink ~pred fiber;
+          flush nodes ~n (i + 1) ~pred:fiber
 
   let substitute : Var.t -> Dba.Expr.t -> Dba.Expr.t -> Dba.Expr.t =
    fun tmp value exp ->
     Dba_types.Expr.substitute (Var.Map.singleton tmp value) exp
 
-  let replace : 'a fiber IntTbl.t -> int -> Var.t -> Dba.Expr.t -> unit =
-   fun nodes x tmp value ->
-    match IntTbl.find nodes x with
+  let replace :
+      'a node IntTbl.t -> int -> Var.t -> Dba.Expr.t -> decay:IntSet.t -> unit =
+   fun nodes x tmp value ~decay ->
+    let node = IntTbl.find nodes x in
+    node.decay <- IntSet.union decay node.decay;
+    match node.fiber with
     | Assign { var; rval; _ } ->
-        IntTbl.replace nodes x
-          (Assign
-             { var; rval = substitute tmp value rval; succ = invalid_successor })
+        node.fiber <-
+          Assign
+            { var; rval = substitute tmp value rval; succ = invalid_successor }
     | Load { var; base; addr; dir; _ } ->
-        IntTbl.replace nodes x
-          (Load
-             {
-               var;
-               base;
-               addr = substitute tmp value addr;
-               dir;
-               succ = invalid_successor;
-             })
+        node.fiber <-
+          Load
+            {
+              var;
+              base;
+              addr = substitute tmp value addr;
+              dir;
+              succ = invalid_successor;
+            }
     | Store { base; addr; dir; rval; _ } ->
-        IntTbl.replace nodes x
-          (Store
-             {
-               base;
-               addr = substitute tmp value addr;
-               dir;
-               rval = substitute tmp value rval;
-               succ = invalid_successor;
-             })
+        node.fiber <-
+          Store
+            {
+              base;
+              addr = substitute tmp value addr;
+              dir;
+              rval = substitute tmp value rval;
+              succ = invalid_successor;
+            }
     | Assume { test; _ } ->
-        IntTbl.replace nodes x
-          (Assume { test = substitute tmp value test; succ = invalid_successor })
+        node.fiber <-
+          Assume { test = substitute tmp value test; succ = invalid_successor }
     | Assert { test; _ } ->
-        IntTbl.replace nodes x
-          (Assert { test = substitute tmp value test; succ = invalid_successor })
+        node.fiber <-
+          Assert { test = substitute tmp value test; succ = invalid_successor }
     | _ -> ()
 
-  let forward : 'a t -> int -> Var.t -> Dba.Expr.t -> unit =
-   fun { nodes; ordering; _ } i tmp value ->
-    DGraph.iter_succ (fun x -> replace nodes x tmp value) ordering i;
-    IntTbl.remove nodes i
+  let forward : 'a node IntTbl.t -> 'a node -> Var.t -> Dba.Expr.t -> unit =
+   fun nodes { id; uses; decay; _ } tmp value ->
+    IntSet.iter (fun x -> replace nodes x tmp value ~decay) uses;
+    IntTbl.remove nodes id
 
-  let fprint_graph : Format.formatter -> 'a t -> unit =
-   fun ppf state ->
-    let module Dot = Graph.Graphviz.Dot (struct
-      include DGraph
+  let backward : 'a node IntTbl.t -> 'a node -> unit =
+   fun nodes node ->
+    let alias = IntTbl.find nodes (Option.get node.alias) in
+    match alias.fiber with
+    | Assign { var; rval = Var var'; _ } ->
+        IntSet.iter
+          (fun j -> replace nodes j var' (Dba.Expr.v var) ~decay:IntSet.empty)
+          node.uses;
+        node.fiber <-
+          (match node.fiber with
+          | Assign { rval; succ; _ } -> Assign { var; rval; succ }
+          | Load { base; addr; dir; succ; _ } ->
+              Load { var; base; addr; dir; succ }
+          | _ -> assert false)
+    | _ -> assert false
 
-      let graph_attributes _ = []
-      let default_vertex_attributes _ = [ `Shape `Box ]
+  type count = Zero | One | More
 
-      let pp_vertex ppf i =
-        try pp_fiber ppf (IntTbl.find state.nodes i)
-        with Not_found -> Format.pp_print_int ppf i
+  let rec count : Var.t -> Dba.Expr.t -> count =
+   fun var exp ->
+    match exp with
+    | Cst _ -> Zero
+    | Var var' -> if Var.equal var var' then One else Zero
+    | Load (_, _, addr, _) -> count var addr
+    | Unary (_, x) -> count var x
+    | Binary (_, x, y) -> (
+        match (count var x, count var y) with
+        | Zero, Zero -> Zero
+        | One, Zero | Zero, One -> One
+        | _ -> More)
+    | Ite (x, y, z) -> (
+        match (count var x, count var y, count var z) with
+        | Zero, Zero, Zero -> Zero
+        | One, Zero, Zero | Zero, One, Zero | Zero, Zero, One -> One
+        | _ -> More)
 
-      let vertex_name v = Format.asprintf "\"%a\"" pp_vertex v
-      let vertex_attributes _v = []
-      let get_subgraph _ = None
-      let default_edge_attributes _ = []
-      let edge_attributes _ = []
-    end) in
-    Dot.fprint_graph ppf state.ordering
+  let is_single_use : Var.t -> 'a node -> bool =
+   fun var { fiber; _ } ->
+    match fiber with
+    | Assign { rval = expr; _ }
+    | Load { addr = expr; _ }
+    | Assume { test = expr; _ }
+    | Assert { test = expr; _ } ->
+        count var expr = One
+    | Store { addr; rval; _ } -> (
+        match (count var addr, count var rval) with
+        | One, Zero | Zero, One -> true
+        | _ -> false)
+    | _ -> false
 
-  let last_successor : DGraph.t -> int -> int =
-   fun ordering i -> DGraph.fold_succ max ordering i i
+  let is_single_use : 'a node IntTbl.t -> Var.t -> IntSet.t -> bool =
+   fun nodes var uses ->
+    match
+      IntSet.fold
+        (fun i r ->
+          match r with None -> Some i | Some _ -> raise_notrace Not_found)
+        uses None
+    with
+    | None | (exception Not_found) -> false
+    | Some i -> is_single_use var (IntTbl.find nodes i)
+
+  let is_single_var : Dba.Expr.t -> bool = function Var _ -> true | _ -> false
 
   let commit : 'a t -> pred:'a fiber -> 'a fiber =
    fun state ~pred ->
-    let ordering = state.ordering and nodes = state.nodes in
+    let nodes = state.nodes in
     let n = IntTbl.length nodes in
-    let sync = IntSet.add n state.sync in
-    Var.Htbl.iter
-      (fun _ (i, alive) -> if alive then DGraph.add_edge ordering i n)
-      state.definitions;
     for i = 0 to n - 1 do
-      match IntTbl.find nodes i with
-      | Assign { var; rval = Cst _ as value; _ }
-        when not (IntSet.exists (DGraph.mem_edge ordering i) sync) ->
-          forward state i var value
+      let node = IntTbl.find nodes i in
+      match node.fiber with
+      | Assign { var; rval = Cst _ as value; _ } when node.liveness = Dead ->
+          forward nodes node var value
       | Assign { var; rval = Var var'; _ } when Var.equal var var' ->
           IntTbl.remove nodes i
+      | (Assign _ | Load _)
+        when node.liveness = Dead && Option.is_some node.alias ->
+          backward nodes node
       | Assign { var; rval; _ }
-        when DGraph.out_degree ordering i = 1
-             && not (IntSet.exists (DGraph.mem_edge ordering i) sync) ->
-          forward state i var rval
-      | Assign { var; rval; _ }
-        when not (IntSet.exists (DGraph.mem_edge ordering i) sync) -> (
-          let last = last_successor ordering i in
-          match IntTbl.find nodes (last_successor ordering i) with
-          | Assign { var = var'; rval = Var var''; _ }
-            when Var.equal var var'' && DGraph.in_degree ordering last = 1 ->
-              DGraph.iter_succ
-                (fun j -> replace nodes j var (Dba.Expr.v var'))
-                ordering i;
-              IntTbl.replace nodes i
-                (Assign { var = var'; rval; succ = invalid_successor })
-          | _ -> ())
-      | Load { var; base; dir; addr; _ }
-        when not (IntSet.exists (DGraph.mem_edge ordering i) sync) -> (
-          let last = last_successor ordering i in
-          match IntTbl.find nodes (last_successor ordering i) with
-          | Assign { var = var'; rval = Var _; _ }
-            when DGraph.in_degree ordering last = 1 ->
-              DGraph.iter_succ
-                (fun j -> replace nodes j var (Dba.Expr.v var'))
-                ordering i;
-              IntTbl.replace nodes i
-                (Load { var = var'; base; dir; addr; succ = invalid_successor })
-          | _ -> ())
+        when node.liveness = Dead
+             && (is_single_var rval || is_single_use nodes var node.uses)
+             &&
+             match IntSet.min_elt_opt node.decay with
+             | None -> true
+             | Some x -> IntSet.for_all (( >= ) x) node.uses ->
+          forward nodes node var rval
       | _ -> ()
     done;
     flush nodes ~n 0 ~pred
 end
-
-let () = ignore Default.fprint_graph
 
 module Cse : ASSEMBLER = struct
   module type EVAL = sig
@@ -726,9 +828,8 @@ module Cse : ASSEMBLER = struct
    fun state base dir ~addr rval ->
     state.env <- Cse.Env.store base dir ~addr rval state.env
 
-  let exec :
-      type a. (module EVAL with type path = a) -> Cse.opcode array -> a -> unit
-      =
+  let exec : type a.
+      (module EVAL with type path = a) -> Cse.opcode array -> a -> unit =
    fun x opcodes path ->
     let module E = (val x) in
     let values = Array.make (Array.length opcodes) E.zero in
@@ -864,18 +965,19 @@ let decorate_node : 'a config -> Ir.node -> pred:'a fiber -> 'a fiber =
   | (Assembly | No), _ -> pred
 
 let commit_addr :
-    'a config -> Virtual_address.t -> int -> pred:'a fiber -> 'a fiber =
+    'a config -> Virtual_address.t -> int option -> pred:'a fiber -> 'a fiber =
  fun { echo; debug; _ } addr n ~pred ->
-  if n = 0 then pred
-  else
-    let step = Step { addr; n; succ = invalid_successor } in
-    relink ~pred
-      (match debug with
-      | Ir ->
-          let decoration = Format.sprintf "step %d" n in
-          Apply { f = (fun path -> echo path decoration); succ = step }
-      | Assembly | No -> step);
-    step
+  match n with
+  | None -> pred
+  | Some n ->
+      let step = Step { addr; n; succ = invalid_successor } in
+      relink ~pred
+        (match debug with
+        | Ir ->
+            let decoration = Format.sprintf "step %d" n in
+            Apply { f = (fun path -> echo path decoration); succ = step }
+        | Assembly | No -> step);
+      step
 
 module X (As : ASSEMBLER) = struct
   type 'a state = 'a As.t
@@ -884,7 +986,7 @@ module X (As : ASSEMBLER) = struct
       'a t ->
       'a state ->
       Virtual_address.t ->
-      int ->
+      int option ->
       Ir.View.vertex ->
       pred:'a fiber ->
       'a fiber =
@@ -894,15 +996,31 @@ module X (As : ASSEMBLER) = struct
 
   type continuation =
     | Continue
-    | Shift of Virtual_address.t * int
+    | Sync of int option
+    | Shift of Virtual_address.t
     | Builtin of Ir.builtin
     | Skip
+
+  let step_if_needed :
+      'a config -> 'a state -> Virtual_address.t -> int option -> int option =
+   fun config state addr n ->
+    match n with
+    | None -> None
+    | Some 0 -> n
+    | Some x ->
+        As.apply ~input:Var.Set.empty ~output:Var.Set.empty state (fun path ->
+            config.step path addr x);
+        Some 0
+
+  let incr : int option -> int option = function
+    | None -> Some 1
+    | Some x -> Some (x + 1)
 
   let step :
       'a t ->
       'a state ->
       Virtual_address.t ->
-      int ->
+      int option ->
       Ir.fallthrough ->
       Ir.View.vertex ->
       continuation =
@@ -912,11 +1030,8 @@ module X (As : ASSEMBLER) = struct
     | Forget var ->
         As.forget state var;
         Skip
-    | Instruction inst -> Shift (Instruction.address inst, n + 1)
-    | Hook { addr; _ } ->
-        As.apply ~input:Var.Set.empty ~output:Var.Set.empty state (fun path ->
-            config.step path addr n);
-        Shift (addr, 0)
+    | Instruction inst -> Shift (Instruction.address inst)
+    | Hook { addr; _ } -> Shift addr
     | (Assign { var; _ } | Clobber var | Load { var; _ } | Symbolize var)
       when Var.Set.mem var (killset succ) ->
         Skip
@@ -936,11 +1051,9 @@ module X (As : ASSEMBLER) = struct
         As.store state base dir ~addr:ptr rval;
         Continue
     | Assume test | Assert test ->
-        if n > 0 then
-          As.apply ~input:Var.Set.empty ~output:Var.Set.empty state (fun path ->
-              config.step path addr n);
+        let n = step_if_needed config state addr n in
         (match kind with Assume _ -> As.assume | _ -> As.check) state test;
-        Shift (addr, 0)
+        Sync n
     | Builtin builtin -> Builtin builtin
 
   let rec line :
@@ -949,7 +1062,7 @@ module X (As : ASSEMBLER) = struct
       ('a fiber * bool * Ir.View.vertex) Queue.t ->
       'a state ->
       Virtual_address.t ->
-      int ->
+      int option ->
       Ir.View.vertex ->
       pred:'a fiber ->
       unit =
@@ -971,7 +1084,7 @@ module X (As : ASSEMBLER) = struct
       ('a fiber * bool * Ir.View.vertex) Queue.t ->
       'a state ->
       Virtual_address.t ->
-      int ->
+      int option ->
       Ir.View.vertex ->
       pred:'a fiber ->
       unit =
@@ -1003,10 +1116,15 @@ module X (As : ASSEMBLER) = struct
         | Continue ->
             line env todo reloc state addr n succ
               ~pred:(decorate_fallthrough config kind ~pred)
-        | Shift (addr, n) ->
+        | Sync n ->
             line env todo reloc state addr n succ
               ~pred:(decorate_fallthrough config kind ~pred)
+        | Shift addr' ->
+            let n = if Virtual_address.equal addr' addr then n else incr n in
+            line env todo reloc state addr' n succ
+              ~pred:(decorate_fallthrough config kind ~pred)
         | Builtin builtin -> (
+            let n = step_if_needed config state addr n in
             match resolve_builtin config builtin with
             | Unknown ->
                 let msg =
@@ -1015,30 +1133,26 @@ module X (As : ASSEMBLER) = struct
                 relink
                   ~pred:
                     (decorate_fallthrough config kind
-                       ~pred:(commit env state addr n vertex ~pred))
+                       ~pred:(commit env state addr None vertex ~pred))
                   (Tail_call (fun _ -> Signal (Error msg)))
             | Apply f ->
-                if n > 0 then
-                  As.apply ~input:Var.Set.empty ~output:Var.Set.empty state
-                    (fun path -> config.step path addr n);
                 As.apply
                   ?input:(resolve_knowledge builtin config.may_read_callbacks)
                   ?output:(resolve_knowledge builtin config.may_write_callbacks)
                   state f;
-                line env todo reloc state addr 0 succ
+                line env todo reloc state addr n succ
                   ~pred:(decorate_fallthrough config kind ~pred)
             | Call f ->
-                let pred = commit env state addr n vertex ~pred
+                let pred = commit env state addr None vertex ~pred
                 and call : 'a fiber = Call { f; succ = invalid_successor } in
                 let head = decorate_fallthrough config kind ~pred in
                 relink ~pred:head call;
                 IntTbl.add fibers vertex (if head == pred then call else head);
-                line env todo reloc (As.empty config.path) addr 0 succ
+                line env todo reloc (As.empty config.path) addr n succ
                   ~pred:call))
 end
 
-let assemble :
-    type a.
+let assemble : type a.
     a t ->
     int Queue.t ->
     (a fiber * bool * int) Queue.t ->
@@ -1048,7 +1162,8 @@ let assemble :
  fun ({ config = { path; assembler; _ }; _ } as env) todo reloc pred vertex ->
   let module As = (val assembler : ASSEMBLER) in
   let module X = X (As) in
-  X.baseline env todo reloc (As.empty path) Virtual_address.zero 0 vertex ~pred
+  X.baseline env todo reloc (As.empty path) Virtual_address.zero None vertex
+    ~pred
 
 let rec closure : 'a t -> int Queue.t -> ('a fiber * bool * int) Queue.t -> unit
     =

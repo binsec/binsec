@@ -27,7 +27,8 @@ val reset_img : unit -> unit
 
 module Loader : sig
   val set_arch : Loader.Img.t -> unit
-  (** [set_arch img] retrieves and sets the machine as determined by the loader **)
+  (** [set_arch img] retrieves and sets the machine as determined by the loader
+      **)
 
   val set_arch_from_file : filename:string -> unit
   val pp_loader_summary : Format.formatter -> string -> unit

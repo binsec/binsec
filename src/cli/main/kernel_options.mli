@@ -42,11 +42,9 @@ module Machine : sig
 end
 
 module Decoder : Cli.STRING
-(** Use external decoder
-    This is for example needed for arm support.
-*)
+(** Use external decoder This is for example needed for arm support. *)
 
-(** {2 Static disassembly / Analysis } *)
+(** {2 Static disassembly / Analysis} *)
 
 module Dba_file : Cli.STRING_OPT
 module Dba_config : Cli.STRING_OPT

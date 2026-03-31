@@ -22,7 +22,19 @@
 open Types
 
 type t
-type access = Select of string * int | Store of string * int
+
+type term = string
+(** identifier of a term *)
+
+type access =
+  | ConstSelect of { index : Z.t; size : int }
+      (** Array select of [size] bytes starting from constant [index]. *)
+  | Select of { index : term; size : int }
+      (** Array select of [size] bytes starting from [index]. *)
+  | ConstStore of { index : Z.t; size : int }
+      (** Array store of [size] bytes starting from constant [index]. *)
+  | Store of { index : term; size : int }
+      (** Array store of [size] bytes starting from [index]. *)
 
 val create :
   ?debug:(name:string -> label:string -> string) -> next_id:Suid.t -> unit -> t
@@ -32,8 +44,8 @@ val visit_bl : t -> Expr.t -> unit
 val visit_bv : t -> Expr.t -> unit
 val visit_ax : t -> Memory.t -> unit
 val pp_print_defs : Format.formatter -> t -> unit
-val pp_flush_bl : t -> Format.formatter -> Expr.t -> string
-val pp_flush_bv : t -> Format.formatter -> Expr.t -> string
+val pp_flush_bl : t -> Format.formatter -> Expr.t -> term
+val pp_flush_bv : t -> Format.formatter -> Expr.t -> term
 val pp_flush_defs : Format.formatter -> t -> unit
 val pp_print_bl : t -> Format.formatter -> Expr.t -> unit
 val pp_print_bv : t -> Format.formatter -> Expr.t -> unit

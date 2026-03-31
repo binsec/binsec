@@ -8,12 +8,13 @@
 
 (name binsec)
 
-(version "0.11.0")
+(version "0.11.1")
 
 (maintainers "BINSEC <binsec@saxifrage.saclay.cea.fr>")
 
 (authors
  "Adel Djoudi"
+ "Benoit Boero"
  "Benjamin Farinier"
  "Chakib Foulani"
  "Dorian Lesbre"
@@ -24,7 +25,6 @@
  "Mahmudul Faisal Al Ameen"
  "Manh-Dung Nguyen"
  "Mathéo Vergnolle"
- "Mathilde Ollivier"
  "Matthieu Lemerre"
  "Nicolas Bellec"
  "Olivier Nicole"
@@ -89,7 +89,7 @@
     (< 6.0.0)
     (>= 16.0.0)))
   (bitwuzla
-   (< 1.0.4))
+   (< 1.0.6))
   (bitwuzla-cxx
    (< 0.4))
   (z3

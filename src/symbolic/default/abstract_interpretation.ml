@@ -40,8 +40,7 @@ module type S = sig
   val refine : 'a t -> Expr.t -> 'a -> unit
 end
 
-let unary :
-    type a.
+let unary : type a.
     (module Domains.S with type t = a) -> unary operator -> size:int -> a -> a =
  fun domain f ~size x ->
   let open (val domain) in
@@ -52,8 +51,7 @@ let unary :
   | Uext n -> uext n ~size x
   | Restrict { hi; lo } -> restrict ~hi ~lo ~size x
 
-and binary :
-    type a.
+and binary : type a.
     (module Domains.S with type t = a) ->
     binary operator ->
     size:int ->
@@ -90,8 +88,7 @@ and binary :
   | Ror -> rotate_right
   | Concat -> assert false
 
-and unary_feedback :
-    type a.
+and unary_feedback : type a.
     (module Domains.S with type t = a) ->
     unary operator ->
     size:int ->
@@ -107,8 +104,7 @@ and unary_feedback :
   | Uext n -> uext_feedback ~size n x d
   | Restrict { hi; lo } -> restrict_feedback ~size ~hi ~lo x d
 
-and binary_feedback :
-    type a.
+and binary_feedback : type a.
     (module Domains.S with type t = a) ->
     binary operator ->
     size:int ->
@@ -150,8 +146,8 @@ module Make (C : CONTEXT) : S with type 'a t := 'a C.t = struct
   let domain = C.domain
 
   let eval : type a. a C.t -> Expr.t -> a =
-    let rec eval :
-        type a. a C.t -> Expr.t -> (module Domains.S with type t = a) -> a =
+    let rec eval : type a.
+        a C.t -> Expr.t -> (module Domains.S with type t = a) -> a =
      fun ctx e domain ->
       try C.find_value ctx e
       with Not_found ->
@@ -194,8 +190,7 @@ module Make (C : CONTEXT) : S with type 'a t := 'a C.t = struct
       try C.find_value ctx e with Not_found -> eval ctx e (C.domain ctx)
 
   let refine : type a. a C.t -> Expr.t -> a -> unit =
-    let rec loop_up :
-        type a.
+    let rec loop_up : type a.
         a C.t ->
         BvSet.t ->
         BvSet.t ->
@@ -239,8 +234,7 @@ module Make (C : CONTEXT) : S with type 'a t := 'a C.t = struct
             C.add_value ctx e n;
             loop_up ctx todo locked domain
     in
-    let rec loop_down :
-        type a.
+    let rec loop_down : type a.
         a C.t ->
         (Expr.t * a) Queue.t ->
         BvSet.t ->

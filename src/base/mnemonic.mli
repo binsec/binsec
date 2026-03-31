@@ -19,12 +19,13 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** {1 Mnemonic } *)
+(** {1 Mnemonic} *)
 
 type t = private
   | Unknown  (** Opcodes which do not have a valid mnemonic translation *)
   | Unsupported of string option
-      (** Opcodes which have a valid mnemonic but do not have a handled mnemonic translation *)
+      (** Opcodes which have a valid mnemonic but do not have a handled mnemonic
+          translation *)
   | Supported of string
 
 val supported : 'a -> (Format.formatter -> 'a -> unit) -> t

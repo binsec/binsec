@@ -45,10 +45,9 @@ end
 (** Priority queues over comparable types *)
 module Make : functor (X : Sigs.COMPARABLE) -> S with type elt = X.t
 
-(** Priority queues with generated comparison function.
-      Added benefit: insertion at the front/rear can be guaranteed.
-      Culprit: does not behave as a set (i.e. the same element of [X.t] w.r.t to
-      [=] can be inserted twice in the queue).
+(** Priority queues with generated comparison function. Added benefit: insertion
+    at the front/rear can be guaranteed. Culprit: does not behave as a set (i.e.
+    the same element of [X.t] w.r.t to [=] can be inserted twice in the queue).
 *)
 module CMake : functor (X : Sigs.ANY) -> sig
   include S with type elt = X.t

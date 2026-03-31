@@ -28,8 +28,7 @@ end
 
 type inout = { mutable term : Types.Expr.t; mutable repr : string }
 
-let make :
-    type a.
+let make : type a.
     (module Smtlib.Solver.Session.S with type arg = a) ->
     a ->
     (module DEBUG) * (module Session.S) =
@@ -159,34 +158,38 @@ let make :
         else
           let dirty = BiTbl.create n in
           let name = Format.asprintf "%a" (Printer.pp_print_ax ctx) ar in
+          let rec fold_select index len x =
+            if len = 0 then x
+            else if BiTbl.mem dirty index then
+              fold_select (Z.succ index) (len - 1) x
+            else
+              let k = get_at name index idx_size in
+              fold_select (Z.succ index) (len - 1) (f index k x)
+          in
+          let rec store_loop index len =
+            if len <> 0 then (
+              BiTbl.replace dirty index ();
+              store_loop (Z.succ index) (len - 1))
+          in
           Printer.fold_array_accesses
             (fun x (access : Printer.access) ->
               match access with
-              | Select (index, len) ->
+              | ConstSelect { index; size } -> fold_select index size x
+              | Select { index; size } ->
                   let index =
                     value_of_term
                       (Session.get_value session Format.pp_print_string index)
                   in
-                  let rec fold index len x =
-                    if len = 0 then x
-                    else if BiTbl.mem dirty index then
-                      fold (Z.succ index) (len - 1) x
-                    else
-                      let k = get_at name index idx_size in
-                      fold (Z.succ index) (len - 1) (f index k x)
-                  in
-                  fold index len x
-              | Store (index, len) ->
+                  fold_select index size x
+              | ConstStore { index; size } ->
+                  store_loop index size;
+                  x
+              | Store { index; size } ->
                   let index =
                     value_of_term
                       (Session.get_value session Format.pp_print_string index)
                   in
-                  let rec loop index len =
-                    if len <> 0 then (
-                      BiTbl.replace dirty index ();
-                      loop (Z.succ index) (len - 1))
-                  in
-                  loop index len;
+                  store_loop index size;
                   x)
             ctx ar x
 
@@ -274,8 +277,7 @@ let make_carbon_copy : (module Session.S) -> string -> (module Session.S) =
       Main.close ()
   end : Session.S)
 
-let make :
-    type a.
+let make : type a.
     (module Smtlib.Solver.Session.S with type arg = a) ->
     a ->
     (module Session.S) =

@@ -25,7 +25,7 @@ fi
 arch=$(file --brief --dereference "$exe" | cut -d, -f2 | tail -c +2)
 
 case "$arch" in
-  "Intel 80386")
+  "Intel 80386" | "Intel i386")
     main='*((int*)($esp+4))'
     tunables="-AVX512VL,-AVX512F"
     ;;
@@ -55,7 +55,7 @@ case "$arch" in
     ;;
 esac
 
-host=$(file --brief --dereference "/usr/bin/env" | cut -d, -f2 | tail -c +2)
+host=$(file --brief --dereference "/bin/env" | cut -d, -f2 | tail -c +2)
 
 tmpfile="$(mktemp)"
 trap 'rm -f $tmpfile' EXIT
@@ -78,7 +78,7 @@ echo 0x3f > /proc/self/coredump_filter
 
 if [ "$arch" != "$host" ] && ([ "$arch" != "Intel 80386" ] || [ "$host" != "x86-64" ]); then
     case "$arch" in
-      "Intel 80386")
+      "Intel 80386" | "Intel i386")
         qemu="qemu-i386"
         ;;
       "x86-64")

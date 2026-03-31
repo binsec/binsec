@@ -21,7 +21,7 @@
 
 (** Core functionalities for disassembly *)
 
-(** {2 Worklist definition for disassembly } *)
+(** {2 Worklist definition for disassembly} *)
 
 module W : sig
   include Worklist.S with type elt = Virtual_address.t
@@ -41,7 +41,7 @@ module W : sig
   val singleton : Virtual_address.t -> t
 end
 
-(** {2 Basic successors definition } *)
+(** {2 Basic successors definition} *)
 
 module Successors : sig
   val recursive : Instruction.t -> Virtual_address.Set.t
@@ -54,14 +54,14 @@ val decode :
   Virtual_address.t ->
   Instruction.t * Virtual_address.t option
 (** [decode addr] decodes the contents of address [addr]
-    @return the contents of this address and its linear successor (if applicable)
-*)
+    @return
+      the contents of this address and its linear successor (if applicable) *)
 
 val decode_from :
   int Reader.t -> Virtual_address.t -> Instruction.t * Virtual_address.t option
 (** [decode_from reader addr] decodes the contents of address [addr]
-    @return the contents of this address and its linear successor (if applicable)
-*)
+    @return
+      the contents of this address and its linear successor (if applicable) *)
 
 (** {2 Iterators} *)
 
@@ -70,13 +70,13 @@ val fold :
   'a ->
   W.t ->
   'a
-(** [fold f wl v] starts disassembly from worklist [wl] (i.e. an initial
-    state) using function [f] to guide its choices to compute a value intialized
-    to [v].
+(** [fold f wl v] starts disassembly from worklist [wl] (i.e. an initial state)
+    using function [f] to guide its choices to compute a value intialized to
+    [v].
 
     In particular, [f] is called after each successful disassembly to compute a
-    new worklist and a new value. It receives from the disassembly loop the current
-    value, the current worklist, the decoded instruction, and a list of
+    new worklist and a new value. It receives from the disassembly loop the
+    current value, the current worklist, the decoded instruction, and a list of
     identified successors to this instruction.
 
     The set of successors is computed according to the disassembly mode. The
@@ -86,18 +86,15 @@ val fold :
 
     Disasm_options.DisassemblyMode.set "linear";
 
-    before starting the fold functions.
-
-*)
+    before starting the fold functions. *)
 
 val iter : (W.t -> Instruction.t -> Virtual_address.Set.t -> W.t) -> W.t -> unit
 (** [iter f worklist] iterates disassembles an executable with function [f].
 
     Given the signature of the function, all computations, except worklist
-    management, must take place as imperative side-effects.
-*)
+    management, must take place as imperative side-effects. *)
 
-(** {2 Functors } *)
+(** {2 Functors} *)
 
 module type Iterable = sig
   val successors : Instruction.t -> Virtual_address.Set.t
@@ -118,7 +115,5 @@ val decode_binstream :
   ?base:Virtual_address.t ->
   Binstream.t ->
   Instruction.t * Virtual_address.t option
-(** [decode_binstream b] decodes stream [b] and returns
-    a tuple of the first instruction contained in [b] and its possible
-    linear successor.
-*)
+(** [decode_binstream b] decodes stream [b] and returns a tuple of the first
+    instruction contained in [b] and its possible linear successor. *)

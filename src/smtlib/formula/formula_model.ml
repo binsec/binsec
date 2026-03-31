@@ -161,9 +161,9 @@ let pp_with_sections section_name ppf t =
       let l =
         Basic_types.String.Htbl.fold (fun k v acc -> (k, v) :: acc) r []
         |> List.sort (fun (k1, _) (k2, _) ->
-               match String.length k1 - String.length k2 with
-               | 0 -> String.compare k1 k2
-               | x -> x)
+            match String.length k1 - String.length k2 with
+            | 0 -> String.compare k1 k2
+            | x -> x)
       in
       List.iter
         (fun (name, bv) ->

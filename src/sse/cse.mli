@@ -54,13 +54,16 @@ and Layer : sig
 end
 
 type var = ([ `Var ], Source.t, Layer.t) Expr.term
+type read = ([ `Mem ], Source.t, Layer.t) Expr.term
+
+module ReadSet : Set.S with type elt = read
 
 module Env : sig
   type t = private {
     id : int;
     vars : Expr.t Dba_types.Var.Map.t;
     layers : (Layer.t * bool) Basic_types.String.Map.t;
-    rev_reads : Expr.t list;
+    reads : ReadSet.t;
     sources : var list Dba_types.Var.Map.t;
   }
 

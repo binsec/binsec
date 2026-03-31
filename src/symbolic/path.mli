@@ -26,15 +26,14 @@ type ('state, 'model) partition =
   | False  (** The condition is [false]. *)
   | True  (** The condition is [true]. *)
   | Falsish of 'state
-      (** The condition evaluates to [false] in the path models,
-          but the given state may lead to [true]. *)
+      (** The condition evaluates to [false] in the path models, but the given
+          state may lead to [true]. *)
   | Trueish of 'state
-      (** The condition evaluates to [true] in the path models,
-          but the given state may lead to [false]. *)
+      (** The condition evaluates to [true] in the path models, but the given
+          state may lead to [false]. *)
   | Split of 'state * 'model list
-      (** The condition evaluates to [true] in the path models,
-          and evaluates to [false] in the given state and
-          models. *)
+      (** The condition evaluates to [true] in the path models, and evaluates to
+          [false] in the given state and models. *)
 
 module type S = sig
   type t
@@ -44,7 +43,7 @@ module type S = sig
   (** A symbolic state (see {!module-State.module-type-S}). *)
 
   type value
-  (** A symbolic state (see {!module-State.module-type-VALUE}). *)
+  (** A symbolic value (see {!module-State.module-type-VALUE}). *)
 
   type model
   (** A concrete assignment (see {!module-State.module-type-MODEL})*)
@@ -68,9 +67,9 @@ module type S = sig
 
   val clobber : t -> Dba.Var.t -> unit
   (** [assign p v e] assigns the variable [v] with a new symbolic value.
-      
-      Clobbered variables are expected to not be used by the program and are not recorded
-      in the {!val-symbols} history. *)
+
+      Clobbered variables are expected to not be used by the program and are not
+      recorded in the {!val-symbols} history. *)
 
   val load :
     t ->
@@ -84,8 +83,8 @@ module type S = sig
 
       When [m] is [None], the load is performed from the main memory {b \@}.
 
-      The bit size of [v] should be a multiple of the size of a byte (8).
-      The byte order is determined by the endianness [d]. *)
+      The bit size of [v] should be a multiple of the size of a byte (8). The
+      byte order is determined by the endianness [d]. *)
 
   val store :
     t ->
@@ -94,13 +93,13 @@ module type S = sig
     Dba.Expr.t ->
     Machine.endianness ->
     unit
-  (** [store p m ~addr e d] writes the expression [e] at the address [addr]
-      in the memory array [m].
+  (** [store p m ~addr e d] writes the expression [e] at the address [addr] in
+      the memory array [m].
 
       When [m] is [None], the write is performed in the main memory {b \@}.
 
-      The bit size of [e] should be a multiple of the size of a byte (8).
-      The byte order is determined by the endianness [d]. *)
+      The bit size of [e] should be a multiple of the size of a byte (8). The
+      byte order is determined by the endianness [d]. *)
 
   val memcpy :
     t -> string option -> addr:Dba.Expr.t -> int -> Loader_types.buffer -> unit
@@ -112,33 +111,36 @@ module type S = sig
   (** {2 Predicate query} *)
 
   val predicate : t -> value list
-  (** [predicate p] returns the path predicate as a list of boolean {!type-value}. *)
+  (** [predicate p] returns the path predicate as a list of boolean
+      {!type-value}. *)
 
   val is_symbolic : t -> Dba.Expr.t -> bool
-  (** [is_symbolic p e] checks if the expression [e] may depend on symbolic values.
+  (** [is_symbolic p e] checks if the expression [e] may depend on symbolic
+      values.
 
       When it returns [false], the path predicate of [p] implies that [e] has a
       single value. This value can be obtained via {!eval}.
 
       Otherwise, it means that [e] syntactically depends on a symbolic value.
-      Use {!enumerate} with [n = 2] to prove or disprove that
-      it can take several values. *)
+      Use {!enumerate} with [n = 2] to prove or disprove that it can take
+      several values. *)
 
   val is_zero : t -> Dba.Expr.t -> trilean
-  (** [is_zero p e] checks if the boolean expression [e] may depend on symbolic values.
+  (** [is_zero p e] checks if the boolean expression [e] may depend on symbolic
+      values.
 
-      It returns {!constructor-True} when the path predicate implies [e] is [false]
-      and {!constructor-False} when the path predicate implies [e] is [true].
+      It returns {!constructor-True} when the path predicate implies [e] is
+      [false] and {!constructor-False} when the path predicate implies [e] is
+      [true].
 
-      Otherwise, it returns {!constructor-Unknown}, that means that [e] syntactically
-      depends on a symbolic value.
-      Use {!enumerate} with [n = 2] to prove or disprove that
-      it can take several values. *)
+      Otherwise, it returns {!constructor-Unknown}, that means that [e]
+      syntactically depends on a symbolic value. Use {!enumerate} with [n = 2]
+      to prove or disprove that it can take several values. *)
 
   val assume : t -> Dba.Expr.t -> model option
-  (** [assume p e] tests if the condition [e] can be [true].
-      If so, it returns a witness model ([Some]) and updates the symbolic predicate.
-      Otherwise, nothing is updated and it returns [None].
+  (** [assume p e] tests if the condition [e] can be [true]. If so, it returns a
+      witness model ([Some]) and updates the symbolic predicate. Otherwise,
+      nothing is updated and it returns [None].
 
       @raise State.Unknown when the symboloc engine fails to give an answer. *)
 
@@ -154,18 +156,20 @@ module type S = sig
   (** [partition p e] tests if the condition [e] can be [true] and update its
       internal symbolic state accordingly.
 
-      It returns {!constructor-True} when the path predicate implies [e] is [true]
-      and {!constructor-False} when the path predicate implies [e] is [false].
+      It returns {!constructor-True} when the path predicate implies [e] is
+      [true] and {!constructor-False} when the path predicate implies [e] is
+      [false].
 
       It returns {!constructor-Trueish} when the path predicate allows [e] to be
       [true] but may allow [false] too, and {!constructor-Falsish} when the path
-      predicate allows [e] to be [false] but may allow [true] too.
-      The returned {!type-state} can be used to check the other assumption.
-      
+      predicate allows [e] to be [false] but may allow [true] too. The returned
+      {!type-state} can be used to check the other assumption.
+
       It returns {!constructor-Split} when the path predicate allows [e] to be
       both [true] and [false]. The current path keeps models for which [e]
-      evaluates to [true] (same as {!val-assume}) while the returned {!type-state}
-      comes with a list of models for which [e] evaluates to [false]. *)
+      evaluates to [true] (same as {!val-assume}) while the returned
+      {!type-state} comes with a list of models for which [e] evaluates to
+      [false]. *)
 
   val enumerate :
     t ->
@@ -175,22 +179,23 @@ module type S = sig
     ?assuming:Dba.Expr.t ->
     Dba.Expr.t ->
     model Bitvector.Map.t
-  (** [enumerate p ~retain ~n ~accumulator ~assuming e]
-      lists the possible values of the expression [e].
+  (** [enumerate p ~retain ~n ~accumulator ~assuming e] lists the possible
+      values of the expression [e].
 
-      It returns a map of up to [n] new possible values that are not already present
-      in [accumulator], together with their respective model witnesses.
+      It returns a map of up to [n] new possible values that are not already
+      present in [accumulator], together with their respective model witnesses.
       When [n] is omitted, the enumeration is unbounded.
 
       The new models satisfy the predicate [assuming] when present.
 
-      If [retain] is [true] ({b default}), new models are saved into the path [p].
+      If [retain] is [true] ({b default}), new models are saved into the path
+      [p].
 
       @raise State.Unknown when the symbolic engine fails to give an answer. *)
 
   val check_model : t -> ?retain:bool -> model -> bool
-  (** [check_model p ~retain m] returns [true] if the model [m] is a witness
-       for the path predicate of [p].
+  (** [check_model p ~retain m] returns [true] if the model [m] is a witness for
+      the path predicate of [p].
 
       If [retain] is [true] ({b default}), the model is saved into the path [p]
       when the function returns [true]. *)
@@ -208,17 +213,18 @@ module type S = sig
   (** [get_value p e] evaluates the expression [e] to its symbolic value. *)
 
   val lookup : t -> Dba.Var.t -> value
-  (** [lookup p v] evaluates the content of the variable [v] to its symbolic value. *)
+  (** [lookup p v] evaluates the content of the variable [v] to its symbolic
+      value. *)
 
   val read :
     t -> string option -> addr:Dba.Expr.t -> int -> Machine.endianness -> value
-  (** [read p m ~addr n d]
-      reads the content of the memory array [m] at the address [addr].
+  (** [read p m ~addr n d] reads the content of the memory array [m] at the
+      address [addr].
 
       When [m] is [None], the load is performed from the main memory.
 
-      Returns a value of [n] bytes.
-      The byte order is determined by the endianness [d]. *)
+      Returns a value of [n] bytes. The byte order is determined by the
+      endianness [d]. *)
 
   val symbols : t -> value list Dba_types.Var.Map.t
   (** [symbols p] returns the (reverse) history of symbols created by
@@ -304,7 +310,7 @@ module type S = sig
 
   val set_models : t -> model list -> unit
   (** [set_models p l] replaces the witness models of [p] by the ones in [l].
-  
+
       {b Warning.} It is the caller responsibility to ensure that [l] is
       non-empty and that each model in [l] is consistent with the current
       symbolic state {!val-state}. *)
@@ -314,10 +320,9 @@ module type S = sig
 
   val set_state : t -> state -> unit
   (** [set_state p s] replaces the symbolic state of [p] by [s].
-  
-      {b Warning.} It is the caller responsibility to ensure that each
-      model in {!models} is consistent with the new symbolic state [s].
-  *)
+
+      {b Warning.} It is the caller responsibility to ensure that each model in
+      {!models} is consistent with the new symbolic state [s]. *)
 
   val transform_state : t -> (state -> state) -> unit
   (** [transform_state p f] is equivalent to [set_state p (f (state p))]. *)
@@ -333,16 +338,16 @@ module Make (_ : Metrics.S) (State : State.S) : sig
        and module State = State
 
   val cookie : t -> State.Cookie.t
-  (** [cookie p] returns the cookie of [p] (see {!module-State.module-type-COOKIE} for more details). *)
+  (** [cookie p] returns the cookie of [p] (see
+      {!module-State.module-type-COOKIE} for more details). *)
 
   (** {2 Path extension}
-  
+
       A path is a mutable table which maps typed {!type-key}s to their values.
-      Each instance of [Make] has its own set of keys. The current implementation
-      requires that all keys be known (i.e. {!val-declare_field}) before a path
-      is created ({!val-create}).
-      A value can then be read with {!val-get} and written with {!val-set}.
-  *)
+      Each instance of [Make] has its own set of keys. The current
+      implementation requires that all keys be known (i.e. {!val-declare_field})
+      before a path is created ({!val-create}). A value can then be read with
+      {!val-get} and written with {!val-set}. *)
 
   val declare_field :
     ?copy:('a -> 'a) -> ?merge:('a -> 'a -> 'a option) -> 'a -> 'a key
@@ -352,30 +357,31 @@ module Make (_ : Metrics.S) (State : State.S) : sig
       When given, the [copy] function will be called to initialize this field in
       the new path during {!val-fork}.
 
-      When given, the [merge] function will be called to initialize this field in
-      the new path during {!val-merge}. Returning [None] prevents the paths to be
-      merged.
+      When given, the [merge] function will be called to initialize this field
+      in the new path during {!val-merge}. Returning [None] prevents the paths
+      to be merged.
 
-      @raise Invalid_argument when this function is called after a call to {!val-create}.
-  *)
+      @raise Invalid_argument
+        when this function is called after a call to {!val-create}. *)
 
   (** {2 Builder functions} *)
 
   val create : unit -> t
-  (** [create ()] makes a path with all fields initialized with their default values.
-  
-      {b Warning.} It is an error to try adding more fields after calling this function.
-  *)
+  (** [create ()] makes a path with all fields initialized with their default
+      values.
+
+      {b Warning.} It is an error to try adding more fields after calling this
+      function. *)
 
   val fork : t -> t
   (** [fork p] returns a copy of [p] with a new identifier.
 
-      Fields are copied using the [copy] functions given via {!val-declare_field}
-      (default to {!module-Fun.val-id}).
-  *)
+      Fields are copied using the [copy] functions given via
+      {!val-declare_field} (default to {!module-Fun.val-id}). *)
 
   val merge : t -> t -> t option
-  (** [merge p1 p2] tries to merge all the fields of [p1] and [p2] using the [merge]
-      functions given via {!val-declare_field} (default works only when values are
-      physically equal). Returns [None] if any field fails to merge. *)
+  (** [merge p1 p2] tries to merge all the fields of [p1] and [p2] using the
+      [merge] functions given via {!val-declare_field} (default works only when
+      values are physically equal). Returns [None] if any field fails to merge.
+  *)
 end

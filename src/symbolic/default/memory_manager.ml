@@ -100,8 +100,7 @@ end = struct
             C.anchor env over;
             singleton addr value over)
 
-  let rec read :
-      type a.
+  let rec read : type a.
       a C.t -> addr:Expr.t -> int -> Basic_types.endianness -> t -> Expr.t =
    fun env ~addr bytes dir memory ->
     match memory with

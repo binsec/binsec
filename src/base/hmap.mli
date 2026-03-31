@@ -29,26 +29,15 @@ module type S = sig
 
   val union_eq : (key -> 'a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
   (** [union_eq f m m'] is equivalent to
-        [merge
-          (fun k d d' ->
-            match d, d' with
-            | None, _ -> d' | _, None -> d
-            | Some a, Some a' -> if a == a' then d else Some (f k a a'))
-          m m']
-  *)
+      [merge (fun k d d' -> match d, d' with | None, _ -> d' | _, None -> d |
+       Some a, Some a' -> if a == a' then d else Some (f k a a')) m m'] *)
 
   val union_map_eq :
     (key -> 'a -> 'a -> 'a) -> (key -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
   (** [union_map_eq f g m m'] is equivalent to
-        [merge
-          (fun k d d' ->
-            match d, d' with
-            | None, None -> assert false
-            | None, Some a' -> Some (g k a')
-            | Some a, None -> Some (g k a)
-            | Some a, Some a' -> if a == a' then d else Some (f k a a'))
-          m m']
-  *)
+      [merge (fun k d d' -> match d, d' with | None, None -> assert false |
+       None, Some a' -> Some (g k a') | Some a, None -> Some (g k a) | Some a,
+       Some a' -> if a == a' then d else Some (f k a a')) m m'] *)
 
   val freeze : 'a t -> unit
   val bindings : 'a t -> (key * 'a) list

@@ -99,8 +99,8 @@ let has_substitute_stubs p =
 let has_linear_addresses p = p.linear_addresses <> []
 
 (* FIXME: in the next 2 functions
-   * If those values are set to default values in the parameter file, the user
-   * will be allowed to make another declaration in the same file *)
+ * If those values are set to default values in the parameter file, the user
+ * will be allowed to make another declaration in the same file *)
 let has_global_widening_delay p =
   snd p.global_widening <> default_global_widening_delay
 

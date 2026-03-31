@@ -23,6 +23,19 @@ module L = Logger.Make (struct
   let name = "cli"
 end)
 
+let load_all_plugins () =
+  List.iter
+    (fun plugin ->
+      try Plugins.Plugins.Plugins.load plugin
+      with Dynlink.Error error ->
+        Format.eprintf
+          "@[<v 0>The plugin %S cannot be loaded.@ > %S.@ It could be because \
+           of an inconsistent development environment.@ Try to clean the \
+           BINSEC installation folder to avoid this issue.@]@."
+          plugin
+          (Dynlink.error_message error))
+    (Plugins.Plugins.Plugins.list ())
+
 (* Possible actions for a command line argument.contents.
    Either you parse one argument or you do not.
    One could imagine a generalization of that to *n* arguments
@@ -262,9 +275,8 @@ end
 module type ENABLEABLE = sig
   val is_enabled : unit -> bool
   (** [is_enabled] is a switch that is automatically set.
-  
-      Can be set programmatically with {val:enable} and {val:disable}.
-   *)
+
+      Can be set programmatically with {!val-enable} and {!val-disable}. *)
 
   val enable : unit -> unit
   val disable : unit -> unit
@@ -365,8 +377,7 @@ module type Cli_sig = sig
 
   module Builder : sig
     (** A very generic functor that lets you handle cases that are not provided
-        otherwise. Use it only as last resort.
-     *)
+        otherwise. Use it only as last resort. *)
     module Any (P : DETAILED_CLI_DECL) : GENERIC with type t = P.t
 
     module Any_opt (P : sig
@@ -385,10 +396,8 @@ module type Cli_sig = sig
     (** An option that defaults to [false]. *)
     module False (_ : CLI_DECL) : BOOLEAN
 
-    (** An option that defaults to [true].
-        The provided command-line switch
-        automatically add a [no-] prefix to your option name.
-     *)
+    (** An option that defaults to [true]. The provided command-line switch
+        automatically add a [no-] prefix to your option name. *)
     module No (_ : CLI_DECL) : BOOLEAN
 
     (** {4 Integer functors}*)
@@ -444,12 +453,10 @@ module type Cli_sig = sig
       val default : t
     end) : GENERIC with type t = P.t
     (** Functor to map a string choice --- i.e., just one out of a set of
-        possible value --- into a variant type.
-     *)
+        possible value --- into a variant type. *)
 
     (** Like [Variant_choice] but with automatically generated [to_string] and
-        [of_string] function from [assoc_map].
-     *)
+        [of_string] function from [assoc_map]. *)
     module Variant_choice_assoc (P : sig
       include CLI_DECL
 
@@ -582,7 +589,7 @@ module Generic_make_from_logger (L : Logger.S) (D : DECL) = struct
       let spec =
         Unit
           (fun () ->
-            Plugins.Plugins.Plugins.load_all ();
+            load_all_plugins ();
             Cli.pp Format.std_formatter ();
             exit 0)
       in
@@ -1066,7 +1073,7 @@ module Parse = struct
   let level = 3
 
   let fail_on switch =
-    Plugins.Plugins.Plugins.load_all ();
+    load_all_plugins ();
     Format.eprintf
       "@[<v 0>%s: unknown option %s@ Valid command-line switches are:@ %a@]@."
       Sys.argv.(0) switch Cli.pp ();

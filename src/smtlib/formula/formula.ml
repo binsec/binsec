@@ -578,9 +578,10 @@ let rec bl_term bl_term_desc =
   | BlComp (c, bl1, bl2) -> (
       match (is_bl_cst bl1, is_bl_cst bl2) with
       | None, None -> (
-          if (* syntactic equality *)
-             equal_bl_term bl1 bl2 then
-            match c with BlEqual -> mk_bl_true | BlDistinct -> mk_bl_false
+          if
+            (* syntactic equality *)
+            equal_bl_term bl1 bl2
+          then match c with BlEqual -> mk_bl_true | BlDistinct -> mk_bl_false
           else
             (* Remove negations in both sides of (dis-)equality *)
             match (c, bl1.bl_term_desc, bl2.bl_term_desc) with
@@ -608,8 +609,10 @@ let rec bl_term bl_term_desc =
       let bl_term_hash = Hashtbl.hash (c, bv1.bv_term_hash, bv2.bv_term_hash) in
       match (is_bv_cst bv1, is_bv_cst bv2) with
       | None, None -> (
-          if (* syntactic equality *)
-             equal_bv_term bv1 bv2 then
+          if
+            (* syntactic equality *)
+            equal_bv_term bv1 bv2
+          then
             match c with
             | BvEqual | BvUle | BvUge | BvSle | BvSge -> mk_bl_true
             | BvDistinct | BvUlt | BvUgt | BvSlt | BvSgt -> mk_bl_false

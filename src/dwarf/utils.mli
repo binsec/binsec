@@ -20,21 +20,21 @@
 (**************************************************************************)
 
 val read_address : [ `x32 | `x64 ] -> int Reader.t -> Virtual_address.t
-(** [read_address] reads an address of either 32 or 64 bits
-    according to the given wordsize. *)
+(** [read_address] reads an address of either 32 or 64 bits according to the
+    given wordsize. *)
 
 val read : ?signed:bool -> [ `x32 | `x64 ] -> int Reader.t -> int64
-(** [read] reads a value of either 32 or 64 bits
-    according to the given wordsize. *)
+(** [read] reads a value of either 32 or 64 bits according to the given
+    wordsize. *)
 
 val read_addr : Machine.t -> int Reader.t -> Virtual_address.t
-(** [read_addr] reads an address of either 32 or 64 bits
-    according to the given architecture. *)
+(** [read_addr] reads an address of either 32 or 64 bits according to the given
+    architecture. *)
 
 val is_max_addr : Machine.t -> Virtual_address.t -> bool
-(** [is_max_addr isa addr] returns true if [addr] is the largest
-    valid address for the given architecture. *)
+(** [is_max_addr isa addr] returns true if [addr] is the largest valid address
+    for the given architecture. *)
 
 val addr_to_string : Machine.t -> Virtual_address.t -> string
-(** [addr_to_string isa addr] returns the string representation of
-    a 32 or 64 bits address according to the given architecture. *)
+(** [addr_to_string isa addr] returns the string representation of a 32 or 64
+    bits address according to the given architecture. *)

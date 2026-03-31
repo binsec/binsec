@@ -34,17 +34,17 @@ val rule : int -> entry -> rule
 type t
 
 val load : Loader.Img.t -> t
-(** [load img] extract and interpret the content
-    of either .debug_frame or .eh_frame section *)
+(** [load img] extract and interpret the content of either .debug_frame or
+    .eh_frame section *)
 
 val fold :
   ('a -> return_address:int -> columns:int array -> entry -> 'a) ->
   'a ->
   t ->
   'a
-(** [fold f frame] iterate through the frame matrix
-    columns is the list of valid column indexes of the given entry
-    return_address is the column index of the return address of the function *)
+(** [fold f frame] iterate through the frame matrix columns is the list of valid
+    column indexes of the given entry return_address is the column index of the
+    return address of the function *)
 
 val iter :
   (return_address:int -> columns:int array -> entry -> unit) -> t -> unit

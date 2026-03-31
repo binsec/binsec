@@ -69,9 +69,8 @@ val unsupported :
   Virtual_address.t -> Size.Byte.t -> Binstream.t -> Mnemonic.t -> t
 (** Create an instruction without supporting DBA semantics.
 
-   This function should not be used when the menmonic is supported.
-   It will fail in that case.
- *)
+    This function should not be used when the menmonic is supported. It will
+    fail in that case. *)
 
 val of_generic_instruction : Virtual_address.t -> Generic.t -> Dhunk.t -> t
 val of_dba_block : ?mnemonic:Mnemonic.t -> Virtual_address.t -> Dhunk.t -> t

@@ -205,10 +205,15 @@ let pp_instr ppf instr =
   | Movsldup (_, _, _)
   | Movshdup (_, _, _) ->
       fprintf ppf "@[movXmm ... @]"
-  | Movups (_, _) -> fprintf ppf "@[movups ....@]"
-  | Movupd (_, _) -> fprintf ppf "@[movupd ....@]"
+  | Movups (dst, src) ->
+      fprintf ppf "@[movups %a, %a@]" pp_genop_xmm dst pp_genop_xmm src
+  | Movupd (dst, src) ->
+      fprintf ppf "@[movupd %a, %a@]" pp_genop_xmm dst pp_genop_xmm src
   | Movntq (_, _, _, _) -> fprintf ppf "@[movntq ....@]"
   | CmpXchg8b (_, _, _) -> fprintf ppf "@[cmpxchg8b ...@]"
+  | Pshufb (MM, _, _) -> fprintf ppf "@[pushb ...]"
+  | Pshufb (XMM, dst, src) ->
+      fprintf ppf "@[pushb %a, %a@]" pp_reg_xmm dst pp_genop_xmm src
   | Pshufw (_, _, _, _, _) -> fprintf ppf "@[pshufw ...@]"
   | Pshuflw (_, _, _, _, _) -> fprintf ppf "@[pshuflw ...@]"
   | Pshufhw (_, _, _, _, _) -> fprintf ppf "@[pshufhw ...@]"

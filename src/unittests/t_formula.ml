@@ -34,7 +34,8 @@ let eq_bv expected actual ctxt =
     ~printer:(fun bv -> Format.asprintf "%a" pp_bv_term bv)
     expected actual
 
-(** asserts there is not exception thrown when generating the term from the description *)
+(** asserts there is not exception thrown when generating the term from the
+    description *)
 let assert_no_raise desc desc_str _ =
   try ignore (bv_term desc)
   with _ ->
@@ -46,9 +47,9 @@ let tests = []
 (** makes a formula from a list of entries *)
 let from_list l = List.fold_left (fun fm entry -> push_front entry fm) empty l
 
-(** makes a formula from a smt string
- * NOTE: Does all sorts of simlifications like splitting (assert (and a b)) in
- * (assert a) (assert b) or simplifying constant operations. *)
+(** makes a formula from a smt string * NOTE: Does all sorts of simlifications
+    like splitting (assert (and a b)) in * (assert a) (assert b) or simplifying
+    constant operations. *)
 let from_string s =
   let smt =
     try

@@ -23,5 +23,4 @@ module Logger : Logger.S
 
 val decode :
   int Reader.t -> Virtual_address.t -> Instruction.Generic.t * Dhunk.t
-(** [decode r addr] decodes what is at address [addr] in reader [r].
- *)
+(** [decode r addr] decodes what is at address [addr] in reader [r]. *)

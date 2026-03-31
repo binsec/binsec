@@ -35,9 +35,6 @@ external unsafe_of_boxed : boxed -> t = "%identity"
 external is_small_int : Z.t -> bool = "%obj_is_int"
 external unsafe_to_int : Z.t -> int = "%identity"
 
-let limits = Array.init 128 (fun i -> Z.shift_left Z.one i)
-let masks = Array.map Z.pred limits
-
 let create value size =
   if size <= 0 then invalid_arg "Negative bitvector size";
   if size < Sys.int_size - 10 then
@@ -51,26 +48,18 @@ let create value size =
     (ival lsl 10) asr 10 = ival
   then unsafe_of_unboxed ((unsafe_to_int value lsl 10) lor size)
   else
-    let ulimit, slimit, umask =
-      if size < 128 then
-        ( Array.unsafe_get limits size,
-          Array.unsafe_get limits (size - 1),
-          Array.unsafe_get masks size )
-      else
-        let ulimit = Z.shift_left Z.one size in
-        (ulimit, Z.shift_left Z.one (size - 1), Z.pred ulimit)
-    in
-    let unsigned = Z.logand value umask in
-    let signed =
-      if Z.geq unsigned slimit then Z.sub unsigned ulimit else unsigned
-    in
+    let signed = Z.signed_extract value 0 size in
     if
       size < 1024 && is_small_int signed
       &&
       let ival = unsafe_to_int signed in
       (ival lsl 10) asr 10 = ival
     then unsafe_of_unboxed ((unsafe_to_int signed lsl 10) lor size)
-    else unsafe_of_boxed { size; unsigned; signed }
+    else
+      let unsigned =
+        if Z.lt signed Z.zero then Z.extract signed 0 size else signed
+      in
+      unsafe_of_boxed { size; unsigned; signed }
 
 let size_of t =
   if is_unboxed t then unsafe_to_int (unsafe_to_unboxed t) land 0x3ff
@@ -246,7 +235,10 @@ let logand bv1 bv2 = unsigned_apply Z.logand bv1 bv2 "logand"
 let logor bv1 bv2 = unsigned_apply Z.logor bv1 bv2 "logor"
 let logxor bv1 bv2 = unsigned_apply Z.logxor bv1 bv2 "logxor"
 let lognot bv = update bv (Z.lognot (value_of bv))
-let shift_left bv i = update bv (Z.shift_left (value_of bv) i)
+
+let shift_left bv i =
+  update bv (if size_of bv <= i then Z.zero else Z.shift_left (value_of bv) i)
+
 let shift_right bv i = update bv (Z.shift_right (value_of bv) i)
 let shift_right_signed bv i = update bv (Z.shift_right (signed_of bv) i)
 

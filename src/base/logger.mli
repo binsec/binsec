@@ -38,8 +38,8 @@ module type S = sig
 
   val fatal : ?e:exn -> ('a, Format.formatter, unit, 'b) format4 -> 'a
   (** For messages that show a fatal failure, In this case, you should not be
-      able to continue and exit [code] should follow the emission.
-      Use [error] otherwise. *)
+      able to continue and exit [code] should follow the emission. Use [error]
+      otherwise. *)
 
   val error : ('a, Format.formatter, unit) format -> 'a
   (** For error messages only. *)
@@ -75,22 +75,19 @@ module type S = sig
   val is_debug_enabled : unit -> bool
 
   val set_tagged_entry : bool -> unit
-  (** [set_tagged_entry]
-      Print channel identifiers, like [warning] for the warning channel, in front
-      of messages to explicit their origins.
+  (** [set_tagged_entry] Print channel identifiers, like [warning] for the
+      warning channel, in front of messages to explicit their origins.
 
-      If might not be necessary if you use colors for example.
-  *)
+      If might not be necessary if you use colors for example. *)
 
   val set_log_level : string -> unit
   (** Set logger to display only messages from that channel and those with
       higher loglevels.
 
-      Valid arguments in increasing order of loglevels are :
-      "debug", "info", "warning", "error", "fatal"/"result".
+      Valid arguments in increasing order of loglevels are : "debug", "info",
+      "warning", "error", "fatal"/"result".
 
-      You cannot turn off [fatal_channel] or [result_channel].
-  *)
+      You cannot turn off [fatal_channel] or [result_channel]. *)
 
   val quiet : unit -> unit
 
@@ -98,42 +95,39 @@ module type S = sig
   (** [set_channel_color b chan] activates (if [b] is [true]) or deactivates (if
       [b] is [false]) the emission of ANSI color tags for terminal.
 
-      You might want to deactivate the feature if you plan on analyzing the log in
-      a file for example.
-  *)
+      You might want to deactivate the feature if you plan on analyzing the log
+      in a file for example. *)
 
   val channel_get_color : channel -> bool
 
   val set_color : bool -> unit
   (** Activate color tags rendering on all outputs.
 
-      In your format strings, tags of the form ["\@\{<color>format\@\}"] will thus
-      be interpreted.
+      In your format strings, tags of the form ["\@\{<color>format\@\}"] will
+      thus be interpreted.
 
       [color] can be any of the following:
 
-          - black
-          - darkgray
-          - blue
-          - lightblue
-          - green
-          - lightgreen,
-          - cyan
-          - lightcyan
-          - red
-          - lightred
-          - purple
-          - lightpurple
-          - brown
-          - yellow
-          - lightgray
-          - white
+      - black
+      - darkgray
+      - blue
+      - lightblue
+      - green
+      - lightgreen,
+      - cyan
+      - lightcyan
+      - red
+      - lightred
+      - purple
+      - lightpurple
+      - brown
+      - yellow
+      - lightgray
+      - white
 
-      [format] is any format string recognized by [Format].
-      For example, after activating color tags
-      [Format.printf "\@\{<purple>Hello!\@\}"] will write "Hello!" in
-      purple if your terminal has such features.
-  *)
+      [format] is any format string recognized by [Format]. For example, after
+      activating color tags [Format.printf "\@\{<purple>Hello!\@\}"] will write
+      "Hello!" in purple if your terminal has such features. *)
 
   val get_color : unit -> bool
   val set_logging : (string -> unit) option -> channel -> unit
@@ -157,9 +151,8 @@ module Group (_ : ChannelGroup) : GROUP
 
 val with_tags_on : Format.formatter -> ('a, Format.formatter, unit) format -> 'a
 (** [with_tags_on ppf fmt] pretty-prints [fmt] on the pretty-printing formatter
-    [ppf] with tag marking and printing functions activated.
-    Before it quits, those functions are deactivated.
+    [ppf] with tag marking and printing functions activated. Before it quits,
+    those functions are deactivated.
 
     This allows delimits an environment where tags simply need to be interpreted
-    or might have specific semantics.
-*)
+    or might have specific semantics. *)

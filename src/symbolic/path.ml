@@ -712,8 +712,13 @@ end = struct
               else
                 fold_models path retain n assumption value except result models)
     in
-    fun path ?(retain = true) ?n ?(accumulator = Bitvector.Map.empty) ?assuming
-        value ->
+    fun path
+      ?(retain = true)
+      ?n
+      ?(accumulator = Bitvector.Map.empty)
+      ?assuming
+      value
+    ->
       if Value.is_symbolic value then (
         Metrics.Preprocess.Timer.start ();
         fold_models path retain n assuming value [] accumulator (models path))

@@ -20,8 +20,8 @@
 (**************************************************************************)
 
 type t = private { min : Z.t; max : Z.t; stride : int }
-(** Represents the unsigned fixed-width integer interval
-    between [min] and [max], with [stride] fixed bits. *)
+(** Represents the unsigned fixed-width integer interval between [min] and
+    [max], with [stride] fixed bits. *)
 
 include Common.S with type t := t
 

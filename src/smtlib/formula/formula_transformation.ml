@@ -1980,8 +1980,8 @@ module StaticSingleAssignment = struct
     | Custom _ -> raise Invalid_custom
 
   let visit_list :
-        'env 'a 'b.
-        ('env -> 'a -> 'env * 'b) -> 'env -> 'a list -> 'env * 'b list =
+      'env 'a 'b. ('env -> 'a -> 'env * 'b) -> 'env -> 'a list -> 'env * 'b list
+      =
    fun f env ls ->
     let env, acc =
       List.fold_left

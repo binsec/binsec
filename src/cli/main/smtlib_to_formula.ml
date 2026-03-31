@@ -640,7 +640,10 @@ let genr_bv_apply qid exprs =
   let open BvTheory in
   match op_of_qid qid with
   | SmtBvUnop unop ->
-      let msg = "foo" (* Format.asprintf "%a" Ast_pp.pp_bv_unop unop *) in
+      let msg =
+        "foo"
+        (* Format.asprintf "%a" Ast_pp.pp_bv_unop unop *)
+      in
       let e, sz = extract_bv_expr (get_one_param msg exprs) in
       Smtlib.Formula.mk_bv_unop unop e |> bv_sorted_expr (unop_bv_size sz unop)
   | SmtBvBnop BvConcat ->

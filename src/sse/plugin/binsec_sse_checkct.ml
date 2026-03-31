@@ -212,15 +212,15 @@ module Ct_state = struct
     try e /== Expr.Tbl.find t.mirror_e e
     with Not_found ->
       (match e with
-      | Cst _ -> false
-      | Var _ -> false
-      | Load { label; _ } ->
-          t.loads <- Term.to_mem_exn e :: t.loads;
-          is_tainted_memory label t
-      | Unary { x; _ } -> is_tainted x t
-      | Binary { x; y; _ } -> is_tainted x t || is_tainted y t
-      | Ite { c; t = x; e = y; _ } ->
-          is_tainted c t || is_tainted x t || is_tainted y t)
+        | Cst _ -> false
+        | Var _ -> false
+        | Load { label; _ } ->
+            t.loads <- Term.to_mem_exn e :: t.loads;
+            is_tainted_memory label t
+        | Unary { x; _ } -> is_tainted x t
+        | Binary { x; y; _ } -> is_tainted x t || is_tainted y t
+        | Ite { c; t = x; e = y; _ } ->
+            is_tainted c t || is_tainted x t || is_tainted y t)
       ||
       (Expr.Tbl.add t.mirror_e e e;
        false)
@@ -1082,7 +1082,13 @@ end
 module Plugin (O : OPTIONS) : PLUGIN = struct
   let name = "checkct"
 
-  let fields : (module PATH) -> field list =
+  let fields :
+      (module PATH
+         with type value = 'value
+          and type model = 'model
+          and type state = 'state
+          and type t = 'path) ->
+      ('value, 'model, 'state, 'path) field list =
    fun _ ->
     [
       Field
@@ -1094,8 +1100,8 @@ module Plugin (O : OPTIONS) : PLUGIN = struct
         };
     ]
 
-  let extensions :
-      type a. (module ENGINE with type Path.t = a) -> a extension list =
+  let extensions : type a.
+      (module ENGINE with type Path.t = a) -> a extension list =
    fun engine ->
     let module Engine = (val engine) in
     match Engine.Path.State.more Symbolic.State.ValueKind with

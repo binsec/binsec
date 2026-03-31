@@ -22,6 +22,8 @@
 module Ast = Binsec_script.Ast
 module Syntax = Binsec_script.Syntax
 
+exception Unresolved of string * Dba.Var.Tag.attribute
+
 type env = {
   wordsize : int;
   endianness : Machine.endianness;

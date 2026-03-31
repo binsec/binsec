@@ -30,7 +30,7 @@
 
 (plugin
  (name shadow_stack)
- (libraries binsec.sse.shadow_stack)
+ (libraries binsec.cli.sse.shadow_stack)
  (site
   (binsec plugins)))
 

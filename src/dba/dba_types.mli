@@ -28,12 +28,11 @@ type instruction_sequence = (Dba.address * Dba.Instr.t) list
 module Call_stack :
   Sigs.COMPARABLE with type t = (Dba.address * Dba.address) list
 
-(** {2 Dba address / Code address } *)
+(** {2 Dba address / Code address} *)
 
 (** A DBA instruction is uniquely located at an address + label/id
 
-    Such a location is named "code address" (or [Caddress])
-*)
+    Such a location is named "code address" (or [Caddress]) *)
 module Caddress : sig
   type t = Dba.address
 
@@ -51,8 +50,7 @@ module Caddress : sig
 
   val pp_base : Format.formatter -> t -> unit
   (** [pp_base caddr] only print the base address of the DBA code address as
-      hexadecimal, thus ignoring the [id] part
-  *)
+      hexadecimal, thus ignoring the [id] part *)
 
   val add_int : t -> int -> t
   (** [add_int addr n] Increment the current address from the value of [n] *)
@@ -83,13 +81,11 @@ module Expr : sig
   include Sigs.PRINTABLE with type t := t
 
   val var : string -> Size.Bit.t -> Dba.Var.Tag.t -> t
-  (** {4 Constructors } *)
+  (** {4 Constructors} *)
 
   val flag : ?bits:Size.Bit.t -> string -> t
   (** [flag ~bits flagname] constructs a variable named [flagname] tagged as a
-      flag.
-      [bits] defaults to [Size.Bit.bits1].
-  *)
+      flag. [bits] defaults to [Size.Bit.bits1]. *)
 
   val temporary : string -> Size.Bit.t -> t
   (** [temporary name nbits] constructs a variable named [name] of size [nbits]
@@ -103,34 +99,33 @@ module Expr : sig
   (** Encoding of booleans as DBA expressions *)
 
   val temp : Size.Bit.t -> t
-  (** [temp n] creates an expression representing a temporary of size [n] with name
-      [Format.sprintf "temp%d" n]. *)
+  (** [temp n] creates an expression representing a temporary of size [n] with
+      name [Format.sprintf "temp%d" n]. *)
 
   val of_lvalue : Dba.LValue.t -> t
-  (** {4 Operations } *)
+  (** {4 Operations} *)
 
   val is_symbolic : t -> bool
-  (** {4 Predicates } *)
+  (** {4 Predicates} *)
 
   val is_zero : t -> bool
-  (** [is_zero e] is [true] if [e]'s value is equal to 0 whatever its length is *)
+  (** [is_zero e] is [true] if [e]'s value is equal to 0 whatever its length is
+  *)
 
   val is_one : t -> bool
-  (** [is_one e] is [true] if [e]'s value is equal to 1 whatever its length is *)
+  (** [is_one e] is [true] if [e]'s value is equal to 1 whatever its length is
+  *)
 
   val is_max : t -> bool
-  (** [is_max e] is [true] if [e] is a constant representing the maximum value for
-   ** its size *)
+  (** [is_max e] is [true] if [e] is a constant representing the maximum value
+      for ** its size *)
 
   val complement : Dba.Expr.t -> lo:int -> hi:int -> Dba.Var.t -> Dba.Expr.t
-  (** [complement e lo hi v]
-     return the expression e' such as [v{hi .. lo} := e <=> v := e']
-  *)
+  (** [complement e lo hi v] return the expression e' such as
+      [v{hi .. lo} := e <=> v := e'] *)
 
   val bswap : Dba.Expr.t -> Dba.Expr.t
-  (** [bswap e]
-      reverses the byte order of e
-  *)
+  (** [bswap e] reverses the byte order of e *)
 
   val collect_variables : Dba.Expr.t -> Var.Set.t -> Var.Set.t
   val substitute : t Var.Map.t -> t -> t
@@ -188,26 +183,22 @@ module Instruction : sig
   (** [outer_jumps t] returns the set of virtual addresses this instruction may
       jump to.
 
-      This is a conservative, syntactic computation.
-      Whenever an instruction can jump to a virtual address, this corresponds to
-      a jump outside a DBA block. This function is used in [Dhunk.outer_jumps].
-  *)
+      This is a conservative, syntactic computation. Whenever an instruction can
+      jump to a virtual address, this corresponds to a jump outside a DBA block.
+      This function is used in [Dhunk.outer_jumps]. *)
 
   val is_call : t -> bool
   (** [is_call t] returns [true] if the instruction is a function call.
 
       A DBA function call is encoded a jump (static or dynamic) with a [Call]
-      tag which stores the return address.
-  *)
+      tag which stores the return address. *)
 
   val is_return : t -> bool
 
   val generic_reset_successors :
     p:(Dba.id -> bool) -> f:(Dba.id -> Dba.id) -> Dba.Instr.t -> Dba.Instr.t
-  (** [generic_reset_successors ~p ~f i]
-        applies the transformation [f] on the successor index of [i]
-        if predicate [p] is [true]
-    *)
+  (** [generic_reset_successors ~p ~f i] applies the transformation [f] on the
+      successor index of [i] if predicate [p] is [true] *)
 end
 
 module Declarations : sig

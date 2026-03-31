@@ -22,8 +22,8 @@
 (** General BINSEC related utilities *)
 
 exception UserFriendlyParseError of string
-(** the exception for errors in read_* functions. Use `to_string` on it to get
- * a user-friendly error message *)
+(** the exception for errors in read_* functions. Use `to_string` on it to get *
+    a user-friendly error message *)
 
 val pp_pos : Format.formatter -> Lexing.position -> unit
 (** pretty print a lexing position with some context *)

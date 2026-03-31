@@ -24,11 +24,9 @@
 (** {2 DBA blocks} *)
 
 type t
-(** A DBA block represents a set of DBA instructions with explicit links to
-    the next one. The first instruction of the block always has [id] 0.
-    Typically, DBA a block is the translation of one binary/assembly
-    instruction.
-*)
+(** A DBA block represents a set of DBA instructions with explicit links to the
+    next one. The first instruction of the block always has [id] 0. Typically,
+    DBA a block is the translation of one binary/assembly instruction. *)
 
 val empty : t
 (** The one and only empty DBA hunk. Get it here! *)
@@ -58,12 +56,12 @@ val iter : f:(Dba.Instr.t -> unit) -> t -> unit
 val iteri : f:(int -> Dba.Instr.t -> unit) -> t -> unit
 
 val of_list : Dba.Instr.t list -> t
-(** [of_list l] assumes the list is sorted in increasing order inside the
-    block *)
+(** [of_list l] assumes the list is sorted in increasing order inside the block
+*)
 
 val of_labelled_list : (int * Dba.Instr.t) list -> t
-(** [of_list l] assumes the list is sorted in increasing order inside the
-    block, i.e. the labels are contiguous starting from 0. *)
+(** [of_list l] assumes the list is sorted in increasing order inside the block,
+    i.e. the labels are contiguous starting from 0. *)
 
 val mapi : f:(int -> Dba.Instr.t -> Dba.Instr.t) -> t -> t
 val flatten : t -> (int * Dba.Instr.t) list
@@ -72,27 +70,25 @@ val fold : ('a -> Dba.Instr.t -> 'a) -> 'a -> t -> 'a
 val for_all : (Dba.Instr.t -> bool) -> t -> bool
 
 val unlink : t -> int -> unit
-(** [unlink dh i] skips the [i]th instruction.
-    Its predecessors go to its successor.
+(** [unlink dh i] skips the [i]th instruction. Its predecessors go to its
+    successor.
 
     @raise Invalid_argument if [inst dh i] has not exactly one successor. *)
 
 val export_and_view : ?cmd:string -> t -> unit
 (** [view dh] Visualize dot-rendered DBA hunk [dh] using [cmd].
 
-    Default value for [cmd] is firefox.
-*)
+    Default value for [cmd] is firefox. *)
 
 val pred : t -> int -> int list
 val succ : t -> int -> int list
 
 val optimize : ?inplace:bool -> t -> t
-(** [optimize dh] Performs some "compiler" optimizations
-    and return the simplified block.
+(** [optimize dh] Performs some "compiler" optimizations and return the
+    simplified block.
 
-    @param inplace Directly modify the block without making a copy.
-                   Default: [false].
-*)
+    @param inplace
+      Directly modify the block without making a copy. Default: [false]. *)
 
 include Sigs.PRINTABLE with type t := t
 
@@ -101,32 +97,27 @@ include Sigs.PRINTABLE with type t := t
 module Check : sig
   val has_inbound_inner_jumps : t -> bool
   (** [has_inbound_inner_jumps dh] checks a hunk only has well-behaved inner
-      jumps, i.e. to an index that is defined inside this hunk.
-  *)
+      jumps, i.e. to an index that is defined inside this hunk. *)
 
   val no_undeclared_variables : Dba_types.Declarations.t -> t -> bool
   (** [no_undeclared_variables decls dh] checks that the hunk [dh] only uses
-      well-declared variables w.r.t. to [decls]
-  *)
+      well-declared variables w.r.t. to [decls] *)
 
   val no_temporary_leak : t -> bool
   (** [no_temporary_leak b] checks the invariant that a block must always
-      (re)define a temporary before using it. This guarantees that no
-      assumption is made on the block sequences and that no "leaked"
-      information from another block is used inside a block.
+      (re)define a temporary before using it. This guarantees that no assumption
+      is made on the block sequences and that no "leaked" information from
+      another block is used inside a block.
 
-      @return [true] if that is the case.
-  *)
+      @return [true] if that is the case. *)
 end
 
 val to_stmts : t -> Virtual_address.t -> Dba_types.Statement.t list
 
 val outer_jumps : t -> Virtual_address.Set.t
-(** [outer_jumps b] computes the set of jumps to external addresses in hunk
-    [b].
-    Due to dynamic jumps, this represents a syntactic under-approximation of
-    the possible jumps from this block.
-*)
+(** [outer_jumps b] computes the set of jumps to external addresses in hunk [b].
+    Due to dynamic jumps, this represents a syntactic under-approximation of the
+    possible jumps from this block. *)
 
 val callees : t -> Virtual_address.Set.t
 (** [callees b] computes the set of addresses this block may call *)
@@ -136,8 +127,7 @@ val is_return : t -> bool
 
 val has_indirect_jump : t -> bool
 (** [has_indirect_jump d] returns [true] if the hunk contains an indirect jump
-    instruction
-*)
+    instruction *)
 
 type conditional = {
   condition : Dba.Expr.t;

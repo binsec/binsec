@@ -91,7 +91,7 @@ module Integers : sig
   end
 end
 
-(** {2 Maps & Sets on base types } *)
+(** {2 Maps & Sets on base types} *)
 
 (* HINT:
    Always use fully-qualified names when using these modules in order not to
@@ -102,7 +102,7 @@ module String : Collection.S with type t = string
 (* module BigInt : Collection.S with type t = Z.t *)
 module Float : Collection.S with type t = float
 
-(** {2 Functors } *)
+(** {2 Functors} *)
 
 module Collection_make : sig
   module Default (C : Sigs.COMPARABLE) : Collection.S with type t = C.t
@@ -123,9 +123,8 @@ module Ternary : sig
   val of_bool : bool -> t
 
   val to_bool : ?unknown:bool -> t -> bool
-  (** [to_bool t] translates a ternary value to its boolean equivalent.
-      For [Unknown] the value is given by [unknown] and defaults to [false].
-  *)
+  (** [to_bool t] translates a ternary value to its boolean equivalent. For
+      [Unknown] the value is given by [unknown] and defaults to [false]. *)
 
   (** {3 Operations} *)
 

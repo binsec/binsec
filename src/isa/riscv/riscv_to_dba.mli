@@ -21,10 +21,10 @@
 
 val decode_32 :
   int Reader.t -> Virtual_address.t -> Instruction.Generic.t * Dhunk.t
-(** [decode_32 r addr] decodes what is at address [addr] in reader [r]
-    using ISA RISC-V32I with standard extensions C and M *)
+(** [decode_32 r addr] decodes what is at address [addr] in reader [r] using ISA
+    RISC-V32I with standard extensions C and M *)
 
 val decode_64 :
   int Reader.t -> Virtual_address.t -> Instruction.Generic.t * Dhunk.t
-(** [decode_64 r addr] decodes what is at address [addr] in reader [r]
-    using ISA RISC-V64I with standard extensions C and M *)
+(** [decode_64 r addr] decodes what is at address [addr] in reader [r] using ISA
+    RISC-V64I with standard extensions C and M *)

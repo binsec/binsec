@@ -28,14 +28,16 @@ module Expr : sig
   type t
 
   val load : Machine.isa -> [ `x32 | `x64 ] -> int -> int Reader.t -> t
-  (** [load isa blocksize cursor] read a DWARF expression at the current cursor position *)
+  (** [load isa blocksize cursor] read a DWARF expression at the current cursor
+      position *)
 
   val loc : Machine.isa -> ?cfa:Dba.Expr.t -> t -> int -> Dba.Expr.t
-  (** [loc isa ~cfa expr bitsize] interpret the expression expr
-    according to the Canonical Frame Address *)
+  (** [loc isa ~cfa expr bitsize] interpret the expression expr according to the
+      Canonical Frame Address *)
 
   val cfa : Machine.isa -> t -> Dba.Expr.t
-  (** [cfa isa expr] interpret the expression expr as a Canonical Frame Address *)
+  (** [cfa isa expr] interpret the expression expr as a Canonical Frame Address
+  *)
 
   include Sigs.PRINTABLE with type t := t
 end
@@ -297,8 +299,8 @@ module Cunit : sig
   (** [dir cunit] return the path from where the compiler have proceed *)
 
   val file : t -> string
-  (** [file cunit] return the path of the proceesed file
-      of the compilation unit *)
+  (** [file cunit] return the path of the proceesed file of the compilation unit
+  *)
 
   module Type : sig
     type t = private Die.t
@@ -328,8 +330,8 @@ module Cunit : sig
     type func = private Die.t
 
     val find : t -> string -> func
-    (** [find cunit func_name] return the function named func_name
-        of the compilation unit
+    (** [find cunit func_name] return the function named func_name of the
+        compilation unit
         @raise Exception Not_found *)
 
     type t = func
@@ -347,14 +349,14 @@ module Cunit : sig
     (** [cfa func] return the Canonical Frame Address of the function func *)
 
     val vars : t -> Var.t list
-    (** [vars func] return the list of local variables
-        declared in the function func *)
+    (** [vars func] return the list of local variables declared in the function
+        func *)
   end
 
   module Global : sig
     val vars : t -> Var.t list
-    (** [vars cunit] return the list of global variables
-        declared in the compilation unit *)
+    (** [vars cunit] return the list of global variables declared in the
+        compilation unit *)
   end
 
   include Sigs.PRINTABLE with type t := t
@@ -376,17 +378,17 @@ module Frame : sig
   type t
 
   val load : Loader.Img.t -> t
-  (** [load img] extract and interpret the content
-    of either .debug_frame or .eh_frame section *)
+  (** [load img] extract and interpret the content of either .debug_frame or
+      .eh_frame section *)
 
   val fold :
     ('a -> return_address:int -> columns:int array -> entry -> 'a) ->
     'a ->
     t ->
     'a
-  (** [fold f frame] iterate through the frame matrix
-    columns is the list of valid column indexes of the given entry
-    return_address is the column index of the return address of the function *)
+  (** [fold f frame] iterate through the frame matrix columns is the list of
+      valid column indexes of the given entry return_address is the column index
+      of the return address of the function *)
 
   val iter :
     (return_address:int -> columns:int array -> entry -> unit) -> t -> unit
@@ -405,15 +407,13 @@ module Lines : sig
     basic_block : bool;
     discriminator : int;
   }
-  (** represent one or more rows of the addresse / line matrix
-    [addresses]     the range of virtual addresses of the entry
-    [path]          the path of the processed file
-    [line]          the line of the source (starting from 1)
-    [column]        the column (non reliable, old compilers do not produce it)
-    [is_stmt]       if the entry correspond to a statement in the source
-    [basic_block]   if the entry is the start of a basic block
-    [discriminator] an integer identifying the block to which the entry belong
-*)
+  (** represent one or more rows of the addresse / line matrix [addresses] the
+      range of virtual addresses of the entry [path] the path of the processed
+      file [line] the line of the source (starting from 1) [column] the column
+      (non reliable, old compilers do not produce it) [is_stmt] if the entry
+      correspond to a statement in the source [basic_block] if the entry is the
+      start of a basic block [discriminator] an integer identifying the block to
+      which the entry belong *)
 
   type t
 

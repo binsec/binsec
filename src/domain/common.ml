@@ -36,16 +36,15 @@ module type S = sig
   (** [included  ~size t t'] tests if all values in [t] are in [t']. *)
 
   val disjoint : size:int -> t -> t -> bool
-  (** [disjoint ~size t t'] returns [true]
-      if the intersection between [t] and [t'] is empty. *)
+  (** [disjoint ~size t t'] returns [true] if the intersection between [t] and
+      [t'] is empty. *)
 
   val union : size:int -> t -> t -> t
 
   val inter : size:int -> t -> t -> t
   (** [inter ~size t t'] returns the intersection of the intervals [t] and [t'].
 
-      @raise Empty If there is no intersection.
-  *)
+      @raise Empty If there is no intersection. *)
 
   val is_point : size:int -> t -> bool
   (** [is_point ~size t] checks if [t] has a unique value *)

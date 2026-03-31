@@ -1654,6 +1654,36 @@ let lift_jcxz mode src =
       (strange_addr_of_int64 src);
   ]
 
+let zero8 = Dba.Expr.zeros 8
+
+let lift_pshufb reg_t r gop sreg =
+  let size, size_t = match reg_t with MM -> (64, S64) | XMM -> (128, S128) in
+  let bits = Size.Bit.create size in
+  let src_expr = disas_expr_xmm gop reg_t size_t sreg
+  and dst_lval = lhs_of_reg_xmm r reg_t
+  and tmp_lval = Dba.LValue.temp bits in
+  let dst_expr = Dba.LValue.to_expr dst_lval
+  and tmp_expr = Dba.LValue.to_expr tmp_lval in
+  let rec loop acc dst_lval tmp_expr offset size =
+    if offset = 0 then acc
+    else
+      let offset = offset - 8 in
+      let idx = Dba.Expr.restrict offset (offset + 7) src_expr in
+      let byte =
+        Dba.Expr.ite
+          (Dba.Expr.bit_restrict 7 idx)
+          zero8
+          (Dba.Expr.restrict 0 7
+             (Dba.Expr.shift_right tmp_expr
+                (Dba.Expr.uext size
+                   (Dba.Expr.restrict 0 (if size = 128 then 3 else 2) idx))))
+      in
+      loop
+        (assign dst_lval byte offset (offset + 7) :: acc)
+        dst_lval tmp_expr offset size
+  in
+  Predba.assign tmp_lval dst_expr :: loop [] dst_lval tmp_expr size size
+
 let lift_pshuf reg_t size_t r gop imm off_min off_max sreg =
   let size = match size_t with S128 -> 128 | S64 -> 64 | S32 -> 32 in
   let bits = Size.Bit.create size in
@@ -2760,6 +2790,7 @@ let instruction_to_dba sreg addr nextaddr opcode instruction =
   | Xadd (mode, gop1, gop2) -> lift_xadd mode gop1 gop2 sreg
   | Jcxz (mode, src) -> lift_jcxz mode src
   | CmpXchg8b (reg_t, size_t, gop) -> lift_cmpXchg8b reg_t size_t gop sreg
+  | Pshufb (reg_t, r, gop) -> lift_pshufb reg_t r gop sreg
   | Pshufw (reg_t, size_t, r, gop, imm) ->
       lift_pshuf reg_t size_t r gop imm 0 64 sreg
   | Pshuflw (reg_t, size_t, r, gop, imm) ->

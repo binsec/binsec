@@ -419,20 +419,16 @@ module type S = sig
   (** [load nbytes endianness addr label] *)
 
   val constant : Bitvector.t -> t
-  (** [constant bv] creates a constant expression from the bitvector [bv].
-  *)
+  (** [constant bv] creates a constant expression from the bitvector [bv]. *)
 
   val unary : unary op -> t -> t
-  (** [unary f x] creates a unary application of [f] on [x].
-  *)
+  (** [unary f x] creates a unary application of [f] on [x]. *)
 
   val binary : binary op -> t -> t -> t
-  (** [binary f x y] creates a binary application of [f] on [x] and [y].
-  *)
+  (** [binary f x y] creates a binary application of [f] on [x] and [y]. *)
 
   val ite : t -> t -> t -> t
-  (** [ite c t e] creates an if-then-else expression [c] ? [t] : [e].
-  *)
+  (** [ite c t e] creates an if-then-else expression [c] ? [t] : [e]. *)
 
   val uminus : t -> t
   val add : t -> t -> t
@@ -477,8 +473,7 @@ module type S = sig
 
   val restrict : lo:int -> hi:int -> t -> t
   (** [restrict lo hi e] creates [Dba.ExprUnary(Restrict(lo, hi), e)] if
-      [hi >= lo && lo >=0] .
-  *)
+      [hi >= lo && lo >=0] . *)
 
   val bit_restrict : int -> t -> t
   (** [bit_restrict o e] is [restrict o o e] *)
@@ -486,33 +481,30 @@ module type S = sig
   val byte_swap : t -> t
   (** [byte_swap e] reverses the byte order of the expression [e] *)
 
-  (** {3 Specific constants }*)
+  (** {3 Specific constants}*)
 
   val zeros : int -> t
   (** [zeros n] creates a constant expression of value 0 with length [n] *)
 
   val ones : int -> t
-  (** [ones n] creates a constant expression of value 1 with length [n].
-      I.e.; it has (n - 1) zeros in binary.
-  *)
+  (** [ones n] creates a constant expression of value 1 with length [n]. I.e.;
+      it has (n - 1) zeros in binary. *)
 
   val one : t
   val zero : t
   val addi : t -> int -> t
   val addz : t -> Z.t -> t
 
-  (** {4 Utils} **)
+  (** {2 Utils} *)
 
   val hash : t -> int
-  (** [hash t] returns the hash of [t] in constant time.
-  *)
+  (** [hash t] returns the hash of [t] in constant time. *)
 
   val is_equal : t -> t -> bool
   val compare : t -> t -> int
 
   val sizeof : t -> size
-  (** [sizeof t] returns the bit size of [t] in constant time.
-  *)
+  (** [sizeof t] returns the bit size of [t] in constant time. *)
 
   val map :
     (string -> int -> 'a -> t) ->
@@ -521,17 +513,15 @@ module type S = sig
     t
 
   (** {2 Raw constructors} *)
+
   val _unary : unary op -> t -> t
-  (** [_unary f x] creates a unary application of [f] on [x].
-  *)
+  (** [_unary f x] creates a unary application of [f] on [x]. *)
 
   val _binary : binary op -> t -> t -> t
-  (** [_binary f x y] creates a binary application of [f] on [x] and [y].
-  *)
+  (** [_binary f x y] creates a binary application of [f] on [x] and [y]. *)
 
   val _ite : t -> t -> t -> t
-  (** [_ite c t e] creates an if-then-else expression [c] ? [t] : [e].
-  *)
+  (** [_ite c t e] creates an if-then-else expression [c] ? [t] : [e]. *)
 end
 
 module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
@@ -665,8 +655,7 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
           && is_equal_unify r.t r'.t set_ite_t i i'
           && is_equal_unify r.e r'.e set_ite_e i i'
       | _, _ -> false
-    and is_equal_unify :
-        type a.
+    and is_equal_unify : type a.
         t ->
         t ->
         ((a, A.t, B.t) term -> t -> unit) ->
@@ -761,8 +750,7 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
           else
             let d = String.compare r.name r'.name in
             if d <> 0 then d else A.compare r.label r'.label
-    and compare_unify :
-        type a.
+    and compare_unify : type a.
         t ->
         t ->
         ((a, A.t, B.t) term -> t -> unit) ->
@@ -1567,8 +1555,7 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
       if size land 0x7 <> 0 then raise (Invalid_argument "byte_swap");
       iter e (size - 8) (restrict ~hi:(size - 1) ~lo:(size - 8) e)
 
-  let rec map :
-      type k a b.
+  let rec map : type k a b.
       (string -> int -> a -> t) ->
       (int -> Machine.endianness -> t -> b -> t) ->
       (k, a, b) term ->

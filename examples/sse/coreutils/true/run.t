@@ -1,4 +1,5 @@
-  $ tar xvzf sysroot.tar.gz --one-top-level=sysroot
+equivalent to `tar xvzf sysroot.tar.gz --one-top-level=sysroot`
+  $ mkdir sysroot && (cd sysroot && tar xzf ../sysroot.tar.gz && find * -type f)
   bin/true
   usr/lib/debug/.build-id/0e/ea10bd32e512b82055e32b8cb1b9b3e46e4d89.debug
   $ binsec -sse -sse-script run.ini sysroot/bin/true -sse-sysroot sysroot/ -sse-debug-level 2 |

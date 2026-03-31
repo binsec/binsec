@@ -51,11 +51,11 @@ module Spawn : S with type arg = Solver.t
 module Dump : S with type arg = string
 (** [!module-Dump] is a dummy session that outputs its input stream to a file.
 
-    [!val-check_sat] and [!val-check_sat_assuming] always return [!constructor-Unknown].
+    [!val-check_sat] and [!val-check_sat_assuming] always return
+    [!constructor-Unknown].
 
-    [!val-get_value] and [!val-get_model] return dummy results.
-*)
+    [!val-get_value] and [!val-get_model] return dummy results. *)
 
-(** [!module-Carbon_copy] performs the same as the [Main] session while outputting its input stream to a file.
-*)
+(** [!module-Carbon_copy] performs the same as the [Main] session while
+    outputting its input stream to a file. *)
 module Carbon_copy (Main : S) : S with type arg = Main.arg * string

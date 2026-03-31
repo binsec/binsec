@@ -57,7 +57,7 @@ type t = private {
 (** {2 Configuration definition} *)
 
 val default : t
-(** {3 Constructors and modificators } *)
+(** {3 Constructors and modificators} *)
 
 val empty : t
 val set_entry_points : Virtual_address.Set.t -> t -> t

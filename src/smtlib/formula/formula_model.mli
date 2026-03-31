@@ -21,7 +21,7 @@
 
 (** Internal model representation *)
 
-(** {2 Model types }*)
+(** {2 Model types}*)
 
 type t
 type address = Bitvector.t
@@ -31,31 +31,26 @@ type identifier = string
 val empty : t
 (** Empty model.
 
-    @raise Not_found on lookup.
- *)
+    @raise Not_found on lookup. *)
 
 val extract : Smtlib.model -> t
 (** [extract model] extracts relevant information in SMT-LIB [model] concerning
-    registers and memory values.
-    This function takes into account the various "model dialects" spoken by:
+    registers and memory values. This function takes into account the various
+    "model dialects" spoken by:
     - Z3;
     - CVC4;
-    - Boolector
-*)
+    - Boolector *)
 
 val extract_value : Smtlib.constant -> Bitvector.t
-(** [extract_value value] extracts the value returned by (get-value) the same
- * way extract returns the model returned by (get-model).
- * This function currently only supports bitvectors
-*)
+(** [extract_value value] extracts the value returned by (get-value) the same *
+    way extract returns the model returned by (get-model). * This function
+    currently only supports bitvectors *)
 
 val yices_extract : string -> t
 (** [yices_extract s] extracts the same information as [extract] but for a
-    yices-smt2 produced model
-    yices-smt2 models use another syntax and are parsed on their own
-    [s] is expected to be the raw string of the model and not, for example, a
-    filename
-*)
+    yices-smt2 produced model yices-smt2 models use another syntax and are
+    parsed on their own [s] is expected to be the raw string of the model and
+    not, for example, a filename *)
 
 (** {2 Create from scratch} *)
 
@@ -75,13 +70,11 @@ val pp_with_sections :
 
 val find_variable : t -> identifier -> Bitvector.t option
 (** [find_register model name] finds the bitvector value of register [name] in
-    the model
-*)
+    the model *)
 
 val find_address_contents : t -> address -> Bitvector.t option
 (** [find_address_contents model addr] find the (byte-sized) value of address
-    [addr] from the model.
-*)
+    [addr] from the model. *)
 
 val find_address_content :
   t -> address -> Size.Byte.t -> Machine.endianness -> Bitvector.t option
@@ -99,8 +92,7 @@ val memory_bindings : t -> (address * Bitvector.t) array
 
 val is_memory_set : t -> address -> bool
 (** [is_memory_set model address] checks if the given address is present in the
-    memory of this model
-*)
+    memory of this model *)
 
 val filter :
   ?keep_default:bool ->
@@ -111,7 +103,6 @@ val filter :
 (** [filter ?keep_default ~addr_p ~var_p model] creates a new model [m] with the
     following properties:
     - [m] has the same default value for memory adresses than [model] if
-    [keep_default] is [true] (default is [false])
+      [keep_default] is [true] (default is [false])
     - [m] keeps from [model] all addresses verifying the predicate [addr_p] and
-    all the variable names verifying [var_p]
- *)
+      all the variable names verifying [var_p] *)

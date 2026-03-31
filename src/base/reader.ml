@@ -228,8 +228,8 @@ module type ACCESS = sig
       provided. *)
 
   val sub : 'a t -> int -> 'a t
-  (** [sub t len] returns a fresh cursor pointing to the beginning of a sub-buffer
-      of size [len] starting from [t], and advances [t] by [len]. *)
+  (** [sub t len] returns a fresh cursor pointing to the beginning of a
+      sub-buffer of size [len] starting from [t], and advances [t] by [len]. *)
 end
 
 let uleb128 : 'a t -> Z.t * int =

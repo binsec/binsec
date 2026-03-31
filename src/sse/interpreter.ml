@@ -44,8 +44,7 @@ end
 type ('path, 'outcome) driver =
   (module DRIVER with type path = 'path and type outcome = 'outcome)
 
-let dispatch :
-    type path outcome.
+let dispatch : type path outcome.
     path -> ([ `All ], path) fiber -> (path, outcome) driver -> outcome =
  fun path fiber driver ->
   let open (val driver) in

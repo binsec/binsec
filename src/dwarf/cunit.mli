@@ -275,8 +275,8 @@ val dir : t -> string
 (** [dir cunit] return the path from where the compiler have proceed *)
 
 val file : t -> string
-(** [file cunit] return the path of the proceesed file
-    of the compilation unit *)
+(** [file cunit] return the path of the proceesed file of the compilation unit
+*)
 
 module Type : sig
   type t = private Die.t
@@ -306,8 +306,8 @@ module Func : sig
   type func = private Die.t
 
   val find : t -> string -> func
-  (** [find cunit func_name] return the function named func_name
-      of the compilation unit
+  (** [find cunit func_name] return the function named func_name of the
+      compilation unit
       @raise Exception Not_found *)
 
   type t = func
@@ -325,14 +325,14 @@ module Func : sig
   (** [cfa func] return the Canonical Frame Address of the function func *)
 
   val vars : t -> Var.t list
-  (** [vars func] return the list of local variables
-      declared in the function func *)
+  (** [vars func] return the list of local variables declared in the function
+      func *)
 end
 
 module Global : sig
   val vars : t -> Var.t list
-  (** [vars cunit] return the list of global variables
-      declared in the compilation unit *)
+  (** [vars cunit] return the list of global variables declared in the
+      compilation unit *)
 end
 
 include Sigs.PRINTABLE with type t := t

@@ -23,5 +23,4 @@
 
 val read_configuration_file : unit -> unit
 (** [read_configuration_file ()] reads the configuration file given by
-    [Kernel_options.Config_file]
- *)
+    [Kernel_options.Config_file] *)

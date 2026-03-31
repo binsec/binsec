@@ -504,8 +504,8 @@ let zip c0 n0 c1 n1 =
   let c0', c1', common, n = zip c0 n0 c1 n1 Expr.one Expr.one in
   (c0', c1', common, n)
 
-let merge_predicate :
-    type a b. a predicate -> b predicate -> Expr.t * a predicate =
+let merge_predicate : type a b.
+    a predicate -> b predicate -> Expr.t * a predicate =
  fun predicate0 predicate1 ->
   if predicate0.token != predicate1.token then raise Non_mergeable
   else
@@ -641,7 +641,9 @@ let add_condition : type a. a predicate -> Expr.t -> a predicate =
         Ai.refine predicate cond one;
         predicate
   in
-  fun { clauses; constraints; reverse_dependencies; domain; values; token } cond ->
+  fun { clauses; constraints; reverse_dependencies; domain; values; token }
+    cond
+  ->
     BvHmap.freeze reverse_dependencies;
     BvHmap.freeze values;
     refine

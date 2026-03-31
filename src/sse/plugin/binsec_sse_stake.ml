@@ -445,8 +445,8 @@ module Plugin (O : OPTIONS) : PLUGIN = struct
   let name = shortname
   let fields _ = []
 
-  let extensions :
-      type a. (module ENGINE with type Path.t = a) -> a extension list =
+  let extensions : type a.
+      (module ENGINE with type Path.t = a) -> a extension list =
    fun engine ->
     let module Engine = (val engine) in
     match Engine.Path.State.more Symbolic.State.ValueKind with

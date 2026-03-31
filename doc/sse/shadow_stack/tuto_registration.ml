@@ -1,6 +1,6 @@
 module Namespace =
   Binsec_cli.Cli.Make_from_logger
-    (Shadow_stack.Log)
+    (Tuto_shadow_stack.Log)
     (struct
       let name = "Shadow stack tutorial"
       let shortname = "tuto"
@@ -26,5 +26,5 @@ end)
 let () =
   Binsec_cli_sse.Plugins.register ~is_enabled:Namespace.is_enabled (fun () ->
       match Mode.get () with
-      | Inline -> (module Shadow_stack.Plugin_v1)
-      | Builtin -> (module Shadow_stack.Plugin_v2))
+      | Inline -> (module Tuto_shadow_stack.Plugin_v1)
+      | Builtin -> (module Tuto_shadow_stack.Plugin_v2))

@@ -345,60 +345,61 @@ module Make (E : Metrics.EXPLORATION) (Q : Metrics.QUERY) = struct
   let init_formatters locked mutex formatter =
     let restore_fof = Format.pp_get_formatter_out_functions formatter () in
     let logging_fof =
-      Format.
-        {
-          out_string =
-            (fun s p n ->
-              let lockable = not !locked in
-              if lockable then (
-                Mutex.lock mutex;
-                locked := true);
-              restore_fof.out_string s p n;
-              if lockable then (
-                locked := false;
-                Mutex.unlock mutex));
-          out_flush =
-            (fun () ->
-              let lockable = not !locked in
-              if lockable then (
-                Mutex.lock mutex;
-                locked := true);
-              restore_fof.out_flush ();
-              if lockable then (
-                locked := false;
-                Mutex.unlock mutex));
-          out_newline =
-            (fun () ->
-              let lockable = not !locked in
-              if lockable then (
-                Mutex.lock mutex;
-                locked := true);
-              restore_fof.out_newline ();
-              restore_fof.out_string "\r" 0 1;
-              if lockable then (
-                locked := false;
-                Mutex.unlock mutex));
-          out_spaces =
-            (fun n ->
-              let lockable = not !locked in
-              if lockable then (
-                Mutex.lock mutex;
-                locked := true);
-              restore_fof.out_spaces n;
-              if lockable then (
-                locked := false;
-                Mutex.unlock mutex));
-          out_indent =
-            (fun n ->
-              let lockable = not !locked in
-              if lockable then (
-                Mutex.lock mutex;
-                locked := true);
-              restore_fof.out_indent n;
-              if lockable then (
-                locked := false;
-                Mutex.unlock mutex));
-        }
+      (Format.
+         {
+           restore_fof with
+           out_string =
+             (fun s p n ->
+               let lockable = not !locked in
+               if lockable then (
+                 Mutex.lock mutex;
+                 locked := true);
+               restore_fof.out_string s p n;
+               if lockable then (
+                 locked := false;
+                 Mutex.unlock mutex));
+           out_flush =
+             (fun () ->
+               let lockable = not !locked in
+               if lockable then (
+                 Mutex.lock mutex;
+                 locked := true);
+               restore_fof.out_flush ();
+               if lockable then (
+                 locked := false;
+                 Mutex.unlock mutex));
+           out_newline =
+             (fun () ->
+               let lockable = not !locked in
+               if lockable then (
+                 Mutex.lock mutex;
+                 locked := true);
+               restore_fof.out_newline ();
+               restore_fof.out_string "\r" 0 1;
+               if lockable then (
+                 locked := false;
+                 Mutex.unlock mutex));
+           out_spaces =
+             (fun n ->
+               let lockable = not !locked in
+               if lockable then (
+                 Mutex.lock mutex;
+                 locked := true);
+               restore_fof.out_spaces n;
+               if lockable then (
+                 locked := false;
+                 Mutex.unlock mutex));
+           out_indent =
+             (fun n ->
+               let lockable = not !locked in
+               if lockable then (
+                 Mutex.lock mutex;
+                 locked := true);
+               restore_fof.out_indent n;
+               if lockable then (
+                 locked := false;
+                 Mutex.unlock mutex));
+         } [@warning "-23"])
     in
     let background_buffer = Buffer.create 4096 in
     let flush_buffer () =
@@ -406,23 +407,24 @@ module Make (E : Metrics.EXPLORATION) (Q : Metrics.QUERY) = struct
         background_buffer
     in
     let drawing_fof =
-      Format.
-        {
-          out_string =
-            Buffer.out_string mutex restore_fof.out_string restore_fof.out_flush
-              background_buffer;
-          out_flush = Buffer.out_flush mutex background_buffer;
-          out_newline =
-            (fun () ->
-              Buffer.out_string mutex restore_fof.out_string
-                restore_fof.out_flush background_buffer "\n" 0 1);
-          out_spaces =
-            Buffer.out_spaces mutex restore_fof.out_string restore_fof.out_flush
-              background_buffer;
-          out_indent =
-            Buffer.out_spaces mutex restore_fof.out_string restore_fof.out_flush
-              background_buffer;
-        }
+      (Format.
+         {
+           restore_fof with
+           out_string =
+             Buffer.out_string mutex restore_fof.out_string
+               restore_fof.out_flush background_buffer;
+           out_flush = Buffer.out_flush mutex background_buffer;
+           out_newline =
+             (fun () ->
+               Buffer.out_string mutex restore_fof.out_string
+                 restore_fof.out_flush background_buffer "\n" 0 1);
+           out_spaces =
+             Buffer.out_spaces mutex restore_fof.out_string
+               restore_fof.out_flush background_buffer;
+           out_indent =
+             Buffer.out_spaces mutex restore_fof.out_string
+               restore_fof.out_flush background_buffer;
+         } [@warning "-23"])
     in
     (restore_fof, logging_fof, drawing_fof, flush_buffer)
 
@@ -522,8 +524,7 @@ let () =
         let name = "screen"
         let fields _ = []
 
-        let extensions :
-            type a.
+        let extensions : type a.
             (module Types.ENGINE with type Path.t = a) -> a Types.extension list
             =
          fun engine ->

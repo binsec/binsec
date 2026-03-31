@@ -1,13 +1,13 @@
 (library
  (public_name tuto.shadow_stack)
- (name shadow_stack)
- (modules shadow_stack)
+ (name tuto_shadow_stack)
+ (modules tuto_shadow_stack)
  (libraries binsec.sse))
 
 (library
  (public_name tuto.registration)
- (name registration)
- (modules registration)
+ (name tuto_registration)
+ (modules tuto_registration)
  (libraries binsec.cli.sse tuto.shadow_stack))
 
 (plugin

@@ -136,9 +136,8 @@ type address = {
   addrDisp : int64;  (** Constant displacement *)
   addrBase : reg32 option;  (** Optional base register *)
   addrIndex : (scale * reg32) option;
-      (** Optional index register, along
-                                              with a scaling factor by which to
-                                              multiply it *)
+      (** Optional index register, along with a scaling factor by which to
+          multiply it *)
 }
 (** The memory address format supported by the machine language *)
 
@@ -147,7 +146,8 @@ type address = {
 (** Generic instruction operands, indexed by the relevant register set *)
 type 'a genop =
   | Imm of int64
-      (** A constant machine integer -no immediate values of more than 64 bits- *)
+      (** A constant machine integer -no immediate values of more than 64 bits-
+      *)
   | Reg of 'a  (** A register *)
   | Address of address  (** A memory dereference *)
 
@@ -251,6 +251,7 @@ type instruction_kind =
   | Loopnz of mode * address_size_mode * int64
   | Loopz of mode * address_size_mode * int64
   | Loop of mode * address_size_mode * int64
+  | Pshufb of xmm_mm * xmm_reg * genopxmm
   | Pshufw of xmm_mm * simd_size * xmm_reg * genopxmm * int
   | Pshuflw of xmm_mm * simd_size * xmm_reg * genopxmm * int
   | Pshufhw of xmm_mm * simd_size * xmm_reg * genopxmm * int

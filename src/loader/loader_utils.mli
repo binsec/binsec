@@ -26,8 +26,7 @@ val find_section_by_name : string -> Loader.Img.t -> Loader.Section.t
 val section_slice_by_name :
   string -> Loader.Img.t -> Virtual_address.t * Virtual_address.t
 (** [section_slice section_name img] returns the interval [lo, hi] of virtual
-    addresses defining the section [section_name].
-*)
+    addresses defining the section [section_name]. *)
 
 val find_section_by_address :
   address:Virtual_address.t -> Loader.Img.t -> Loader.Section.t option
@@ -44,7 +43,7 @@ val section_slice_by_address :
 val find_section :
   p:(Loader.Section.t -> bool) -> Loader.Img.t -> Loader.Section.t option
 
-(** {2 Manipulation of symbols } *)
+(** {2 Manipulation of symbols} *)
 
 (** Functions that are of the form [f_by_name] call the function
     [symbol_by_name] which is costly because it compares all the symbols in the
@@ -52,12 +51,12 @@ val find_section :
     if they are requested multiple times. *)
 
 val symbol_by_name : name:String.t -> Loader.Img.t -> Loader.Symbol.t option
-(** [symbol_by_name ~name img] Returns [Some] symbol [name] in [img].
-    If [img] contains no symbol [name], returns [None]. *)
+(** [symbol_by_name ~name img] Returns [Some] symbol [name] in [img]. If [img]
+    contains no symbol [name], returns [None]. *)
 
 val address_of_symbol : Loader.Symbol.t -> Virtual_address.t
-(** [address_of_symbol symbol] finds [Some address] where the symbole
-    is defined. Otherwise returns [None]. *)
+(** [address_of_symbol symbol] finds [Some address] where the symbole is
+    defined. Otherwise returns [None]. *)
 
 val address_of_symbol_by_name :
   name:string -> Loader.Img.t -> Virtual_address.t option
@@ -66,17 +65,17 @@ val size_of_symbol : Loader.Symbol.t -> int
 val size_of_symbol_by_name : name:string -> Loader.Img.t -> int option
 
 val symbol_interval : Loader.Symbol.t -> Virtual_address.t * Virtual_address.t
-(** [symbol_interval symbol] Returns the address range corresponding
-    to [symbol] *)
+(** [symbol_interval symbol] Returns the address range corresponding to [symbol]
+*)
 
 val symbol_interval_by_name :
   name:string -> Loader.Img.t -> (Virtual_address.t * Virtual_address.t) option
 
 val belongs_to_symbol : Loader.Symbol.t -> Virtual_address.t -> bool
-(** [belongs_to_symbol symbol addr] Returns [true] if the address
-    [addr] is locate in the [symbol] (i.e. in the range
-    [address_of_symbol symbol] (included) and [address_of_symbol symbol
-    + size_of_symbol symbol_interval] (excluded)). *)
+(** [belongs_to_symbol symbol addr] Returns [true] if the address [addr] is
+    locate in the [symbol] (i.e. in the range [address_of_symbol symbol]
+    (included) and [address_of_symbol symbol + size_of_symbol symbol_interval]
+    (excluded)). *)
 
 val belongs_to_symbol_by_name :
   name:string -> Loader.Img.t -> Virtual_address.t -> bool
@@ -114,12 +113,10 @@ module Binary_loc : sig
 
   val to_virtual_address_from_file :
     filename:string -> t -> Virtual_address.t option
-  (** [virtual_address_from_file file t] resolves the name [Name name] w.r.t to the
-    loaded binary from [file] if needed.
-   *)
+  (** [virtual_address_from_file file t] resolves the name [Name name] w.r.t to
+      the loaded binary from [file] if needed. *)
 
   val to_virtual_address : img:Loader.Img.t -> t -> Virtual_address.t option
-  (** [virtual_address img t] resolves the name [Name name] w.r.t to the
-    loaded [img] binary if needed.
- *)
+  (** [virtual_address img t] resolves the name [Name name] w.r.t to the loaded
+      [img] binary if needed. *)
 end

@@ -24,7 +24,7 @@ include
     (Smtlib.Logger)
     (struct
       let shortname = "smt"
-      let name = "Static Symbolic Execution"
+      let name = "Satisfiability Modulo Theories"
     end)
 
 type solver =

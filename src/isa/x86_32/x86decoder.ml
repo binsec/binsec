@@ -182,11 +182,14 @@ let read_0f_38 mode address_mode lr =
   in
   let sse41 = "op from sse41" in
   match b3 with
+  | 0x00 ->
+      let src, spare = read_modrm_xmm address_mode lr in
+      with_xmm_simd mode (fun xmm _ -> Pshufb (xmm, int_to_xmm_reg spare, src))
   | 0x4 ->
       let src, spare = read_modrm_xmm address_mode lr in
       with_xmm_simd mode (fun xmm simd ->
           Pmaddusbsw (xmm, simd, Reg (int_to_xmm_reg spare), src))
-  | n when 0x00 <= n && n <= 0x0b -> un_ssse3 ()
+  | n when 0x00 < n && n <= 0x0b -> un_ssse3 ()
   | 0x10 | 0x14 | 0x15 -> un_m16 sse41
   | 0x17 ->
       let src, spare = read_modrm_xmm address_mode lr in
@@ -343,8 +346,26 @@ let read_2bytes_opcode addr mode address_mode prefix lr =
   | 0x0f ->
       (* 3D now *)
       read_0f_0f mode address_mode lr
-  | 0x10 -> unsupported_modrm "movups/movss/movupd/movsd" address_mode lr
-  | 0x11 -> unsupported_modrm "movups/movss/movupd/movsd" address_mode lr
+  | 0x10 -> (
+      match (prefix, mode) with
+      | _, `M16 ->
+          let src, spare = read_modrm_xmm address_mode lr in
+          Movupd (Reg (int_to_xmm_reg spare), src)
+      | None, _ ->
+          let src, spare = read_modrm_xmm address_mode lr in
+          Movups (Reg (int_to_xmm_reg spare), src)
+      | Some F2, _ -> unsupported_modrm "movsd" address_mode lr
+      | Some F3, _ -> unsupported_modrm "movss" address_mode lr)
+  | 0x11 -> (
+      match (prefix, mode) with
+      | _, `M16 ->
+          let dst, spare = read_modrm_xmm address_mode lr in
+          Movupd (dst, Reg (int_to_xmm_reg spare))
+      | None, _ ->
+          let dst, spare = read_modrm_xmm address_mode lr in
+          Movups (dst, Reg (int_to_xmm_reg spare))
+      | Some F2, _ -> unsupported_modrm "movsd" address_mode lr
+      | Some F3, _ -> unsupported_modrm "movss" address_mode lr)
   | 0x12 -> (
       match (prefix, mode) with
       | _, `M16 ->

@@ -106,3 +106,21 @@ module type EXPLORATION = sig
 end
 
 module Exploration () : EXPLORATION
+
+module type BUFFER = sig
+  type t
+  type elt
+
+  val create : int -> t
+  val fill : t -> int -> int -> elt -> unit
+  val get : t -> int -> elt
+  val set : t -> int -> elt -> unit
+end
+
+module type BACKEND = sig
+  module Int : BUFFER with type elt := int
+  module Float : BUFFER with type elt := float
+end
+
+module Make_query (_ : BACKEND) : QUERY
+module Make_exploration (_ : BACKEND) : EXPLORATION

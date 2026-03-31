@@ -22,8 +22,8 @@
 open Common
 
 type t = { min : Z.t; max : Z.t; stride : int }
-(** Represents the unsigned fixed-width integer interval
-    between [min] and [max], with [stride] fixed bits. *)
+(** Represents the unsigned fixed-width integer interval between [min] and
+    [max], with [stride] fixed bits. *)
 
 type 'a id += T : t id
 

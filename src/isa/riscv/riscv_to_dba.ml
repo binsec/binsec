@@ -341,9 +341,8 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
     Printf.sprintf "%s %s,%s,%s" name (reg_name dst) (reg_name src1)
       (reg_name src2)
 
-  (** Amounts of bits used to represent a shift
-    Since are smaller then 32 (or 64 bits)
-    they fit on 5 or 6 bits *)
+  (** Amounts of bits used to represent a shift Since are smaller then 32 (or 64
+      bits) they fit on 5 or 6 bits *)
   let shift_size force_32 =
     if force_32 || Riscv_arch.Mode.is_m32 mode then 4
     else if Riscv_arch.Mode.is_m64 mode then 5
@@ -612,8 +611,8 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
     let remu st ~dst ~src1 ~src2 =
       _div ~on_div_by_zero:(reg_bv src1) "remu" De.urem st ~dst ~src1 ~src2
 
-    (** 32 bit division in 64 bit mode - same semantics as 32 bit division
-      with a final sign extension *)
+    (** 32 bit division in 64 bit mode - same semantics as 32 bit division with
+        a final sign extension *)
     let _divw ?on_overflow ~on_div_by_zero name f st ~dst ~src1 ~src2 =
       assert_mode_is_64 name;
       let dba =
@@ -706,32 +705,36 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
         ( Printf.sprintf "mv %s,%s" (reg_name dst) (reg_name src),
           ini (reg_bv dst <-- reg_bv src) |> seal (D_status.next st) )
 
-    let jal ~call st ~dst ~offset =
+    let jal st ~dst ~offset =
       let jmp_addr =
         let offset = Z.to_int (Bitvector.signed_of offset) in
         Virtual_address.add_int offset (D_status.addr st)
       in
-      let next_addr = D_status.next st in
+      let next_addr = D_status.next st and r = reg_bv dst in
       let tag =
-        if call then Dba.Call (Dba_types.Caddress.of_virtual_address next_addr)
+        if is_ra dst then
+          Dba.Call (Dba_types.Caddress.of_virtual_address next_addr)
         else Default
       in
-      let dba =
-        !!(ini (reg_bv dst <-- aoff next_addr) +++ vajmp ~tag jmp_addr)
+      let dba = !!(ini (r <-- aoff next_addr) +++ vajmp ~tag jmp_addr) in
+      let mnemonic =
+        if is_x0 r then Format.asprintf "j %a" Virtual_address.pp jmp_addr
+        else
+          Format.asprintf "jal %s,%a" (reg_name dst) Virtual_address.pp jmp_addr
       in
-      let mnemonic = Format.asprintf "jal %a" Virtual_address.pp jmp_addr in
       (mnemonic, dba)
 
     (** instr_size is the size in bytes, so 2 for compressed and 4 for normal *)
-    let jalr ~call st ~instr_size ~dst ~src ~offset =
-      let jump_addr =
-        let _offset = Z.to_int (Bitvector.signed_of offset) in
-        Virtual_address.add_int instr_size (D_status.addr st)
+    let jalr st ~instr_size ~dst ~src ~offset =
+      let jump_addr = Virtual_address.add_int instr_size (D_status.addr st) in
+      (* We need a temporary value for when dst = src *)
+      let base, target =
+        if Bitvector.equal dst src then
+          let tmp = De.temporary ~size:mode_size "tmp_jalr" in
+          (ini (tmp <-- reg_bv src), tmp)
+        else (empty, reg_bv src)
       in
       let r = reg_bv dst in
-      (* We need a temporary value for when dst = src *)
-      let temp = De.temporary ~size:mode_size "tmp_jalr" in
-      let base = ini (temp <-- De.add (reg_bv src) (mk_imm offset)) in
       let sr =
         if is_x0 r then base
         else
@@ -739,13 +742,19 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
           base +++ (r <-- next)
       in
       let tag : Dba.tag =
-        if call then Call (Dba_types.Caddress.of_virtual_address jump_addr)
-        else if is_x0 r then Return
+        if is_ra dst then Call (Dba_types.Caddress.of_virtual_address jump_addr)
+        else if is_x0 r && is_ra src then Return
         else Default
       in
-      let dba = !!(sr +++ ejmp ~tag temp) in
+      let dba =
+        !!(sr
+          +++ ejmp ~tag
+                (De.logand
+                   (De.add target (mk_imm offset))
+                   (De.constant (Bitvector.of_int (-2) ~size:mode_size))))
+      in
       let mnemonic =
-        if is_x0 r then "ret"
+        if is_x0 r && is_ra src then "ret"
         else
           Format.asprintf "jalr %s,%s,%a" (reg_name dst) (reg_name src)
             Virtual_address.pp jump_addr
@@ -754,8 +763,7 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
 
     let jr st r =
       let _, dba =
-        jalr ~call:false st ~instr_size:4 ~dst:Bitvector.zero ~src:r
-          ~offset:Bitvector.zero
+        jalr st ~instr_size:4 ~dst:Bitvector.zero ~src:r ~offset:Bitvector.zero
       in
       let mnemonic =
         if is_ra r then "ret" else Printf.sprintf "jr %s" (reg_name r)
@@ -840,7 +848,7 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
 
       let jmp rdst st ~offset =
         let dst = Rar.(bvnum rdst) in
-        jal ~call:false st ~dst ~offset:(real_offset offset)
+        jal st ~dst ~offset:(real_offset offset)
 
       let j st ~offset =
         let _, dba = jmp Rar.zero st ~offset in
@@ -850,9 +858,12 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
       let jal = jmp (Rar.of_int_exn 1)
 
       let jalr st ~src =
-        let dst = Rar.(bvnum ra) (* always ra *) in
+        let dst =
+          Rar.(bvnum ra)
+          (* always ra *)
+        in
         let offset = Bv.zero in
-        let _, dba = jalr ~call:true st ~instr_size:2 ~dst ~src ~offset in
+        let _, dba = jalr st ~instr_size:2 ~dst ~src ~offset in
         (Printf.sprintf "jalr %s" (reg_name src), dba)
 
       let swsp st ~src ~imm6 =
@@ -960,7 +971,10 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
         ld st ~dst ~offset ~src:base
 
       let li st ~dst ~imm5 ~imm1 =
-        let src = Bitvector.zero (* x0 *) in
+        let src =
+          Bitvector.zero
+          (* x0 *)
+        in
         let imm = Bv.concat [ imm1; imm5 ] in
         let _, dba = addi st ~src ~dst ~imm in
         ( Printf.sprintf "li %s,%s" (reg_name dst)
@@ -1160,7 +1174,7 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
       let lb = apply_off Lift.lb
       let lhu = apply_off Lift.lhu
       let lbu = apply_off Lift.lbu
-      let jalr = apply_off (Lift.jalr ~call:true ~instr_size:4)
+      let jalr = apply_off (Lift.jalr ~instr_size:4)
 
       (* Shift with immediates *)
       let apply_shift name lift_f st ~shamt ~dst ~src ~opcode =
@@ -1172,9 +1186,9 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
         Inst.create ~mnemonic ~dba ~opcode
 
       (** Spilts the 12 bit immediate into:
-       - shamt (5-6 bits) imm[4:0] or imm[5:0] depending on 32 or 64 bit mode
-       - imm[10] - used to determine right shift operation
-       asserts all other bits are 0*)
+          - shamt (5-6 bits) imm[4:0] or imm[5:0] depending on 32 or 64 bit mode
+          - imm[10] - used to determine right shift operation asserts all other
+            bits are 0*)
       let get_shamt force_32 imm =
         let shamt_size = shift_size force_32 in
         (* Invalid shift operation if imm[11,9-shamt_size+1] not zero*)
@@ -1698,7 +1712,7 @@ module Riscv_to_Dba (M : Riscv_arch.RegisterSize) = struct
           ins @@ Inst.create ~mnemonic ~dba ~opcode
       | 0x63 -> ins @@ lift_0x63 st opcode
       | 0x6f ->
-          let mnemonic, dba = I.Jtype.jal ~call:true st opcode in
+          let mnemonic, dba = I.Jtype.jal st opcode in
           ins @@ Inst.create ~mnemonic ~dba ~opcode
       | 0x67 ->
           let mnemonic, dba = I.Itype.jalr st opcode in

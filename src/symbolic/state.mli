@@ -21,21 +21,21 @@
 
 exception Unknown
 (** Raised by reasoning functions ({!module-type-S.val-check_sat} and
-    {!module-type-ENUMERATION.val-next}) when no solution has been found
-    within the resource budget (e.g. {!constructor-SetSMTSolverTimeout}). *)
+    {!module-type-ENUMERATION.val-next}) when no solution has been found within
+    the resource budget (e.g. {!constructor-SetSMTSolverTimeout}). *)
 
 exception Undefined of Dba.Var.t
-(** Raised by the {!module-type-DATA.val-lookup} function when the variable
-    is not defined. *)
+(** Raised by the {!module-type-DATA.val-lookup} function when the variable is
+    not defined. *)
 
 exception Undeclared of string option
 (** Raised by the {!module-type-DATA.val-read}, {!module-type-DATA.val-select},
-    {!module-type-S.val-write} and {!module-type-S.val-store} functions when
-    the memory array is not defined. *)
+    {!module-type-S.val-write} and {!module-type-S.val-store} functions when the
+    memory array is not defined. *)
 
 exception Non_mergeable
-(** Raised by the {!module-type-S.val-merge} function the two states can not
-    be merged. *)
+(** Raised by the {!module-type-S.val-merge} function the two states can not be
+    merged. *)
 
 type trilean = Basic_types.Ternary.t
 (** Extends the booleans with {!constructor-Unknown}. *)
@@ -107,23 +107,24 @@ module type VALUE = sig
       {!module-Binsec_kernel.module-Bitvector} [v]. *)
 
   val zero : t
-  (** [zero] shorthand for {!val-constant} {!module-Binsec_kernel.module-Bitvector.val-zero}. *)
+  (** [zero] shorthand for {!val-constant}
+      {!module-Binsec_kernel.module-Bitvector.val-zero}. *)
 
   val var : id -> string -> int -> t
-  (** [var i n s] creates a (first-order) constant value of [s] bits,
-      named [n] and uniquely identified by [i]. *)
+  (** [var i n s] creates a (first-order) constant value of [s] bits, named [n]
+      and uniquely identified by [i]. *)
 
   val unary : unary operator -> t -> t
-  (** [unary o v] returns the application of the unary operator [o] applied
-      to the value [v]. *)
+  (** [unary o v] returns the application of the unary operator [o] applied to
+      the value [v]. *)
 
   val binary : binary operator -> t -> t -> t
   (** [binary o v1 v2] returns the application of the binary operator [o]
       applied to the values [v1] and [v2]. *)
 
   val ite : t -> t -> t -> t
-  (** [ite cond if_term else_term] returns the value that evaluates to
-      [if_term] if [cond] is [true], or [else_term] otherwise. *)
+  (** [ite cond if_term else_term] returns the value that evaluates to [if_term]
+      if [cond] is [true], or [else_term] otherwise. *)
 
   (** {3 Inspection} *)
 
@@ -132,8 +133,9 @@ module type VALUE = sig
       to constant {!module-Binsec_kernel.module-Bitvector.type-t}. *)
 
   val is_zero : t -> trilean
-  (** [is_zero v] returns {!constructor-True} if [v] equals zero, 
-      {!constructor-False} if [v] equals one and {!constructor-Unknown} otherwise. *)
+  (** [is_zero v] returns {!constructor-True} if [v] equals zero,
+      {!constructor-False} if [v] equals one and {!constructor-Unknown}
+      otherwise. *)
 
   val sizeof : t -> int
   (** [sizeof v] returns the size in bits of the value [v]. *)
@@ -141,8 +143,9 @@ end
 
 module type MODEL = sig
   type t
-  (** A model is a mapping from symbolic values ({!type-value}) to their concrete 
-      values assignment ({!module-Binsec_kernel.module-Bitvector.type-t}). *)
+  (** A model is a mapping from symbolic values ({!type-value}) to their
+      concrete values assignment
+      ({!module-Binsec_kernel.module-Bitvector.type-t}). *)
 
   type value
   (** A symbolic value. *)
@@ -158,16 +161,20 @@ module type MODEL = sig
 
   val pp_with_sections :
     (Virtual_address.t -> string option) -> Format.formatter -> t -> unit
-  (** [pp_with_sections s f m] same as {!val-pp}, but may also display the section names from which memory accesses belong. *)
+  (** [pp_with_sections s f m] same as {!val-pp}, but may also display the
+      section names from which memory accesses belong. *)
 end
 
 module type COOKIE = sig
   type t
-  (** A cookie contains the configuration elements to be used to reason on the symbolic formula ({!module-type-S.val-predicate}).
-      
-      It is passed to the functions {!module-type-S.val-check_sat} and {!module-type-S.val-enumerate}.
-      It can be configured via the extension implemented by the state (see {!type-feature} and {!module-type-S.val-more}).
-      For instance, SMT solver based states can use {!constructor-SetSMTSolver} to select a different solver backend. *)
+  (** A cookie contains the configuration elements to be used to reason on the
+      symbolic formula ({!module-type-S.val-predicate}).
+
+      It is passed to the functions {!module-type-S.val-check_sat} and
+      {!module-type-S.val-enumerate}. It can be configured via the extension
+      implemented by the state (see {!type-feature} and
+      {!module-type-S.val-more}). For instance, SMT solver based states can use
+      {!constructor-SetSMTSolver} to select a different solver backend. *)
 
   val default : unit -> t
   (** [default] creates a cookie with default parameters. *)
@@ -175,28 +182,32 @@ end
 
 module type ENUMERATION = sig
   type t
-  (** The current state of the value enumeration.  *)
+  (** The current state of the value enumeration. *)
 
   type value
   (** The value returned by the enumeration. *)
 
   val next : t -> value option
-  (** [next e] gives the following value possible for the enumeration [e]. If there is no remaining value, it returns [None].
+  (** [next e] gives the following value possible for the enumeration [e]. If
+      there is no remaining value, it returns [None].
 
-       @raise Unknown when no solution is found within the current resource budget (see {!constructor-SetSMTSolverTimeout}).
-  *)
+      @raise Unknown
+        when no solution is found within the current resource budget (see
+        {!constructor-SetSMTSolverTimeout}). *)
 
   val suspend : t -> unit
-  (** [suspend e] pauses the enumeration [e] and releases the external ressources (e.g. solver session).
+  (** [suspend e] pauses the enumeration [e] and releases the external
+      ressources (e.g. solver session).
 
-      It can be used to release ressources as soon as the enumeration is no longer used or will not be used for a long time.
-      Calling {!val-next} resumes a suspended enumeration where it was paused.
-  *)
+      It can be used to release ressources as soon as the enumeration is no
+      longer used or will not be used for a long time. Calling {!val-next}
+      resumes a suspended enumeration where it was paused. *)
 end
 
 module type DATA = sig
   type t
-  (** A mapping for variables ({!module-Binsec_kernel.module-Dba.module-Var.type-t} [->] {!type-value})
+  (** A mapping for variables
+      ({!module-Binsec_kernel.module-Dba.module-Var.type-t} [->] {!type-value})
       and memory accesses ({!type-value} [->] {!type-value}). *)
 
   type value
@@ -204,38 +215,40 @@ module type DATA = sig
 
   val lookup : Dba.Var.t -> t -> value
   (** [lookup var s] returns the value assigned to [var] in [s].
-  
-      @raise Undefined if [var] is not in [s].
-  *)
+
+      @raise Undefined if [var] is not in [s]. *)
 
   val read : addr:value -> int -> Machine.endianness -> t -> value * t
-  (** [read ~addr len d s] returns [len] bytes of the value stored at address [addr] in the main memory array {b \@},
-      together with the updated state [s]. The byte order is determined by the endianness [d].
-      
-      @raise Undeclared [None] if there is no main memory in [s] (see {!module-type-S.val-declare}).
-  *)
+  (** [read ~addr len d s] returns [len] bytes of the value stored at address
+      [addr] in the main memory array {b \@}, together with the updated state
+      [s]. The byte order is determined by the endianness [d].
+
+      @raise Undeclared
+        [None] if there is no main memory in [s] (see
+        {!module-type-S.val-declare}). *)
 
   val select :
     string -> addr:value -> int -> Machine.endianness -> t -> value * t
-  (** [select m ~addr len d s] returns [len] bytes of the value stored at address [addr] in the memory array [m], together with
-      the updated state [s]. The byte order is determined by the endianness [d].
-  
-      @raise Undeclared [Some m] if [m] is not in [s] (see {!module-type-S.val-declare}).
-  *)
+  (** [select m ~addr len d s] returns [len] bytes of the value stored at
+      address [addr] in the memory array [m], together with the updated state
+      [s]. The byte order is determined by the endianness [d].
+
+      @raise Undeclared
+        [Some m] if [m] is not in [s] (see {!module-type-S.val-declare}). *)
 end
 
 type ('value, 'state, 'cookie, 'a) feature = ..
-(** A [feature] is a state functionality that is not part of the common interface.
+(** A [feature] is a state functionality that is not part of the common
+    interface.
 
-    A value of type ['a] can be queried with the function {!module-type-S.val-more}.
-    It can be anything, including a function, and may depend on the type parameters
-    ['value], ['state] and ['cookie].
-    
+    A value of type ['a] can be queried with the function
+    {!module-type-S.val-more}. It can be anything, including a function, and may
+    depend on the type parameters ['value], ['state] and ['cookie].
+
     For instance, the function {!module-type-S.val-lookup} can be expressed as a
     [!type-feature] as follows.
-    [type ('value, 'state, 'cookie, 'a) feature +=
-      | Lookup : ('value, 'state, 'cookie, Dba.Var.t -> 'state -> 'value) feature]
-*)
+    [type ('value, 'state, 'cookie, 'a) feature += | Lookup : ('value, 'state,
+     'cookie, Dba.Var.t -> 'state -> 'value) feature] *)
 
 module type S = sig
   type t
@@ -249,108 +262,110 @@ module type S = sig
   (** [empty] creates an empty state. *)
 
   val assign : Dba.Var.t -> Value.t -> t -> t
-  (** [assign var v s] returns a copy of [s] with the value [v] assigned to the variable [var]. *)
+  (** [assign var v s] returns a copy of [s] with the value [v] assigned to the
+      variable [var]. *)
 
   val declare : array:string option -> int -> t -> t
-  (** [declare ~array idx s] returns a copy of [s] where [array] is a fresh mapping between addresses
-      of [idx] bits to (first-order) constant.
-      
-      The [None] represents the main memory {b \@} (e.g. the RAM).
-      The functions {!val-read} and {!val-write} operate on {b \@}.
-      
-      The [Some name] represents a named array.
-      The functions {!val-select} and {!val-store} operate on [name].
-  *)
+  (** [declare ~array idx s] returns a copy of [s] where [array] is a fresh
+      mapping between addresses of [idx] bits to (first-order) constant.
+
+      The [None] represents the main memory {b \@} (e.g. the RAM). The functions
+      {!val-read} and {!val-write} operate on {b \@}.
+
+      The [Some name] represents a named array. The functions {!val-select} and
+      {!val-store} operate on [name]. *)
 
   val write : addr:Value.t -> Value.t -> Machine.endianness -> t -> t
-  (** [write ~addr v d s] returns a copy of [s] where the value [v] is written at the address [addr]
-      in the main memory. The byte order is determined by the endianness [d].
-  
-      @raise Undeclared [None] if there is no main memory {b \@} in [s] (see {!val-declare}). 
-  *)
+  (** [write ~addr v d s] returns a copy of [s] where the value [v] is written
+      at the address [addr] in the main memory. The byte order is determined by
+      the endianness [d].
+
+      @raise Undeclared
+        [None] if there is no main memory {b \@} in [s] (see {!val-declare}). *)
 
   val store : string -> addr:Value.t -> Value.t -> Machine.endianness -> t -> t
-  (** [store m ~addr v s] returns a copy of [s] where the value [v] is stored at the address [addr]
-      in the memory array [m]. The byte order is determined by the endianness [d].
+  (** [store m ~addr v s] returns a copy of [s] where the value [v] is stored at
+      the address [addr] in the memory array [m]. The byte order is determined
+      by the endianness [d].
 
-      @raise Undeclared [Some m] if [m] is not in [s] (see {!val-declare}). 
-  *)
+      @raise Undeclared [Some m] if [m] is not in [s] (see {!val-declare}). *)
 
   val memcpy :
     string option -> addr:Value.t -> int -> Loader_types.buffer -> t -> t
-  (** [memcpy m ~addr len content s] returns a copy of [s] where [len] bytes from the zero extended
-      buffer [content] are copied to the memory array [m] at the address [addr].
+  (** [memcpy m ~addr len content s] returns a copy of [s] where [len] bytes
+      from the zero extended buffer [content] are copied to the memory array [m]
+      at the address [addr].
 
-      @raise Undeclared [m] is not in [s] (see {!val-declare}). 
-  *)
+      @raise Undeclared [m] is not in [s] (see {!val-declare}). *)
 
   val merge : t -> t -> t
-  (** [merge t1 t2] returns a new state with the values of both [t1] and [t2]. *)
+  (** [merge t1 t2] returns a new state with the values of both [t1] and [t2].
+  *)
 
   val assume : Value.t -> t -> t option
-  (** [assume v s] returns the a copy of the state [s] for which the boolean condition [v] has been
-      added to the path predicate.
-    
-      Returns [None] if the state [s] can infer that [v] always evaluates to [false].
-  *)
+  (** [assume v s] returns the a copy of the state [s] for which the boolean
+      condition [v] has been added to the path predicate.
+
+      Returns [None] if the state [s] can infer that [v] always evaluates to
+      [false]. *)
 
   val predicate : t -> Value.t list
   (** [predicate s] returns the state predicate as a list of {!type-value}. *)
 
   val is_symbolic : Value.t -> t -> bool
-  (** [is_symbolic v s] checks if the value [v] may depend on symbolic values. *)
+  (** [is_symbolic v s] checks if the value [v] may depend on symbolic values.
+  *)
 
   val is_zero : Value.t -> t -> trilean
   (** [is_zero v s] checks if [v] may depend on symbolic values.
 
-      It returns {!constructor-True} when the state implies [v] is [false]
-      and {!constructor-False} when the state implies [v] is [true].
+      It returns {!constructor-True} when the state implies [v] is [false] and
+      {!constructor-False} when the state implies [v] is [true].
 
-      Otherwise, it returns [!constructor-Unknown], that means that [v] syntactically
-      depends on a symbolic value. *)
+      Otherwise, it returns [!constructor-Unknown], that means that [v]
+      syntactically depends on a symbolic value. *)
 
   module Model : MODEL with type value := Value.t
   module Cookie : COOKIE
 
   val check_sat : Cookie.t -> t -> Model.t option
-  (** [check_sat c s] returns a model that satisfies the predicate of [s], using the
-      configuration stored in the cookie [c].
-  
-      @raise Unknown when no solution is found within the current resource budget
-      (see {!constructor-SetSMTSolverTimeout}).
-  *)
+  (** [check_sat c s] returns a model that satisfies the predicate of [s], using
+      the configuration stored in the cookie [c].
+
+      @raise Unknown
+        when no solution is found within the current resource budget (see
+        {!constructor-SetSMTSolverTimeout}). *)
 
   module Enumeration : ENUMERATION with type value := Bitvector.t * Model.t
 
   val enumerate :
     Cookie.t -> Value.t -> ?except:Bitvector.t list -> t -> Enumeration.t
-  (** [enumerate c v ~except s] returns a new enumeration for the value [v], using the
-      configuration stored in the cookie [c].
+  (** [enumerate c v ~except s] returns a new enumeration for the value [v],
+      using the configuration stored in the cookie [c].
 
-      The enumeration will not contain any {!module-Binsec_kernel.module-Bitvector} present in [except].
-  *)
+      The enumeration will not contain any
+      {!module-Binsec_kernel.module-Bitvector} present in [except]. *)
 
   val print_smtlib :
     ?slice:(Value.t * string) list -> Format.formatter -> t -> unit
-  (** [print_smtlib ~slice f s] outputs the predicate of [s] in the SMTlib format
-      in the formatter [f].
-      
-      If [slice] is given, it outputs the current mapping between values and name.
-      Otherwise, it outputs the full mapping (variables and arrays) of [s]. 
-  *)
+  (** [print_smtlib ~slice f s] outputs the predicate of [s] in the SMTlib
+      format in the formatter [f].
+
+      If [slice] is given, it outputs the current mapping between values and
+      name. Otherwise, it outputs the full mapping (variables and arrays) of
+      [s]. *)
 
   val pp : Format.formatter -> t -> unit
   (** [pp f s] outputs the state [s] in the formatter [f]. *)
 
   val more : (Value.t, t, Cookie.t, 'a) feature -> 'a option
-  (** [more feature]
-      returns [Some] a value of type ['a]; or [None] if the current implementation
-      does not support the queried feature.
-  *)
+  (** [more feature] returns [Some] a value of type ['a]; or [None] if the
+      current implementation does not support the queried feature. *)
 end
 
 type _ value_kind = ..
-(** A witness of the value type used by the state ({!module-type-S.val-more} {!constructor-ValueKind}). *)
+(** A witness of the value type used by the state ({!module-type-S.val-more}
+    {!constructor-ValueKind}). *)
 
 type ('value, 'state, 'cookie, 'a) feature +=
   | ValueKind : ('value, 'state, 'cookie, 'value value_kind) feature

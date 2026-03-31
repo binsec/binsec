@@ -59,7 +59,9 @@ module Solver = struct
     | Binding : {
         factory : (module Bindings.OPEN);
         complete_fold_ax_values : bool;
-            (** [complete_fold_ax_values] is [true] if there is an explicit value for each accessed address, [false] when there can exist a missed default value.  *)
+            (** [complete_fold_ax_values] is [true] if there is an explicit
+                value for each accessed address, [false] when there can exist a
+                missed default value. *)
       }
         -> backend
 

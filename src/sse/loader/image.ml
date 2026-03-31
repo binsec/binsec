@@ -245,7 +245,7 @@ let elf_map_synthetic_symtab :
     string -> Loader_elf.Img.t -> Virtual_address.t -> t -> t =
  fun path source at image ->
   List.fold_left
-    (fun ({ symbols; layout; _ } as image) (value, name) ->
+    (fun ({ symbols; layout; _ } as image) (value, _, name) ->
       let value = Virtual_address.to_bigint (Virtual_address.add at value) in
       let symbols =
         StrMap.update name
@@ -398,7 +398,7 @@ let elf_buildid_path : ?dir:string -> Loader_elf.Img.t -> string option =
               (Loader_elf.Img.content source section)
           in
           match Loader_elf.Note.read cursor with
-          | { name = "GNU"; kind = 3; offset; size } ->
+          | { name = "GNU"; kind = 3l; offset; size } ->
               Reader.set_pos cursor offset;
               let build_id = Reader.Read.bytes cursor size in
               let idx = String_utils.to_hex (String.sub build_id 0 1)
@@ -494,7 +494,7 @@ let elf_load_sections : Loader_types.buffer -> Loader_elf.Section.t array -> t =
     (fun ({ content; protection; _ } as image) section ->
       match Loader_elf.Section.header section with
       | { addr; offset; size; flags; kind; _ } ->
-          if Loader_elf.Shdr.SHF.is flags ALLOC then
+          if Loader_elf.Shdr.SHF.is flags ALLOC && size > 0 then
             let lo = Virtual_address.to_bigint addr in
             let hi = Z.add lo (Z.of_int (size - 1)) in
             let mapping =
@@ -635,10 +635,9 @@ let elf_load_core : fs:(string -> Loader_types.buffer) -> Loader_elf.Img.t -> t
                     | None -> value
                     | Some { offset = fileoff; vaddr; _ } ->
                         let base =
-                          Virtual_address.create
-                            (Virtual_address.diff
-                               (Virtual_address.add_int (fileoff - offset) lo)
-                               vaddr)
+                          Virtual_address.sub
+                            (Virtual_address.add_int (fileoff - offset) lo)
+                            vaddr
                         in
                         Logger.debug "%a :: %a-%a %08x %s" Virtual_address.pp
                           base Virtual_address.pp lo Virtual_address.pp hi

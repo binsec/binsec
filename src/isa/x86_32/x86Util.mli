@@ -67,8 +67,7 @@ val segment_of_string : string -> X86Types.segment_reg option
     segment name lie "fs" or "gs", [None] otherwise
 
     A valid name is the 2 letters string representation of the algebraic data
-    type [X86Types.segment_reg].
-*)
+    type [X86Types.segment_reg]. *)
 
 val segments : X86Types.segment_reg list
 (** The list of of possible segement registers *)
@@ -111,10 +110,9 @@ val mk_address :
   int ->
   'a X86Types.genop
 (** Default values are:
-    - [address_mode]:  [A32]
-    - [address_base]:  [None]
-    - [address_index]: [None]
-*)
+    - [address_mode]: [A32]
+    - [address_base]: [None]
+    - [address_index]: [None] *)
 
 val mk_address_64 :
   ?address_mode:X86Types.address_size_mode ->

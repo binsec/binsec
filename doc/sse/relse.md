@@ -274,7 +274,7 @@ Here is an example of diagnostic reported when the target enumeration did not ru
 #### Solver timeout
 
 This is the time budget given to the SMT solver to solve a single query.
-If the symbolic constrains are hard, the SMT solver may fails to find a solution. By default, the limit is `5` seconds. Use option `-fml-solver-timeout` to set another value. Special value `0` disable the timeout.
+If the symbolic constrains are hard, the SMT solver may fails to find a solution. By default, the limit is `5` seconds. Use option `-smt-timeout` to set another value. Special value `0` disable the timeout.
 
 :information_source: *There are two kinds of queries, the exploration queries and the security ones. When unsolved, the first ones may lead to unexplored paths while the second ones mean the leakage status of an instruction can not be determined. In both case, the analysis will not be able to answer the program is `secure`.*
 
@@ -282,5 +282,5 @@ Here is an example of diagnostic reported when the target enumeration did not ru
 
 ```console
 [checkct:warning] Exploration is incomplete:
-                  - 4 SMT solver queries remain unsolved (-fml-solver-timeout)
+                  - 4 SMT solver queries remain unsolved (-smt-timeout)
 ```

@@ -358,7 +358,8 @@ let rec join :
       'a branch ->
       'a tree =
    fun ~stich (Item { lo = lo0; _ } as item0)
-       (Node { hi = hi1; mask = mask1; zero = zero1; one = one1; _ } as node1) ->
+       (Node { hi = hi1; mask = mask1; zero = zero1; one = one1; _ } as node1)
+     ->
     let n = diff lo0 mask1 in
     let z' = Z.trailing_zeros mask1 in
     if z' + 1 >= n then
@@ -391,7 +392,8 @@ let rec join :
       'a tree =
    fun ~stich
        (Node { lo = lo0; mask = mask0; zero = zero0; one = one0; _ } as node0)
-       (Node { hi = hi1; mask = mask1; zero = zero1; one = one1; _ } as node1) ->
+       (Node { hi = hi1; mask = mask1; zero = zero1; one = one1; _ } as node1)
+     ->
     let n = diff mask0 mask1 and z = Z.trailing_zeros mask0 in
     if z >= n then
       join_make_nodes ~stich ~lo:lo0 ~hi:hi1 ~mask:mask0 ~zero:zero0
@@ -1383,8 +1385,8 @@ let disjoint : type a b. a t -> b t -> bool =
         if Z.lt lo1 lo0 then disjoint_ordered tree1 tree0
         else disjoint_ordered tree0 tree1
 
-let substract :
-    type a b. ?crop:(lo:Z.t -> hi:Z.t -> a -> a) -> a t -> b t -> a t =
+let substract : type a b.
+    ?crop:(lo:Z.t -> hi:Z.t -> a -> a) -> a t -> b t -> a t =
   let union_disjoint : type a. a t -> a t -> a t =
    fun t0 t1 ->
     match (t0, t1) with
@@ -1393,8 +1395,8 @@ let substract :
     | ((Item _ | Node _) as tree0), ((Item _ | Node _) as tree1) ->
         any (join ~stich:None tree0 tree1)
   in
-  let rec substract :
-      type a b. crop:(lo:Z.t -> hi:Z.t -> a -> a) -> a tree -> b tree -> a t =
+  let rec substract : type a b.
+      crop:(lo:Z.t -> hi:Z.t -> a -> a) -> a tree -> b tree -> a t =
    fun ~crop tree0 tree1 ->
     let ub0 = upper_bound tree0 and lb1 = lower_bound tree1 in
     if Z.lt ub0 lb1 then any tree0
@@ -1458,10 +1460,10 @@ let substract :
     | ((Item _ | Node _) as tree0), ((Item _ | Node _) as tree1) ->
         substract ~crop tree0 tree1
 
-let fold_inter :
-    type a b. (a item -> b item -> 'c -> 'c) -> 'c -> a t -> b t -> 'c =
-  let rec fold_inter :
-      type a b. (a item -> b item -> 'c -> 'c) -> 'c -> a tree -> b tree -> 'c =
+let fold_inter : type a b.
+    (a item -> b item -> 'c -> 'c) -> 'c -> a t -> b t -> 'c =
+  let rec fold_inter : type a b.
+      (a item -> b item -> 'c -> 'c) -> 'c -> a tree -> b tree -> 'c =
    fun f acc tree0 tree1 ->
     let ub0 = upper_bound tree0 and lb1 = lower_bound tree1 in
     if Z.lt ub0 lb1 then acc

@@ -43,5 +43,4 @@ val stop : Dba.state -> 'a t
 
 val blockify : Dba.address -> Dba.id t list -> Dhunk.t
 (** [blockify next_addr predbas]
-    @return a full DBA block considering it continues to [next_addr]
-*)
+    @return a full DBA block considering it continues to [next_addr] *)

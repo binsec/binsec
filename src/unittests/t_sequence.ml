@@ -43,7 +43,8 @@ let eq_list expected actual ctxt =
 let eq_sequence expected actual ctxt =
   assert_equal ~ctxt ~printer:int_sequence_to_string expected actual
 
-(** compare the effect of supposedly equivalent functions on sequences and lists *)
+(** compare the effect of supposedly equivalent functions on sequences and lists
+*)
 let via_sequence name on_sequence on_list =
   QCheck.Test.make ~count:1000 ~name
     QCheck.(list nat_small)
@@ -52,7 +53,7 @@ let via_sequence name on_sequence on_list =
       let direct = l |> on_list in
       direct = via)
 
-(** checks that f @@ sequence_of_list is the identity *)
+(** checks that [f @@ sequence_of_list] is the identity *)
 let check_id name f =
   QCheck.Test.make ~count:1000 ~name
     QCheck.(list nat_small)

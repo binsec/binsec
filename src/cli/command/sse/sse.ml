@@ -85,6 +85,12 @@ let run () =
             else No
 
           let transient_enum = Options.TransientEnum.get ()
+
+          module Metrics = struct
+            module Exploration = Metrics.Exploration ()
+            module Queries = Metrics.Query ()
+          end
+
           let max_depth = Options.MaxDepth.get ()
           let enumeration_limit = Options.JumpEnumDepth.get ()
           let smt_backend = Smt_options.backend (Smt_options.Solver.get ())

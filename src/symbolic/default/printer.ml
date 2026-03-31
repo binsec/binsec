@@ -52,7 +52,12 @@ open Types
 
 type term = string
 
-type access = Select of term * int | Store of term * int
+type access =
+  | ConstSelect of { index : Z.t; size : int }
+  | Select of { index : term; size : int }
+  | ConstStore of { index : Z.t; size : int }
+  | Store of { index : term; size : int }
+
 and def = Bl of Expr.t | Bv of Expr.t | Ax of Memory.t | Decl of string
 
 and t = {
@@ -203,7 +208,11 @@ and visit_and_mark_bv ctx bv set label' =
       Queue.push (Bv bv) ctx.ordered_defs;
       let (Symbol _ as root) = AxTbl.find ctx.ax_root label in
       let ordered_mem = AxTbl.find ctx.ordered_mem root in
-      Queue.push (Select (BvTbl.find ctx.bv_cons addr, len)) ordered_mem
+      Queue.push
+        (match addr with
+        | Cst bv -> ConstSelect { index = Bitvector.value_of bv; size = len }
+        | _ -> Select { index = BvTbl.find ctx.bv_cons addr; size = len })
+        ordered_mem
   | Cst _ ->
       set ctx.bv_cons bv label';
       Queue.push (Bv bv) ctx.ordered_defs
@@ -283,10 +292,17 @@ and visit_and_mark_ax ctx (ax : Memory.t) set label =
       let ordered_mem = AxTbl.find ctx.ordered_mem root in
       let index =
         match addr with
-        | Cst _ -> Format.asprintf "%a" (pp_int_as_offset index)
+        | Cst _ -> fun index size -> ConstStore { index; size }
         | _ ->
             let addr = BvTbl.find ctx.bv_cons addr in
-            Format.asprintf "(bvadd %s %a)" addr (pp_int_as_offset index)
+            fun idx size ->
+              Store
+                {
+                  index =
+                    Format.asprintf "(bvadd %s %a)" addr
+                      (pp_int_as_offset index) idx;
+                  size;
+                }
       in
       let lazy_memory =
         match (addr, over) with Cst _, Symbol _ -> true | _ -> false
@@ -294,7 +310,7 @@ and visit_and_mark_ax ctx (ax : Memory.t) set label =
       Store.iter
         (fun i chunk ->
           if Chunk.is_term chunk || not lazy_memory then
-            Queue.push (Store (index i, Chunk.len chunk)) ordered_mem)
+            Queue.push (index i (Chunk.len chunk)) ordered_mem)
         store
 
 let pp_unop ppf (op : Term.unary Term.operator) =
@@ -592,7 +608,8 @@ and print_multi_select =
       print_multi_select_be (i + 1) ppf len ax bv size)
   in
   function
-  | LittleEndian -> print_multi_select_le | BigEndian -> print_multi_select_be 0
+  | LittleEndian -> print_multi_select_le
+  | BigEndian -> print_multi_select_be 0
 
 let pp_print_defs ppf ctx =
   Queue.iter

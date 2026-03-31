@@ -79,7 +79,7 @@ a major bottleneck of symbolic execution since a satisfiability query can
 use large amounts of ressources, both in time and memory.  
 By default, BINSEC runs each query with a timeout of `5s`. This parameter
 can be set with a higher value using the command-line option
-`-fml-solver-timeout`.
+`-smt-timeout`.
 
 :information_source: Timeouts can be totally disabled by using the
 special value `0`.

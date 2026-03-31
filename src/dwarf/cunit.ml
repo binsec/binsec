@@ -1325,12 +1325,12 @@ module Global = struct
     | { children; _ } ->
         let rec walk : Die.t list -> Die.t list -> Die.t list =
          fun vars -> function
-          | [] -> vars
-          | d :: l -> (
-              match d with
-              | { tag = Subprogram; _ } -> walk vars l
-              | { tag = Variable; _ } -> walk (d :: vars) l
-              | { children; _ } -> List.concat [ children; l ] |> walk vars)
+           | [] -> vars
+           | d :: l -> (
+               match d with
+               | { tag = Subprogram; _ } -> walk vars l
+               | { tag = Variable; _ } -> walk (d :: vars) l
+               | { children; _ } -> List.concat [ children; l ] |> walk vars)
         in
         walk [] children
 end

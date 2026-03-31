@@ -89,8 +89,8 @@ module Mode : sig
   (** size in bits *)
 end
 
-(** Parameter for register module,
-    size is one of Mode.m32, Mode.m64 or Mode.m128 (Not yet supported) *)
+(** Parameter for register module, size is one of Mode.m32, Mode.m64 or
+    Mode.m128 (Not yet supported) *)
 module type RegisterSize = sig
   val size : Mode.t
 end

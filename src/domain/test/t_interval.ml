@@ -75,9 +75,9 @@ let unary f c size size' =
       Z.equal it'.min it'.max = (it'.stride = size')
       && (it.stride <> size || it'.stride = size')
       (* |> fun b ->
-         * if not b then
-         *   Format.eprintf "op %a -> %a@ " Interval.pp it Interval.pp it';
-         * b *)
+       * if not b then
+       *   Format.eprintf "op %a -> %a@ " Interval.pp it Interval.pp it';
+       * b *)
       && Interval.for_all
            (fun i -> Interval.mem (app1 c i size) ~size it')
            ~size it

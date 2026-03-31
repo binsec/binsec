@@ -205,8 +205,7 @@ module Callback = struct
       if Z.lt lo0 lo1 then update_ordered item1 item0
       else update_ordered item0 item1
 
-  let register_hook :
-      type a.
+  let register_hook : type a.
       t -> Virtual_address.t Interval.t -> ?stage:stage -> a hook -> a -> t =
    fun ({ n; fetch; decode; disasm; rewrite; _ } as env) { lo; hi }
        ?(stage = Early) hook f ->
@@ -258,8 +257,8 @@ module Callback = struct
    fun ({ n; instrument; _ } as env) f ->
     { env with n = n + 1; instrument = Q.add n f instrument }
 
-  let register_knowledge :
-      type a. t -> a knowledge -> (Ir.builtin -> a option) -> t =
+  let register_knowledge : type a.
+      t -> a knowledge -> (Ir.builtin -> a option) -> t =
    fun ({ may_read; must_write; _ } as env) info callback ->
     match info with
     | May_read -> { env with may_read = callback :: may_read }
@@ -573,8 +572,8 @@ let disassemble_from : t -> Virtual_address.t -> Ir.Graph.vertex =
                       Virtual_address.Map.add target
                         ((vertex + pred, label, tag)
                         ::
-                        (try Virtual_address.Map.find target addresses
-                         with Not_found -> []))
+                          (try Virtual_address.Map.find target addresses
+                           with Not_found -> []))
                         addresses
                   | _ -> addresses)
                 ir addresses

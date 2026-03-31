@@ -29,7 +29,7 @@ module StrMap = Basic_types.String.Map
 module AttrMap = Dba.Var.Tag.Attribute.Map
 
 exception Halt
-exception Unresolved of string * Dba.Var.Tag.attribute
+exception Unresolved = Script.Unresolved
 exception Unknown = Symbolic.State.Unknown
 exception Initialization_failure
 
@@ -945,6 +945,12 @@ module Run (Config : CONFIG) (State : STATE) (W : Worklist.S) () = struct
         end
 
         module Debug = struct
+          let symbol : ?info:Dba.Var.Tag.attribute -> string -> Z.t option =
+           fun ?(info = Value) name ->
+            match query_symbol name info with
+            | exception Unresolved _ -> None
+            | value -> Some value
+
           let reverse_section : Virtual_address.t -> (string * Z.t) option =
            fun addr ->
             match rev_section addr with
@@ -970,8 +976,7 @@ module Run (Config : CONFIG) (State : STATE) (W : Worklist.S) () = struct
 
         type ('a, 'b) eq = False | True : ('a, 'a) eq
 
-        let equal :
-            type a b.
+        let equal : type a b.
             ('value0, 'model0, 'state0, 'path0, a) field_id ->
             ('value1, 'model1, 'state1, 'path1, b) field_id ->
             (a, b) eq =
@@ -985,8 +990,7 @@ module Run (Config : CONFIG) (State : STATE) (W : Worklist.S) () = struct
 
         let fields : entry list ref = ref []
 
-        let register :
-            type a.
+        let register : type a.
             ('value, 'model, 'state, 'path, a) field_id ->
             ?copy:(a -> a) ->
             ?merge:(a -> a -> a option) ->
@@ -996,8 +1000,7 @@ module Run (Config : CONFIG) (State : STATE) (W : Worklist.S) () = struct
           fields :=
             Entry (id, Path.declare_field default ?copy ?merge) :: !fields
 
-        let rec lookup :
-            type a.
+        let rec lookup : type a.
             (Path.value, Path.model, Path.state, Path.t, a) field_id ->
             entry list ->
             a Path.key =
@@ -1126,55 +1129,56 @@ module Run (Config : CONFIG) (State : STATE) (W : Worklist.S) () = struct
       in
       let eval : Path.t -> Ir.fallthrough -> unit =
        fun path -> function
-        | Nop | Instruction _ | Hook _ | Forget _ | Goto _ -> ()
-        | Assign { var; rval } -> Path.assign path var rval
-        | Clobber var -> Path.clobber path var
-        | Load { var; base; dir; addr } -> Path.load path var base dir ~addr
-        | Store { base; dir; addr; rval } -> Path.store path base rval dir ~addr
-        | Symbolize var -> Path.symbolize path var
-        | Assume test -> (
-            match Path.assume path test with
-            | exception Unknown ->
-                report path Unresolved_formula;
-                raise Initialization_failure
-            | None ->
-                Logger.warning
-                  "@[<hov>Cut path %d (unsatisfiable assumption) %@ %a@]"
-                  (Path.id path) pp_virtual_address (Path.pc path);
-                report path Unsatisfiable_assumption;
-                raise Initialization_failure
-            | Some _ -> ())
-        | Assert test -> (
-            match split path test with
-            | True -> ()
-            | False ->
-                Logger.error "@[<v 2> Assertion failed %@ %a@ %a@]"
-                  pp_virtual_address (Path.pc path) pp_model
-                  (List.hd (Path.models path));
-                report path Assertion_failure;
-                raise Initialization_failure
-            | Both (path, other) ->
-                report other Assertion_failure;
-                Logger.error "@[<v 2> Assertion failed %@ %a@ %a@]"
-                  pp_virtual_address (Path.pc path) pp_model
-                  (List.hd (Path.models other)))
-        | Builtin builtin -> (
-            match Compiler.resolve_builtin config builtin with
-            | Unknown -> raise Initialization_failure
-            | Apply f -> f path
-            | Call f -> (
-                match f path with
-                | Return -> ()
-                | Return_to _ | Call _ | Tail_call _ | Continue _ | Signal _
-                | Fork _ | Merge _ ->
-                    raise Initialization_failure))
+         | Nop | Instruction _ | Hook _ | Forget _ | Goto _ -> ()
+         | Assign { var; rval } -> Path.assign path var rval
+         | Clobber var -> Path.clobber path var
+         | Load { var; base; dir; addr } -> Path.load path var base dir ~addr
+         | Store { base; dir; addr; rval } ->
+             Path.store path base rval dir ~addr
+         | Symbolize var -> Path.symbolize path var
+         | Assume test -> (
+             match Path.assume path test with
+             | exception Unknown ->
+                 report path Unresolved_formula;
+                 raise Initialization_failure
+             | None ->
+                 Logger.warning
+                   "@[<hov>Cut path %d (unsatisfiable assumption) %@ %a@]"
+                   (Path.id path) pp_virtual_address (Path.pc path);
+                 report path Unsatisfiable_assumption;
+                 raise Initialization_failure
+             | Some _ -> ())
+         | Assert test -> (
+             match split path test with
+             | True -> ()
+             | False ->
+                 Logger.error "@[<v 2> Assertion failed %@ %a@ %a@]"
+                   pp_virtual_address (Path.pc path) pp_model
+                   (List.hd (Path.models path));
+                 report path Assertion_failure;
+                 raise Initialization_failure
+             | Both (path, other) ->
+                 report other Assertion_failure;
+                 Logger.error "@[<v 2> Assertion failed %@ %a@ %a@]"
+                   pp_virtual_address (Path.pc path) pp_model
+                   (List.hd (Path.models other)))
+         | Builtin builtin -> (
+             match Compiler.resolve_builtin config builtin with
+             | Unknown -> raise Initialization_failure
+             | Apply f -> f path
+             | Call f -> (
+                 match f path with
+                 | Return -> ()
+                 | Return_to _ | Call _ | Tail_call _ | Continue _ | Signal _
+                 | Fork _ | Merge _ ->
+                     raise Initialization_failure))
       in
       let eval : Path.t -> Ir.stmt -> unit =
        fun path -> function
-        | Nop -> ()
-        | Opcode op -> eval path op
-        | Label _ | If _ | Goto _ | End _ ->
-            raise (Invalid_argument "initialization")
+         | Nop -> ()
+         | Opcode op -> eval path op
+         | Label _ | If _ | Goto _ | End _ ->
+             raise (Invalid_argument "initialization")
       in
       let blit : Path.t -> Image.buffer Zmap.t -> unit =
        fun path content ->
@@ -1517,8 +1521,9 @@ module Run (Config : CONFIG) (State : STATE) (W : Worklist.S) () = struct
         halt ();
         Logger.fatal ~e "Unable to resolve the initial state"
     in
-    if IntTbl.length tasks = 0 then
-      Logger.warning "Nothing to reach: halting..."
+    if IntTbl.length tasks = 0 then (
+      Logger.warning "Nothing to reach: halting...";
+      halt ())
     else
       let fiber =
         match stmts with

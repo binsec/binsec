@@ -64,6 +64,5 @@ val run : unit -> unit
 (** Run disassembly *)
 
 val decode : string -> unit
-(** [decode s] decodes the string opcode [s].
-    Assumes [s] is an hexadecimal string, i.e. of the form [0-9a-f]+
-*)
+(** [decode s] decodes the string opcode [s]. Assumes [s] is an hexadecimal
+    string, i.e. of the form [0-9a-f]+ *)

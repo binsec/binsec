@@ -22,8 +22,7 @@
 (** {2 Virtual addresses}
 
     A virtual address is a simple location information corresponding to a
-    physical (virtual) address of the underlying machine.
-*)
+    physical (virtual) address of the underlying machine. *)
 
 open Basic_types.Integers
 
@@ -46,6 +45,7 @@ val to_string : t -> string
 val add : t -> t -> t
 val add_int : int -> t -> t
 val add_bigint : Z.t -> t -> t
+val sub : t -> t -> t
 val succ : t -> t
 val pred : t -> t
 val diff : t -> t -> int

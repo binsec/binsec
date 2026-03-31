@@ -30,7 +30,6 @@ let pp_print_list2 =
   Format.pp_print_list ~pp_sep:Format.pp_print_space (fun ppf (i, v) ->
       Format.fprintf ppf "(%a -> %c)" Z.pp_print i v)
 
-let () = ignore pp_print_list
 let debug = ref false
 
 let rec unroll lo hi elt elts =
@@ -120,8 +119,6 @@ let test_create l =
 
   check_equal m m' && check_compact m
 
-let () = ignore test_create
-
 let test_query (w, r) =
   let w = cast_items w and r = cast_index r in
 
@@ -141,8 +138,6 @@ let test_query (w, r) =
       v0 = v1)
     r
 
-let () = ignore test_query
-
 let test_disjoint (l0, l1) =
   let l0 = cast_items l0 and l1 = cast_items l1 in
   let m0 = of_items l0 and m1 = of_items l1 in
@@ -154,8 +149,6 @@ let test_disjoint (l0, l1) =
     Format.eprintf "@[<v>Witness: %b@ Result: %b@]@." r' r);
   r = r'
 
-let () = ignore test_disjoint
-
 let test_substract (l0, l1) =
   let l0 = cast_items l0 and l1 = cast_items l1 in
   let m0 = of_items l0 and m1 = of_items l1 in
@@ -163,8 +156,6 @@ let test_substract (l0, l1) =
   let r = Zmap.substract m0 m1
   and r' = M.fold (fun i _ m' -> M.remove i m') m1' m0' in
   check_equal r r'
-
-let () = ignore test_substract
 
 let test_fold_inter (l0, l1) =
   let l0 = cast_items l0 and l1 = cast_items l1 in
@@ -199,8 +190,6 @@ let test_fold_inter (l0, l1) =
           m1' Z.zero
       in
       r = r'
-
-let () = ignore test_fold_inter
 
 let benchmark_zmap l =
   ignore
@@ -259,8 +248,6 @@ let test_create2 l =
       pp_print_list2 r;
   r = r'
 
-let () = ignore test_create2
-
 let test_create3 (l0, l1) =
   let l0 = cast_items l0 and l1 = cast_items l1 in
 
@@ -282,8 +269,6 @@ let test_create3 (l0, l1) =
 
   check_equal m m' && check_compact m
 
-let () = ignore test_create3
-
 let test_create4 (l0, l1) =
   let l0 = cast_objects l0 and l1 = cast_objects l1 in
 
@@ -300,8 +285,6 @@ let test_create4 (l0, l1) =
     Format.eprintf "@[<v>Witness: %a@ Result: %a@]@." pp_print_list2 r'
       pp_print_list2 r;
   r = r'
-
-let () = ignore test_create4
 
 let test_overlap l =
   let check : (int * int) * (int * int) -> bool =
@@ -391,7 +374,6 @@ let test_overlap l =
 
   List.for_all check l
 
-let () = ignore test_overlap
 let () = QCheck_base_runner.set_seed 26186641
 
 let itervals_generator =
@@ -400,20 +382,15 @@ let itervals_generator =
          Format.sprintf "{%d..%d}, {%d..%d}" i (i + o) i' (i' + o')))
     (QCheck.list
        (QCheck.pair
-          (QCheck.pair QCheck.nat_small QCheck.int_pos_small)
-          (QCheck.pair QCheck.nat_small QCheck.int_pos_small)))
-
-let () = ignore itervals_generator
+          (QCheck.pair QCheck.nat_small QCheck.nat_small)
+          (QCheck.pair QCheck.nat_small QCheck.nat_small)))
 
 let item_generator =
   QCheck.set_print
     (QCheck.Print.list (fun (i, (o, v)) ->
          Format.sprintf "{%d..%d}: %d" i (i + o) v))
     (QCheck.list
-       (QCheck.pair QCheck.nat_small
-          (QCheck.pair QCheck.int_pos_small QCheck.int)))
-
-let () = ignore item_generator
+       (QCheck.pair QCheck.nat_small (QCheck.pair QCheck.nat_small QCheck.int)))
 
 let object_generator =
   QCheck.set_print
@@ -424,9 +401,7 @@ let object_generator =
           (QCheck.map (fun i -> i lsl 2) QCheck.nat_small)
           (QCheck.string_size_of (* (fun _ -> 4) *)
              (QCheck.gen (QCheck.int_range 1 16))
-             (QCheck.gen QCheck.printable))))
-
-let () = ignore object_generator
+             QCheck.Gen.char_printable)))
 
 let () =
   if false && not !debug then
@@ -478,4 +453,5 @@ let () =
     ignore @@ test_create2 [ (0, "aaaaaaa"); (2, "bb") ];
     ignore @@ test_create2 [ (0, "aaaaaaa"); (2, "bb"); (5, "c") ];
     ignore @@ test_create4 ([ (36, "a") ], [ (28, "aaaaaaaaa") ]);
-    ignore @@ test_overlap [ ((0, 1), (0, 0)) ])
+    ignore @@ test_overlap [ ((0, 1), (0, 0)) ];
+    ignore @@ test_overlap [ ((0, 1), (1, 2)) ])

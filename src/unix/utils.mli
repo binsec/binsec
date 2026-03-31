@@ -21,7 +21,7 @@
 
 (** Generic utilities *)
 
-(** {2 Timing } *)
+(** {2 Timing} *)
 
 val time : (unit -> 'a) -> float * 'a
 (** [time f] times the execution of function f and returns both the time taken

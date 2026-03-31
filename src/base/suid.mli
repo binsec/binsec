@@ -20,12 +20,11 @@
 (**************************************************************************)
 
 type t = private string
-(** This module is intended to generate valid SMTLib2 short identifiers
-    Are valid any non-empty sequence of letters, digits
-                  and the characters ~ ! \@ $ % ^ & * _ - + < > . ? /
-                  that does not start with a digit
-    To never clash with reserved keywords, generated identifiers
-    always start with one of the special characters *)
+(** This module is intended to generate valid SMTLib2 short identifiers Are
+    valid any non-empty sequence of letters, digits and the characters ~ ! \@ $
+    % ^ & * _ - + < > . ? / that does not start with a digit To never clash with
+    reserved keywords, generated identifiers always start with one of the
+    special characters *)
 
 (** Generated identifier follows the syntax :
     [!$%&*+./?^~][0-9a-zA-Z!$%&*+./?^~]+ *)

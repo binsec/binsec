@@ -29,6 +29,5 @@ val register :
   unit
 
 val get : Machine.isa -> int Reader.t -> Virtual_address.t -> Instruction.t
-(** [get isa buf addr]
-    interprets the opcode bytes at the current position of the buffer [buf]
-    as a rebased [isa] instruction for address [addr]. *)
+(** [get isa buf addr] interprets the opcode bytes at the current position of
+    the buffer [buf] as a rebased [isa] instruction for address [addr]. *)

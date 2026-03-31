@@ -38,13 +38,11 @@ val id_from_qid : Smtlib.qual_identifier -> Smtlib.identifier
 (** [id_from_qid qid] extracts the id part of a qualified identifier *)
 
 val is_constant_term : Smtlib.term -> bool
-(** [is_constant t] checks if the term t is a constant or not.
- *  A real constant might be hidden under an annotated term.
-*)
+(** [is_constant t] checks if the term t is a constant or not. * A real constant
+    might be hidden under an annotated term. *)
 
 val is_variable_term : Smtlib.term -> bool
-(** [is_variable t] checks if the term t is possibly a variable or not.
-*)
+(** [is_variable t] checks if the term t is possibly a variable or not. *)
 
 (** {2 Creation functions} *)
 

@@ -22,6 +22,8 @@
 include Binsec_script
 module S = Basic_types.String
 
+exception Unresolved of string * Dba.Var.Tag.attribute
+
 type env = {
   wordsize : int;
   endianness : Machine.endianness;
@@ -912,8 +914,8 @@ let grammar : (unit, obj, unit, unit, obj Dyp.dyplexbuf) Dyp.dyp_action list =
             "default_priority",
             [] ),
           fun _ -> function
-            | [ Syntax.String id ] -> (Syntax.String id, [])
-            | _ -> assert false );
+            | [ Syntax.String id ] -> (Syntax.String id, []) | _ -> assert false
+        );
         ( ("qident", [ Dyp.Ter "CONST" ], "default_priority", []),
           fun _ -> function
             | [ Syntax.Obj_CONST bv ] ->
@@ -924,8 +926,8 @@ let grammar : (unit, obj, unit, unit, obj Dyp.dyplexbuf) Dyp.dyp_action list =
             "default_priority",
             [] ),
           fun _ -> function
-            | [ Syntax.String id ] -> (Syntax.String id, [])
-            | _ -> assert false );
+            | [ Syntax.String id ] -> (Syntax.String id, []) | _ -> assert false
+        );
         ( ( "section",
             [ Dyp.Non_ter ("label", No_priority) ],
             "default_priority",

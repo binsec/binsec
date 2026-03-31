@@ -377,7 +377,7 @@ For a more exhaustive list of *sse* command line options
 #### `-smt-solver {auto|bitwuzla|bitwuzla:native|bitwuzla:smtlib|boolector|boolector:smtlib|z3|z3:smtlib|cvc4|cvc4:smtlib|yices|yices:smtlib}`
 Set the SMT solver to use *[default:*`z3`*]*
 
-#### `-fml-solver-timeout <n>`
+#### `-smt-timeout <n>`
 Set a timeout in seconds for solver queries *[default:*`5s`*]*
 
 ### `-arm-supported-modes {both|thumb|arm}`

@@ -1,3 +1,21 @@
+## 0.11.1 (2026-03-31)
+
+** Misc
+
+- Upgrade `ocamlformat` (`= 0.28.1`)
+
+** Bugs
+
+- Fix compilation issue with OCaml `>= 5.4`
+- Fix tests using newer version of `qcheck` (`>= 0.90`)
+- Properly install the script `archive_sysroot.sh`
+- Properly catch `Dynlink` error during `-help` command
+- Replace wrong references to `-fml-solver-timeout` by `-smt-timeout`
+- Strengthen `field` type equation in SSE plugins API
+- Fix incorrect syntactic simplifications during SSE disassembly
+- Fix some issues with x86 and RISCV disassembly
+- Fix minor typos in documentation
+
 ## 0.11.0 (2026-01-06)
 
 ** Feature

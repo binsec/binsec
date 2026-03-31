@@ -25,8 +25,7 @@ module Flags : PLUGIN = struct
   let name = "sse-kill-flags-at-return"
   let fields _ = []
 
-  let extensions :
-      type a.
+  let extensions : type a.
       (module Types.ENGINE with type Path.t = a) -> a Types.extension list =
    fun engine ->
     let module Engine = (val engine) in

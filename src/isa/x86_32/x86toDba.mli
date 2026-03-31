@@ -30,10 +30,8 @@ val unknown_instructions : unit -> int * int
 (** insertions / unique insertions *)
 
 val native_instructions_decoded : unit -> int
-(** Number of decoded instructions.
-    This is always equal to
-    [fst (handled_instructions ()) + fst (unknown_instructions ())]
-*)
+(** Number of decoded instructions. This is always equal to
+    [fst (handled_instructions ()) + fst (unknown_instructions ())] *)
 
 val pp_unknown_instructions : Format.formatter -> unit -> unit
 val decode : int Reader.t -> Virtual_address.t -> X86Instruction.t * Dhunk.t
@@ -43,5 +41,4 @@ val decode_binstream :
 (** [decode_binstream base_addr bstream] decodes a binary stream whose address
     is supposed to be [base_addr] into an instruction and its DBA hunk encoding.
 
-    - [base_addr] defaults to 0
-*)
+    - [base_addr] defaults to 0 *)

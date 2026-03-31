@@ -22,9 +22,7 @@
 module Logger : Logger.S
 
 module Model_from_file : Cli.STRING_OPT
-(** When given a filename, this switch enables parsing from a given SMT model
- ** file, printing the obtained model, in BINSEC's internal format.
- **
- ** This option is in particular useful to integrate and test new SMT model
- ** format, as most provers have their own way of displaying a model.
- **)
+(** When given a filename, this switch enables parsing from a given SMT model **
+    file, printing the obtained model, in BINSEC's internal format. ** ** This
+    option is in particular useful to integrate and test new SMT model **
+    format, as most provers have their own way of displaying a model. **)

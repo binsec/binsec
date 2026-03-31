@@ -40,6 +40,7 @@ let of_bitvector = Bitvector.value_of
 let add = Z.add
 let add_int n t = Z.add t (create n)
 let add_bigint = Z.add
+let sub a b = if Z.lt a b then raise (Invalid_argument "sub") else Z.sub a b
 let succ = Z.succ
 let pred = Z.pred
 

@@ -41,6 +41,7 @@ module type S = sig
   val iter : (Z.t -> v -> unit) -> t -> unit
   val rev_iter : (Z.t -> v -> unit) -> t -> unit
   val fold : (Z.t -> v -> 'a -> 'a) -> 'a -> t -> 'a
+  val fold_between : (Z.t -> v -> 'a -> 'a) -> Z.t -> Z.t -> 'a -> t -> 'a
   val rev_fold : (Z.t -> v -> 'a -> 'a) -> 'a -> t -> 'a
   val map : (Z.t -> v -> v) -> t -> t
   val merge : (Z.t -> v option -> v option -> v option) -> t -> t -> t

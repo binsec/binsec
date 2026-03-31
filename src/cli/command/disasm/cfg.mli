@@ -76,18 +76,17 @@ module type S = sig
     (** Predicate to determine the fixpoint. *)
 
     val analyze : E.t -> data -> data
-    (** The actual analysis of one edge; provided the edge and the incoming
-           * data, it needs to compute the outgoing data. *)
+    (** The actual analysis of one edge; provided the edge and the incoming *
+        data, it needs to compute the outgoing data. *)
   end) : sig
     val analyze : (V.t -> X.data) -> t -> V.t -> X.data
-    (** [analyze f g] computes the fixpoint on the given graph using the work
-      * list algorithm. Beware that a misconstructed Fixpoint will not terminate!
-      * [f] is used to create the initial analysis data. The function returned is
-      * a map to see what data was computed for which node.
-      *
-      * Beware of applying function [analyze] partially, to arguments [f] and [g]
-      * only. The result is a function that is to be used to query the result of
-      * the analysis. *)
+    (** [analyze f g] computes the fixpoint on the given graph using the work *
+        list algorithm. Beware that a misconstructed Fixpoint will not
+        terminate! * [f] is used to create the initial analysis data. The
+        function returned is * a map to see what data was computed for which
+        node. * * Beware of applying function [analyze] partially, to arguments
+        [f] and [g] * only. The result is a function that is to be used to query
+        the result of * the analysis. *)
   end
 
   type trace = vertex Sequence.t
@@ -99,20 +98,20 @@ module type S = sig
 
   val create : int -> t
   (** Return an empty graph. Optionally, a size can be given, which should be on
-    * the order of the expected number of vertices that will be in the graph (for
-    * hash tables-based implementations). The graph grows as needed, so [size] is
-    * just an initial guess. *)
+      * the order of the expected number of vertices that will be in the graph
+      (for * hash tables-based implementations). The graph grows as needed, so
+      [size] is * just an initial guess. *)
 
   val clear : t -> unit
   (** Remove all vertices and edges from the given graph. *)
 
   val copy : t -> t
   (** [copy g] returns a copy of [g]. Vertices and edges (and eventually marks,
-    * see module [Mark]) are duplicated. *)
+      * see module [Mark]) are duplicated. *)
 
   val add_vertex : t -> vertex -> unit
-  (** [add_vertex g v] adds the vertex [v] in graph [g]. Do nothing if [v]
-    * is already in [g]. *)
+  (** [add_vertex g v] adds the vertex [v] in graph [g]. Do nothing if [v] * is
+      already in [g]. *)
 
   val add_addr : t -> addr -> unit
   val add_inst : t -> addr -> inst -> unit
@@ -120,7 +119,7 @@ module type S = sig
 
   val remove_vertex : t -> vertex -> unit
   (** [remove g v] removes the vertex [v] from the graph [g] (and all the edges
-    * going from [v] in [g]). Do nothing if [v] is not in [g]. *)
+      * going from [v] in [g]). Do nothing if [v] is not in [g]. *)
 
   val remove_addr : t -> addr -> unit
   val remove_inst : t -> addr -> unit
@@ -128,15 +127,15 @@ module type S = sig
 
   val add_edge : t -> vertex -> vertex -> unit
   (** [add_edge g v1 v2] adds an edge from the vertex [v1] to the vertex [v2] in
-    * the graph [g]. Add also [v1] (resp. [v2]) in [g] if [v1] (resp. [v2]) is not
-    * in [g]. Do nothing if this edge is already in [g]. *)
+      * the graph [g]. Add also [v1] (resp. [v2]) in [g] if [v1] (resp. [v2]) is
+      not * in [g]. Do nothing if this edge is already in [g]. *)
 
   val add_edge_a : t -> addr -> addr -> unit
 
   val add_edge_e : t -> edge -> unit
-  (** [add_edge_e g e] adds the edge [e] in the graph [g]. Add also [E.src e]
-    * (resp. [E.dst e]) in [g] if [E.src e] (resp. [E.dst e]) is not in [g]. Do
-    * nothing if [e] is already in [g]. *)
+  (** [add_edge_e g e] adds the edge [e] in the graph [g]. Add also [E.src e] *
+      (resp. [E.dst e]) in [g] if [E.src e] (resp. [E.dst e]) is not in [g]. Do
+      * nothing if [e] is already in [g]. *)
 
   val remove_edge : t -> vertex -> vertex -> unit
   (** [remove_edge g v1 v2] removes the edge going from [v1] to [v2] from the
@@ -212,7 +211,8 @@ module type S = sig
   (** {2 Vertex iterators}
 
       Each iterator [iterator f v g] iters [f] to the successors/predecessors of
-      [v] in the graph [g] and raises [Invalid_argument] if [v] is not in [g]. *)
+      [v] in the graph [g] and raises [Invalid_argument] if [v] is not in [g].
+  *)
 
   (** iter/fold on all successors/predecessors of a vertex. *)
 
