@@ -43,7 +43,7 @@ Names in script file are not case-sensitive. So writing `eax` or `EAX` behaves t
 - little endian multi-byte access `<-`  
   (e.g. `@[0x4000,<-,4]` is equivalent to `@[0x4003] :: @[0x4002] :: @[0x4001] :: @[0x4000]`)
 - big endian multi-byte access `->`  
-  (e.g. `@(0x4000,->,4]` is equivalent to `@[0x4000] :: @[0x4001] :: @[0x4002] :: @[0x4003]`)
+  (e.g. `@[0x4000,->,4]` is equivalent to `@[0x4000] :: @[0x4001] :: @[0x4002] :: @[0x4003]`)
 - *byte size* should be constant positive interger [default: 1] 
 
 #### Parenthesis `(`*expr*`)`
