@@ -1,3 +1,15 @@
+## 0.11.2 (2026-06-30)
+
+** Misc
+
+- Update help wording in `make_coredump.sh` script and add a `--quiet` option
+
+** Bugs
+
+- Fix loader bug with zero-sized sections
+- Fix minor typos in documentation (including #62)
+- Remove leftover SSE options for deleted features (#64)
+
 ## 0.11.1 (2026-03-31)
 
 ** Misc

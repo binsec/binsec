@@ -356,12 +356,6 @@ Change the search heuristics *[default:*`dfs`*]*
 #### `-sse-jump-enum <n>` 
 Change the maximum number of jump targets computed to dynamic jumps *[default:*`3`*]*
 
-#### `-sse-keep-going`
-Ignore errors returned by the SMT solver (`stale path`) *[default:*`abort`*]*
-
-#### `-sse-load-ro-sections`
-Load the content of all read-only sections *[default:*`false`*]*
-
 #### `-sse-script <file>[,<file>..]`
 Read script from files.
 

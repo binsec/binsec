@@ -100,16 +100,16 @@ module BvTbl : Hashtbl.S with type key = Expr.t
 module AxTbl : Hashtbl.S with type key = Memory.t
 module AsMap : Map.S with type key = Memory.symbol
 module AsTbl : Hashtbl.S with type key = Memory.symbol
-module StTbl : Hashtbl.S with type key = string
 
 module Model : sig
   type t = {
-    symbols : Expr.t StTbl.t;
+    symbols : Expr.t Basic_types.String.Htbl.t;
     values : Bv.t BvTbl.t;
     arrays : char Basic_types.Integers.Bigint.Htbl.t AsTbl.t;
   }
 
   val empty : unit -> t
+  val copy : t -> t
 
   val eval :
     ?symbols:(Expr.t -> Bitvector.t) ->

@@ -3,6 +3,32 @@
 The latest public revision of `binsec` is available on GitHub:
 https://github.com/binsec/binsec.
 
+#### (optional) OCaml "environment"
+
+:information_source: **Local opam switch**
+Similarly to Python's venv, `opam` offers a mechanism for isolated OCaml environments, called switches.
+In particular, local switches are activated when inside the specified directory.
+
+A local switch makes the installation of dependencies, including OCaml supported version, not impacting the system wide OCaml configuration.
+*Doing so, everything installed will be readily available but only inside the BINSEC directory.*
+
+---
+If `opam` is available, using the following command will create a new OCaml switch inside the BINSEC tree.
+```bash
+OCAML_COMPILER=4.14.3 make switch
+```
+
+---
+If you require a local switch in a parent directory to BINSEC's, look into:
+```bash
+opam switch create . 4.14.3
+```
+
+:warning: You might have to load the new switch, as indicated by `opam` at the end of the creation, or after a `opam switch`.
+```bash
+eval $(opam env)
+```
+
 #### Dependencies
 
 Dependencies can be automatically installed via
@@ -40,15 +66,6 @@ $ opam install curses # optional -- for real time summary window
 
 [Makefile](Makefile) is a wrapper around `dune` build system.  
 When `opam` is available, using the command `make` will automatically install the missing dependencies.
-
----
-:information_source: **Local opam switch**  
-If `opam` is available, using the following command will create a new OCaml switch inside the BINSEC tree.
-```bash
-OCAML_COMPILER=4.14.2 make switch
-```
-A local switch makes the installation of dependencies, including ocaml supported version, not impacting the system wide ocaml configuration.  
-*Doing so, everything installed will be readily available but only inside the BINSEC directory.*
 
 ---
 

@@ -1022,6 +1022,9 @@ module Run (Config : CONFIG) (State : STATE) (W : Worklist.S) () = struct
               Path.set path status None;
               add { path; k }
           | None | Some _ -> raise (Invalid_argument "resume")
+
+        let compile : Ir.View.t -> Ir.View.vertex -> fiber =
+         fun graph -> Compiler.get (Compiler.create config graph)
       end in
       List.iter
         (fun plugin ->

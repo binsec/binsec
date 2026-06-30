@@ -188,7 +188,8 @@ let generic_load : string -> Loader.Img.t -> t =
        (fun ({ content; protection; symbols; layout } as image) section ->
          if Loader.Section.has_flag Read section then
            match (Loader.Section.pos section, Loader.Section.size section) with
-           | { virt = base; raw = offset }, { virt = size; raw = len } ->
+           | { virt = base; raw = offset }, { virt = size; raw = len }
+             when Z.lt Z.zero size ->
                let lo = Virtual_address.to_bigint base in
                let hi = Z.add lo (Z.of_int (len - 1)) in
                let mapping =
@@ -236,6 +237,7 @@ let generic_load : string -> Loader.Img.t -> t =
                    (symbols, layout)
                in
                { content; protection; symbols; layout }
+           | _ -> image
          else image)
        empty
        (Loader.Img.sections source))

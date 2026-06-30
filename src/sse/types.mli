@@ -468,6 +468,14 @@ module type ENGINE = sig
       {!constructor-Signal} {!constructor-Stashed}.
 
       It adds back [path] to the running path worklist. *)
+
+  val compile : Ir.View.t -> Ir.View.vertex -> ([ `All ], Path.t) fiber
+  (** [compile graph] compiles the {!module-Ir} code block into an executable
+      form and returns a mapping from graph vertices to their associated
+      {!type-fiber} nodes.
+
+      The resulting nodes can be fed to the {!constructor-Continue} and
+      {!constructor-Return_to} {!type-continuation}s. *)
 end
 
 module type PLUGIN = sig

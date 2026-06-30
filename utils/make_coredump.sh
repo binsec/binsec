@@ -1,31 +1,105 @@
 #!/usr/bin/env bash
 
 gdb=${GDB:-gdb}
+self=$(basename $0)
 
-set -x
+short_options=hq
+help_options="-h"
+quiet_options+="-q"
+
+getopt --test > /dev/null
+if [[ $? -eq 4 ]]; then
+  help_options+=", --help"
+  quiet_options+=", --quiet"
+  long_options="--longoptions=help,quiet"
+else
+  long_options=""
+fi
+
+function show_usage () {
+  echo "USAGE:"
+  echo ""
+  echo -e "\t$self [options] core-file-path executable"
+  echo -e "\t$self [options] core-file-path [--] executable [arg1 arg2 ...]"
+  echo ""
+  echo "Creates a core file with all libs to run the command loaded."
+  echo "/!\ It assumes glibc loader to break at the main entrypoint."
+  echo "Runs code from the executable (either natively or with qemu - if available)."
+  echo ""
+  echo "You can set the gdb executable with the environment variable 'GDB'."
+  echo -e "e.g:\tGDB=gdb-multiarch make_coredump.sh core.snapshot /bin/ls"
+  echo ""
+  echo "OPTIONS:"
+  echo -e "\t$help_options\tDisplay this help message."
+  echo -e "\t$quiet_options\tActivate silent mode."
+}
+
+args=$(getopt --options=$short_options $long_options --name "$self" -- "$@")
+if [[ $? -ne 0 ]]; then
+  show_usage
+  exit 1
+fi
+
+eval set -- $args
+
+help_required=false
+quiet_mode=false
+while true; do
+  case "$1" in
+    -h|--help)
+      help_required=true
+      shift
+      ;;
+    -q|--quiet)
+      quiet_mode=true
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+  esac
+done
+
+if [[ "$help_required" = true ]]; then
+  echo "This is a BINSEC utility script to generate coredump."
+  show_usage
+  exit 0
+fi
 
 snapshot="$1"
 shift
-if [[ $snapshot = -h ]] || [[ -z $snapshot ]]; then
-  echo "$0: usage: $0 name_of_core_file_to_create command arg1 arg2 ..."
-  echo "creates a core file with all libs to run the command loaded"
-  echo "runs code from the executable (either natively or with qemu)"
-  echo "also assumes glibc loader"
-  echo "you can set the gdb executable with the environment variable 'GDB'"
-  echo "e.g. GDB=gdb-multiarch make_coredump.sh core.snapshot /bin/ls" 
+
+if [[ -z "$snapshot" ]]; then
+  echo "$self: missing output path 'core-file-path', aborting."
+  show_usage
   exit 1
 fi
 
 exe="$1"
-if [[ ! -f "$exe" ]]; then
-  echo "$exe is not a file, aborting"
+
+if [[ -z "$exe" ]]; then
+  echo "$self: receive no file to analyze, aborting."
+  show_usage
+  exit 1
+elif [[ ! -f "$exe" ]]; then
+  echo "$self: $exe is not a file, aborting."
+  show_usage
   exit 1
 fi
 
-arch=$(file --brief --dereference "$exe" | cut -d, -f2 | tail -c +2)
+batch="--batch"
+if [[ "$quiet_mode" = true ]]; then
+  batch+="-silent"
+else
+  set -x
+fi
 
+x86_32=false
+arch=$(file --brief --dereference "$exe" | cut -d, -f2 | tail -c +2)
 case "$arch" in
   "Intel 80386" | "Intel i386")
+    x86_32=true
     main='*((int*)($esp+4))'
     tunables="-AVX512VL,-AVX512F"
     ;;
@@ -50,7 +124,7 @@ case "$arch" in
     tunables=""
     ;;
   *)
-    echo "Architecture $arch is not supported by this script."
+    echo "$self: Architecture $arch is not supported by this script."
     exit 1
     ;;
 esac
@@ -76,7 +150,7 @@ EOF
 
 echo 0x3f > /proc/self/coredump_filter
 
-if [ "$arch" != "$host" ] && ([ "$arch" != "Intel 80386" ] || [ "$host" != "x86-64" ]); then
+if [ "$arch" != "$host" ] && ([ "$x86_32" = false ] || [ "$host" != "x86-64" ]); then
     case "$arch" in
       "Intel 80386" | "Intel i386")
         qemu="qemu-i386"
@@ -103,7 +177,7 @@ if [ "$arch" != "$host" ] && ([ "$arch" != "Intel 80386" ] || [ "$host" != "x86-
     esac
     port=$(comm -23 <(seq 49152 65535 | sort) <(ss -Htan | awk '{print $4}' | cut -d':' -f2 | sort -u) | shuf | head -n 1)
     $qemu -E "LD_BIND_NOW=1" -E "GLIBC_TUNABLES=glibc.cpu.hwcaps=$tunables" -g $port $@ &
-    $gdb -n -batch \
+    $gdb -n $batch \
       -iex "set interactive-mode off" \
       -iex "set pagination off" \
       -iex "set breakpoint pending on" \
@@ -112,7 +186,7 @@ if [ "$arch" != "$host" ] && ([ "$arch" != "Intel 80386" ] || [ "$host" != "x86-
       -ex "continue" \
       -x $tmpfile $exe
 else
-    $gdb -n -batch \
+    $gdb -n $batch \
       -iex "set interactive-mode off" \
       -iex "set pagination off" \
       -iex "set env LD_BIND_NOW=1" \
@@ -120,5 +194,5 @@ else
       -iex "set breakpoint pending on" \
       -ex "break __libc_start_main" \
       -ex "run" \
-      -x $tmpfile --args "$@"
+      -x $tmpfile --args $@
 fi

@@ -346,6 +346,12 @@ module Model = struct
       arrays = AsTbl.create 0;
     }
 
+  let copy : t -> t =
+   fun { symbols; values; arrays } ->
+    let arrays = AsTbl.copy arrays in
+    AsTbl.filter_map_inplace (fun _ array -> Some (BiTbl.copy array)) arrays;
+    { symbols = StTbl.copy symbols; values = BvTbl.copy values; arrays }
+
   let maybe_pp_char ppf c =
     if String_utils.is_char_printable c then Format.fprintf ppf " (%c)" c
 

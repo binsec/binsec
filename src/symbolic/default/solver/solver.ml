@@ -20,6 +20,7 @@
 (**************************************************************************)
 
 module BiTbl = Basic_types.Integers.Bigint.Htbl
+module StTbl = Basic_types.String.Htbl
 open Types
 include Session
 

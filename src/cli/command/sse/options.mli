@@ -25,12 +25,15 @@ include Cli.S
 
 module Engine : sig
   type t = ..
+  type t += Default
 
   include Cli.GENERIC with type t := t
 
   val register : string -> t -> (unit -> (module Types.STATE)) -> unit
   val get_factory : unit -> (module Types.STATE)
 end
+
+
 
 module MaxDepth : Cli.INTEGER
 module TransientEnum : Cli.INTEGER

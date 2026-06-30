@@ -96,7 +96,13 @@ end
 module Plugin_v1 : PLUGIN = struct
   include ID
 
-  let fields : (module PATH) -> field list = fun _ -> []
+  let fields : (module PATH
+         with type value = 'value
+          and type model = 'model
+          and type state = 'state
+          and type t = 'path) ->
+      ('value, 'model, 'state, 'path) field list =
+   fun _ -> []
 
   let extensions :
       type a. (module ENGINE with type Path.t = a) -> a extension list =

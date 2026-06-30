@@ -49,6 +49,7 @@ let pp_bv ppf value size =
       size
 
 open Types
+module StTbl = Basic_types.String.Htbl
 
 type term = string
 
