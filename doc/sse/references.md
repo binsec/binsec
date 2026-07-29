@@ -176,7 +176,7 @@ Names in script file are not case-sensitive. So writing `eax` or `EAX` behaves t
      <while> ::= "while" <e> "do" <chunk> "end"
     <switch> ::= "case" <e> "is" (<cst> ":" <chunk>) .. "end"
      <instr> ::= <assign> | "assert" <e> | "assume" <e> | "goto" <label>
-<terminator> ::= "jump" "at" <e> | "halt" | "return" [ <e> ]
+<terminator> ::= "jump" "at" <e> | "halt" | "abort" | "return" [ <e> ]
     <assign> ::= <lv> ":=" (<e> | "undef" | "nondet") ["as" <var>]
      <label> ::= "." <ident>
 ```
@@ -221,6 +221,10 @@ Note that even the last instruction of a chunk, before the "end" keyword, must b
 #### Stop execution `halt`
   (e.g. `halt`)
   
+#### Abort execution `abort`
+  (e.g. `abort`)
+  Equivalent to `assert false; halt`: stops the path and reports a failed assertion.
+  
 #### Return to the caller `return` *[expr]*
   (e.g. `return 0`)
   
@@ -242,6 +246,9 @@ Note that even the last instruction of a chunk, before the "end" keyword, must b
            | "with" "concrete" "stack" "pointer"
 <goal> ::= "reach" <e> [<n> "times"] ["such" "that" <e>] ["then" <action> ["and" <action> ..]]
            | "cut" "at" <e> ["if" <e>]
+           | "halt" "at" <e> ["," <e> ..] | "halt" "at" "<" <name> ">" "return"
+           | "abort" "at" <e> ["," <e> ..] | "abort" "at" "<" <name> ">" "return"
+           | "explore" "all"
            | "at" <e> ("assume" | "assert") <e>
            | "at" <e> enumerate <e> ["(" <n> ")"]
 <action> ::= "print" "formula" ["for" <e> ["as" <var>] ["," <e> ["as" <var>] ..]]
@@ -318,6 +325,18 @@ Note that even the last instruction of a chunk, before the "end" keyword, must b
 #### Enumerate possible values `at` *addr* `enumerate` *expr [*`(` *times* `)`*]*
   (e.g. `at 0x4000 enumerate eax (10)`)
 
+#### Explore all paths `explore` `all`
+  (e.g. `explore all`)
+  Explore every path, without a specific target. Replaces the deprecated `reach all`.
+
+#### Halt at a point `halt` `at` *addr* / `halt` `at` *symbol* `return`
+  (e.g. `halt at <main> return`)
+  Stop the path when it reaches *addr*, or (with `return`) when the function returns.
+
+#### Abort at a point `abort` `at` *addr* / `abort` `at` *symbol* `return`
+  (e.g. `abort at 0x4000`)
+  Like `halt at`, but reports a failed assertion (`assert false; halt`).
+
 ## `<goal>` Semantics
 
 If multiple `<goals>` are defined at the same position they are executed in the order they are defined in the script, before the instruction or its `replace`ment.
@@ -338,7 +357,7 @@ if *n* is specified, we enumerate *n* distinct values of the expression specifie
 #### `reach`
 
 if *n* is specified, we try to reach the specified position *n* times. *BINSEC* will continue running until all positions are reached as many times as specified.
-  *PS:* If no `reach` nor `enumerate` is defined **BINSEC** does not explore the program.
+  *PS:* If no `reach`, `enumerate` nor `explore all` is defined **BINSEC** does not explore the program.
 
 #### `cut`
 
