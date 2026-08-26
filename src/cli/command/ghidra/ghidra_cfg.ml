@@ -138,7 +138,9 @@ let parse_cache ~path =
     Logger.fatal "lexeme was %s at line %d" (Lexing.lexeme lexbuf)
       p.Lexing.pos_lnum
 
-let run_ghidra ?(temp_dir = "/dev/shm") ?cache ~runner exe =
+let run_ghidra ?(temp_dir =
+  if Sys.file_exists "/dev/shm" then "/dev/shm" else Filename.get_temp_dir_name ())
+  ?cache ~runner exe =
   let id = Filename.temp_file ~temp_dir "" "" in
   let base = Filename.basename id in
   let dir = base ^ ".d" and len = String.length base in
