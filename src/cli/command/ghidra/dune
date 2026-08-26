@@ -5,7 +5,7 @@
  (name binsec_cli_ghidra)
  (modules :standard)
  (flags :standard -open Binsec)
- (libraries binsec binsec.cli))
+ (libraries unix binsec binsec.cli))
 
 (menhir
  (modules parser_ghidra)
