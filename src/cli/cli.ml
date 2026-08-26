@@ -23,6 +23,16 @@ module L = Logger.Make (struct
   let name = "cli"
 end)
 
+let is_ansi_code_supported =
+  Unix.(isatty stdout)
+  &&
+  match Sys.getenv_opt "NO_COLOR" with
+  | Some _ -> false
+  | None -> (
+      match Sys.getenv_opt "TERM" with
+      | Some "dumb" | None -> false
+      | Some _ -> true)
+
 let load_all_plugins () =
   List.iter
     (fun plugin ->
@@ -194,13 +204,14 @@ end = struct
     hargs
 
   let pp ppf t =
-    let pp_args ppf () =
-      let args = args t |> Argv.list_of_args in
-      pp_options ppf args
-    in
-    Format.fprintf ppf "@[<v 4>* %s options@ @ %a@]"
-      (String.capitalize_ascii t.title)
-      pp_args ()
+    Format.pp_open_vbox ppf 4;
+    Format.pp_open_stag ppf (Binsec_base.Logger.Font (Default, Bold));
+    Format.fprintf ppf "* %s - options" (String.capitalize_ascii t.title);
+    Format.pp_close_stag ppf ();
+    Format.pp_print_space ppf ();
+    Format.pp_print_space ppf ();
+    pp_options ppf (args t |> Argv.list_of_args);
+    Format.pp_close_box ppf ()
 end
 
 and Cli : sig
@@ -213,6 +224,7 @@ and Cli : sig
   val insert_leaf : t -> Cli_spec.t -> unit
   val insert_node : t -> Cli_node.t -> unit
   val pp : Format.formatter -> unit -> unit
+  val pp_local : Format.formatter -> string -> unit -> unit
   val size : t -> int
 end = struct
   type elt = Leaf of Cli_spec.t | Node of Cli_node.t
@@ -270,6 +282,50 @@ end = struct
     pp_print_cut ppf ();
     pp_print_cut ppf ();
     pp_close_box ppf ()
+
+  let node_key : Cli_node.t -> string =
+   fun node -> match node.key with "" -> "kernel" | key -> key
+
+  let pp_local ppf switch () =
+    let switch =
+      let first = Bool.to_int (String.get switch 0 = '-') in
+      let last =
+        match String.index_from_opt switch first '-' with
+        | None -> String.length switch
+        | Some pos -> pos
+      in
+      String.sub switch first (last - first)
+    in
+    let filtered_nodes, _, best_node =
+      List.fold_left
+        (fun (acc_nodes, acc_dist, acc_best) key ->
+          match H.find cli key with
+          | Leaf _ -> (acc_nodes, acc_dist, acc_best)
+          | Node node -> (
+              match
+                Mula.Strings.Dem.get_distance ~k:3 switch (node_key node)
+              with
+              | None -> (acc_nodes, acc_dist, acc_best)
+              | Some d ->
+                  let new_acc_nodes = node :: acc_nodes in
+                  if d < acc_dist then (new_acc_nodes, d, Some node)
+                  else (new_acc_nodes, acc_dist, acc_best)))
+        ([], max_int, None) (keys ())
+    in
+    match best_node with
+    | Some best_node ->
+        Format.fprintf ppf "Did you mean one of these? @[<h>%a@]@ @ %a"
+          (Format.pp_print_list
+             ~pp_sep:(fun ppf () -> Format.fprintf ppf ",@ ")
+             (fun ppf node ->
+               Format.pp_print_char ppf '-';
+               if node == best_node then
+                 Format.pp_open_stag ppf
+                   (Binsec_base.Logger.Font (Default, Bold));
+               Format.pp_print_string ppf (node_key node);
+               if node == best_node then Format.pp_close_stag ppf ()))
+          filtered_nodes Cli_node.pp best_node
+    | None -> Format.fprintf ppf "@[Usage : binsec -help@]@."
 end
 
 module type ENABLEABLE = sig
@@ -378,6 +434,17 @@ module type Cli_sig = sig
   module Builder : sig
     (** A very generic functor that lets you handle cases that are not provided
         otherwise. Use it only as last resort. *)
+    module Wrap (P : sig
+      include DETAILED_CLI_DECL
+
+      val choices : string list option
+    end) (_ : sig
+      type t = P.t
+
+      val get : unit -> t
+      val set : t -> unit
+    end) : GENERIC with type t = P.t
+
     module Any (P : DETAILED_CLI_DECL) : GENERIC with type t = P.t
 
     module Any_opt (P : sig
@@ -579,8 +646,17 @@ module Generic_make_from_logger (L : Logger.S) (D : DECL) = struct
   end
 
   let usage () =
-    Format.eprintf "@[<v 2>* Help for %s (%s)@ @ %a@]@." D.name D.shortname
-      pp_options (Args.get_list ())
+    Format.pp_open_vbox Format.err_formatter 2;
+    Format.pp_open_stag Format.err_formatter
+      (Binsec_base.Logger.Font (Default, Bold));
+    Format.fprintf Format.err_formatter "* Help for %s (%s)" D.name D.shortname;
+    Format.pp_close_stag Format.err_formatter ();
+    Format.pp_print_space Format.err_formatter ();
+    Format.pp_print_space Format.err_formatter ();
+    pp_options Format.err_formatter (Args.get_list ());
+    Format.pp_close_box Format.err_formatter ();
+    (* Final newline to realign terminal prompt. *)
+    Format.pp_force_newline Format.err_formatter ()
 
   let add_help () =
     if is_kernel then (
@@ -607,7 +683,7 @@ module Generic_make_from_logger (L : Logger.S) (D : DECL) = struct
             usage ();
             exit 0)
       in
-      let doc = Printf.sprintf "Display options list for %s" name in
+      let doc = Printf.sprintf "Display high-level options" in
       let cspec = Cli_spec.simple ~key ~doc ~spec in
       extend cspec)
     else
@@ -628,24 +704,37 @@ module Generic_make_from_logger (L : Logger.S) (D : DECL) = struct
     Cli.insert_node Cli.cli cli_space
 
   module Builder = struct
-    module Gen (P : sig
-      include DETAILED_CLI_DECL
+    module State (P : sig
+      type t
 
-      val values : Values.t
+      val get : unit -> t
+      val set : t -> unit
+      val default : t
     end) =
     struct
       type t = P.t
 
       let default = P.default
-      let is_set = ref false
-      let value = ref P.default
+      let is_set_ref = ref false
 
       let set v =
-        is_set := true;
-        value := v
+        is_set_ref := true;
+        P.set v
 
-      let get () = !value
-      let is_set () = !is_set
+      let get () = P.get ()
+      let is_set () = !is_set_ref
+      let is_default () = get () = default
+    end
+
+    module Gen0
+        (P : sig
+          include DETAILED_CLI_DECL
+
+          val values : Values.t
+        end)
+        (S : GENERIC with type t = P.t) =
+    struct
+      include S
 
       let doc =
         Format.asprintf "%s%a" P.doc
@@ -656,9 +745,47 @@ module Generic_make_from_logger (L : Logger.S) (D : DECL) = struct
       let spec = Scan (fun s -> set @@ P.of_string s)
       let key = P.name
       let cspec = Cli_spec.create ~values:P.values ~key ~doc ~spec
-      let is_default () = !value = default
       let _ = extend cspec
     end
+
+    module Gen (P : sig
+      include DETAILED_CLI_DECL
+
+      val values : Values.t
+    end) =
+      Gen0
+        (P)
+        (State (struct
+          type t = P.t
+
+          let value = ref P.default
+          let get () = !value
+          let set x = value := x
+          let default = P.default
+        end))
+
+    module Wrap (P : sig
+      include DETAILED_CLI_DECL
+
+      val choices : string list option
+    end) (S : sig
+      type t = P.t
+
+      val get : unit -> t
+      val set : t -> unit
+    end) =
+      Gen0
+        (struct
+          include P
+
+          let values =
+            Option.fold ~none:Values.Unconstrained ~some:Values.one_of P.choices
+        end)
+        (State (struct
+          include S
+
+          let default = P.default
+        end))
 
     module Any (P : DETAILED_CLI_DECL) = Gen (struct
       include P
@@ -739,7 +866,7 @@ module Generic_make_from_logger (L : Logger.S) (D : DECL) = struct
       include False (struct
         include P
 
-        let name = "no-" ^ name
+        let name = Printf.sprintf "no-%s" name
       end)
 
       let get () = not (get ())
@@ -1065,7 +1192,7 @@ module Parse = struct
   (* The argument parser *)
 
   module L = Logger.Make (struct
-    let name = "cli_parser"
+    let name = "cli"
   end)
 
   (*  let _ = L.set_debug_level 3;; *)
@@ -1074,9 +1201,9 @@ module Parse = struct
 
   let fail_on switch =
     load_all_plugins ();
-    Format.eprintf
-      "@[<v 0>%s: unknown option %s@ Valid command-line switches are:@ %a@]@."
-      Sys.argv.(0) switch Cli.pp ();
+    let pp_local_for_switch ppf () = Cli.pp_local ppf switch () in
+    L.error "@[<v 0>unknown option %s @]" switch;
+    Format.eprintf "@[<v 0>%a@]@." pp_local_for_switch ();
     exit 2
 
   type origin = Command_line | Config_file

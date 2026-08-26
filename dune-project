@@ -8,7 +8,7 @@
 
 (name binsec)
 
-(version "0.11.2")
+(version "0.11.3")
 
 (maintainers "BINSEC <binsec@saxifrage.saclay.cea.fr>")
 
@@ -68,6 +68,7 @@
   dypgen
   (toml
    (>= 6))
+  mula
   (ounit2
    (and
     :with-test
@@ -81,7 +82,7 @@
   (ocamlformat
    (and
     :with-dev-setup
-    (= 0.26.2))))
+    (= 0.28.1))))
  (depopts curses llvm unisim_archisec bitwuzla bitwuzla-cxx z3)
  (conflicts
   (llvm

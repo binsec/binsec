@@ -19,6 +19,68 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Color : sig
+  type t =
+    | Default
+    | Black
+    | Red
+    | Green
+    | Yellow
+    | Blue
+    | Purple
+    | Cyan
+    | White
+
+  val to_string : t -> string
+
+  val of_string : string -> t
+  (** [of_string s] parses a color name [s] into a {!t}. Returns {!Default} if
+      the color name is unrecognized. *)
+end
+
+module Emphasis : sig
+  type t = Default | Bold | Italic
+
+  val to_string : t -> string
+
+  val of_string : string -> t
+  (** [of_string s] parses an emphasis name [s] into a {!t}. Returns {!Default}
+      if the name is unrecognized. *)
+end
+
+type font = Color.t * Emphasis.t
+type Format.stag += Font of font
+
+module Profile : sig
+  type t = {
+    name : string;
+    debug : font;
+    step : font;
+    info : font;
+    result : font;
+    warning : font;
+    error : font;
+    fatal : font;
+  }
+
+  val default : t
+  val default_light : t
+  val light : t
+  val dark : t
+
+  val of_string : string -> t
+  (** [of_string s] returns the profile named [s].
+      @raise Not_found if no profile matches [s]. *)
+
+  val all_profiles : t list
+end
+
+val set_profile : Profile.t -> unit
+(** [set_profile p] sets the global color profile used by loggers. *)
+
+val get_profile : unit -> Profile.t
+(** [get_profile ()] returns the current color profile used by loggers. *)
+
 (** Logging/output facilities *)
 
 module type S = sig
@@ -31,6 +93,7 @@ module type S = sig
   val result_channel : channel
   val warning_channel : channel
   val info_channel : channel
+  val step_channel : channel
 
   val debug_channel : channel
   (** These predefined channels are flushed after each call and a newline
@@ -58,6 +121,9 @@ module type S = sig
 
   val set_info_level : int -> unit
   val get_info_level : unit -> int
+
+  val step : ('a, Format.formatter, unit) format -> 'a
+  (** For detailed step-by-step logging. *)
 
   val debug : ?level:int -> ('a, Format.formatter, unit) format -> 'a
   (** [debug ~level:n msg] will be displayed if at least level n + 1 debug is

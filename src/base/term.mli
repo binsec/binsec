@@ -269,6 +269,9 @@ module type S = sig
   val byte_swap : t -> t
   (** [byte_swap e] reverses the byte order of the expression [e] *)
 
+  val repeat : int -> t -> t
+  (** [repeat n e] concatenates [n] times the expression [e] *)
+
   (** {3 Specific constants}*)
 
   val zeros : int -> t

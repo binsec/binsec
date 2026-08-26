@@ -50,21 +50,61 @@ let set_command_line extra =
           if Kernel_options.ExecFile.is_set () then
             let filename = Kernel_options.ExecFile.get () in
             Kernel_options.Logger.fatal
-              "File %s was previously set. Cannot set to %s" filename arg
+              "@[\"%s\" is set to be analized. @ \"%s\" is an unexpected \
+               argument.@]"
+              filename arg
           else Kernel_options.ExecFile.set arg
         else Cli.Boot.maybe_enable arg;
         loop args
   in
   loop extra
 
+let dynlink_error_tips : Dynlink.error -> string option = function
+  | Inconsistent_implementation _ | Inconsistent_import _ ->
+      Some "try running $(dune clean && dune build && dune install)"
+  | Module_already_loaded _ | Library's_module_initializers_failed _ ->
+      Some "please contact the developers"
+  | Not_a_bytecode_file _ | Unavailable_unit _ | Unsafe_file | Linking_error _
+  | Corrupted_interface _ | Cannot_open_dynamic_library _
+  | Private_library_cannot_implement_interface _ ->
+      None
+
+(** Load a color profile, priority to the command line. *)
+let load_color_profile () =
+  match Sys.getenv_opt "BINSEC_COLOR_PROFILE" with
+  | None -> ()
+  | Some string -> Kernel_options.Color_profile.set string
+
+(** Set colors in terminal *)
+let switch_color_mode () =
+  Kernel_options.Logger.set_color
+    (Cli.is_ansi_code_supported && Kernel_options.Color.get ())
+
 let main () =
   (* General initialization of the random number generator *)
   Random.self_init ();
   Kernel_core.read_configuration_file ();
-  Cli.parse () |> set_command_line |> set_machdep_on_need;
-  (* no need to handle it as a signal, the calling function will still raise a Sys_error "EPIPE" *)
-  Sys.(set_signal sigpipe Signal_ignore);
-  Cli.Boot.run ()
+
+  (***************************)
+  try
+    (* First activation to color Cli.parse operations *)
+    switch_color_mode ();
+    (* From the env, update the initial state *)
+    load_color_profile ();
+    Cli.parse () |> set_command_line |> set_machdep_on_need;
+    (* Second activation to color or not, depend if options being passed, Plugins operations *)
+    switch_color_mode ();
+    (* no need to handle it as a signal, the calling function will still raise a Sys_error "EPIPE" *)
+    Sys.(set_signal sigpipe Signal_ignore);
+    Cli.Boot.run ()
+  with Dynlink.Error err ->
+    Kernel_options.Logger.error
+      "@[<v>Dynlink error: \"%s\"@ This may indicate that a package is out of \
+       sync with your latest@ compiled version of Binsec.@]"
+      (Dynlink.error_message err);
+    Option.iter
+      (Kernel_options.Logger.info "@[<v>Tips: %s@]")
+      (dynlink_error_tips err)
 ;;
 
 (* these ;; are necessary if we want to avoid an uglier let () = main ()

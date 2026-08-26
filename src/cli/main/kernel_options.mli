@@ -54,9 +54,9 @@ module Dba_config : Cli.STRING_OPT
 module Entry_point : Cli.STRING_OPT
 module Describe_binary : Cli.BOOLEAN
 
-(** {2 Tests} *)
-
-module Experimental : Cli.BOOLEAN
-(** {b Experimental purposes only} *)
+(** {3 Utils} *)
 
 module Version : Cli.BOOLEAN
+module Color : Cli.BOOLEAN
+module Color_profile : Cli.STRING
+module Color_help : Cli.BOOLEAN

@@ -132,6 +132,8 @@ let mk_timeout t =
     interrupt (fun () -> Float.compare (Unix.gettimeofday ()) t >= 0)
 
 module Session () : Common.S = struct
+  let pp ppf () = Format.fprintf ppf "bitwuzla-cxx.%s" (Bitwuzla_cxx.version ())
+
   module Bl = Bl
   module Bv = Bv
   module Ax = Ax
@@ -160,6 +162,7 @@ module Session () : Common.S = struct
     | Unsat -> Unsat
     | Unknown -> Unknown
 
+  let get_bl_value bl = Term.value Bool (Solver.get_value solver bl)
   let get_bv_value bv = Term.value Z (Solver.get_value solver bv)
 
   let rec fold_ax_values f ax v =

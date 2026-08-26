@@ -48,11 +48,6 @@
 %token GOTO JUMP AT HALT ABORT
 %token WHILE FOR IN TO DO END
 
-%token STARTING FROM FILE CORE LOAD SECTION SECTIONS IMPORT
-%token REACH CUT ENUMERATE
-%token TIMES SUCH THAT PRINT FORMULA MODEL STREAM BIN DEC HEXA ASCII CSTRING
-%token REPLACE BY WITH
-
 %layout [' ' '\t']
 
 %constructor Obj Decl
@@ -60,7 +55,7 @@
 %constructor Symbol  %for symbol
 %constructor Loc     %for var load loc
 %constructor Unop    %for ext unop
-%constructor Binop   %for arith0 arith1 bitwize0 bitwize1 cmpop
+%constructor Binop   %for arith0 arith1 bitwize0 bitwize1 cmplop cmpgop
 %constructor Expr    %for const expr
 %constructor Instr   %for assignment fallthrough terminator
 %constructor Stmt    %for instr block instr_or_block control labelled stmt stmts
@@ -236,8 +231,16 @@ expr:
     { Ast.Expr.append x y, dyp.symbol_start_pos () } concat
   | expr(< diff)<x> accept_newline "<>" expr(< diff)<y>
     { Ast.Expr.diff x y, dyp.symbol_start_pos () } diff
-  | expr(<= diff)<x>
-    [ accept_newline cmpop<op> expr(<= diff)<y> { (op, y) } ]+<y>
+  | expr(< diff)<x>
+    [ accept_newline cmplop<op> expr(< diff)<y> { (op, y) } ]+<y>
+    { fst (fst (List.fold_left
+           (fun (e, a) (op, b) ->
+             (Ast.Expr.logand e (op a b, Lexing.dummy_pos),
+              Lexing.dummy_pos), b)
+           ((Ast.Expr.one, Lexing.dummy_pos), x) y)),
+            dyp.symbol_start_pos () } ineq
+  | expr(< diff)<x>
+    [ accept_newline cmpgop<op> expr(< diff)<y> { (op, y) } ]+<y>
     { fst (fst (List.fold_left
            (fun (e, a) (op, b) ->
              (Ast.Expr.logand e (op a b, Lexing.dummy_pos),
@@ -293,20 +296,23 @@ bitwize1:
   | ROL        { Ast.Expr.rotate_left }
   | ROR        { Ast.Expr.rotate_right }
 
-cmpop:
+cmplop:
+  | '='        { Ast.Expr.equal }
+  | "<="       { Ast.Expr.ule }
+  | '<'        { Ast.Expr.ult }
+  | "<=u"      { Ast.Expr.ule }
+  | "<u"       { Ast.Expr.ult }
+  | "<=s"      { Ast.Expr.sle }
+  | "<s"       { Ast.Expr.slt }
+
+cmpgop:
   | '='        { Ast.Expr.equal }
   | ">="       { Ast.Expr.uge }
   | '>'        { Ast.Expr.ugt }
-  | "<="       { Ast.Expr.ule }
-  | '<'        { Ast.Expr.ult }
   | ">=u"      { Ast.Expr.uge }
   | ">u"       { Ast.Expr.ugt }
-  | "<=u"      { Ast.Expr.ule }
-  | "<u"       { Ast.Expr.ult }
   | ">=s"      { Ast.Expr.sge }
   | ">s"       { Ast.Expr.sgt }
-  | "<=s"      { Ast.Expr.sle }
-  | "<s"       { Ast.Expr.slt }
 
 assignment:
   | loc<lval> ":=" expr<rval>

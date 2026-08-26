@@ -20,6 +20,7 @@
 (**************************************************************************)
 
 module Session () : Common.S = struct
+  let pp ppf () = Format.pp_print_string ppf Z3.Version.full_version
   let ctx = Z3.mk_context []
 
   let bv_sort =
@@ -149,6 +150,11 @@ module Session () : Common.S = struct
   let check_sat_assuming ?timeout bl = check_sat ?timeout [ bl ]
   let check_sat ?timeout () = check_sat ?timeout []
   let to_z v = Z.of_string (Z3.BitVector.numeral_to_string v)
+
+  let get_bl_value x =
+    let model = Option.get (Z3.Solver.get_model solver) in
+    Option.fold ~none:false ~some:Z3.Boolean.is_true
+      (Z3.Model.eval model x false)
 
   let get_bv_value x =
     let model = Option.get (Z3.Solver.get_model solver) in

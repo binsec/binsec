@@ -44,6 +44,10 @@ let watchdog ~timeout (f : ?interrupt:('a -> int) * 'a -> 'b) =
   f ~interrupt
 
 module Session () : Common.S = struct
+  let pp ppf () =
+    Format.fprintf ppf "bitwuzla-c=%s"
+      (Bitwuzla_c.version (Bitwuzla_c.create ()))
+
   include Bitwuzla.Incremental ()
 
   let bv_sort =
@@ -150,6 +154,7 @@ module Session () : Common.S = struct
     | Unsat -> Unsat
     | Unknown -> Unknown
 
+  let get_bl_value bl = Term.Bl.assignment (get_value bl)
   let get_bv_value bv = Term.Bv.assignment (get_value bv)
 
   let fold_ax_values f ax v =

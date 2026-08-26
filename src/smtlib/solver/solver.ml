@@ -109,7 +109,7 @@ let ping solver =
 
 let default_arguments = function
   | Boolector -> [ "-m"; "-x" ]
-  | Bitwuzla -> [ "-m"; "--bv-output-format"; "16" ]
+  | Bitwuzla -> [ "-m" ]
   | CVC4 -> [ "--lang=smt2"; "--produce-models" ]
   | Z3 -> [ "--smt2" ]
   | Yices -> []

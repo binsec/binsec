@@ -20,3 +20,15 @@
 (**************************************************************************)
 
 val script : Smtlib.Lang.script -> Smtlib.Formula.formula
+
+module Chunk : sig
+  type t
+
+  val empty : t
+  val of_formula : Smtlib.Formula.formula -> t
+  val to_formula : t -> Smtlib.Formula.formula
+end
+
+val incremental : Chunk.t -> Smtlib.Lang.script -> Chunk.t
+(** [incremental chunk script] appends the given [script] to the formula
+    [chunk]. *)

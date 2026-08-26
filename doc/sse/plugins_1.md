@@ -128,6 +128,9 @@ let () =
       (module Tuto_shadow_stack.Plugin_v1))
 ```
 
+:information_source: When declaring a plugin with the plugin stanza in the `dune` file, its name must match the shortname defined in `registration.ml`.
+For multi-word names, use underscores `_` in the `dune` file and hyphens `-` in `registration.ml`. **BINSEC** will normalize and match them automatically when loading the plugin.
+
 #### Compile
 
 Lets compile and register to **BINSEC** this empty plugin.

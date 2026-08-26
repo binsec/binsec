@@ -21,6 +21,10 @@
 
 (** Functors for command-line parameters declarations *)
 
+val is_ansi_code_supported : bool
+(** Return a boolean if we can display ansi code in the user terminal. Used in
+    'cli/main/main.ml'. *)
+
 (** {3 Module type declarations}*)
 module type GENERIC = sig
   type t
@@ -119,6 +123,17 @@ module type Cli_sig = sig
   module Builder : sig
     (** A very generic functor that lets you handle cases that are not provided
         otherwise. Use it only as last resort. *)
+    module Wrap (P : sig
+      include DETAILED_CLI_DECL
+
+      val choices : string list option
+    end) (_ : sig
+      type t = P.t
+
+      val get : unit -> t
+      val set : t -> unit
+    end) : GENERIC with type t = P.t
+
     module Any (P : DETAILED_CLI_DECL) : GENERIC with type t = P.t
 
     module Any_opt (P : sig

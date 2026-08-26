@@ -41,16 +41,24 @@ type obj =
     ((Ast.Expr.t Ast.loc -> Ast.Expr.t Ast.loc -> Ast.Expr.t)
     * Ast.Expr.t Ast.loc)
     list,
+    (Ast.Expr.t Ast.loc -> Ast.Expr.t Ast.loc -> Ast.Expr.t)
+    * Ast.Expr.t Ast.loc,
+    ((Ast.Expr.t Ast.loc -> Ast.Expr.t Ast.loc -> Ast.Expr.t)
+    * Ast.Expr.t Ast.loc)
+    list,
+    ((Ast.Expr.t Ast.loc -> Ast.Expr.t Ast.loc -> Ast.Expr.t)
+    * Ast.Expr.t Ast.loc)
+    list,
     Ast.Expr.t Ast.loc * Ast.Expr.t Ast.loc,
     (Ast.Expr.t Ast.loc * Ast.Expr.t Ast.loc) list,
     (Ast.Expr.t Ast.loc * Ast.Expr.t Ast.loc) list,
     Ast.Instr.t list,
     Ast.Instr.t list list,
     Ast.Instr.t list list,
+    Z.t,
     Ast.Expr.t Ast.loc * Ast.Instr.t list,
     (Ast.Expr.t Ast.loc * Ast.Instr.t list) list,
     (Ast.Expr.t Ast.loc * Ast.Instr.t list) list,
-    Z.t,
     Ast.Instr.t list,
     Ast.Instr.t list option,
     string,

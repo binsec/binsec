@@ -457,9 +457,10 @@ let elf_load_segments : Loader_types.buffer -> Loader_elf.Phdr.t array -> t =
  fun value segments ->
   Array.fold_left
     (fun ({ content; protection; _ } as image)
-         ({ flags; offset; vaddr; filesz; memsz; _ } : Loader_elf.Phdr.t) ->
+         ({ kind; flags; offset; vaddr; filesz; memsz; _ } : Loader_elf.Phdr.t)
+       ->
       let memsz = Uint64.to_bigint memsz in
-      if Loader_elf.Phdr.PHF.is flags R && Z.lt Z.zero memsz then
+      if kind = LOAD && Loader_elf.Phdr.PHF.is flags R && Z.lt Z.zero memsz then
         let lo = Virtual_address.to_bigint vaddr in
         let hi = Z.add lo (Z.of_int (filesz - 1)) in
         let mapping =
@@ -581,9 +582,9 @@ let elf_core_fix_segment_permissions :
  fun source at image ->
   Array.fold_left
     (fun ({ protection; _ } as image)
-         ({ flags; vaddr; memsz; _ } : Loader_elf.Phdr.t) ->
+         ({ kind; flags; vaddr; memsz; _ } : Loader_elf.Phdr.t) ->
       let memsz = Uint64.to_bigint memsz in
-      if Loader_elf.Phdr.PHF.is flags R && Z.lt Z.zero memsz then
+      if kind = LOAD && Loader_elf.Phdr.PHF.is flags R && Z.lt Z.zero memsz then
         let lo = Virtual_address.to_bigint (Virtual_address.add at vaddr) in
         let hi = Z.add lo (Z.pred memsz) in
         let mapping =

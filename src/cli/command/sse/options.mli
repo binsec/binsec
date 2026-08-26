@@ -33,8 +33,6 @@ module Engine : sig
   val get_factory : unit -> (module Types.STATE)
 end
 
-
-
 module MaxDepth : Cli.INTEGER
 module TransientEnum : Cli.INTEGER
 module JumpEnumDepth : Cli.INTEGER

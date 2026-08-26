@@ -54,6 +54,49 @@ let version () =
     Format.printf "Binsec version %%VERSION%%\n";
     exit 0)
 
+let style : Binsec_base.Logger.font -> Format.formatter -> string -> unit =
+ fun font ppf str ->
+  Format.pp_open_stag ppf (Binsec_base.Logger.Font font);
+  Format.pp_print_string ppf str;
+  Format.pp_close_stag ppf ()
+
+let print_color_documentation () =
+  if Color_help.get () then (
+    Logger.set_log_level "result";
+    if Cli.is_ansi_code_supported then (
+      Logger.set_color true;
+      Format.printf
+        "@[<v>The following color profiles are available:%a@ @ Use the %a \
+         environment variable to automatically select a color profile.@ Tip: \
+         add this variable to your %a to make your choice permanent.@."
+        (fun ppf profiles ->
+          let max_name_size =
+            List.fold_left
+              (fun size (profile : Binsec_base.Logger.Profile.t) ->
+                max size (String.length profile.name))
+              0 profiles
+          in
+          List.iter
+            (fun (profile : Binsec_base.Logger.Profile.t) ->
+              Format.fprintf ppf "@ %-*s: %a %a %a %a %a %a %a" max_name_size
+                profile.name (style profile.debug) "debug" (style profile.step)
+                "step" (style profile.info) "info" (style profile.result)
+                "result" (style profile.warning) "warning" (style profile.error)
+                "error" (style profile.fatal) "fatal")
+            profiles)
+        Binsec_base.Logger.Profile.all_profiles
+        (style (Default, Bold))
+        "BINSEC_COLOR_PROFILE"
+        (style (Default, Bold))
+        ".bashrc";
+      exit 0)
+    else (
+      Format.printf
+        "@[<v>Your terminal does not support ANSI colors or color output is \
+         disabled.@ Color options will be ignored.@]@.";
+      exit 0))
+
 let _ =
   Cli.Boot.enlist ~name:"binary description" ~f:binary_descr;
-  Cli.Boot.enlist ~name:"version description" ~f:version
+  Cli.Boot.enlist ~name:"version description" ~f:version;
+  Cli.Boot.enlist ~name:"color description" ~f:print_color_documentation

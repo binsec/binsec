@@ -17,6 +17,7 @@ If `opam` is available, using the following command will create a new OCaml swit
 ```bash
 OCAML_COMPILER=4.14.3 make switch
 ```
+Use `OCAML_COMPILER=4.14.3 make switch-dev` to also set up editor support (`merlin` and `user-setup`).
 
 ---
 If you require a local switch in a parent directory to BINSEC's, look into:
@@ -34,7 +35,7 @@ eval $(opam env)
 Dependencies can be automatically installed via
 [*opam*](https://opam.ocaml.org/doc/Install.html).  
 ```bash
-$ opam install dune dune-site menhir grain_dypgen ocamlgraph zarith toml
+$ opam install dune dune-site menhir grain_dypgen ocamlgraph zarith toml mula
 $ opam install bitwuzla bitwuzla-cxx z3 # optional -- for native SMT solver bindings
 $ opam install unisim_archisec # optional -- for x86-64, ARMv7 and ARMv8
 $ opam install curses # optional -- for real time summary window

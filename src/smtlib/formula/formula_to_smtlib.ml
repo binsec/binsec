@@ -22,15 +22,22 @@
 open Formula
 open Smtlib_utils
 
-let mk_bv_string bv =
-  Printf.sprintf "(_ bv%s %i)"
-    (Z.to_string (Bitvector.value_of bv))
-    (Bitvector.size_of bv)
+let mk_bv_cst bv : Smtlib.constant =
+  CstDecimalSize
+    (Z.to_string (Bitvector.value_of bv), string_of_int (Bitvector.size_of bv))
 
-let mk_bitvec_symbol sz = mk_symbol (Printf.sprintf "(_ BitVec %i)" sz)
+let bitvec_sym = mk_symbol "BitVec"
+and array_sym = mk_symbol "Array"
 
-let mk_array_symbol idx elt =
-  mk_symbol (Printf.sprintf "(Array (_ BitVec %i) (_ BitVec %i))" idx elt)
+let mk_sort_bitvec sz : Smtlib.sort =
+  {
+    sort_desc =
+      SortIdentifier (mk_id_underscore bitvec_sym [ IdxNum (string_of_int sz) ]);
+    sort_loc = Location.dummy_loc;
+  }
+
+let mk_sort_array idx elt : Smtlib.sort =
+  mk_sort_fun array_sym [ mk_sort_bitvec idx; mk_sort_bitvec elt ]
 
 let mk_select ax bv =
   mk_term_qual_identifier_terms
@@ -119,8 +126,8 @@ let visit_bv_bnop b =
 
 let visit_sort = function
   | BlSort -> mk_sort_identifier (mk_symbol "Bool")
-  | BvSort i -> mk_sort_identifier (mk_bitvec_symbol i)
-  | AxSort (i, j) -> mk_sort_identifier (mk_array_symbol i j)
+  | BvSort i -> mk_sort_bitvec i
+  | AxSort (i, j) -> mk_sort_array i j
 
 let get_elt, get_idx =
   let get_bv str bv =
@@ -165,6 +172,11 @@ let get_arr str ax =
 let visit_list : 'env 'a 'b. ('env -> 'a -> 'b) -> 'env -> 'a list -> 'b list =
  fun f env ls -> List.map (f env) ls
 
+let mk_bl_not term =
+  mk_term_qual_identifier_terms
+    (mk_qual_identifier_identifier (visit_bl_unop BlNot))
+    [ term ]
+
 let rec visit_term_desc env = function
   | BlTerm bl -> visit_bl_term env bl
   | BvTerm bv -> visit_bv_term env bv
@@ -199,18 +211,39 @@ and visit_bl_term_desc env = function
       mk_term_qual_identifier_terms
         (mk_qual_identifier_identifier (visit_bl_bnop b))
         [ bl1; bl2 ]
+  | BlComp (BlDistinct, bl1, bl2) ->
+      let bl1 = visit_bl_term env bl1 in
+      let bl2 = visit_bl_term env bl2 in
+      mk_bl_not
+        (mk_term_qual_identifier_terms
+           (mk_qual_identifier_identifier (visit_bl_comp BlEqual))
+           [ bl1; bl2 ])
   | BlComp (c, bl1, bl2) ->
       let bl1 = visit_bl_term env bl1 in
       let bl2 = visit_bl_term env bl2 in
       mk_term_qual_identifier_terms
         (mk_qual_identifier_identifier (visit_bl_comp c))
         [ bl1; bl2 ]
+  | BvComp (BvDistinct, bv1, bv2) ->
+      let bv1 = visit_bv_term env bv1 in
+      let bv2 = visit_bv_term env bv2 in
+      mk_bl_not
+        (mk_term_qual_identifier_terms
+           (mk_qual_identifier_identifier (visit_bv_comp BvEqual))
+           [ bv1; bv2 ])
   | BvComp (c, bv1, bv2) ->
       let bv1 = visit_bv_term env bv1 in
       let bv2 = visit_bv_term env bv2 in
       mk_term_qual_identifier_terms
         (mk_qual_identifier_identifier (visit_bv_comp c))
         [ bv1; bv2 ]
+  | AxComp (AxDistinct, ax1, ax2) ->
+      let ax1 = visit_ax_term env ax1 in
+      let ax2 = visit_ax_term env ax2 in
+      mk_bl_not
+        (mk_term_qual_identifier_terms
+           (mk_qual_identifier_identifier (visit_ax_comp AxEqual))
+           [ ax1; ax2 ])
   | AxComp (c, ax1, ax2) ->
       let ax1 = visit_ax_term env ax1 in
       let ax2 = visit_ax_term env ax2 in
@@ -228,7 +261,7 @@ and visit_bl_term_desc env = function
 and visit_bl_term env { bl_term_desc; _ } = visit_bl_term_desc env bl_term_desc
 
 and visit_bv_term_desc env = function
-  | BvCst bv -> mk_term_spec_constant (Smtlib.CstNumeral (mk_bv_string bv))
+  | BvCst bv -> mk_term_spec_constant (mk_bv_cst bv)
   | BvFun (v, ls) -> (
       let ls = visit_list visit_term env ls in
       match ls with
@@ -349,12 +382,12 @@ and visit_def_desc env = function
         visit_bl_term env bl )
   | BvDef (v, ls, bv) ->
       ( mk_symbol v.bv_name,
-        mk_sort_identifier (mk_bitvec_symbol v.bv_size),
+        mk_sort_bitvec v.bv_size,
         visit_list visit_decl env ls,
         visit_bv_term env bv )
   | AxDef (v, ls, ax) ->
       ( mk_symbol v.ax_name,
-        mk_sort_identifier (mk_array_symbol v.idx_size v.elt_size),
+        mk_sort_array v.idx_size v.elt_size,
         visit_list visit_decl env ls,
         visit_ax_term env ax )
 
@@ -366,12 +399,10 @@ and visit_decl_desc _ = function
         mk_sort_identifier (mk_symbol "Bool"),
         List.map visit_sort ls )
   | BvDecl (v, ls) ->
-      ( mk_symbol v.bv_name,
-        mk_sort_identifier (mk_bitvec_symbol v.bv_size),
-        List.map visit_sort ls )
+      (mk_symbol v.bv_name, mk_sort_bitvec v.bv_size, List.map visit_sort ls)
   | AxDecl (v, ls) ->
       ( mk_symbol v.ax_name,
-        mk_sort_identifier (mk_array_symbol v.idx_size v.elt_size),
+        mk_sort_array v.idx_size v.elt_size,
         List.map visit_sort ls )
 
 and visit_decl env { decl_desc; _ } = visit_decl_desc env decl_desc

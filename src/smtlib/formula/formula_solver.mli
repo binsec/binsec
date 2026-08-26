@@ -43,11 +43,12 @@ module Command : sig
   val put_entry : Formula.entry -> unit t
 end
 
-module Make (S : Session.S) : sig
+module type S = sig
   type t
+  type arg
 
   val pp : Format.formatter -> t -> unit
-  val create : theory:string -> S.arg -> t
+  val create : theory:string -> arg -> t
   val destroy : t -> unit
   val run : t -> 'a command -> 'a
   val put_entry : t -> Formula.entry -> unit
@@ -62,3 +63,8 @@ module Make (S : Session.S) : sig
   val get_bv_value : t -> Formula.bv_term list -> Bitvector.t list
   val get_ax_value : t -> Formula.ax_term -> (Bitvector.t * Bitvector.t) array
 end
+
+module Make (S : Session.S) : S with type arg = S.arg
+module Make_binding (_ : Binsec_smtlib_bindings.OPEN) : S with type arg = unit
+
+val create : Backend.t -> (module S with type arg = unit)

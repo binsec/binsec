@@ -5,7 +5,7 @@
  (name binsec_cli)
  (modules :standard)
  (flags :standard -open Binsec_base)
- (libraries dune-site dune-site.plugins binsec.base))
+ (libraries mula dune-site dune-site.plugins binsec.base))
 
 (generate_sites_module
  (module runtime)

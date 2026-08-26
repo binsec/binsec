@@ -46,16 +46,9 @@ module Describe_binary = Builder.False (struct
   let doc = "Display a description of the binary and exits"
 end)
 
-(** Server options *)
-
-module Experimental = Builder.False (struct
-  let name = "X"
-  let doc = "Only for developmental purposes"
-end)
-
 module ExecFile = Builder.String_option (struct
   let name = "file"
-  let doc = "Set binary file"
+  let doc = "Set binary file. *Optional*"
 end)
 
 module Entry_point = Builder.String_option (struct
@@ -72,6 +65,44 @@ end)
 module Version = Builder.False (struct
   let name = "version"
   let doc = "Print the version identifier and exit"
+end)
+
+module Color = Builder.No (struct
+  let name = "color"
+  let doc = "Disable colored output"
+end)
+
+module Color_profile =
+  Builder.Wrap
+    (struct
+      let name = "color-profile"
+      let doc = "Set your profile for the actual execution"
+
+      type t = string
+
+      let default = Binsec_base.Logger.Profile.default.name
+      let default_str = Some default
+      let of_string = Fun.id
+
+      let choices =
+        Some
+          (List.map
+             (fun ({ name; _ } : Binsec_base.Logger.Profile.t) -> name)
+             Binsec_base.Logger.Profile.all_profiles)
+    end)
+    (struct
+      type t = string
+
+      let get () = (Binsec_base.Logger.get_profile ()).name
+
+      let set new_profile =
+        Binsec_base.Logger.set_profile
+          (Binsec_base.Logger.Profile.of_string new_profile)
+    end)
+
+module Color_help = Builder.False (struct
+  let name = "color-help"
+  let doc = "Print the color documentation"
 end)
 
 module Machine = struct

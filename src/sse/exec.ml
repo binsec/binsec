@@ -205,7 +205,7 @@ module Run (Config : CONFIG) (State : STATE) (W : Worklist.S) () = struct
 
   let config =
     Compiler.make_config ~debug:Config.trace
-      ~echo:(fun _ msg -> Logger.result "%s" msg)
+      ~echo:(fun _ msg -> Logger.step "%s" msg)
       ~step:(fun path addr n -> ignore (step path addr n))
       (module Path)
       Config.assembler

@@ -23,24 +23,46 @@ default: binsec
 
 ifneq (, $(shell command -v opam 2> /dev/null))
 
-OCAML_COMPILER ?= $(shell opam switch list 2> /dev/null |\
-		    grep -m 1 -oe "ocaml-system[^ ]*" )
+BINSEC_VERSION ?= $(shell opam info --just-file ./binsec.opam -f version)
 
 OCAMLFORMAT_VERSION ?= $(shell cut -d "=" -f 2 .ocamlformat)
 
 _opam:
-	opam switch create . $(OCAML_COMPILER) --no-install
+	@if [ -n "$(OCAML_COMPILER)" ]; then \
+	  compiler="$(OCAML_COMPILER)"; \
+	else \
+	  compiler=$$(opam list ocaml-base-compiler --installed --coinstallable-with=binsec.$(BINSEC_VERSION) --columns=version --short | sort -V | tail -n 1); \
+	  if [ -z "$$compiler" ]; then \
+	    compiler=$$(opam list ocaml-base-compiler --coinstallable-with=binsec.$(BINSEC_VERSION) --columns=version --short | sort -V | tail -n 1); \
+	    if [ -z "$$compiler" ]; then \
+	      echo "No OCaml compiler coinstallable with binsec.$(BINSEC_VERSION) found."; \
+	      exit 1; \
+	    fi; \
+	    read -p "No installed OCaml compiler found for binsec.$(BINSEC_VERSION); use OCaml $$compiler? [y/N] " answer; \
+	    case "$$answer" in \
+	      [yY]*) ;; \
+	      *) echo "Aborted. Set OCAML_COMPILER to choose a different version."; exit 1;; \
+	    esac; \
+	  fi; \
+	fi; \
+	opam switch create . $$compiler --no-install
 	opam pin add . -n
 	opam install binsec --deps-only --with-test --with-doc -y
+
+_opam-dev:
 	opam install merlin ocamlformat=$(OCAMLFORMAT_VERSION) user-setup -y
 	opam user-setup install
 
 switch: _opam
 
+switch-dev: switch _opam-dev
+
 else
 
 switch:
 	$(error "Please install opam.")
+
+switch-dev: switch
 
 endif
 
@@ -66,7 +88,7 @@ endef
 
 endif
 
-.PHONY: default switch install uninstall binsec test doc clean
+.PHONY: default switch switch-dev install uninstall binsec test doc clean
 
 binsec:
 	$(call check_dune)

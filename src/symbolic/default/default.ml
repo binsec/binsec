@@ -29,6 +29,8 @@ module Expr = struct
   module Map = Types.BvMap
   module Hmap = Types.BvHmap
   module Tbl = Types.BvTbl
+
+  let from_smtlib = From_smtlib.expr
 end
 
 module Memory = struct
@@ -51,6 +53,8 @@ module Memory = struct
         -> [< `Some | `Any ] node
 
   module Tbl = Types.AxTbl
+
+  let from_smtlib = From_smtlib.array
 end
 
 module Symbol = struct

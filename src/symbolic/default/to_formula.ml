@@ -37,10 +37,13 @@ and t = {
   bl_cons : Formula.bl_var BvTbl.t;
   bv_cons : Formula.bv_var BvTbl.t;
   ax_cons : Formula.ax_var AxTbl.t;
+  ax_root : Memory.symbol AxTbl.t;
   ordered : k Queue.t;
-  mutable idx_size : int;
   debug : name:string -> label:string -> string;
 }
+
+let index_size { ax_root; _ } ax =
+  match AxTbl.find ax_root ax with Symbol { index; _ } -> index
 
 let create ?(debug = fun ~name ~label:_ -> name) ~next_id () =
   {
@@ -50,8 +53,8 @@ let create ?(debug = fun ~name ~label:_ -> name) ~next_id () =
     bl_cons = BvTbl.create 32;
     bv_cons = BvTbl.create 128;
     ax_cons = AxTbl.create 64;
+    ax_root = AxTbl.create 64;
     ordered = Queue.create ();
-    idx_size = 0;
     debug;
   }
 
@@ -67,7 +70,6 @@ let rec visit_bl ctx bl =
       BvTbl.replace ctx.bl_cons bl (Formula.bl_var name))
   with Not_found -> (
     match bl with
-    | Cst _ -> ()
     | Load _ (* cannot be a bl<1> *) -> assert false
     | Unary { f = Not; x; _ } ->
         BvTbl.add ctx.bl_cons bl bl_once;
@@ -95,7 +97,7 @@ let rec visit_bl ctx bl =
         visit_bl ctx t;
         visit_bl ctx e;
         Queue.push (Bl bl) ctx.ordered
-    | Var _ | Unary _ | Binary _ -> visit_bv ctx bl)
+    | Cst _ | Var _ | Unary _ | Binary _ -> visit_bv ctx bl)
 
 and visit_bv ctx bv =
   try
@@ -111,7 +113,6 @@ and visit_bv ctx bv =
         BvTbl.add ctx.bv_cons bv var;
         BvTbl.add ctx.bv_decl bv (Formula.mk_bv_decl var [])
     | Load { addr; label; _ } ->
-        ctx.idx_size <- Expr.sizeof addr;
         BvTbl.add ctx.bv_cons bv bv_once;
         visit_bv ctx addr;
         visit_ax ctx label;
@@ -145,18 +146,20 @@ and visit_ax ctx ax =
     if AxTbl.find ctx.ax_cons ax == ax_once then (
       let name = Suid.to_string ctx.id in
       ctx.id <- Suid.incr ctx.id;
-      AxTbl.replace ctx.ax_cons ax (Formula.ax_var name ctx.idx_size 8))
+      AxTbl.replace ctx.ax_cons ax (Formula.ax_var name (index_size ctx ax) 8))
   with Not_found -> (
     match ax with
-    | Symbol { name; index; _ } ->
+    | Symbol { name; index; _ } as root ->
         let var = Formula.ax_var (ctx.debug ~name ~label:"") index 8 in
         AxTbl.add ctx.ax_cons ax var;
-        AxTbl.add ctx.ax_decl ax (Formula.mk_ax_decl var [])
+        AxTbl.add ctx.ax_decl ax (Formula.mk_ax_decl var []);
+        AxTbl.add ctx.ax_root ax root
     | Layer { addr; store; over; _ } ->
         AxTbl.add ctx.ax_cons ax ax_once;
         visit_bv ctx addr;
         Store.iter_term (fun _ bv -> visit_bv ctx bv) store;
         visit_ax ctx over;
+        AxTbl.add ctx.ax_root ax (AxTbl.find ctx.ax_root over);
         Queue.push (Ax ax) ctx.ordered)
 
 let assert_bl ctx bl =
@@ -170,7 +173,7 @@ let define_bv ctx name bv =
 
 let define_ax ctx name ax =
   visit_ax ctx ax;
-  let var = Formula.ax_var name ctx.idx_size 8 in
+  let var = Formula.ax_var name (index_size ctx ax) 8 in
   Queue.push (AxDefine (var, ax)) ctx.ordered
 
 let mk_unop (op : Term.unary Term.operator) =
@@ -287,14 +290,14 @@ and mk_ax_no_cons : t -> Memory.t -> Formula.ax_term =
   match ax with
   | Symbol _ -> assert false
   | Layer { addr; store; over; _ } ->
-      let addr = mk_bv ctx addr in
+      let addr = mk_bv ctx addr and index_size = Expr.sizeof addr in
       Store.fold_term
         (fun i bv store ->
           Formula.mk_store
             (Expr.sizeof bv lsr 3)
             store
             (Formula.mk_bv_add addr
-               (Formula.mk_bv_cst (Bitvector.create i ctx.idx_size)))
+               (Formula.mk_bv_cst (Bitvector.create i index_size)))
             (mk_bv ctx bv))
         (mk_ax ctx over) store
 

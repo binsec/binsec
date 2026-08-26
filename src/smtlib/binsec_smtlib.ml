@@ -49,7 +49,7 @@ module Solver = struct
   include Solver
   module Session = Session
 
-  type backend =
+  type backend = Backend.t =
     | None : backend
     | Text : {
         session : (module Session.S with type arg = 'a);
@@ -65,21 +65,5 @@ module Solver = struct
       }
         -> backend
 
-  let default_backend () =
-    match Bindings.bitwuzla_cxx with
-    | Some factory -> Binding { factory; complete_fold_ax_values = false }
-    | None -> (
-        match Bindings.bitwuzla_c with
-        | Some factory -> Binding { factory; complete_fold_ax_values = true }
-        | None -> (
-            match Bindings.z3 with
-            | Some factory ->
-                Binding { factory; complete_fold_ax_values = false }
-            | None -> (
-                match
-                  List.find Solver.ping [ Bitwuzla; Boolector; Yices; Z3; CVC4 ]
-                with
-                | solver ->
-                    Text { session = (module Session.Spawn); arg = solver }
-                | exception Not_found -> None)))
+  let default_backend = Backend.default
 end

@@ -1,3 +1,17 @@
+## 0.11.3 (2026-08-26)
+
+** Misc
+
+- Improve command-line interface error messages and color output support
+- Improve `Makefile` build rules and add `switch-dev` target
+- Restore `Formula` SMT solver internal backend
+
+** Bugs
+
+- Fix a bug where non-`PT_LOAD` segments were incorrectly loaded from ELF binaries (#67)
+- Fix a parsing error caused by grammar ambiguity
+- Fix minor typos and missing documentation (including #65)
+
 ## 0.11.2 (2026-06-30)
 
 ** Misc

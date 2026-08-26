@@ -57,6 +57,12 @@ let (pp_builtin, register_builtin_printer) :
           | EndOfHook ->
               Format.pp_print_string ppf "end of hook";
               true
+          | Inline hunk ->
+              Format.fprintf ppf "@[<v 2>inline@,%a@]"
+                (Format.pp_print_list ~pp_sep:Format.pp_print_cut
+                   Dba_printer.Ascii.pp_instruction)
+                (Dhunk.to_list hunk);
+              true
           | _ -> false);
       ]
   in

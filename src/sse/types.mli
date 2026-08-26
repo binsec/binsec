@@ -23,17 +23,17 @@ type trilean = Basic_types.Ternary.t = False | True | Unknown
 
 (** The reason a path execution ends (via {!constructor-Signal}). *)
 type status = Metrics.status =
-  | Halt
-  | Cut
-  | Merged
-  | Stashed
-  | Unsatisfiable_assumption
-  | Assertion_failure
-  | Max_depth
-  | Enumeration_limit
-  | Unresolved_formula
-  | Non_executable_code
-  | Error of string
+  | Halt  (** Normal end of execution *)
+  | Cut  (** Stopped by user directive *)
+  | Merged  (** Merged into another path and discarded *)
+  | Stashed  (** Retained by a plugin *)
+  | Unsatisfiable_assumption  (** Unsatisfiable user assumption *)
+  | Assertion_failure  (** Failed assertion *)
+  | Max_depth  (** Reached depth limit *)
+  | Enumeration_limit  (** Reached enumeration limit *)
+  | Unresolved_formula  (** Unsolvable path predicate within budget *)
+  | Non_executable_code  (** Program counter outside executable segment *)
+  | Error of string  (** Internal error *)
 
 (** The return of a {!module-Ir.builtin} {!constructor-Call}. *)
 type 'path continuation =

@@ -21,6 +21,144 @@
 
 open Format
 
+module Color = struct
+  type t =
+    | Default
+    | Black
+    | Red
+    | Green
+    | Yellow
+    | Blue
+    | Purple
+    | Cyan
+    | White
+
+  let terminal_encoding = function
+    | Default -> ""
+    | Black -> ";30"
+    | Red -> ";31"
+    | Green -> ";32"
+    | Yellow -> ";33"
+    | Blue -> ";34"
+    | Purple -> ";35"
+    | Cyan -> ";36"
+    | White -> ";37"
+
+  let to_string = function
+    | Default -> "default"
+    | Black -> "black"
+    | Red -> "red"
+    | Green -> "green"
+    | Yellow -> "yellow"
+    | Blue -> "blue"
+    | Purple -> "purple"
+    | Cyan -> "cyan"
+    | White -> "white"
+
+  let of_string = function
+    | "black" -> Black
+    | "red" -> Red
+    | "green" -> Green
+    | "yellow" -> Yellow
+    | "blue" -> Blue
+    | "purple" -> Purple
+    | "cyan" -> Cyan
+    | "white" -> White
+    | _ -> Default
+
+  let string_to_terminal_color_codes color_name =
+    terminal_encoding (of_string color_name)
+end
+
+module Emphasis = struct
+  type t = Default | Bold | Italic
+
+  let terminal_encoding = function
+    | Default -> "0"
+    | Bold -> "1"
+    | Italic -> "3"
+
+  let to_string = function
+    | Default -> "default"
+    | Bold -> "bold"
+    | Italic -> "italic"
+
+  let of_string = function "bold" -> Bold | "italic" -> Italic | _ -> Default
+end
+
+type font = Color.t * Emphasis.t
+
+module Profile = struct
+  type t = {
+    name : string;
+    debug : font;
+    step : font;
+    info : font;
+    result : font;
+    warning : font;
+    error : font;
+    fatal : font;
+  }
+
+  let default =
+    {
+      name = "default";
+      debug = (Cyan, Default);
+      step = (Default, Default);
+      info = (Green, Default);
+      result = (Default, Bold);
+      warning = (Yellow, Default);
+      error = (Red, Bold);
+      fatal = (Red, Bold);
+    }
+
+  let default_light =
+    {
+      name = "default_light";
+      debug = (Cyan, Default);
+      step = (Default, Default);
+      info = (Purple, Default);
+      result = (Default, Bold);
+      warning = (Yellow, Default);
+      error = (Red, Bold);
+      fatal = (Red, Bold);
+    }
+
+  let dark =
+    {
+      name = "dark";
+      debug = (Blue, Default);
+      step = (White, Default);
+      info = (Default, Italic);
+      result = (Default, Bold);
+      warning = (Yellow, Italic);
+      error = (Red, Bold);
+      fatal = (Red, Bold);
+    }
+
+  let light =
+    {
+      name = "light";
+      debug = (Cyan, Default);
+      step = (Default, Default);
+      info = (Black, Italic);
+      result = (Black, Bold);
+      warning = (Yellow, Italic);
+      error = (Red, Bold);
+      fatal = (Red, Bold);
+    }
+
+  let of_string s =
+    match String.lowercase_ascii s with
+    | "default" -> default
+    | "default_light" -> default_light
+    | "dark" -> dark
+    | "light" -> light
+    | _ -> raise Not_found
+
+  let all_profiles = [ default; default_light; dark; light ]
+end
+
 let with_tags_on ppf fmt =
   let mark_tags = pp_get_mark_tags ppf ()
   and print_tags = pp_get_print_tags ppf () in
@@ -32,150 +170,57 @@ let with_tags_on ppf fmt =
       pp_set_print_tags ppf print_tags)
     ppf fmt
 
-module Color = struct
-  type t =
-    | Black
-    | DarkGray
-    | Blue
-    | LightBlue
-    | Green
-    | LightGreen
-    | Cyan
-    | LightCyan
-    | Red
-    | LightRed
-    | Purple
-    | LightPurple
-    | Brown
-    | Yellow
-    | LightGray
-    | White
+type stag += Font of (Color.t * Emphasis.t)
 
-  let _terminal_encoding = function
-    | Black -> "0;30"
-    | DarkGray -> "1;30"
-    | Blue -> "0;34"
-    | LightBlue -> "1;34"
-    | Green -> "0;32"
-    | LightGreen -> "1;32"
-    | Cyan -> "0;36"
-    | LightCyan -> "1;36"
-    | Red -> "0;31"
-    | LightRed -> "1;31"
-    | Purple -> "0;35"
-    | LightPurple -> "1;35"
-    | Brown -> "0;33"
-    | Yellow -> "1;33"
-    | LightGray -> "0;37"
-    | White -> "1;37"
+(** Reference color profile - should be one listed in Profile. *)
+let profile = ref Profile.default
 
-  let to_string = function
-    | Black -> "black"
-    | DarkGray -> "darkgray"
-    | Blue -> "blue"
-    | LightBlue -> "lightblue"
-    | Green -> "green"
-    | LightGreen -> "lightgreen"
-    | Cyan -> "cyan"
-    | LightCyan -> "lightcyan"
-    | Red -> "red"
-    | LightRed -> "lightred"
-    | Purple -> "purple"
-    | LightPurple -> "lightpurple"
-    | Brown -> "brown"
-    | Yellow -> "yellow"
-    | LightGray -> "lightgray"
-    | White -> "white"
-
-  let string_to_terminal_color_codes color_name =
-    match String.lowercase_ascii color_name with
-    | "black" -> Some "0;30"
-    | "darkgray" -> Some "1;30"
-    | "blue" -> Some "0;34"
-    | "lightblue" -> Some "1;34"
-    | "green" -> Some "0;32"
-    | "lightgreen" -> Some "1;32"
-    | "cyan" -> Some "0;36"
-    | "lightcyan" -> Some "1;36"
-    | "red" -> Some "0;31"
-    | "lightred" -> Some "1;31"
-    | "purple" -> Some "0;35"
-    | "lightpurple" -> Some "1;35"
-    | "brown" -> Some "0;33"
-    | "yellow" -> Some "1;33"
-    | "lightgray" -> Some "0;37"
-    | "white" -> Some "1;37"
-    | _ -> (* warning "Unsupported color name %s@." s;*) None
-
-  (* ¯\_(ツ)_/¯ *)
-  let _black = Black
-  let _darkgray = DarkGray
-  let _blue = Blue
-  let _lightblue = LightBlue
-  let _green = Green
-  let _lightgreen = LightGreen
-  let _cyan = Cyan
-  let _lightcyan = LightCyan
-  let _red = Red
-  let _lightred = LightRed
-  let _purple = Purple
-  let _lightpurple = LightPurple
-  let _brown = Brown
-  let _yellow = Yellow
-  let _lightgray = LightGray
-  let _white = White
-end
+let set_profile profile_input = profile := profile_input
+let get_profile () = !profile
 
 module ChannelKind = struct
   type t =
-    | ChInfo (* Normal output to feedback positive results *)
-    | ChResult (* Normal output kind *)
-    | ChDebug (* Debug message *)
-    | ChWarning (* Warning message *)
-    | ChError (* For events not meant to occur but that we can handle *)
-    | ChFatal
-  (* Fatal failures *)
+    | Debug (* Debug message *)
+    | Step (* General operations *)
+    | Info (* Normal output to feedback positive results *)
+    | Result (* Normal output kind *)
+    | Warning (* Warning message *)
+    | Error (* For events not meant to occur but that we can handle *)
+    | Fatal (* Fatal failures *)
 
   let to_string = function
-    | ChInfo -> "info"
-    | ChResult -> "result"
-    | ChDebug -> "debug"
-    | ChWarning -> "warning"
-    | ChError -> "error"
-    | ChFatal -> "fatal"
+    | Debug -> "debug"
+    | Step -> "step"
+    | Info -> "info"
+    | Result -> "result"
+    | Warning -> "warning"
+    | Error -> "error"
+    | Fatal -> "fatal"
 
-  let values = [ "debug"; "info"; "result"; "warning"; "error"; "fatal" ]
+  let values = [ Debug; Step; Info; Result; Warning; Error; Fatal ]
 
   let loglevel = function
-    | ChDebug -> 0
-    | ChInfo -> 10
-    | ChWarning -> 20
-    | ChError -> 100
-    | ChFatal -> max_int (* Fatal & Result channels cannot be turned off *)
-    | ChResult -> max_int
+    | Debug -> 0
+    | Step -> 5
+    | Info -> 10
+    | Warning -> 20
+    | Error -> 100
+    | Fatal -> max_int (* Fatal & Result channels cannot be turned off *)
+    | Result -> max_int
 
   let of_string s =
     match String.lowercase_ascii s with
-    | "info" -> ChInfo
-    | "result" -> ChResult
-    | "warning" -> ChWarning
-    | "error" -> ChError
-    | "fatal" -> ChFatal
-    | "debug" -> ChDebug
+    | "debug" -> Debug
+    | "step" -> Step
+    | "info" -> Info
+    | "result" -> Result
+    | "warning" -> Warning
+    | "error" -> Error
+    | "fatal" -> Fatal
     | s -> failwith (sprintf "%s not a channel string identifier" s)
 
   let is_string_identifier s =
     match of_string s with _ -> true | exception Failure _ -> false
-
-  let color kind =
-    let open Color in
-    match kind with
-    | ChInfo -> LightGray
-    | ChResult -> LightGray
-    | ChDebug -> Cyan
-    | ChWarning -> Yellow
-    | ChError -> LightRed
-    | ChFatal -> Red
 end
 
 module type S = sig
@@ -186,6 +231,7 @@ module type S = sig
   val result_channel : channel
   val warning_channel : channel
   val info_channel : channel
+  val step_channel : channel
   val debug_channel : channel
   val fatal : ?e:exn -> ('a, Format.formatter, unit, 'b) format4 -> 'a
   val error : ('a, Format.formatter, unit) format -> 'a
@@ -196,6 +242,7 @@ module type S = sig
   val info : ?level:int -> ('a, Format.formatter, unit) format -> 'a
   val set_info_level : int -> unit
   val get_info_level : unit -> int
+  val step : ('a, Format.formatter, unit) format -> 'a
   val debug : ?level:int -> ('a, Format.formatter, unit) format -> 'a
 
   val fdebug :
@@ -225,7 +272,7 @@ type channel = {
 
 module Make (G : ChannelGroup) = struct
   let set_log_level, log_level_of_chkind, get_log_level, quiet =
-    let loglevel = ref (ChannelKind.loglevel ChannelKind.ChInfo) in
+    let loglevel = ref (ChannelKind.loglevel Info) in
     ( (fun (s : string) ->
         loglevel := ChannelKind.of_string s |> ChannelKind.loglevel),
       (fun ck ->
@@ -240,16 +287,18 @@ module Make (G : ChannelGroup) = struct
   let default_out kind = { kind; ppfs = [ Format.std_formatter ] }
   let err_out kind = { kind; ppfs = [ Format.err_formatter ] }
 
-  let debug_channel = default_out ChannelKind.ChDebug
-  and info_channel = default_out ChannelKind.ChInfo
-  and result_channel = default_out ChannelKind.ChResult
-  and warning_channel = err_out ChannelKind.ChWarning
-  and error_channel = err_out ChannelKind.ChError
-  and fatal_channel = err_out ChannelKind.ChFatal
+  let debug_channel = default_out Debug
+  and step_channel = default_out Step
+  and info_channel = default_out Info
+  and result_channel = default_out Result
+  and warning_channel = err_out Warning
+  and error_channel = err_out Error
+  and fatal_channel = err_out Fatal
 
   let channels =
     [
       debug_channel;
+      step_channel;
       info_channel;
       warning_channel;
       result_channel;
@@ -262,10 +311,9 @@ module Make (G : ChannelGroup) = struct
   let reset_channel : channel -> unit =
    fun channel ->
     match channel.kind with
-    | ChInfo | ChResult | ChDebug ->
+    | Info | Result | Step | Debug ->
         set_formatters [ Format.std_formatter ] channel
-    | ChWarning | ChError | ChFatal ->
-        set_formatters [ Format.err_formatter ] channel
+    | Warning | Error | Fatal -> set_formatters [ Format.err_formatter ] channel
 
   let set_tagged_entry, get_tagged_entry =
     let tag = ref true in
@@ -297,8 +345,12 @@ module Make (G : ChannelGroup) = struct
     let mark_open_stag = function
       | String_tag tag_string -> (
           match Color.string_to_terminal_color_codes tag_string with
-          | None -> ""
-          | Some tcolor_code -> sprintf "\027[%sm" tcolor_code)
+          | "" -> ""
+          | code -> sprintf "\027[0;%sm" code)
+      | Font (color, emphasis) ->
+          sprintf "\027[%s%sm"
+            (Emphasis.terminal_encoding emphasis)
+            (Color.terminal_encoding color)
       | _ -> ""
     and print_open_stag = function
       | String_tag tag_string ->
@@ -311,18 +363,28 @@ module Make (G : ChannelGroup) = struct
     and mark_close_stag _ = "\027[0m" in
     { mark_open_stag; mark_close_stag; print_open_stag; print_close_stag }
 
+  let local_profile (channel : ChannelKind.t) (profile : Profile.t) : stag =
+    match channel with
+    | Debug -> Font profile.debug
+    | Step -> Font profile.step
+    | Info -> Font profile.info
+    | Result -> Font profile.result
+    | Warning -> Font profile.warning
+    | Error -> Font profile.error
+    | Fatal -> Font profile.fatal
+
   let log finally channel txt =
     let ppfs = channel.ppfs in
     let pp fmt txt =
-      if ChannelKind.loglevel channel.kind >= get_log_level () then
+      if ChannelKind.loglevel channel.kind >= get_log_level () then (
+        Format.pp_open_stag fmt (local_profile channel.kind !profile);
+        Format.pp_open_stag fmt (String_tag (channel_name channel.kind));
         Format.kfprintf
           (fun fmt ->
             Format.kfprintf
               (fun fmt -> Format.kfprintf finally fmt "@]@}@}@.")
               fmt txt)
-          fmt "@{<%s>@{<%s>@[<hov 0>"
-          (ChannelKind.color channel.kind |> Color.to_string)
-          (channel_name channel.kind)
+          fmt "@[<hov 0>")
       else Format.ikfprintf finally fmt txt
     in
     let rec aux = function
@@ -379,7 +441,7 @@ module Make (G : ChannelGroup) = struct
     mk_level_functions debug_channel
 
   let is_debug_enabled =
-    let threshold = ChannelKind.loglevel ChannelKind.ChDebug in
+    let threshold = ChannelKind.loglevel Debug in
     fun () -> get_log_level () <= threshold
 
   let get_info_level, set_info_level, info_pass =
@@ -393,6 +455,7 @@ module Make (G : ChannelGroup) = struct
     else Format.ifprintf Format.std_formatter txt
 
   let finally_unit _ = ()
+  let step txt = log finally_unit step_channel txt
 
   let debug ?(level = 0) txt =
     leveled_channel finally_unit debug_channel debug_pass ~level txt

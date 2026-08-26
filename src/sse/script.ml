@@ -731,7 +731,7 @@ let grammar : (unit, obj, unit, unit, obj Dyp.dyplexbuf) Dyp.dyp_action list =
         ( ( "named",
             [
               Dyp.Non_ter ("expr", No_priority);
-              Dyp.Regexp (RE_String "as");
+              Dyp.Ter "AS";
               Dyp.Non_ter ("ident", No_priority);
             ],
             "default_priority",
@@ -769,7 +769,7 @@ let grammar : (unit, obj, unit, unit, obj Dyp.dyplexbuf) Dyp.dyp_action list =
             [
               Dyp.Regexp (RE_String "print");
               Dyp.Regexp (RE_String "formula");
-              Dyp.Regexp (RE_String "for");
+              Dyp.Ter "FOR";
               Dyp.Non_ter ("comma_separated_named_rev_list", No_priority);
             ],
             "default_priority",
@@ -900,7 +900,7 @@ let grammar : (unit, obj, unit, unit, obj Dyp.dyplexbuf) Dyp.dyp_action list =
           fun _ -> function _ -> (Syntax.Obj (Output_list []), []) );
         ( ( "outputs",
             [
-              Dyp.Regexp (RE_String "then");
+              Dyp.Ter "THEN";
               Dyp.Non_ter ("and_separated_output_rev_list", No_priority);
             ],
             "default_priority",
@@ -1071,7 +1071,7 @@ let grammar : (unit, obj, unit, unit, obj Dyp.dyplexbuf) Dyp.dyp_action list =
             [
               Dyp.Regexp (RE_String "with");
               Dyp.Non_ter ("stmts", No_priority);
-              Dyp.Regexp (RE_String "end");
+              Dyp.Ter "END";
             ],
             "default_priority",
             [] ),
@@ -1095,7 +1095,7 @@ let grammar : (unit, obj, unit, unit, obj Dyp.dyplexbuf) Dyp.dyp_action list =
         ( ("guard", [], "default_priority", []),
           fun _ _ -> (Syntax.Obj (Expr_opt None), []) );
         ( ( "guard",
-            [ Dyp.Regexp (RE_String "if"); Dyp.Non_ter ("expr", No_priority) ],
+            [ Dyp.Ter "IF"; Dyp.Non_ter ("expr", No_priority) ],
             "default_priority",
             [] ),
           fun _ -> function
@@ -1127,18 +1127,14 @@ let grammar : (unit, obj, unit, unit, obj Dyp.dyplexbuf) Dyp.dyp_action list =
                 (Syntax.Stmt [ Enumerate (max_int, expr) ], [])
             | _ -> assert false );
         ( ( "directive",
-            [
-              Dyp.Regexp (RE_String "assume"); Dyp.Non_ter ("expr", No_priority);
-            ],
+            [ Dyp.Ter "ASSUME"; Dyp.Non_ter ("expr", No_priority) ],
             "default_priority",
             [] ),
           fun _ -> function
             | [ _; Syntax.Expr expr ] -> (Syntax.Stmt [ Instr.Assume expr ], [])
             | _ -> assert false );
         ( ( "directive",
-            [
-              Dyp.Regexp (RE_String "assert"); Dyp.Non_ter ("expr", No_priority);
-            ],
+            [ Dyp.Ter "ASSERT"; Dyp.Non_ter ("expr", No_priority) ],
             "default_priority",
             [] ),
           fun _ -> function
@@ -1304,7 +1300,7 @@ let grammar : (unit, obj, unit, unit, obj Dyp.dyplexbuf) Dyp.dyp_action list =
               Dyp.Non_ter ("byte_rev_list", No_priority);
               Dyp.Regexp (RE_String "by");
               Dyp.Non_ter ("stmts", No_priority);
-              Dyp.Regexp (RE_String "end");
+              Dyp.Ter "END";
             ],
             "default_priority",
             [] ),
@@ -1321,7 +1317,7 @@ let grammar : (unit, obj, unit, unit, obj Dyp.dyplexbuf) Dyp.dyp_action list =
               Dyp.Non_ter ("arguments", No_priority);
               Dyp.Regexp (RE_String "with");
               Dyp.Non_ter ("stmts", No_priority);
-              Dyp.Regexp (RE_String "end");
+              Dyp.Ter "END";
             ],
             "default_priority",
             [] ),
@@ -1343,7 +1339,7 @@ let grammar : (unit, obj, unit, unit, obj Dyp.dyplexbuf) Dyp.dyp_action list =
               Dyp.Non_ter ("arguments", No_priority);
               Dyp.Regexp (RE_String "by");
               Dyp.Non_ter ("stmts", No_priority);
-              Dyp.Regexp (RE_String "end");
+              Dyp.Ter "END";
             ],
             "default_priority",
             [] ),
@@ -1361,8 +1357,8 @@ let grammar : (unit, obj, unit, unit, obj Dyp.dyplexbuf) Dyp.dyp_action list =
             | _ -> assert false );
         ( ( "decl",
             [
-              Dyp.Regexp (RE_String "abort");
-              Dyp.Regexp (RE_String "at");
+              Dyp.Ter "ABORT";
+              Dyp.Ter "AT";
               Dyp.Non_ter ("comma_separated_expr_rev_list", No_priority);
             ],
             "default_priority",
@@ -1381,8 +1377,8 @@ let grammar : (unit, obj, unit, unit, obj Dyp.dyplexbuf) Dyp.dyp_action list =
             | _ -> assert false );
         ( ( "decl",
             [
-              Dyp.Regexp (RE_String "halt");
-              Dyp.Regexp (RE_String "at");
+              Dyp.Ter "HALT";
+              Dyp.Ter "AT";
               Dyp.Non_ter ("comma_separated_expr_rev_list", No_priority);
             ],
             "default_priority",
@@ -1478,7 +1474,7 @@ let grammar : (unit, obj, unit, unit, obj Dyp.dyplexbuf) Dyp.dyp_action list =
         ( ( "decl",
             [
               Dyp.Regexp (RE_String "cut");
-              Dyp.Regexp (RE_String "at");
+              Dyp.Ter "AT";
               Dyp.Non_ter ("expr", No_priority);
               Dyp.Non_ter ("arguments", No_priority);
               Dyp.Non_ter ("accept_newline", No_priority);
@@ -1501,7 +1497,7 @@ let grammar : (unit, obj, unit, unit, obj Dyp.dyplexbuf) Dyp.dyp_action list =
             | _ -> assert false );
         ( ( "decl",
             [
-              Dyp.Regexp (RE_String "at");
+              Dyp.Ter "AT";
               Dyp.Non_ter ("expr", No_priority);
               Dyp.Non_ter ("arguments", No_priority);
               Dyp.Non_ter ("directive", No_priority);
@@ -1520,7 +1516,7 @@ let grammar : (unit, obj, unit, unit, obj Dyp.dyplexbuf) Dyp.dyp_action list =
               Dyp.Regexp (RE_String "return");
               Dyp.Regexp (RE_String "with");
               Dyp.Non_ter ("stmts", No_priority);
-              Dyp.Regexp (RE_String "end");
+              Dyp.Ter "END";
             ],
             "default_priority",
             [] ),
@@ -1530,8 +1526,8 @@ let grammar : (unit, obj, unit, unit, obj Dyp.dyplexbuf) Dyp.dyp_action list =
             | _ -> assert false );
         ( ( "decl",
             [
-              Dyp.Regexp (RE_String "abort");
-              Dyp.Regexp (RE_String "at");
+              Dyp.Ter "ABORT";
+              Dyp.Ter "AT";
               Dyp.Non_ter ("symbol", No_priority);
               Dyp.Regexp (RE_String "return");
             ],
@@ -1550,8 +1546,8 @@ let grammar : (unit, obj, unit, unit, obj Dyp.dyplexbuf) Dyp.dyp_action list =
             | _ -> assert false );
         ( ( "decl",
             [
-              Dyp.Regexp (RE_String "halt");
-              Dyp.Regexp (RE_String "at");
+              Dyp.Ter "HALT";
+              Dyp.Ter "AT";
               Dyp.Non_ter ("symbol", No_priority);
               Dyp.Regexp (RE_String "return");
             ],
@@ -1622,7 +1618,7 @@ let grammar : (unit, obj, unit, unit, obj Dyp.dyplexbuf) Dyp.dyp_action list =
         ( ( "decl",
             [
               Dyp.Regexp (RE_String "cut");
-              Dyp.Regexp (RE_String "at");
+              Dyp.Ter "AT";
               Dyp.Non_ter ("symbol", No_priority);
               Dyp.Regexp (RE_String "return");
               Dyp.Non_ter ("accept_newline", No_priority);

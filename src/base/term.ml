@@ -481,6 +481,9 @@ module type S = sig
   val byte_swap : t -> t
   (** [byte_swap e] reverses the byte order of the expression [e] *)
 
+  val repeat : int -> t -> t
+  (** [repeat n e] concatenates [n] times the expression [e] *)
+
   (** {3 Specific constants}*)
 
   val zeros : int -> t
@@ -1554,6 +1557,12 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
       let size = sizeof e in
       if size land 0x7 <> 0 then raise (Invalid_argument "byte_swap");
       iter e (size - 8) (restrict ~hi:(size - 1) ~lo:(size - 8) e)
+
+  let repeat =
+    let rec iter e i r = if i = 0 then r else iter e (i - 1) (append e r) in
+    fun i e ->
+      if i < 1 then raise (Invalid_argument "repeat");
+      iter e (i - 1) e
 
   let rec map : type k a b.
       (string -> int -> a -> t) ->

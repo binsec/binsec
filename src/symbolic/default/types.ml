@@ -323,7 +323,6 @@ end)
 
 module BiTbl = Basic_types.Integers.Bigint.Htbl
 module StTbl = Basic_types.String.Htbl
-module S = Basic_types.String.Map
 
 module IntMap = Map.Make (struct
   type t = Z.t

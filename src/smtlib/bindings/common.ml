@@ -162,6 +162,9 @@ end
 module type S = sig
   (** An incremental solver instance. *)
 
+  val pp : Format.formatter -> unit -> unit
+  (** [pp ppf ()] pretty-print the session solver. *)
+
   include TERM
 
   val assert_formula : Bl.t -> unit
@@ -187,6 +190,15 @@ module type S = sig
       the assumtion [e].
 
       @return Sat, Unsat or Unknown. *)
+
+  val get_bl_value : Bl.t -> bool
+  (** [get_bl_value expr] returns the assignment of the expression [expr] if
+      [check_sat] returned [Sat]. Invalid uses may fail in an unpredictable
+      fashion.
+
+      @param expr The expression to get the assignment.
+
+      @return The boolean assignment of [expr]. *)
 
   val get_bv_value : Bv.t -> Z.t
   (** [get_bv_value expr] returns the assignment of the expression [expr] if

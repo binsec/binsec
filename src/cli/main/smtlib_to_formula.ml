@@ -126,6 +126,11 @@ module Sort = struct
     | BitVec i -> BvSort i
     | Array (idx, elt) -> AxSort (idx, elt)
     | Var _ -> assert false
+
+  let of_formula_sort = function
+    | BlSort -> boolean
+    | BvSort sz -> bv sz
+    | AxSort (idx, elt) -> array idx elt
 end
 
 type sorted_expr = { sort : Sort.t; term : term }
@@ -433,6 +438,37 @@ module TypEnv = struct
     |> load_funs ArrayTheory.functions
     |> load_funs CoreTheory.functions
     |> load_vars CoreTheory.vars
+
+  let update env name params sort =
+    if params = [] then add_var env name sort
+    else
+      add_fun env name
+        (FunTyp.create true (List.map Sort.of_formula_sort params) sort)
+
+  let declare env { decl_desc; _ } =
+    match decl_desc with
+    | BlDecl ({ bl_name; _ }, params) -> update env bl_name params Sort.boolean
+    | BvDecl ({ bv_name; bv_size; _ }, params) ->
+        update env bv_name params (Sort.bv bv_size)
+    | AxDecl ({ ax_name; idx_size; elt_size; _ }, params) ->
+        update env ax_name params (Sort.array idx_size elt_size)
+
+  let update env name params sort =
+    if params = [] then add_var env name sort
+    else
+      add_fun env name
+        (FunTyp.create true
+           (List.map (fun { decl_desc; _ } -> Sort.of_decl decl_desc) params)
+           sort)
+
+  let define env { def_desc; _ } =
+    match def_desc with
+    | BlDef ({ bl_name; _ }, params, _) ->
+        update env bl_name params Sort.boolean
+    | BvDef ({ bv_name; bv_size; _ }, params, _) ->
+        update env bv_name params (Sort.bv bv_size)
+    | AxDef ({ ax_name; idx_size; elt_size; _ }, params, _) ->
+        update env ax_name params (Sort.array idx_size elt_size)
 end
 
 let eval_constant = function
@@ -970,14 +1006,34 @@ let eval_command env cmd =
   | CmdSetLogic _ | CmdComment _ | CmdSetOption _ ->
       (env, None)
 
-let eval_commands env cmds =
+module Chunk = struct
+  type t = formula * TypEnv.t
+
+  let empty = (empty, TypEnv.init)
+
+  let of_formula fm =
+    ( fm,
+      fold_forward
+        (fun { entry_desc; _ } env ->
+          match entry_desc with
+          | Declare decl -> TypEnv.declare env decl
+          | Define def -> TypEnv.define env def
+          | Assert _ | Assume _ | Comment _ | Custom _ -> env)
+        fm TypEnv.init )
+
+  let to_formula = fst
+end
+
+let eval_commands chunk cmds =
   let ev (fml, env) cmd =
     let env, sentry_opt = eval_command env cmd in
     match sentry_opt with
     | None -> (fml, env)
     | Some entry_desc -> (push_front (entry entry_desc) fml, env)
   in
-  let sentries, _env = List.fold_left ev (empty, env) cmds in
-  sentries
+  List.fold_left ev chunk cmds
 
-let script script = eval_commands TypEnv.init script.script_commands
+let script script =
+  eval_commands (empty, TypEnv.init) script.script_commands |> fst
+
+let incremental chunk script = eval_commands chunk script.script_commands
