@@ -138,7 +138,9 @@ let parse_cache ~path =
     Logger.fatal "lexeme was %s at line %d" (Lexing.lexeme lexbuf)
       p.Lexing.pos_lnum
 
-let run_ghidra ?(temp_dir = "/dev/shm") ?cache ~runner exe =
+let run_ghidra ?(temp_dir =
+  if Sys.file_exists "/dev/shm" then "/dev/shm" else Filename.get_temp_dir_name ())
+  ?cache ~runner exe =
   let id = Filename.temp_file ~temp_dir "" "" in
   let base = Filename.basename id in
   let dir = base ^ ".d" and len = String.length base in
@@ -147,36 +149,51 @@ let run_ghidra ?(temp_dir = "/dev/shm") ?cache ~runner exe =
       (fun path -> Sys.file_exists (path ^ "/ghidra_export.java"))
       Cli.Sites.utils
   in
-  let command =
-    Format.sprintf
-      "%s %s %s -import %s -scriptPath %s -postScript ghidra_export.java \
-       -scriptlog %s -deleteProject"
-      runner temp_dir dir exe include_path id
+  (* The analysed file name and the runner path are data, not shell program
+     fragments: spawn the analyzer with an argv array and no shell in between
+     (Unix.create_process), closing the command-injection vector on crafted
+     file names such as [...$(cmd)...]. *)
+  let args =
+    [| runner; temp_dir; dir; "-import"; exe; "-scriptPath"; include_path;
+       "-postScript"; "ghidra_export.java"; "-scriptlog"; id; "-deleteProject" |]
   in
-  Logger.debug "%s" command;
-  if Sys.command command <> 0 then Logger.fatal "can not run ghidra";
+  Logger.debug "%s" (String.concat " " (Array.to_list args));
+  let pid =
+    Unix.create_process runner args Unix.stdin Unix.stdout Unix.stderr
+  in
+  (match Unix.waitpid [] pid with
+  | _, Unix.WEXITED 0 -> ()
+  | _ -> Logger.fatal "can not run ghidra");
   let readdir = Sys.readdir temp_dir in
   let log = match cache with None -> id ^ ".log" | Some p -> p in
   let oc = open_out_bin log in
+  let session_files =
+    Array.fold_left
+      (fun s f ->
+        if String.length f > len && String.(equal base (sub f 0 len)) then
+          Basic_types.String.Set.add f s
+        else s)
+      Basic_types.String.Set.empty readdir
+  in
   Basic_types.String.Set.iter (fun f ->
-      let ic = open_in (Printf.sprintf "%s/%s" temp_dir f) in
+      let ic = open_in (Filename.concat temp_dir f) in
       let n = in_channel_length ic in
       output_string oc @@ really_input_string ic n;
       close_in ic)
-  @@ Array.fold_left
-       (fun s f ->
-         if String.length f > len && String.(equal base (sub f 0 len)) then
-           Basic_types.String.Set.add f s
-         else s)
-       Basic_types.String.Set.empty readdir;
+    session_files;
   let ic = open_in id in
   let n = in_channel_length ic in
   output_string oc @@ really_input_string ic n;
   close_in ic;
   close_out oc;
   let r = parse_cache ~path:log in
-  let command = Format.sprintf "rm %s*" id in
-  if Sys.command command <> 0 then Logger.fatal "can not remove tempory files";
+  (* Cleanup without a shell glob: remove exactly this session's files (same
+     selection as above, plus the temp file itself), ignoring leftovers. *)
+  let remove_quietly f = try Sys.remove f with _ -> () in
+  Basic_types.String.Set.iter
+    (fun f -> remove_quietly (Filename.concat temp_dir f))
+    session_files;
+  remove_quietly id;
   r
 
 module L = Graph.Leaderlist.Make (G)
