@@ -21,6 +21,13 @@
  (modes native))
 
 (test
+ (name t_term_shift)
+ (modules t_term_shift)
+ (libraries binsec)
+ (flags (:standard -open Binsec_base))
+ (modes native))
+
+(test
  (name t_zmap)
  (modules t_zmap)
  (libraries binsec unionFind qcheck-core qcheck-core.runner)

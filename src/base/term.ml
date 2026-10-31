@@ -1322,11 +1322,13 @@ module Make (A : Sigs.HASHABLE) (B : Sigs.HASHABLE) :
         Unary { f = Uext n; x = b; _ } )
       when sizeof b = Bv.to_uint bv ->
         binary Concat (unary (Restrict { lo = 0; hi = n - 1 }) a) b n
-    | (Or | Xor), Binary { f = Lsl; x = a; y = Cst bv; size; _ }, Cst bv' ->
+    | ( ((Or | Xor) as op),
+        Binary { f = Lsl; x = a; y = Cst bv; size; _ },
+        Cst bv' ) ->
         let shift = Bv.to_uint bv in
         let sz = size - shift in
         binary Concat
-          (binary Or
+          (binary op
              (unary (Restrict { hi = sz - 1; lo = 0 }) a)
              (constant (Bv.extract ~hi:(size - 1) ~lo:shift bv'))
              sz)
